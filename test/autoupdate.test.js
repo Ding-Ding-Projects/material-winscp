@@ -111,6 +111,25 @@ test('publishing a release cannot trigger another build', () => {
     'on.push must not also list tags — that is the loop again, spelled differently');
 });
 
+test('a hung test fails the build instead of holding it for six hours', () => {
+  // `npm test` is the CI test job in its entirety, and node --test has no
+  // default per-test timeout — so ONE test that never settles hangs the runner
+  // until GitHub's six-hour ceiling kills it. That is not a theoretical risk:
+  // a main run sat in "Test (windows-latest)" for over an hour today while
+  // every other run of the day finished in three to six minutes, and because
+  // `concurrency.group` is keyed on the ref with cancel-in-progress false, the
+  // hung run also blocked every later push to main behind it.
+  //
+  // A timeout converts that into a red build naming the test that hung, which
+  // is the difference between a diagnosis and a mystery. The suite runs in
+  // ~14s, so 120s per test is slack, not a constraint.
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  const script = pkg.scripts.test;
+  const m = /--test-timeout[= ](\d+)/.exec(script);
+  assert.ok(m, `npm test must set --test-timeout so a hung test cannot stall CI (got: ${script})`);
+  assert.ok(Number(m[1]) > 0, 'a zero timeout disables the timeout');
+});
+
 test('the update feed points at a public repository', () => {
   // update.electronjs.org only serves public repositories. If this ever moves
   // private, silent updates stop working and the failure is invisible.
