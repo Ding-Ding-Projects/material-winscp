@@ -25,7 +25,7 @@ const nodePath = require('path');
 const crypto = require('crypto');
 const { utils } = require('ssh2');
 
-const { startSftpServer } = require('./helpers/sftp-server');
+const { startSftpServer, generateKeyPair } = require('./helpers/sftp-server');
 const { SftpAdapter, SshTransport } = require('../design/main/protocols/sftp');
 const { ScpAdapter } = require('../design/main/protocols/scp');
 const { LocalAdapter } = require('../design/main/protocols/local');
@@ -266,7 +266,7 @@ describe('SFTP: authentication against a real server', () => {
   });
 
   it('authenticates with a public key from a key file', async () => {
-    const pair = utils.generateKeyPairSync('ed25519');
+    const pair = generateKeyPair('ed25519');
     const srv = await startSftpServer({ authorizedKey: pair.public });
     const dir = await scratch('winscp-e2e-key-');
     const keyFile = nodePath.join(dir, 'id_ed25519');
@@ -284,8 +284,8 @@ describe('SFTP: authentication against a real server', () => {
     // Without this, "authenticates with a public key" only proves that a
     // signature was offered — not that the server checked it, and not that a
     // stranger's key is turned away.
-    const authorized = utils.generateKeyPairSync('ed25519');
-    const stranger = utils.generateKeyPairSync('ed25519');
+    const authorized = generateKeyPair('ed25519');
+    const stranger = generateKeyPair('ed25519');
     const srv = await startSftpServer({ authorizedKey: authorized.public });
     const dir = await scratch('winscp-e2e-key-');
     const keyFile = nodePath.join(dir, 'id_stranger');
@@ -303,7 +303,7 @@ describe('SFTP: authentication against a real server', () => {
   });
 
   it('authenticates with a passphrase-protected key file', async () => {
-    const pair = utils.generateKeyPairSync('ed25519', { passphrase: PASSPHRASE, cipher: 'aes256-cbc' });
+    const pair = generateKeyPair('ed25519', { passphrase: PASSPHRASE, cipher: 'aes256-cbc' });
     const srv = await startSftpServer({ authorizedKey: pair.public });
     const dir = await scratch('winscp-e2e-key-');
     const keyFile = nodePath.join(dir, 'id_locked');

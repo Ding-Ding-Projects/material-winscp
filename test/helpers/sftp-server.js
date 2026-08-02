@@ -38,12 +38,43 @@ const S_IFCHR = 0o20000;
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+/**
+ * generateKeyPairSync, but the key is guaranteed to parse.
+ *
+ * ssh2's own generator and its own parser disagree about 0.3% of the time:
+ * `utils.parseKey(utils.generateKeyPairSync('ed25519').private)` comes back as
+ * `Error: Malformed OpenSSH private key` rather than a key. Measured at 3/1000
+ * over 1000 pairs on ssh2 1.17.0 — small enough to look like nothing, and the
+ * suite generates six ed25519 pairs, so roughly one full run in fifty died
+ * with `parsedHostKey.getPublicSSH is not a function` and took the whole SFTP
+ * end-to-end file down with it. Every one of those runs looked like a real
+ * regression in the code under test, which is the expensive part.
+ *
+ * Retrying is the honest fix: the defect is upstream, it is not deterministic,
+ * and a key that round-trips is exactly as valid as one generated first time.
+ * Bounded, because an unbounded retry against a genuinely broken generator is a
+ * hang rather than a failure — and this suite has already paid for one of those.
+ */
+function generateKeyPair(alg = 'ed25519', opts) {
+  let last = null;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const pair = opts ? utils.generateKeyPairSync(alg, opts) : utils.generateKeyPairSync(alg);
+    // A passphrase-protected key cannot be parsed without it; check the public
+    // half instead, which is what the round-trip is really testing.
+    const probe = utils.parseKey(opts && opts.passphrase ? pair.public : pair.private);
+    if (probe && typeof probe.getPublicSSH === 'function') return pair;
+    last = probe;
+  }
+  throw new Error('ssh2 could not generate a parsable '
+    + `${alg} key in 8 attempts (last: ${last && last.message})`);
+}
+
 // One host key per process: generating an ed25519 pair is cheap, but a suite
 // that starts a dozen servers should not pay for it a dozen times, and a stable
 // key means a test can pin the fingerprint it expects to be offered.
 let HOST_KEY = null;
 function hostKey() {
-  if (!HOST_KEY) HOST_KEY = utils.generateKeyPairSync('ed25519');
+  if (!HOST_KEY) HOST_KEY = generateKeyPair('ed25519');
   return HOST_KEY;
 }
 
@@ -1148,4 +1179,5 @@ module.exports = {
   tokenize,
   splitCommands,
   rightsFromMode,
+  generateKeyPair,
 };

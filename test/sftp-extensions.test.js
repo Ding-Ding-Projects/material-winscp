@@ -17,6 +17,7 @@ const net = require('net');
 const { Server, utils, Client } = require('ssh2');
 const ext = require('../design/main/protocols/sftp-extensions');
 const { SftpAdapter, SshTransport, signedSeconds } = require('../design/main/protocols/sftp');
+const { generateKeyPair } = require('./helpers/sftp-server');
 
 const P = ext.SFTP_PACKET;
 
@@ -24,7 +25,9 @@ const P = ext.SFTP_PACKET;
 
 let HOST_KEY = null;
 function hostKey() {
-  if (!HOST_KEY) HOST_KEY = utils.generateKeyPairSync('ed25519');
+  // Via the shared validating generator: ssh2's own parser rejects about
+  // 0.3% of what its generator produces (see helpers/sftp-server.js).
+  if (!HOST_KEY) HOST_KEY = generateKeyPair('ed25519');
   return HOST_KEY;
 }
 
