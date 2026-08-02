@@ -16,12 +16,20 @@
 #     .nupkg and RELEASES update manifest, a real dim sum photograph taken from
 #     the repository's bundled catalog (decoded and verified in-run, never
 #     generated or downloaded), and the dim sum code name for the build.
-#   * Nothing here pushes a commit back to this repository, so a release can
-#     never retrigger the workflow.
+#   * Nothing here pushes a commit back to this repository. Note that publishing
+#     a release still CREATES A TAG, and a bare `on: push` fires for tag pushes
+#     too — which made every release trigger another build, which published
+#     another release. Nine releases came out of four commits before anyone
+#     noticed. `tags-ignore` is what actually closes that loop; not pushing a
+#     commit is not sufficient on its own.
 name: CI
 
 on:
   push:
+    branches:
+      - '**'
+    tags-ignore:
+      - '**'
   workflow_dispatch:
     inputs:
       reason:
