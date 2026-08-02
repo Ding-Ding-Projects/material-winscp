@@ -107,6 +107,12 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+/* The UA's [hidden] rule is `display: none` at the lowest specificity, so any
+ * component rule that sets `display: flex` silently defeats it. Everything in
+ * this app toggles visibility with the `hidden` attribute (it also removes the
+ * element from the accessibility tree), so that has to win. */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   padding: 0;

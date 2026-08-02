@@ -430,14 +430,15 @@ export async function boot() {
   /* ---- baseline status items ---- */
   registerStatusItem({
     id: 'connection', side: 'left', order: 10, label: 'Connection chip',
-    render: () => {
-      const chip = h('span', { class: 'chip' }, icon('shield_lock', 13), h('span', {}, t('notConnected')));
-      return chip;
-    },
+    // Where a chip has to ellipsise (bilingual mode makes labels long), the
+    // full text is always on the title so nothing is truly lost.
+    render: () => h('span', { class: 'chip', title: t('notConnected') },
+      icon('shield_lock', 13), h('span', {}, t('notConnected'))),
   });
   registerStatusItem({
     id: 'language', side: 'left', order: 20, label: 'Language status',
-    render: () => h('span', { class: 'chip is-quiet' }, icon('translate', 13), h('span', {}, languageSummary())),
+    render: () => h('span', { class: 'chip is-quiet', title: languageSummary() },
+      icon('translate', 13), h('span', {}, languageSummary())),
   });
   registerStatusItem({
     id: 'build', side: 'right', order: 10, label: 'Build status',

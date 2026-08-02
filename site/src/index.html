@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{TITLE}} — documentation</title>
+<meta name="description" content="Every WinSCP feature, rebuilt in Material Design 3. Documentation, feature articles and design rules.">
+<meta name="color-scheme" content="light dark">
+<!-- Every asset is local. No CDN script, stylesheet, font or image; no analytics. -->
+<link rel="stylesheet" href="{{BASE}}app.css">
+<link rel="icon" href="{{BASE}}favicon.svg" type="image/svg+xml">
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="topbar" role="banner">
+  <div class="topbar-lead">
+    <span class="brand-mark" aria-hidden="true">🥟</span>
+    <div class="brand-text">
+      <span class="brand-title">{{TITLE}}</span>
+      <span class="brand-version" id="brand-version">v{{VERSION}}</span>
+    </div>
+  </div>
+
+  <div class="topbar-search">
+    <div class="search-field" data-search="global">
+      <span class="search-icon" aria-hidden="true">🔍</span>
+      <input type="search" id="global-search" class="search-input"
+             placeholder="Search the documentation" autocomplete="off"
+             aria-label="Search the documentation" aria-describedby="global-search-hint">
+      <span id="global-search-hint" class="visually-hidden">Plain text by default. Open the regex builder to use a regular expression.</span>
+      <button type="button" class="rx-button" data-rx-for="global-search"
+              aria-expanded="false" title="Open the regex builder">.*</button>
+    </div>
+  </div>
+
+  <div class="topbar-actions">
+    <button type="button" class="icon-button" id="open-settings" title="Settings" aria-label="Settings">⚙️</button>
+    <button type="button" class="icon-button" id="toggle-theme" title="Toggle light and dark" aria-label="Toggle light and dark">◐</button>
+    <a class="icon-button" href="{{REPOSITORY}}" target="_blank" rel="noopener noreferrer" title="Repository" aria-label="Repository">↗</a>
+  </div>
+</header>
+
+<!-- Browser-style tab strip: overflow, reordering, pinning, grouping. -->
+<nav class="tabbar" aria-label="Open pages">
+  <div class="tabstrip-pinned" id="strip-pinned" role="tablist" aria-label="Pinned pages"></div>
+  <div class="tabstrip" id="strip" role="tablist" aria-label="Pages"></div>
+  <button type="button" class="tab-overflow" id="tab-overflow" aria-expanded="false"
+          aria-label="Tabs that do not fit" hidden><span id="tab-overflow-count">0</span> more ▾</button>
+  <button type="button" class="tab-tool" id="tab-search-open" title="Search tabs" aria-label="Search tabs">⌕</button>
+  <button type="button" class="tab-tool" id="tab-groups-open" title="Tab groups" aria-label="Tab groups">▤</button>
+</nav>
+
+<main id="main" class="content" tabindex="-1"></main>
+
+<footer class="sitefoot">
+  <p id="foot-version"></p>
+  <p class="sitefoot-links">
+    <a href="#/">Home</a> ·
+    <a href="#/settings">Settings</a> ·
+    <a href="{{REPOSITORY}}" target="_blank" rel="noopener noreferrer">Repository</a> ·
+    <a href="{{REPOSITORY}}/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">GPL-3.0-or-later</a>
+  </p>
+</footer>
+
+<!-- Non-blocking corner notifications. Modals are reserved for decisions. -->
+<div class="toast-region" id="toasts" aria-live="polite" aria-atomic="false"></div>
+<div class="toast-region toast-region-assertive" id="toasts-assertive" aria-live="assertive" aria-atomic="false"></div>
+
+<!-- Anchored popovers: regex builder, appearance editor, tab menus. -->
+<div class="popover-layer" id="popovers"></div>
+
+<!-- Dim sum surprise: non-blocking, auto-dismissing, never steals focus. -->
+<div id="dimsum-slot" aria-live="polite"></div>
+
+<script src="{{BASE}}content.js"></script>
+<script src="{{BASE}}app.js"></script>
+</body>
+</html>

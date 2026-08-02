@@ -532,7 +532,10 @@ export function openAppearanceEditor({ key, element, label } = {}) {
     clear(presetsRow);
     const presets = store.get('theme.presets') || [];
     presetsRow.appendChild(h('span', { class: 'ap-presets-label' }, t('apPresets')));
-    if (!presets.length) presetsRow.appendChild(h('span', { class: 'ap-presets-empty' }, t('presetsHint')));
+    if (!presets.length) {
+      presetsRow.appendChild(h('span', { class: 'ap-presets-empty' },
+        'No saved appearance presets yet. Save one to reuse this look, or export it to a file.'));
+    }
     for (const p of presets) {
       presetsRow.appendChild(h('span', { class: 'ap-preset' },
         h('button', { type: 'button', class: 'btn-text', onclick: () => { applyPreset(p.id); renderProps(); } }, p.name),

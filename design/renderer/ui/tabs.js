@@ -691,7 +691,10 @@ export function createTabStrip(opts = {}) {
     ];
   }
 
-  registerContextMenu(root, () => [
+  // The strip's own menu is for empty strip space only. Without this guard a
+  // right-click on a tab would collect the tab's menu AND the strip's, and the
+  // user would see "New tab" and every search entry listed twice.
+  registerContextMenu(root, (ctx) => (ctx.target?.closest?.('[role="tab"], .tab-group-head') ? [] : [
     { labelKey: 'newTab', icon: 'add', onSelect: () => opts.onNewTab?.(strip) },
     { labelKey: 'newGroup', icon: 'topic', onSelect: () => promptNewGroup([]) },
     SEPARATOR,
@@ -701,7 +704,7 @@ export function createTabStrip(opts = {}) {
     SEPARATOR,
     { labelKey: 'closeContaining', icon: 'filter', onSelect: () => bulkClose({ containing: true }) },
     { labelKey: 'closeNotContaining', icon: 'filter', onSelect: () => bulkClose({ containing: false }) },
-  ]);
+  ]));
 
   /* ---------------- prompts ---------------- */
 

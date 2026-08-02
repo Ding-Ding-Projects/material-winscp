@@ -1,0 +1,22 @@
+{
+  "$comment": [
+    "Site build configuration.",
+    "",
+    "`base` is the path prefix the site is published under. It MUST be",
+    "configurable, because this project publishes at",
+    "https://<owner>.github.io/<repo>/ rather than at a domain root, and a",
+    "static site that hardcodes a root with no base emits absolute URLs for",
+    "every asset: the build succeeds, the deployment goes green, and every page",
+    "404s. `node site/build.js --verify` checks the emitted output actually",
+    "carries the prefix.",
+    "",
+    "Override at build time with --base, or with the SITE_BASE environment",
+    "variable (the Pages workflow sets it from the repository name)."
+  ],
+  "base": "/material-winscp/",
+  "version": "0.1.0",
+  "versionStatus": "unreleased",
+  "title": "WinSCP Material",
+  "tagline": "Every WinSCP feature. Material Design 3.",
+  "repository": "https://github.com/Ding-Ding-Projects/material-winscp"
+}
