@@ -67,8 +67,13 @@ test('CI publishes a plain-semver tag whose version actually increments', () => 
   // Strip comments before asserting. The first version of this test failed on
   // the comment that explains why --prerelease is absent, which is a fine
   // reason to write a comment and a terrible reason to fail a build.
+  //
+  // The trailing \r has to go FIRST. `.` never matches a carriage return, so
+  // against a CRLF checkout `/(^|\s)#.*$/` can never reach `$` and every
+  // comment survives intact — the same explanatory comment then fails the
+  // build again, but only on Windows, where the difference is invisible.
   const ci = raw.split('\n')
-    .map((l) => l.replace(/(^|\s)#.*$/, ''))
+    .map((l) => l.replace(/\r$/, '').replace(/(^|\s)#.*$/, ''))
     .join('\n');
 
   assert.ok(!/tag=v\$\{\{ steps\.pkg\.outputs\.version \}\}-build\./.test(ci),
