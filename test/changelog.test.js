@@ -494,10 +494,25 @@ test('every CI checkout fetches full history, or the sha check above cannot run'
     'the default is a depth-1 shallow clone in which no changelog sha resolves');
 
   // vendor/winscp is the large read-only porting reference. fetch-depth and
-  // submodules are independent inputs, so asking for history must never have
-  // been paid for by quietly pulling 300k lines of C++ into every run.
-  assert.equal((ci.match(/^\s*submodules:\s*false\s*$/gm) || []).length, checkouts,
-    'every checkout must still skip the vendor/winscp submodule');
+  // submodules are independent inputs, so asking for history must never be paid
+  // for by quietly pulling 300k lines of C++ into every run.
+  //
+  // What this asserts is that the value is DECLARED, not that it is `false`.
+  // Requiring `false` reads like the stricter guard and is actually a deadlock:
+  // test/messages.test.js skips two extractor tests when vendor/ is absent
+  // (`NO_VENDOR`), and checking the submodule out in the test job is the only
+  // way to un-skip them — which a `must be false` assertion forbids outright.
+  // A test that permanently prevents the only fix for another test is worse than
+  // no test.
+  //
+  // The accident worth catching is an OMITTED key, where the default silently
+  // decides. Flipping one to `true` is a deliberate, reviewable trade — slower
+  // runs against real coverage of the extractor — and belongs to whoever makes
+  // it, not to this assertion.
+  const declared = (ci.match(/^\s*submodules:\s*(true|false)\s*$/gm) || []).length;
+  assert.equal(declared, checkouts,
+    `every actions/checkout must state submodules: explicitly (${checkouts} checkouts, ${declared} declared) — `
+    + 'left unset, whether 300k lines of vendored C++ enter the run is decided by a default nobody read');
 });
 
 test('the exported Markdown keeps the full sha and the link in plain text', () => {
