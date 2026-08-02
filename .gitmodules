@@ -1,0 +1,3 @@
+[submodule "vendor/winscp"]
+	path = vendor/winscp
+	url = https://github.com/winscp/winscp
