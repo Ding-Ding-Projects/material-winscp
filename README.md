@@ -316,18 +316,57 @@ regex-builder search and export — and **never invents an entry** to fill a gap
 
 | Part | Files | Lines | Non-blank |
 |---|---:|---:|---:|
-| Tests | 54 | 44,867 | 39,485 |
-| Application — main process | 50 | 62,897 | 56,930 |
-| Application — renderer | 57 | 45,098 | 41,247 |
+| Tests | 55 | 46,824 | 41,219 |
+| Application — main process | 50 | 63,478 | 57,496 |
+| Application — renderer | 57 | 45,668 | 41,811 |
 | Styles and markup | 6 | 4,888 | 4,792 |
-| Build and porting tools | 15 | 4,339 | 3,972 |
+| Build and porting tools | 15 | 4,962 | 4,556 |
 | Landing page and docs site | 1 | 22 | 22 |
 | Translations and catalog data | 4 | 15,780 | 15,773 |
-| Documentation | 81 | 9,662 | 7,731 |
-| Configuration | 7 | 1,230 | 1,052 |
-| **Hand-written total** | **275** | **188,783** | **171,004** |
+| Documentation | 81 | 10,230 | 8,216 |
+| Configuration | 7 | 1,316 | 1,136 |
+| **Hand-written total** | **276** | **193,168** | **175,021** |
 | Generated (extracted from WinSCP's own definitions) | 5 | 49,602 | 49,563 |
-| **Total including generated** | | **238,385** | **220,567** |
+| **Project total (hand-written + generated)** | **281** | **242,770** | **224,584** |
+| _Excluded_ — `vendor/winscp` (submodule gitlink; WinSCP's own C++, 421,584 lines when checked out) | 1 | 0 | 0 |
+| _Excluded_ — `package-lock.json` (a lockfile is not code) | 1 | 7,236 | 7,236 |
+| _Excluded_ — binary assets (images, icons, fonts: no lines) | 24 | 0 | 0 |
+| **Grand total — every file this repository tracks** | **307** | **250,006** | **231,820** |
+
+### Who wrote the lines that are still here
+
+Attributed **per surviving line** with `git blame` — not by summing added lines out of `git log`, because churn is not authorship and a line written then deleted belongs to nobody.
+
+| Authorship of surviving lines | Hand-written | Generated | All counted | Share |
+|---|---:|---:|---:|---:|
+| Agent — commit authored by an automation identity | 188,690 | 49,602 | 238,292 | 98.2% |
+| Agent — `Co-Authored-By:` trailer naming an agent | 4,473 | 0 | 4,473 | 1.8% |
+| **Agent-written, both rules together** | **193,163** | **49,602** | **242,765** | **>99.9%** |
+| Human-written | 5 | 0 | 5 | <0.1% |
+| **Attributed total** | **193,168** | **49,602** | **242,770** | **100%** |
+
+The attributed total is **242,770** lines against **242,770** lines counted, over 281 files — the same number twice, on purpose. If those two ever differ the split is withheld instead of published.
+
+<details><summary>Which rule decided each commit, and how to check it</summary>
+
+A commit counts as agent-written under either of exactly two rules:
+
+1. automation author — the commit author's own name or e-mail is an agent identity (name `/^(claude|codex|copilot|opencode|cursor|aider|devin|gemini|github-actions|dependabot|renovate)\b|\[bot\]/i`, e-mail `/(@anthropic\.com|@openai\.com)$|^(claude|codex|copilot|aider|devin|opencode)@|\[bot\]/i`)
+1. agent co-author — the commit message carries a `Co-Authored-By:` trailer whose name or e-mail matches those same two patterns
+
+Of the 40 commits still owning at least one surviving line: **19** matched the automation-author rule, **19** matched the co-author-trailer rule, **2** matched neither and are counted as human.
+
+Method: per surviving line, `git blame --porcelain` (plain blame: no -M/-C rename or copy detection, so a moved line is credited to the commit that moved it). Measured in 1.6s at concurrency 8.
+
+This is stated plainly and is neither a boast nor an apology. It is a fact about how the repository was built, and it is checkable:
+
+```bash
+node tools/count-lines.js --json          # every number above, machine-readable
+git blame --line-porcelain -- <file> \
+  | grep '^author-mail ' | sort | uniq -c   # one file, by hand
+```
+
+</details>
 
 **Excluded, deliberately:**
 
@@ -336,29 +375,29 @@ regex-builder search and export — and **never invents an entry** to fill a gap
 - `package-lock.json` — a lockfile is not code.
 - Binary assets (images, icons, fonts).
 
-Measured over `git ls-files` at commit `74a92c6` on 2026-08-02. Reproduce with:
+Measured over `git ls-files` at commit `bfe5315` on 2026-08-02. Reproduce with:
 
 ```bash
-node tools/count-lines.js
+node tools/count-lines.js --markdown
+```
+
+**Also excluded, because git does not track them:** `node_modules`, `out/` and
+`dist/` — dependencies and build output.
+
+Measured over `git ls-files` at commit `bfe5315`. Reproduce with:
+
+```bash
+node tools/count-lines.js            # the table above
+node tools/count-lines.js --markdown # exactly this markdown
 ```
 
 > [!NOTE]
-> The count is information, not a boast. The generated rows are files extracted
-> from WinSCP's own definitions by `tools/extract-actions.js` and
-> `tools/extract-forms.js` — a person did not type them, so they are reported
-> separately rather than folded into the total.
-
-> [!IMPORTANT]
-> **The release notes are the record; this table is a convenience copy.** Every
-> release states the count, measured by CI with the committed counter at exactly
-> the tagged commit — including the `git blame` split of how many surviving lines
-> agents wrote versus people, and the grand total with the excluded rows visible.
-> A number pinned to a tag can be compared across releases; one floating in a
-> README goes stale the day after it is written. The table above is refreshed
-> from a published release, so run `node tools/count-lines.js --markdown` for the
-> current figure rather than reading this one as today's.
-
----
+> **This copy is a convenience, not the record.** Every release states its own
+> count, measured by CI over the tagged commit — those notes are the record, and
+> this table is refreshed to match a published release. The count is information,
+> never a boast: generated rows are files extracted from WinSCP's own definitions by
+> `tools/extract-actions.js` and `tools/extract-forms.js`, so they are reported
+> separately rather than folded in to make a number look larger.
 
 ## Project layout
 

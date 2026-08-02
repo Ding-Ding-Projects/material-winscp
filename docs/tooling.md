@@ -103,9 +103,14 @@ lines, and states its exclusions out loud rather than applying them quietly:
 `vendor/winscp` is 421,584 lines of someone else's C++ and folding it in would
 inflate this project roughly tenfold. Generated files are reported on their own
 row, because a person did not type them. The excluded rows are printed **in the
-same table** as the totals they are held out of, so "the project" (280 files)
-and "everything the repository tracks" (304 files) are two visible numbers
-rather than one number with a silent asterisk.
+same table** as the totals they are held out of, so **Project total** and **Grand
+total — every file this repository tracks** are two visible numbers rather than
+one number with a silent asterisk.
+
+> The figures themselves are deliberately not repeated here. This file opens by
+> saying that a number a person types is a number that quietly stops being true,
+> and a file count pasted into prose drifts the moment anyone adds a file — which
+> is exactly what happened to the two that used to sit in this paragraph.
 
 ### Who wrote it
 
@@ -140,9 +145,11 @@ Two failure modes it refuses rather than guesses through:
   numbers that do not add up. (The classic cause is counting the empty string
   after a file's trailing newline as a line, which blame does not.)
 
-Blaming ~280 files takes about **2 seconds** at concurrency 8 — one `git blame
---porcelain` per file, run through a small pool, because on Windows the process
-spawn dominates everything else. Serially it is closer to 14.
+Blaming the whole tree takes about **2 seconds** at concurrency 8 — one `git
+blame --porcelain` per file, run through a small pool, because on Windows the
+process spawn dominates everything else. Serially it is closer to 14. The run
+prints its own timing and file count, so that claim is checkable rather than
+taken on trust.
 
 ### Where the number gets published
 
