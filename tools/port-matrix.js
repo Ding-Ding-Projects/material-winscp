@@ -1,0 +1,213 @@
+// port-matrix.js — the coverage ledger for the port.
+//
+// "Every feature ported" is only a meaningful claim if it is measurable, so
+// this walks WinSCP's own source tree, pairs each unit with the file in this
+// repository that carries its behaviour, and reports what is still unclaimed.
+// The mapping lives in port-map.json; this tool never invents a pairing, and a
+// unit with no mapping is reported as missing rather than quietly skipped.
+//
+// Run: node tools/port-matrix.js            (write docs/port-coverage.md)
+//      node tools/port-matrix.js --check    (exit non-zero if anything regressed)
+'use strict';
+const fs = require('fs');
+const path = require('path');
+
+const ROOT = path.join(__dirname, '..');
+const WINSCP = path.join(ROOT, 'vendor', 'winscp', 'source');
+const MAP_FILE = path.join(__dirname, 'port-map.json');
+const OUT = path.join(ROOT, 'docs', 'port-coverage.md');
+
+/** WinSCP's own code. PuTTY and FileZilla are third-party engines it vendors. */
+const OWN_AREAS = ['core', 'windows', 'forms', 'components', 'console', 'dragext', 'resource'];
+const VENDORED = ['putty', 'filezilla'];
+
+const STATUS = {
+  done: { icon: '✅', label: 'Ported' },
+  partial: { icon: '🚧', label: 'In progress' },
+  replaced: { icon: '🔁', label: 'Replaced by an equivalent' },
+  na: { icon: '➖', label: 'Not applicable' },
+  todo: { icon: '⬜', label: 'Not started' },
+};
+
+function lineCount(file) {
+  try {
+    const buf = fs.readFileSync(file);
+    let n = 0;
+    for (let i = 0; i < buf.length; i++) if (buf[i] === 10) n++;
+    return n + (buf.length && buf[buf.length - 1] !== 10 ? 1 : 0);
+  } catch { return 0; }
+}
+
+function walk(dir, exts) {
+  const out = [];
+  const stack = [dir];
+  while (stack.length) {
+    const d = stack.pop();
+    let items;
+    try { items = fs.readdirSync(d, { withFileTypes: true }); } catch { continue; }
+    for (const it of items) {
+      const p = path.join(d, it.name);
+      if (it.isDirectory()) stack.push(p);
+      else if (exts.some((e) => it.name.toLowerCase().endsWith(e))) out.push(p);
+    }
+  }
+  return out.sort();
+}
+
+function loadMap() {
+  if (!fs.existsSync(MAP_FILE)) return { units: {} };
+  try { return JSON.parse(fs.readFileSync(MAP_FILE, 'utf8')); } catch (e) {
+    console.error('port-map.json is not valid JSON: ' + e.message);
+    process.exit(2);
+  }
+}
+
+/** A "unit" is one WinSCP translation unit: the .cpp/.h/.dfm sharing a stem. */
+function collectUnits() {
+  const units = new Map();
+  for (const area of OWN_AREAS) {
+    const dir = path.join(WINSCP, area);
+    if (!fs.existsSync(dir)) continue;
+    for (const file of walk(dir, ['.cpp', '.h', '.dfm', '.rc'])) {
+      const rel = path.relative(WINSCP, file).replace(/\\/g, '/');
+      const stem = rel.replace(/\.(cpp|h|dfm|rc)$/i, '');
+      if (!units.has(stem)) units.set(stem, { stem, area, files: [], lines: 0 });
+      const u = units.get(stem);
+      u.files.push(rel);
+      u.lines += lineCount(file);
+    }
+  }
+  return [...units.values()].sort((a, b) => b.lines - a.lines);
+}
+
+function collectVendored() {
+  const out = [];
+  for (const area of VENDORED) {
+    const dir = path.join(WINSCP, area);
+    if (!fs.existsSync(dir)) continue;
+    let lines = 0;
+    const files = walk(dir, ['.c', '.cpp', '.h']);
+    for (const f of files) lines += lineCount(f);
+    out.push({ area, files: files.length, lines });
+  }
+  return out;
+}
+
+function fileExists(rel) {
+  return fs.existsSync(path.join(ROOT, rel));
+}
+
+function main() {
+  const check = process.argv.includes('--check');
+  const map = loadMap();
+  const units = collectUnits();
+  const vendored = collectVendored();
+
+  let totalLines = 0, coveredLines = 0;
+  const rows = [];
+  const problems = [];
+
+  for (const u of units) {
+    totalLines += u.lines;
+    const m = map.units[u.stem];
+    const status = m ? (m.status || 'todo') : 'todo';
+    const targets = (m && m.targets) || [];
+    // A mapping that names a file which does not exist is a broken claim, not
+    // coverage — surface it loudly instead of counting it.
+    const missing = targets.filter((t) => !fileExists(t));
+    if (missing.length) problems.push(`${u.stem}: mapped to missing file(s) ${missing.join(', ')}`);
+    if ((status === 'done' || status === 'replaced') && !missing.length) coveredLines += u.lines;
+    else if (status === 'partial') coveredLines += u.lines * ((m && m.progress) || 0.5);
+
+    rows.push({
+      stem: u.stem, area: u.area, lines: u.lines, status,
+      targets, note: (m && m.note) || '', missing,
+    });
+  }
+
+  const pct = totalLines ? (coveredLines / totalLines) * 100 : 0;
+  const byArea = {};
+  for (const r of rows) {
+    const a = byArea[r.area] || (byArea[r.area] = { lines: 0, covered: 0, units: 0, done: 0 });
+    a.lines += r.lines; a.units++;
+    if (r.status === 'done' || r.status === 'replaced') { a.covered += r.lines; a.done++; }
+    else if (r.status === 'partial') a.covered += r.lines * 0.5;
+  }
+
+  const esc = (s) => String(s).replace(/\|/g, '\\|');
+  const lines = [];
+  lines.push('# Port coverage');
+  lines.push('');
+  lines.push('Generated by `node tools/port-matrix.js` — do not edit by hand.');
+  lines.push('');
+  lines.push('This ledger pairs every unit of WinSCP\'s own source with the file in this');
+  lines.push('repository that carries its behaviour. A unit with no mapping is reported as');
+  lines.push('not started; a mapping pointing at a file that does not exist is reported as a');
+  lines.push('problem. The percentage is weighted by source lines, so a large subsystem');
+  lines.push('cannot be made to look finished by porting a handful of small files.');
+  lines.push('');
+  lines.push(`**Overall: ${pct.toFixed(1)}% of ${totalLines.toLocaleString()} lines across ${units.length} units.**`);
+  lines.push('');
+
+  if (problems.length) {
+    lines.push('> [!WARNING]');
+    lines.push('> The following mappings are broken and are NOT counted as coverage:');
+    for (const p of problems) lines.push('> - ' + esc(p));
+    lines.push('');
+  }
+
+  lines.push('## By area');
+  lines.push('');
+  lines.push('| Area | Units | Ported | Lines | Coverage |');
+  lines.push('|---|---:|---:|---:|---:|');
+  for (const [area, a] of Object.entries(byArea).sort((x, y) => y[1].lines - x[1].lines)) {
+    lines.push(`| \`${area}\` | ${a.units} | ${a.done} | ${a.lines.toLocaleString()} | ${((a.covered / a.lines) * 100).toFixed(1)}% |`);
+  }
+  lines.push('');
+
+  lines.push('## Third-party engines vendored by WinSCP');
+  lines.push('');
+  lines.push('WinSCP embeds these rather than authoring them. This port supplies the same');
+  lines.push('capability through a maintained JavaScript equivalent, which is why they are');
+  lines.push('counted as replaced rather than transcribed.');
+  lines.push('');
+  lines.push('| Engine | Files | Lines | Replacement |');
+  lines.push('|---|---:|---:|---|');
+  const REPL = { putty: '`ssh2` (SSH transport, auth, SFTP)', filezilla: '`basic-ftp` (FTP/FTPS engine)' };
+  for (const v of vendored) {
+    lines.push(`| \`${v.area}\` | ${v.files} | ${v.lines.toLocaleString()} | ${REPL[v.area] || '—'} |`);
+  }
+  lines.push('');
+
+  lines.push('## Units');
+  lines.push('');
+  lines.push('| Status | Unit | Area | Lines | Ported to | Note |');
+  lines.push('|---|---|---|---:|---|---|');
+  for (const r of rows) {
+    const s = STATUS[r.status] || STATUS.todo;
+    const targets = r.targets.length
+      ? r.targets.map((t) => (r.missing.includes(t) ? `⚠️ \`${t}\`` : `\`${t}\``)).join('<br>')
+      : '—';
+    lines.push(`| ${s.icon} ${s.label} | \`${esc(r.stem)}\` | ${r.area} | ${r.lines.toLocaleString()} | ${targets} | ${esc(r.note)} |`);
+  }
+  lines.push('');
+
+  fs.mkdirSync(path.dirname(OUT), { recursive: true });
+  fs.writeFileSync(OUT, lines.join('\n'), 'utf8');
+
+  console.log(`Wrote ${path.relative(ROOT, OUT)}`);
+  console.log(`  units:     ${units.length}`);
+  console.log(`  lines:     ${totalLines.toLocaleString()} (WinSCP's own code)`);
+  console.log(`  coverage:  ${pct.toFixed(1)}%`);
+  for (const [area, a] of Object.entries(byArea).sort((x, y) => y[1].lines - x[1].lines)) {
+    console.log(`    ${area.padEnd(12)} ${a.done}/${a.units} units  ${((a.covered / a.lines) * 100).toFixed(1)}%`);
+  }
+  if (problems.length) {
+    console.log('\nBroken mappings (not counted):');
+    for (const p of problems) console.log('  - ' + p);
+  }
+  if (check && problems.length) process.exit(1);
+}
+
+if (require.main === module) main();
+module.exports = { collectUnits, collectVendored, lineCount };

@@ -1,0 +1,54 @@
+{
+  "_comment": [
+    "The porting ledger. Each key is a WinSCP translation unit (path stem under",
+    "vendor/winscp/source, without extension). Values:",
+    "  status  - done | partial | replaced | na | todo",
+    "  targets - files in THIS repository carrying the behaviour. A target that",
+    "            does not exist is reported as broken and counts as zero.",
+    "  progress- for 'partial' only, 0..1; defaults to 0.5",
+    "  note    - short, factual",
+    "Never mark a unit done to move on. See docs/porting-mandate.md."
+  ],
+
+  "units": {
+    "core/Configuration": {
+      "status": "partial",
+      "progress": 0.6,
+      "targets": ["design/main/config.js", "design/main/defaults.js", "design/main/paths.js"],
+      "note": "Store, atomic writes, defaults. INI import/export still to do."
+    },
+    "core/SessionData": {
+      "status": "partial",
+      "progress": 0.5,
+      "targets": ["design/main/defaults.js", "design/main/config.js"],
+      "note": "Full option set declared; URL parsing and raw-settings editing pending."
+    },
+    "core/Security": {
+      "status": "partial",
+      "progress": 0.6,
+      "targets": ["design/main/crypto.js"],
+      "note": "Credential protection and master password. WinSCP password obfuscation compat pending."
+    },
+    "core/Cryptography": {
+      "status": "partial",
+      "progress": 0.4,
+      "targets": ["design/main/crypto.js"],
+      "note": "AES-GCM + scrypt in place; file-encryption feature pending."
+    },
+    "core/HierarchicalStorage": {
+      "status": "partial",
+      "progress": 0.5,
+      "targets": ["design/main/config.js"],
+      "note": "JSON store replaces INI/registry hierarchy; INI compatibility layer pending."
+    },
+    "forms/NonVisual": {
+      "status": "partial",
+      "progress": 0.5,
+      "targets": ["tools/extract-actions.js", "design/renderer/actions.js"],
+      "note": "All 301 actions extracted from the original with captions, hints and shortcuts; handlers pending."
+    },
+
+    "putty/putty": { "status": "na", "note": "Directory-level replacement is recorded separately, not per unit." },
+    "filezilla/filezilla": { "status": "na", "note": "Directory-level replacement is recorded separately, not per unit." }
+  }
+}
