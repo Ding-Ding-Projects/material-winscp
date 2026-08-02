@@ -99,6 +99,10 @@ class MemoryAdapter extends Adapter {
         size: r.type === 'dir' ? 0 : r.data.length,
         mtime: r.mtime,
         rights: r.rights,
+        // Every real Adapter fills `owner` — sftp.js with String(uid), ftp.js
+        // with UNIX.ownername — and the resume path reads it. Dropping it here
+        // meant the queue's ownership guard could never fire in a test.
+        owner: r.owner || '',
         isSymlink: !!r.isSymlink,
         hidden: rest.startsWith('.'),
       }));
@@ -116,6 +120,7 @@ class MemoryAdapter extends Adapter {
       size: r.type === 'dir' ? 0 : r.data.length,
       mtime: r.mtime,
       rights: r.rights,
+      owner: r.owner || '',
       isSymlink: !!r.isSymlink,
     });
   }
@@ -947,6 +952,98 @@ test('the partial-file path recycles the target instead of removing it', async (
   assert.strictEqual(bin.length, 1, `expected one recycled file, got ${bin.map((f) => f.name)}`);
   assert.match(bin[0].name, STAMPED);
   assert.ok(bin[0].data.equals(oldBytes), 'the original must be in the bin, not removed');
+});
+
+// ---------------------------------------------------------------------------
+// what the delete-and-rename refuses to replace
+//
+// SftpFileSystem.cpp:4674-4700 vetoes the resumable route for an existing
+// target of two kinds, because `_copyBytes`'s partial-file path does not
+// overwrite the target in place — it writes '<name>.filepart', REMOVES the
+// target and renames the part onto the name, which recreates the file from
+// scratch. transfer.js's `source()` has made this decision for a while; the
+// queue is the route a click in the UI actually takes.
+//
+// `remote.writes` is what tells the two routes apart. A refused resume writes
+// straight at '/r/a.bin'; an allowed one writes at '/r/a.bin.filepart'. Both
+// leave the same bytes behind at the same name, so reading the file back
+// cannot distinguish them — which is precisely why the bug was invisible.
+// ---------------------------------------------------------------------------
+
+/** Upload 8 KB over an existing '/r/a.bin' carrying `extra` stat fields. */
+async function uploadOverTarget(extra, userName) {
+  const { local, remote } = makePair({ chunkSize: 1024 });
+  if (userName !== undefined) remote.session = { userName };
+  const payload = bigBuffer(8192, 5);
+  local.put('/l/a.bin', payload);
+  remote.put('/r/a.bin', bigBuffer(500, 1), 1000000, extra);
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const logs = [];
+  q.on('log', (e) => logs.push(e.text));
+  const item = q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote,
+    copyParam: { resumeSupport: 'on' },
+  });
+  await q.idle();
+  return { item, remote, logs, payload, paths: [...new Set(remote.writes.map((w) => w.path))] };
+}
+
+test('the queue does not resume over a symbolic link', async () => {
+  // "If destination file is symlink, never do resumable transfer, as it would
+  // delete the symlink" — SftpFileSystem.cpp:4674-4680. The queue took the
+  // partial-file route regardless, so `remove` + `rename` replaced the link
+  // with an ordinary file and whatever it pointed at was left orphaned.
+  const r = await uploadOverTarget({ isSymlink: true });
+
+  assert.strictEqual(r.item.state, 'done', r.item.error && r.item.error.message);
+  assert.deepStrictEqual(r.paths, ['/r/a.bin'],
+    'the bytes must go at the link itself, never through a part that is renamed over it');
+  assert.ok(r.remote.read('/r/a.bin').equals(r.payload), 'the upload itself still happens');
+  assert.ok(r.logs.some((l) => /symbolic link, not doing resumable transfer/.test(l)),
+    `expected WinSCP's own refusal in the log, got ${JSON.stringify(r.logs)}`);
+});
+
+test('the queue does not resume over a file another user owns', async () => {
+  // The third arm of the same chain (SftpFileSystem.cpp:4691-4700): deleting
+  // and recreating the file hands a colleague's file to whoever uploaded over
+  // it, and no amount of preserving rights afterwards puts the owner back.
+  const r = await uploadOverTarget({ owner: 'bob' }, 'alice');
+
+  assert.strictEqual(r.item.state, 'done', r.item.error && r.item.error.message);
+  assert.deepStrictEqual(r.paths, ['/r/a.bin'],
+    'a file owned by someone else must not be removed and recreated');
+  assert.ok(r.logs.some((l) => /owned by another user \[bob\]/.test(l)),
+    `expected WinSCP's own refusal in the log, got ${JSON.stringify(r.logs)}`);
+});
+
+test('a numeric owner is a uid and never stops the queue resuming', async () => {
+  // The regression this guards is far worse than the bug it guards: ssh2 asks
+  // for SFTP-3, whose attribute block has no owner-name field at all, so
+  // sftp.js:1345 hands the adapter String(uid). Reading '1000' as somebody
+  // called 1000 makes the comparison against 'alice' false for every file on
+  // every server — resumable uploads would be off everywhere, silently.
+  const r = await uploadOverTarget({ owner: '1000' }, 'alice');
+
+  assert.strictEqual(r.item.state, 'done', r.item.error && r.item.error.message);
+  assert.ok(r.paths.includes('/r/a.bin.filepart'),
+    `a uid is not a user name, so resume must still take the partial route; wrote ${JSON.stringify(r.paths)}`);
+  assert.strictEqual(r.remote.read('/r/a.bin.filepart'), null, 'the partial is renamed away');
+  assert.ok(r.remote.read('/r/a.bin').equals(r.payload));
+  assert.ok(!r.logs.some((l) => /owned by another user/.test(l)));
+});
+
+test('an owner that is this session, @host and all, still resumes', async () => {
+  // RemoteFiles.cpp:583-588 — Bitvise reports the owner as 'user@host' while
+  // the session logged in as 'user'. A plain string compare refuses to resume
+  // over your own files on exactly those servers.
+  const r = await uploadOverTarget({ owner: 'alice@host' }, 'alice');
+
+  assert.strictEqual(r.item.state, 'done', r.item.error && r.item.error.message);
+  assert.ok(r.paths.includes('/r/a.bin.filepart'),
+    `your own file must still resume; wrote ${JSON.stringify(r.paths)}`);
+  assert.ok(r.remote.read('/r/a.bin').equals(r.payload));
 });
 
 test('newerOnly skips a target that is already up to date', async () => {

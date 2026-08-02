@@ -29,7 +29,6 @@ const { finished } = require('stream/promises');
 
 const { FileMask } = require('./masks');
 const { COPY_PARAM_DEFAULTS, PREF_DEFAULTS } = require('./defaults');
-const { sameUserName, ownerName } = require('./remotefiles');
 // The overwrite decision (ConfirmFileOverwrite / EffectiveBatchOverwrite) and
 // the robust retry substrate live in transfer.js, the port of Terminal.cpp's
 // transfer half. The queue moves the bytes; that module decides what happens
@@ -276,28 +275,6 @@ function allowResume(copyParam, size, fileName) {
     case 'smart': return size >= copyParam.resumeThreshold;
     default: return false;
   }
-}
-
-/**
- * SftpFileSystem.cpp:4694-4700 — "never do resumable transfer for file owned by
- * other user, as deleting and recreating the file would change ownership".
- *
- * The partial-file dance below does not overwrite the target in place: it
- * removes it and renames a file this session created onto the name, so the
- * replacement belongs to whoever uploaded it. Refusing the resume costs one
- * optimization; taking it costs a colleague their file's ownership.
- *
- * `ownerName` is the load-bearing half. WinSCP guards on
- * `!Owner.Name.IsEmpty()` and admits in its own comment that the check is inert
- * against OpenSSH, "as it does not provide owner name (only UID)". ssh2 speaks
- * SFTP-3 and nothing else, so sftp.js hands the adapter a uid string; comparing
- * that with a login name is false for every file on every server, which would
- * turn resumable uploads off wholesale rather than guarding anything.
- */
-function ownedByAnotherUser(existing, userName) {
-  if (!existing) return false;
-  const name = ownerName(existing.owner);
-  return !!name && !sameUserName(name, userName);
 }
 
 /** UseAsciiTransfer: 'automatic' consults the asciiFileMask. */
@@ -1197,21 +1174,35 @@ class TransferQueue extends EventEmitter {
       startAt = existing.size;
       readFrom = existing.size;
       if (readFrom >= entry.size) return 0;      // already complete
-    } else if (allowResume(cp, entry.size, dst.basename(targetPath)) && canRange && !text
-               && !ownedByAnotherUser(existing, dst.userName)) {
+    } else if (allowResume(cp, entry.size, dst.basename(targetPath)) && canRange && !text) {
       // Text mode cannot resume: the byte offsets on the two sides differ once
       // line endings are rewritten, so a restart would splice mid-line.
-      // The ownership refusal is the same one transfer.js's source() makes —
-      // this is the route a click actually takes, so the two have to agree.
-      usingPartial = true;
-      writePath = targetPath + cp.partialFileExt;
-      const part = await statOrNull(dst, writePath);
-      if (part && part.size > 0 && part.size < entry.size) {
-        startAt = part.size;
-        readFrom = part.size;
-      } else if (part && part.size >= entry.size) {
-        startAt = 0;
-        readFrom = 0;                            // stale part, start over
+      //
+      // Everything the EXISTING target can say about it is asked once, of the
+      // same function `transfer.js`'s source() asks (SftpFileSystem.cpp:4674-
+      // 4700). Both end at the `remove` + `rename` below, and this is the route
+      // a click in the UI actually takes, so a disagreement between them is a
+      // guard the session path enforces and the product does not — which is
+      // exactly what happened to symlinks: source() had refused them since it
+      // was written, and the queue replaced them anyway.
+      //
+      // A refusal is logged, not swallowed. Dropping to a plain truncating
+      // write costs the user their resume, and an upload that stops resuming
+      // for no stated reason looks like a slow server rather than a decision.
+      const refusal = T.resumeRefusalReason(existing, dst.userName);
+      if (refusal) {
+        this.emit('log', { id: item.id, text: refusal });
+      } else {
+        usingPartial = true;
+        writePath = targetPath + cp.partialFileExt;
+        const part = await statOrNull(dst, writePath);
+        if (part && part.size > 0 && part.size < entry.size) {
+          startAt = part.size;
+          readFrom = part.size;
+        } else if (part && part.size >= entry.size) {
+          startAt = 0;
+          readFrom = 0;                          // stale part, start over
+        }
       }
     }
 

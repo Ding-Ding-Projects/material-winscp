@@ -2646,31 +2646,13 @@ class AdapterFileSystem {
           fileParams.destSize = Number(existing.size) || 0;
           fileParams.destTimestamp = Number(existing.mtime) || 0;
           if (existing.modificationFmt !== undefined) fileParams.destPrecision = existing.modificationFmt;
-          // Resuming replaces the target by renaming the part over it, which
-          // would delete a symlink and recreate it as a plain file.
-          if (existing.isSymlink || existing.type === 'link') {
+          // SftpFileSystem.cpp:4674-4700. The chain lives in
+          // `resumeRefusalReason` because the queue's own delete-and-rename has
+          // to reach the identical verdict; see the comment on that function.
+          const refusal = resumeRefusalReason(existing, engine.terminal.userName);
+          if (refusal) {
             resumeAllowed = false;
-            engine.logEvent('Existing file is symbolic link, not doing resumable transfer.');
-          } else if (ownerName(existing.owner) &&
-                     !sameUserName(ownerName(existing.owner), engine.terminal.userName)) {
-            // SftpFileSystem.cpp:4689-4700, the third arm of the same chain.
-            // The rename below does not overwrite the target in place — it
-            // deletes it and moves a file this session created onto the name,
-            // so the replacement is owned by whoever uploaded it. On a shared
-            // directory that quietly transfers a colleague's file to you, and
-            // no amount of preserving rights afterwards puts the owner back.
-            //
-            // `ownerName` is what keeps this honest rather than catastrophic.
-            // WinSCP guards on `!Owner.Name.IsEmpty()` and concedes in the
-            // comment above the check that it "won't work for SFTP-3
-            // (OpenSSH) as it does not provide owner name (only UID)"; ssh2
-            // speaks SFTP-3 and nothing else, so sftp.js:1345 hands us a uid
-            // string. Comparing that against a login name is false for every
-            // file on every server, which would not tighten a safety check —
-            // it would switch resumable uploads off for everyone.
-            resumeAllowed = false;
-            engine.logEvent(
-              `Existing file is owned by another user [${existing.owner}], not doing resumable transfer.`);
+            engine.logEvent(refusal);
           }
         }
 
@@ -3033,6 +3015,67 @@ async function statOrNull(adapter, p) {
 }
 
 /**
+ * Why an existing target may veto the resumable route — TSFTPFileSystem::Source
+ * (SftpFileSystem.cpp:4674-4700).
+ *
+ * The thing being guarded is not the write, it is the FINISH. Resuming does not
+ * overwrite the target in place: it fills `<name>.filepart`, then `remove`s the
+ * target and `rename`s the part onto the name. The file that ends up at that
+ * path is therefore a brand new one this session created, and two properties of
+ * the old file do not survive being recreated:
+ *
+ *   * a symbolic link. Removing it bins the POINTER and leaves the file it
+ *     pointed at orphaned; the rename then drops an ordinary file where the
+ *     link used to be, so the user's link is gone and the data they meant to
+ *     replace was never touched (4674-4680);
+ *   * its owner. A file belonging to a colleague in a shared directory quietly
+ *     becomes yours, and preserving rights afterwards cannot put the owner back
+ *     — chown is not ours to call (4691-4700).
+ *
+ * Returns WinSCP's own log line, or '' when the resume may go ahead. It answers
+ * with a string rather than a boolean because the reason is the useful part: an
+ * upload that silently stops resuming is indistinguishable from a slow server.
+ *
+ * ONE function for two callers on purpose. `AdapterFileSystem.source` and
+ * `queue.js`'s `_copyBytes` both perform that delete-and-rename, and the queue
+ * is the route a click in the UI actually takes — a second copy of this rule is
+ * a rule that eventually disagrees with itself, which is how the queue came to
+ * replace symlinks that the session path had been refusing all along.
+ *
+ * WinSCP has a THIRD arm between these two, `DoesFileLookLikeSymLink`
+ * (4616-4623, `FVersion < 4 && rights == 0777 && Size < 100`), and it is
+ * deliberately not ported. It is a heuristic for a problem this port does not
+ * have: SSH_FXP_ATTRS in SFTP-3 does not say whether a file is a link, so
+ * WinSCP guesses from the mode and the size. protocols/sftp.js:1325-1327
+ * `lstat`s and reads the type out of the mode bits, so the first arm already
+ * has ground truth on SFTP-3. Porting the guess on top of the fact would only
+ * refuse resume for real 0777 files under 100 bytes — and its `FVersion < 4`
+ * gate has no meaning in a function that also serves FTP, WebDAV and S3.
+ */
+function resumeRefusalReason(existing, userName) {
+  if (!existing) return '';
+  if (existing.isSymlink || existing.type === 'link') {
+    return 'Existing file is symbolic link, not doing resumable transfer.';
+  }
+  // `ownerName` is the load-bearing half, and the reason this is a guard rather
+  // than a catastrophe. WinSCP tests `!Owner.Name.IsEmpty()` and concedes in
+  // the comment above its own check that it "won't for work for SFTP-3
+  // (OpenSSH) as it does not provide owner name (only UID) and we know only
+  // logged in username (not UID)". ssh2 asks for SFTP-3 and nothing else, so
+  // sftp.js:1345 hands the adapter String(uid); reading "1000" as somebody
+  // called 1000 makes the comparison against "alice" false for every file on
+  // every server, which would not tighten this check — it would switch
+  // resumable uploads off for everyone. The one adapter that genuinely reports
+  // a NAME is ftp.js (UNIX.ownername, and the `ls -l` listing fallback), and
+  // FTP sets caps.resume from REST STREAM, so this arm is live exactly there.
+  const owner = ownerName(existing.owner);
+  if (owner && !sameUserName(owner, userName)) {
+    return `Existing file is owned by another user [${existing.owner}], not doing resumable transfer.`;
+  }
+  return '';
+}
+
+/**
  * "Preserve overwritten remote files to recycle bin" — the recycle WinSCP does
  * on the UPLOAD path, not the delete path.
  *
@@ -3180,5 +3223,6 @@ module.exports = {
   StandaloneHost, SimpleProgress, TransferEngine, AdapterFileSystem,
   // wiring
   transferEngineFor, normalizeCopyList, canAppendTo, recycleOverwritten,
+  resumeRefusalReason,
   extractFileNameLocal, extractFileDirLocal,
 };

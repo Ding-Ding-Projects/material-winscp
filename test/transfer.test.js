@@ -1424,14 +1424,36 @@ test('a part file longer than the source is deleted and the transfer restarted',
 // ---------------------------------------------------------------------------
 
 /** An upload of 'ABCDEFGH' over an existing target owned by `owner`. */
-async function uploadOver(owner, userName) {
+async function uploadOver(owner, userName, extra) {
   const ctx = makeEngine({ data: { userName } });
   ctx.local.put('/l/a.bin', 'ABCDEFGH');
-  ctx.remote.putDir('/r').put('/r/a.bin', 'OLD', 0, { owner });
+  ctx.remote.putDir('/r').put('/r/a.bin', 'OLD', 0, { owner, ...(extra || {}) });
   await ctx.engine.copyToRemote(['/l/a.bin'], '/r/',
     cp({ preserveTime: false, resumeSupport: 'on' }), COPY_FLAGS.noConfirmation, null);
   return ctx;
 }
+
+test('a resumable upload refuses a target that is a symbolic link', async () => {
+  // The FIRST arm (SftpFileSystem.cpp:4674-4680): "if destination file is
+  // symlink, never do resumable transfer, as it would delete the symlink".
+  // Removing it bins the pointer and orphans whatever it addressed, and the
+  // rename then leaves an ordinary file where the link used to be.
+  //
+  // The arm has been enforced here for a while but never asserted — the only
+  // symlink test in this file covers the RECYCLE path. It earns its place now
+  // that both this route and the queue's read the verdict out of one shared
+  // `resumeRefusalReason`, which is a single place left to get wrong.
+  const { remote, moved, session } = await uploadOver('', 'alice', { isSymlink: true });
+
+  assert.strictEqual(moved[0].targetPath, '/r/a.bin',
+    'no .filepart: the link must not be removed and replaced by a plain file');
+  assert.deepStrictEqual(remote.calls.rename, [], 'and nothing is renamed over it');
+  assert.deepStrictEqual(remote.calls.remove, [], 'the link itself is never deleted');
+  assert.strictEqual(remote.text('/r/a.bin'), 'ABCDEFGH',
+    'the transfer still happens — WinSCP clears ResumeAllowed, it does not skip');
+  assert.ok(session.lines.some((l) => /symbolic link, not doing resumable transfer/.test(l)),
+    `expected the refusal in the log, got ${JSON.stringify(session.lines)}`);
+});
 
 test('a resumable upload refuses a target owned by another user', async () => {
   // The resume path does not overwrite the target in place: it writes a
