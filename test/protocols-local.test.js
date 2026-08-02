@@ -257,6 +257,25 @@ test('the virtual root lists the drives', { skip: !isWindows }, async () => {
   assert.equal(adapter.dirname(here + '\\'), '', 'a drive root sits under the virtual root');
 });
 
+test('the adapter states its own separator, and join agrees with it', async () => {
+  // queue.js:_buildPlan prunes empty directories with a prefix test built from
+  // `dst.sep`. That is only correct if `sep` really is the character `join`
+  // puts between segments — sniffing process.platform there would have been
+  // wrong for a session constructed with an explicit platform, and a wrong
+  // separator prunes directories that are full of files.
+  assert.equal(adapter.sep, isWindows ? '\\' : '/');
+  const joined = adapter.join('base', 'child');
+  assert.equal(joined, `base${adapter.sep}child`);
+  assert.ok(joined.startsWith(`base${adapter.sep}`), 'the prefix test the queue relies on holds');
+
+  // Both shapes are reachable regardless of the host, because `session.platform`
+  // selects the helpers (local.js:208-209) while file-system calls stay real.
+  const { LocalAdapter: LA } = require('../design/main/protocols/local');
+  assert.equal(new LA({ platform: 'win32' }).sep, '\\');
+  assert.equal(new LA({ platform: 'linux' }).sep, '/');
+  assert.equal(new LA({ platform: 'win32' }).join('C:\\work', 'sub'), 'C:\\work\\sub');
+});
+
 test('POSIX listings carry rights and owner', { skip: isWindows }, async () => {
   const file = adapter.join(root, 'perms.txt');
   await adapter.writeFile(file, Buffer.from('x'));

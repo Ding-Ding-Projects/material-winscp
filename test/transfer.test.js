@@ -1694,6 +1694,122 @@ test('CopyToLocal downloads a tree and preserves the modification time', async (
   assert.deepStrictEqual(local.calls.setTimes.map((c) => c[1]).sort(), [555000, 666000]);
 });
 
+// ---------------------------------------------------------------------------
+// cpNoEmptyDirectories — TTerminal::IsEmptyLocalDirectory / IsEmptyRemoteDirectory
+//
+// Before this landed, `excludeEmptyDirectories` appeared in exactly one place
+// in transfer.js: `allowAnyTransfer`, the "is any filtering switched on at
+// all?" gate. Turning the option on therefore made the engine take the slow
+// filtered path and then apply no filter — the directory was created anyway.
+// ---------------------------------------------------------------------------
+
+test('excludeEmptyDirectories keeps an empty directory off the local disk', async () => {
+  const { engine, local, remote } = makeEngine();
+  remote.put('/r/d/full/a.txt', 'A');
+  remote.putDir('/r/d/empty');
+  local.putDir('/l');
+
+  await engine.copyToLocal(['/r/d'], '/l',
+    cp({ preserveTime: false, excludeEmptyDirectories: true }), 0, null);
+
+  assert.strictEqual(local.text('/l/d/full/a.txt'), 'A');
+  assert.strictEqual(local.has('/l/d/empty'), false, 'the empty directory is never created');
+  assert.deepStrictEqual(local.calls.mkdir, ['/l/d', '/l/d/full']);
+});
+
+test('excludeEmptyDirectories keeps an empty directory off the far side of an upload', async () => {
+  const { engine, local, remote } = makeEngine();
+  local.put('/l/d/full/a.txt', 'A');
+  local.putDir('/l/d/empty');
+  remote.putDir('/r');
+
+  await engine.copyToRemote(['/l/d'], '/r/',
+    cp({ preserveTime: false, excludeEmptyDirectories: true }), 0, null);
+
+  assert.strictEqual(remote.text('/r/d/full/a.txt'), 'A');
+  assert.strictEqual(remote.has('/r/d/empty'), false);
+  assert.deepStrictEqual(remote.calls.mkdir, ['/r/d', '/r/d/full']);
+});
+
+test('emptiness is recursive: a directory of empty directories is empty', async () => {
+  // WinSCP's IsEmptyLocalDirectory recurses (Terminal.cpp:6202), so "holds
+  // nothing but empty directories" is itself empty, all the way up. A
+  // one-level test would pass against an implementation that only counted
+  // immediate children.
+  const { engine, local, remote } = makeEngine();
+  remote.putDir('/r/d/hollow/deeper/deepest');
+  remote.put('/r/d/real/a.txt', 'A');
+  local.putDir('/l');
+
+  await engine.copyToLocal(['/r/d'], '/l',
+    cp({ preserveTime: false, excludeEmptyDirectories: true }), 0, null);
+
+  assert.deepStrictEqual(local.calls.mkdir, ['/l/d', '/l/d/real']);
+  assert.strictEqual(local.has('/l/d/hollow'), false);
+});
+
+test('a directory whose only contents are filtered out counts as empty', async () => {
+  // The whole point of the recursive test rather than a listing-length test:
+  // these directories are not empty on the wire, they are empty *for this
+  // transfer*. Hidden files under excludeHiddenFiles are one such case.
+  const { engine, local, remote } = makeEngine();
+  remote.put('/r/d/secretive/.hidden', 'H', 0, { hidden: true });
+  remote.put('/r/d/real/a.txt', 'A');
+  local.putDir('/l');
+
+  await engine.copyToLocal(['/r/d'], '/l',
+    cp({ preserveTime: false, excludeEmptyDirectories: true, excludeHiddenFiles: true }), 0, null);
+
+  assert.deepStrictEqual(local.calls.mkdir, ['/l/d', '/l/d/real']);
+  assert.strictEqual(local.has('/l/d/secretive'), false);
+});
+
+test('an upload treats a directory holding only .filepart leftovers as empty', async () => {
+  // IsEmptyLocalDirectory hard-codes DisallowTemporaryTransferFiles=true for
+  // the child predicate (Terminal.cpp:6199): a half-finished download of ours
+  // is not content. The remote side deliberately does NOT do this — see the
+  // note on isEmptyDirectory — so this assertion belongs to the upload.
+  const { engine, local, remote } = makeEngine();
+  local.put('/l/d/leftovers/report.filepart', 'partial');
+  local.put('/l/d/real/a.txt', 'A');
+  remote.putDir('/r');
+
+  await engine.copyToRemote(['/l/d'], '/r/',
+    cp({ preserveTime: false, excludeEmptyDirectories: true }), 0, null);
+
+  assert.deepStrictEqual(remote.calls.mkdir, ['/r/d', '/r/d/real']);
+  assert.strictEqual(remote.has('/r/d/leftovers'), false);
+});
+
+test('a directory that cannot be listed is not assumed to be empty', async () => {
+  // Answering "empty" on an error would silently drop a directory — and every
+  // file under it — from the copy. "Not empty" costs at worst one directory
+  // nobody wanted.
+  const { engine, remote } = makeEngine();
+  remote.putDir('/r/d');
+  remote.failNext = { op: 'list', error: Object.assign(new Error('denied'), { code: 'EACCES' }), times: 1 };
+  assert.strictEqual(
+    await engine.isEmptyDirectory(SIDES.remote, '/r/d', cp({ excludeEmptyDirectories: true }), false),
+    false);
+});
+
+test('excludeEmptyDirectories keeps the size calculation agreeing with the copy', async () => {
+  // CalculateLocalFileSize goes through DoAllowLocalFileTransfer too
+  // (Terminal.cpp:5892). A total that counts a directory the copy then refuses
+  // is a progress bar that never reaches the end.
+  const { engine, local } = makeEngine();
+  local.put('/l/d/full/a.txt', 'ABCD');
+  local.putDir('/l/d/empty');
+
+  const r = await engine.calculateLocalFilesSize(['/l/d'],
+    cp({ excludeEmptyDirectories: true }), true, []);
+  assert.strictEqual(r.size, 4);
+  const collected = [];
+  for (let i = 0; i < r.files.count(); i++) collected.push(r.files.getFileName(i));
+  assert.deepStrictEqual(collected, ['/l/d', '/l/d/full', '/l/d/full/a.txt'],
+    'the empty directory is left out of the collected list too');
+});
+
 test('a download refuses to write a file over a directory, or recurse into a file', async () => {
   {
     const { engine, local, remote } = makeEngine();

@@ -38,7 +38,9 @@ class MemoryAdapter extends Adapter {
     this.name = name;
     this.caps = { ...DEFAULT_CAPS, resume: true, timestamp: true, rights: true };
     this.connected = true;
-    this.files = new Map([['/', { type: 'dir', mtime: 0, rights: 'rwxr-xr-x' }]]);
+    // Keyed by `this.sep` rather than by a literal '/', so the Windows-shaped
+    // subclass below shares every one of these methods unchanged.
+    this.files = new Map([[this.sep, { type: 'dir', mtime: 0, rights: 'rwxr-xr-x' }]]);
     this.chunkSize = options.chunkSize || 4096;
     this.readDelayMs = options.readDelayMs || 0;
     this.failRead = null;     // { path, afterBytes } — fires once
@@ -74,10 +76,10 @@ class MemoryAdapter extends Adapter {
   }
 
   _ensureParents(np) {
-    const parts = np.split('/').filter(Boolean);
+    const parts = np.split(this.sep).filter(Boolean);
     let cur = '';
     for (let i = 0; i < parts.length - 1; i++) {
-      cur += `/${parts[i]}`;
+      cur += `${this.sep}${parts[i]}`;
       if (!this.files.has(cur)) this.files.set(cur, { type: 'dir', mtime: 0, rights: 'rwxr-xr-x' });
     }
   }
@@ -87,12 +89,12 @@ class MemoryAdapter extends Adapter {
     const rec = this.files.get(d);
     if (!rec) { const e = new Error(`No such directory: ${d}`); e.code = 'ENOENT'; throw e; }
     if (rec.type !== 'dir') throw new Error(`Not a directory: ${d}`);
-    const prefix = d === '/' ? '/' : `${d}/`;
+    const prefix = d === this.sep ? this.sep : `${d}${this.sep}`;
     const out = [];
     for (const [p, r] of this.files) {
       if (p === d || !p.startsWith(prefix)) continue;
       const rest = p.slice(prefix.length);
-      if (rest.includes('/')) continue;
+      if (rest.includes(this.sep)) continue;
       out.push(entry({
         name: rest,
         type: r.type,
@@ -139,7 +141,7 @@ class MemoryAdapter extends Adapter {
     if (!r) { const e = new Error(`No such file: ${np}`); e.code = 'ENOENT'; throw e; }
     if (r.type === 'dir' && opts.recursive) {
       for (const k of [...this.files.keys()]) {
-        if (k === np || k.startsWith(`${np}/`)) this.files.delete(k);
+        if (k === np || k.startsWith(`${np}${this.sep}`)) this.files.delete(k);
       }
     } else {
       this.files.delete(np);
@@ -154,7 +156,7 @@ class MemoryAdapter extends Adapter {
     this.files.delete(a);
     this.files.set(b, r);
     for (const k of [...this.files.keys()]) {
-      if (k.startsWith(`${a}/`)) {
+      if (k.startsWith(`${a}${this.sep}`)) {
         this.files.set(b + k.slice(a.length), this.files.get(k));
         this.files.delete(k);
       }
@@ -245,10 +247,58 @@ class MemoryAdapter extends Adapter {
   }
 }
 
+/**
+ * The same store, separated by '\' — i.e. shaped like protocols/local.js on
+ * Windows (winPath.sep at local.js:66, surfaced through LocalAdapter's
+ * `get sep()` at local.js:239).
+ *
+ * This exists because the queue's target adapter for a DOWNLOAD is the local
+ * one, and a plan whose dstPaths are backslash-separated is the case that a
+ * '/'-only prefix test gets silently and catastrophically wrong. Running that
+ * case through an in-memory store rather than the real file system keeps the
+ * coverage alive on a POSIX developer machine, where a real LocalAdapter
+ * reports '/' and the bug simply cannot appear.
+ */
+class WindowsMemoryAdapter extends MemoryAdapter {
+  get sep() { return '\\'; }
+
+  normalize(p) {
+    const s = String(p === undefined || p === null ? '' : p);
+    const abs = s.startsWith('\\');
+    const segs = s.split('\\').filter((seg) => seg && seg !== '.');
+    return `${abs ? '\\' : ''}${segs.join('\\')}` || '\\';
+  }
+
+  join(...parts) {
+    return this.normalize(parts.filter((p) => p !== '' && p !== null && p !== undefined).join('\\'));
+  }
+
+  dirname(p) {
+    const n = this.normalize(p);
+    const i = n.lastIndexOf('\\');
+    return i <= 0 ? '\\' : n.slice(0, i);
+  }
+
+  basename(p) {
+    const n = this.normalize(p);
+    const i = n.lastIndexOf('\\');
+    return i < 0 ? n : n.slice(i + 1);
+  }
+}
+
 function makePair(options) {
   const local = new MemoryAdapter('local', options);
   const remote = new MemoryAdapter('remote', options);
   local.putDir('/l');
+  remote.putDir('/r');
+  return { local, remote };
+}
+
+/** A download pair whose LOCAL side separates with '\', as Windows does. */
+function makeWindowsPair(options) {
+  const local = new WindowsMemoryAdapter('local', options);
+  const remote = new MemoryAdapter('remote', options);
+  local.putDir('\\l');
   remote.putDir('/r');
   return { local, remote };
 }
@@ -366,6 +416,95 @@ test('recursive directory upload, correct ordering and mask filtering', async ()
   assert.ok(dirAt >= 0 && fileAt > dirAt, order.join(' | '));
   // Files of a directory come before its subdirectories.
   assert.ok(order.indexOf('file:/r/tree/a.txt') < order.indexOf('dir:/r/tree/sub'));
+});
+
+// ---------------------------------------------------------------------------
+// excludeEmptyDirectories (cpNoEmptyDirectories)
+// ---------------------------------------------------------------------------
+
+test('excludeEmptyDirectories prunes the empty directories and keeps the rest', async () => {
+  const { local, remote } = makePair();
+  local.put('/l/tree/full/a.txt', 'a');
+  local.put('/l/tree/full/deeper/b.txt', 'b');
+  local.putDir('/l/tree/empty');
+  local.putDir('/l/tree/empty/alsoempty');   // nested empties are empty all the way up
+  local.putDir('/l/tree/bc');                // '/r/tree/b' must not claim this one
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'upload',
+    source: '/l/tree',
+    target: '/r/tree',
+    sourceAdapter: local,
+    targetAdapter: remote,
+    copyParam: { excludeEmptyDirectories: true },
+  });
+  await q.idle();
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+
+  const dirs = item._plan.entries.filter((e) => e.kind === 'dir').map((e) => e.dstPath).sort();
+  assert.deepStrictEqual(dirs, ['/r/tree', '/r/tree/full', '/r/tree/full/deeper']);
+  assert.strictEqual(remote.read('/r/tree/full/a.txt').toString(), 'a');
+  assert.strictEqual(remote.read('/r/tree/full/deeper/b.txt').toString(), 'b');
+  assert.ok(!remote.files.has('/r/tree/empty'), 'an empty directory is not created');
+  assert.ok(!remote.files.has('/r/tree/empty/alsoempty'));
+  assert.ok(!remote.files.has('/r/tree/bc'));
+});
+
+test('excludeEmptyDirectories does not destroy a download to a Windows target', async () => {
+  // queue.js:_buildPlan used to prune with a hard-coded '/' — `startsWith(dir +
+  // '/')`. Every dstPath of a download is built by the LOCAL adapter's join,
+  // which separates with '\' on Windows, so the test was false for EVERY
+  // directory including ones stuffed with files. Since _run only mkdirs from
+  // kind:'dir' entries and no adapter's createWriteStream creates parents, the
+  // pruning took the whole tree with it and the first file died with ENOENT.
+  const { local, remote } = makeWindowsPair();
+  remote.put('/r/tree/full/a.txt', 'a');
+  remote.put('/r/tree/full/deeper/b.txt', 'b');
+  remote.putDir('/r/tree/empty');
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'download',
+    source: '/r/tree',
+    target: '\\l\\tree',
+    sourceAdapter: remote,
+    targetAdapter: local,
+    copyParam: { excludeEmptyDirectories: true },
+  });
+  await q.idle();
+
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  const dirs = item._plan.entries.filter((e) => e.kind === 'dir').map((e) => e.dstPath).sort();
+  assert.deepStrictEqual(dirs, ['\\l\\tree', '\\l\\tree\\full', '\\l\\tree\\full\\deeper'],
+    'the directories that hold files survive the prune');
+  assert.strictEqual(local.read('\\l\\tree\\full\\a.txt').toString(), 'a');
+  assert.strictEqual(local.read('\\l\\tree\\full\\deeper\\b.txt').toString(), 'b');
+  assert.ok(!local.files.has('\\l\\tree\\empty'), 'the empty one is still pruned');
+  assert.strictEqual(item.progress.filesDone, 2);
+});
+
+test('a Windows-separated download tree is unaffected when the option is off', async () => {
+  // The control: without excludeEmptyDirectories the prune never runs, so this
+  // passes with or without the fix and proves the fixture itself is sound —
+  // any failure above is the predicate, not the backslash adapter.
+  const { local, remote } = makeWindowsPair();
+  remote.put('/r/tree/full/a.txt', 'a');
+  remote.putDir('/r/tree/empty');
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'download',
+    source: '/r/tree',
+    target: '\\l\\tree',
+    sourceAdapter: remote,
+    targetAdapter: local,
+  });
+  await q.idle();
+
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.strictEqual(local.read('\\l\\tree\\full\\a.txt').toString(), 'a');
+  assert.ok(local.files.has('\\l\\tree\\empty'), 'without the option the empty directory is created');
 });
 
 test('pause and resume of a single item', async () => {

@@ -846,8 +846,26 @@ class TransferQueue extends EventEmitter {
     if (cp.excludeEmptyDirectories) {
       // Drop directory entries that ended up with nothing under them. The root
       // entry stays only if the whole transfer has at least one file in it.
-      const pruned = entries.filter((e) => e.kind !== 'dir'
-        || entries.some((o) => o.kind === 'file' && o.dstPath.startsWith(`${e.dstPath}/`)));
+      //
+      // The separator comes from the TARGET adapter, not from a literal '/'.
+      // Every dstPath in the plan was built by `dst.join`, and the target of a
+      // DOWNLOAD is protocols/local.js, whose `sep` is '\' on Windows. Testing
+      // against '/' there made the predicate false for every directory —
+      // including ones packed with files — so every kind:'dir' entry was
+      // pruned. `_run` only mkdirs from kind:'dir' entries and LocalAdapter's
+      // createWriteStream does not create parents, so the whole download then
+      // died on the first file with ENOENT. Uploads never noticed because a
+      // remote adapter really is '/'-separated.
+      //
+      // The trailing separator is what keeps '/a/b' from swallowing '/a/bc';
+      // a dstPath that already ends in one (a drive or share root) must not
+      // grow a second, which would match nothing at all.
+      const sep = dst.sep || '/';
+      const pruned = entries.filter((e) => {
+        if (e.kind !== 'dir') return true;
+        const prefix = e.dstPath.endsWith(sep) ? e.dstPath : e.dstPath + sep;
+        return entries.some((o) => o.kind === 'file' && o.dstPath.startsWith(prefix));
+      });
       return { entries: pruned, bytes, files };
     }
 

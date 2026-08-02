@@ -44,7 +44,7 @@ Under **Transfer settings** (in any transfer dialog) and
 | `includeFileMask` | `''` | The [file mask](../editing-and-commands/file-masks.md) filtering the transfer. |
 | `newerOnly` | `false` | Skip files not newer than the target. |
 | `excludeHiddenFiles` | `false` | Skip hidden files. |
-| `excludeEmptyDirectories` | `false` | Do not create directories that end up empty. |
+| `excludeEmptyDirectories` | `false` | Do not create directories that end up empty. "Empty" is recursive and filter-aware: a directory holding only masked-out files, only hidden files while `excludeHiddenFiles` is on, or only other empty directories counts as empty too. A directory that cannot be listed counts as **not** empty, so an unreadable folder is still copied rather than silently dropped. |
 | `followDirectorySymlinks` | `false` | Recurse into symlinked directories. Off by default — link loops are how a recursive copy never finishes. |
 
 ### Completion and pacing

@@ -1592,14 +1592,14 @@ class TransferEngine {
 
   /**
    * TTerminal::AllowLocalFileTransfer. The mask, the hidden-file rule, the
-   * temporary `.filepart` rule and the skip list, in that order — and the skip
-   * list adds the file's size to the "skipped" counter rather than pretending
-   * it was never there.
+   * temporary `.filepart` rule, the empty-directory rule and the skip list, in
+   * that order — and the skip list adds the file's size to the "skipped"
+   * counter rather than pretending it was never there.
    */
-  allowLocalFileTransfer(fileName, handle, copyParam, progress) {
+  async allowLocalFileTransfer(fileName, handle, copyParam, progress) {
     const cp = copyParam || {};
     if (!allowAnyTransfer(cp)) {
-      if (!this.doAllowFileTransfer(fileName, handle, cp, SIDES.local, false)) {
+      if (!await this.doAllowFileTransfer(fileName, handle, cp, SIDES.local, false)) {
         this.logEvent(`File "${fileName}" excluded from transfer`);
         return false;
       }
@@ -1612,28 +1612,110 @@ class TransferEngine {
     return true;
   }
 
-  /** DoAllowLocalFileTransfer / DoAllowRemoteFileTransfer, unified. */
-  doAllowFileTransfer(fileName, info, copyParam, side, disallowTemporaryTransferFiles) {
+  /**
+   * DoAllowLocalFileTransfer / DoAllowRemoteFileTransfer, unified.
+   *
+   * Async purely because of the last clause. `cpNoEmptyDirectories` cannot be
+   * answered from the entry in hand — it means "does anything transferable
+   * live under here?", which is a listing — and the original puts it here
+   * rather than at each call site so that *every* caller agrees: the copy, the
+   * size calculation and the collection all ask one predicate. A size that
+   * counts a directory the copy will then refuse is a progress total that
+   * never arrives.
+   */
+  async doAllowFileTransfer(fileName, info, copyParam, side, disallowTemporaryTransferFiles) {
     const cp = copyParam || {};
     if (info.hidden && cp.excludeHiddenFiles) return false;
     if (disallowTemporaryTransferFiles &&
         getPartialFileExtLen(extractFileName(excludeTrailingSlash(fileName))) > 0) {
       return false;
     }
-    if (!cp.includeFileMask) return true;
-    const mask = cp._includeMask instanceof FileMask
-      ? cp._includeMask
-      : new FileMask(cp.includeFileMask);
-    if (!(cp._includeMask instanceof FileMask)) {
-      Object.defineProperty(cp, '_includeMask', { value: mask, enumerable: false, configurable: true, writable: true });
+    if (cp.includeFileMask) {
+      const mask = cp._includeMask instanceof FileMask
+        ? cp._includeMask
+        : new FileMask(cp.includeFileMask);
+      if (!(cp._includeMask instanceof FileMask)) {
+        Object.defineProperty(cp, '_includeMask', { value: mask, enumerable: false, configurable: true, writable: true });
+      }
+      if (!mask.matches(this.baseFileName(fileName), {
+        isDir: !!info.directory,
+        size: info.size,
+        mtime: info.modification,
+        path: excludeTrailingSlash(fileName),
+        local: side === SIDES.local,
+      })) return false;
     }
-    return mask.matches(this.baseFileName(fileName), {
-      isDir: !!info.directory,
-      size: info.size,
-      mtime: info.modification,
-      path: excludeTrailingSlash(fileName),
-      local: side === SIDES.local,
-    });
+    // The cpNoEmptyDirectories clause, which the port used to advertise in
+    // `allowAnyTransfer` and then never apply anywhere.
+    if (info.directory && cp.excludeEmptyDirectories &&
+        await this.isEmptyDirectory(side, fileName, cp, disallowTemporaryTransferFiles)) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * TTerminal::IsEmptyLocalDirectory / TTerminal::IsEmptyRemoteDirectory.
+   *
+   * "Empty" is not "the listing came back with nothing". A directory holding
+   * only files the include mask rejects, only hidden files while
+   * `excludeHiddenFiles` is on, only half-finished `.filepart` leftovers, or
+   * only other empty directories is empty as far as THIS transfer is
+   * concerned — so it recurses, and it re-asks the very predicate that is in
+   * the middle of asking it.
+   *
+   * Three details are deliberate rather than incidental:
+   *
+   *   * The descent clears `excludeEmptyDirectories` — Terminal.cpp:6438 does
+   *     the same and says why ("to avoid endless recursion"). A child
+   *     directory's own emptiness is settled by the explicit recursive call
+   *     below; letting the predicate re-enter here as well would re-walk the
+   *     same subtree once per level.
+   *   * The two sides disagree about `.filepart` leftovers, and the original
+   *     is where the disagreement comes from: IsEmptyLocalDirectory asks the
+   *     child predicate with `DisallowTemporaryTransferFiles` hard-coded true
+   *     (Terminal.cpp:6199), while IsEmptyRemoteDirectory passes the caller's
+   *     flag through (Terminal.cpp:6441). So a LOCAL folder holding nothing
+   *     but `report.filepart` counts as empty and a remote one does not,
+   *     unless the caller already asked for temporaries to be disallowed.
+   *     That is copied rather than tidied up: quietly hardening one side would
+   *     make this port skip a directory WinSCP uploads.
+   *   * It stops at the first thing that counts — `csStopOnFirstFile` — so a
+   *     directory whose first entry is a file costs one listing, not a walk.
+   *
+   * A listing that fails answers "not empty". Refusing to copy a directory
+   * because we could not look inside it would drop it from the transfer in
+   * silence, which is worse than creating one empty directory too many.
+   */
+  async isEmptyDirectory(side, dirName, copyParam, disallowTemporaryTransferFiles) {
+    const a = this.adapterFor(side);
+    const dir = excludeTrailingSlash(dirName);
+    const inner = { ...(copyParam || {}), excludeEmptyDirectories: false };
+    const childDisallowsTemporary = side === SIDES.local ? true : !!disallowTemporaryTransferFiles;
+    let listing;
+    try {
+      listing = await a.list(a.normalize(dir));
+    } catch {
+      return false;
+    }
+    for (const child of listing) {
+      if (child.name === '.' || child.name === '..') continue;
+      // The adapter's own join, so a Windows local path stays a Windows path.
+      const childName = a.join(dir, child.name);
+      const isDir = child.type === 'dir';
+      const allowed = await this.doAllowFileTransfer(childName, {
+        hidden: !!child.hidden,
+        directory: isDir,
+        size: child.size,
+        modification: child.mtime,
+      }, inner, side, childDisallowsTemporary);
+      if (!allowed) continue;
+      if (!isDir) return false;
+      if (!await this.isEmptyDirectory(side, childName, copyParam, disallowTemporaryTransferFiles)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   logFileDetails(fileName, modification, size) {
@@ -1899,7 +1981,7 @@ class TransferEngine {
 
     const handle = searchRec || await this.openFile(SIDES.local, fileName);
 
-    if (!this.allowLocalFileTransfer(fileName, handle, copyParam, progress)) {
+    if (!await this.allowLocalFileTransfer(fileName, handle, copyParam, progress)) {
       throw new SkipFileError(`File "${fileName}" excluded from transfer`);
     }
 
@@ -2100,7 +2182,7 @@ class TransferEngine {
     if (action) action.fileName(fileName);
     if (!file) throw new TerminalError(`No file information for "${fileName}".`);
 
-    if (!this.doAllowFileTransfer(fileName, {
+    if (!await this.doAllowFileTransfer(fileName, {
       hidden: file.hidden, directory: file.type === 'dir',
       size: file.size, modification: file.mtime,
     }, copyParam, SIDES.remote, false)) {
@@ -2570,7 +2652,7 @@ class TransferEngine {
     const collected = fileLists ? new CollectedFileList() : null;
 
     const walk = async (fileName, info, list) => {
-      if (copyParam && !this.doAllowFileTransfer(fileName, info, copyParam, SIDES.local, false)) return;
+      if (copyParam && !await this.doAllowFileTransfer(fileName, info, copyParam, SIDES.local, false)) return;
       let index = -1;
       if (list) index = list.add(fileName, null, !!info.directory);
       if (!info.directory) {
