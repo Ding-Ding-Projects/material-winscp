@@ -207,13 +207,16 @@ registerDialog('locationprofiles', ({ props, close }) => {
           color: isSelected ? 'var(--onsecc)' : 'var(--onsfc)',
           fontSize: 'var(--type-body-sm)', cursor: 'default',
         },
-        onclick: () => { selected = { kind: 'profile', name: profile.name, node: profile.node }; fill(profile); paint(); },
+        onclick: () => row.__select(),
         ondblclick: () => { fill(profile); accept(); },
       },
       h('span', { class: 'ellipsis', style: { flex: '0 1 auto', fontWeight: '600' }, title: profile.name }, profile.name),
       h('span', { class: 'ellipsis muted mono', style: { flex: '1 1 auto', fontSize: 'var(--type-label-sm)' }, title: `${profile.local} · ${profile.remote}` },
         [profile.local, profile.remote].filter(Boolean).join('  ·  ')),
       profile.shortCut ? h('kbd', {}, profile.shortCut) : null);
+      // Selecting is separate from activating, so arrowing through the tree can
+      // move the selection without also firing the click handler's side effects.
+      row.__select = () => { selected = { kind: 'profile', name: profile.name, node: profile.node }; fill(profile); paint(); };
       return row;
     }
 
@@ -253,6 +256,14 @@ registerDialog('locationprofiles', ({ props, close }) => {
           },
         }, h('span', {}, isCollapsed ? '▸' : '▾'), h('span', { class: 'ellipsis' }, node),
         h('span', { class: 'muted' }, `(${children.length})`));
+        // Arrowing onto a folder selects it; collapsing is Left/Right or a
+        // click, never a side effect of moving through the list.
+        header.__select = () => { selected = { kind: 'folder', node }; paint(); };
+        header.__setExpanded = (open) => {
+          if (open) collapsed.delete(node); else collapsed.add(node);
+          selected = { kind: 'folder', node };
+          paint();
+        };
         tree.appendChild(header);
         if (!isCollapsed) for (const child of children) tree.appendChild(rowFor(child));
       }
@@ -435,8 +446,10 @@ registerDialog('locationprofiles', ({ props, close }) => {
       const rows = Array.from(tree.querySelectorAll('[role="treeitem"]'));
       if (!rows.length) return;
       const active = rows.findIndex((r) => r.getAttribute('aria-selected') === 'true');
-      if (e.key === 'ArrowDown') { e.preventDefault(); rows[Math.min(rows.length - 1, active + 1)]?.click(); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); rows[Math.max(0, active - 1)]?.click(); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); rows[Math.min(rows.length - 1, active + 1)]?.__select?.(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); rows[Math.max(0, active - 1)]?.__select?.(); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); rows[active]?.__setExpanded?.(true); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); rows[active]?.__setExpanded?.(false); }
       else if (e.key === 'Delete') { e.preventDefault(); removeProfile(); }
       else if (e.key === 'F2') { e.preventDefault(); renameProfile(); }
       else if (e.key === 'Enter' && selected && selected.kind === 'profile') { e.preventDefault(); accept(); }

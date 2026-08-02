@@ -8,13 +8,20 @@ not started; a mapping pointing at a file that does not exist is reported as a
 problem. The percentage is weighted by source lines, so a large subsystem
 cannot be made to look finished by porting a handful of small files.
 
-**Overall: 9.1% of 318,002 lines across 125 units.**
+**Logic coverage: 19.1%** of 209,889 lines that are actually code.
+
+Raw line coverage is 39.5% of 318,002 lines across 125 units, but that figure is
+distorted: 108,113 of those lines (34%) are binary resources embedded as hex in
+`.dfm` files — icon sheets and animation frames, at four DPI variants each.
+Classifying those eight units as replaced moved the raw number from 9.1% to
+39.5% without a single behaviour being ported, which is precisely why the
+**logic figure is the one to quote**.
 
 ## By area
 
 | Area | Units | Ported | Lines | Coverage |
 |---|---:|---:|---:|---:|
-| `forms` | 51 | 0 | 199,082 | 2.3% |
+| `forms` | 51 | 8 | 199,082 | 50.9% |
 | `core` | 36 | 1 | 76,572 | 37.0% |
 | `windows` | 20 | 0 | 32,403 | 6.0% |
 | `resource` | 9 | 0 | 4,110 | 0.0% |
@@ -37,19 +44,19 @@ counted as replaced rather than transcribed.
 
 | Status | Unit | Area | Lines | Ported to | Note |
 |---|---|---|---:|---|---|
-| ⬜ Not started | `forms/Animations144` | forms | 18,191 | — |  |
-| ⬜ Not started | `forms/Animations192` | forms | 18,066 | — |  |
+| 🔁 Replaced by an equivalent | `forms/Animations144` | forms | 18,191 | `design/renderer/styles/components.css` | 144 DPI animation frame bitmaps (15,747 of 18,155 lines are pure hex). |
+| 🔁 Replaced by an equivalent | `forms/Animations192` | forms | 18,066 | `design/renderer/styles/components.css` | 192 DPI animation frame bitmaps. |
 | ⬜ Not started | `forms/CustomScpExplorer` | forms | 14,045 | — |  |
-| ⬜ Not started | `forms/Animations120` | forms | 13,492 | — |  |
-| ⬜ Not started | `forms/Animations96` | forms | 11,335 | — |  |
+| 🔁 Replaced by an equivalent | `forms/Animations120` | forms | 13,492 | `design/renderer/styles/components.css` | 120 DPI animation frame bitmaps. |
+| 🔁 Replaced by an equivalent | `forms/Animations96` | forms | 11,335 | `design/renderer/styles/components.css` | Embedded animation frame bitmaps. M3 motion is expressed in CSS, so frame sheets are not transcribed. |
 | 🚧 In progress | `core/Terminal` | core | 10,449 | `design/main/session.js`<br>`design/main/sync.js` | Session lifecycle and the synchronization engine. Terminal is 7,000+ lines; most of it is still ahead. |
-| ⬜ Not started | `forms/Glyphs192` | forms | 9,952 | — |  |
-| ⬜ Not started | `forms/Glyphs144` | forms | 9,177 | — |  |
+| 🔁 Replaced by an equivalent | `forms/Glyphs192` | forms | 9,952 | `design/renderer/ui/commands.js` | 192 DPI variant of the same bitmap sheet (9,123 of 9,916 lines are pure hex). |
+| 🔁 Replaced by an equivalent | `forms/Glyphs144` | forms | 9,177 | `design/renderer/ui/commands.js` | 144 DPI variant of the same bitmap sheet. |
 | ⬜ Not started | `forms/Login` | forms | 8,977 | — |  |
-| ⬜ Not started | `forms/Glyphs120` | forms | 8,688 | — |  |
+| 🔁 Replaced by an equivalent | `forms/Glyphs120` | forms | 8,688 | `design/renderer/ui/commands.js` | 120 DPI variant of the same bitmap sheet. A vector icon set has no DPI variants, so the four sheets collapse into one mapping. |
 | ⬜ Not started | `forms/Preferences` | forms | 8,171 | — |  |
 | ⬜ Not started | `forms/Editor` | forms | 8,150 | — |  |
-| ⬜ Not started | `forms/Glyphs` | forms | 7,981 | — |  |
+| 🔁 Replaced by an equivalent | `forms/Glyphs` | forms | 7,981 | `design/renderer/ui/commands.js` | Embedded PNG bitmap sheet (7,981 lines, ~90% pure hex; the .cpp behind it is 14 lines). Material Symbols replace it — the action-to-icon mapping is iconFor() in commands.js. |
 | 🚧 In progress | `core/SessionData` | core | 6,884 | `design/main/defaults.js`<br>`design/main/config.js` | Full option set declared; URL parsing and raw-settings editing pending. |
 | 🚧 In progress | `forms/NonVisual` | forms | 6,486 | `tools/extract-actions.js`<br>`design/renderer/actions.js` | All 301 actions extracted from the original with captions, hints and shortcuts; handlers pending. |
 | ⬜ Not started | `forms/SiteAdvanced` | forms | 6,290 | — |  |

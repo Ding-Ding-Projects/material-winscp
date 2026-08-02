@@ -156,7 +156,11 @@ export function openEditorPreferences({ entry, onSave, title } = {}) {
       if (picked) { programInput.value = picked; draft.external = picked; }
     },
   }, t('browse'));
-  if (!api.raw?.app?.pickPath) { browse.disabled = true; browse.title = 'A file picker needs the application shell.'; }
+  if (!api.raw?.app?.pickPath) {
+    browse.disabled = true;
+    browse.title = tx('A file picker needs the application shell; type the path instead.',
+      '要有應用程式外殼先開到檔案揀選器，請直接打路徑。');
+  }
 
   const defaultBtn = h('button', {
     type: 'button', class: 'btn-text',
@@ -209,7 +213,12 @@ export function openEditorPreferences({ entry, onSave, title } = {}) {
     h('label', { class: 'pref-label' }, tx('Program', '程式')),
     h('span', { class: 'pref-inline' }, programInput, browse, defaultBtn),
     h('p', { class: 'pref-hint' },
-      tx('Custom-command patterns are expanded: ! is the file and !\\ is its local directory.', '可以用自訂指令樣式：! 係檔案，!. 係本機路徑。')));
+      // design/main/editors.js splitProgram() substitutes !.! (and the Windows
+      // shell spellings "%1" / %1) and appends the file when the command line
+      // carries none of them. Naming any other pattern here would document
+      // behaviour this application does not have.
+      tx('Write !.! where the file name goes — "%1" and %1 work too. A command line with none of them gets the file appended as its last argument.',
+        '想個檔名擺喺邊就喺嗰度寫 !.!，用 "%1" 或者 %1 都得。一個都冇寫嘅話，檔名會加喺命令列最尾。')));
 
   function sync() {
     const external = draft.type === 'external';
@@ -289,7 +298,7 @@ export function createEditorList({ value = [], onChange } = {}) {
 
   const bar = createSearchBar({
     id: 'preferences-editors', labelKey: 'prefsSearchPh',
-    placeholder: 'Search editors',
+    placeholder: tx('Search editors', '搵編輯器'),
     persist: false, compact: true,
     sampleProvider: () => rows.map((r) => `${r.mask}\t${describeEditor(r)}`).join('\n'),
     onChange: () => paint(),
@@ -315,8 +324,12 @@ export function createEditorList({ value = [], onChange } = {}) {
   function probe() {
     const name = probeInput.value.trim();
     if (!name) { probeResult.textContent = ''; return; }
-    const hit = editorFor(name, rows);
-    const index = rows.findIndex((r) => r === hit);
+    // editorFor() normalises as it walks, so it hands back a COPY of the entry
+    // it chose — identity comparison against `rows` never matches and the probe
+    // would report "no entry matches" even while one plainly does. The index is
+    // therefore recovered with the same first-match-wins rule editorFor uses.
+    const index = rows.findIndex((r) => matchesMask(r.mask, name));
+    const hit = index >= 0 ? normaliseEditor(rows[index]) : editorFor(name, rows);
     probeResult.textContent = index >= 0
       ? (tx(`Entry ${index + 1} (${hit.mask}) — ${describeEditor(hit)}`, `第 ${index + 1} 行（${hit.mask}）—— ${describeEditor(hit)}`))
       : (tx('No entry matches; the internal editor is used.', '冇規則夾中，會用內置編輯器。'));

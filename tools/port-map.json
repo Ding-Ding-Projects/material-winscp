@@ -150,6 +150,47 @@
       "note": "Internal and external editor lifecycle with upload-on-save."
     },
 
+    "forms/Glyphs": {
+      "status": "replaced",
+      "targets": ["design/renderer/ui/commands.js"],
+      "note": "Embedded PNG bitmap sheet (7,981 lines, ~90% pure hex; the .cpp behind it is 14 lines). Material Symbols replace it — the action-to-icon mapping is iconFor() in commands.js."
+    },
+    "forms/Glyphs120": {
+      "status": "replaced",
+      "targets": ["design/renderer/ui/commands.js"],
+      "note": "120 DPI variant of the same bitmap sheet. A vector icon set has no DPI variants, so the four sheets collapse into one mapping."
+    },
+    "forms/Glyphs144": {
+      "status": "replaced",
+      "targets": ["design/renderer/ui/commands.js"],
+      "note": "144 DPI variant of the same bitmap sheet."
+    },
+    "forms/Glyphs192": {
+      "status": "replaced",
+      "targets": ["design/renderer/ui/commands.js"],
+      "note": "192 DPI variant of the same bitmap sheet (9,123 of 9,916 lines are pure hex)."
+    },
+    "forms/Animations96": {
+      "status": "replaced",
+      "targets": ["design/renderer/styles/components.css"],
+      "note": "Embedded animation frame bitmaps. M3 motion is expressed in CSS, so frame sheets are not transcribed."
+    },
+    "forms/Animations120": {
+      "status": "replaced",
+      "targets": ["design/renderer/styles/components.css"],
+      "note": "120 DPI animation frame bitmaps."
+    },
+    "forms/Animations144": {
+      "status": "replaced",
+      "targets": ["design/renderer/styles/components.css"],
+      "note": "144 DPI animation frame bitmaps (15,747 of 18,155 lines are pure hex)."
+    },
+    "forms/Animations192": {
+      "status": "replaced",
+      "targets": ["design/renderer/styles/components.css"],
+      "note": "192 DPI animation frame bitmaps."
+    },
+
     "putty/putty": { "status": "na", "note": "Directory-level replacement is recorded separately, not per unit." },
     "filezilla/filezilla": { "status": "na", "note": "Directory-level replacement is recorded separately, not per unit." }
   }

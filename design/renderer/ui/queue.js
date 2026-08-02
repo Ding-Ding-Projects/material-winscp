@@ -1469,6 +1469,20 @@ export function createQueuePanel(opts = {}) {
   const handle = {
     element: root,
     refresh: () => queueModel.refresh(),
+    /**
+     * Put the keyboard in the list. ui/commands.js's QueueGoToAction calls this
+     * on the published handle, so leaving it off turns "Go To" into a
+     * TypeError toast rather than a jump to the queue.
+     */
+    focus() {
+      const target = (selectedId && listEl.querySelector(`[data-queue-id="${CSS.escape(String(selectedId))}"]`))
+        || listEl.querySelector('.tx-q-row')
+        || root.querySelector('button, input, [tabindex="0"]');
+      if (!target) return false;
+      target.tabIndex = target.tabIndex < 0 ? 0 : target.tabIndex;
+      target.focus();
+      return true;
+    },
     select(id) { selectedId = id; render(); },
     /** The row the command layer acts on. `null` when nothing is selected. */
     selected() {
@@ -1810,14 +1824,17 @@ export function startQueueUi() {
   bus.on('queue:showQuery', (item) => {
     const id = item?.id || item;
     const query = pendingQueryFor(id);
-    if (query) openOverwriteDialog({ itemId: id, query });
-    else notify.info(t('queueTitle'), t('txNoPendingQuery'));
+    if (query) { openOverwriteDialog({ itemId: id, query }); return; }
+    // The engine's own state is the authority on whether a transfer is waiting.
+    // Saying "it is not waiting" while queue:list reports `query` would be a
+    // false statement about the one thing the user came here to check.
+    reportMissingWait(id, 'query');
   });
   bus.on('queue:showPrompt', (item) => {
     const id = item?.id || item;
     const prompt = pendingPromptFor(id);
-    if (prompt) openQueueCredentialPrompt({ itemId: id, prompt });
-    else notify.info(t('queueTitle'), t('txNoPendingPrompt'));
+    if (prompt) { openQueueCredentialPrompt({ itemId: id, prompt }); return; }
+    reportMissingWait(id, 'prompt');
   });
 
   queueModel.start();
@@ -1826,7 +1843,27 @@ export function startQueueUi() {
 defineStrings({
   txNoPendingQuery: ['That transfer is not waiting for an answer.', '嗰單傳輸而家冇等緊你答。'],
   txNoPendingPrompt: ['That transfer is not waiting for a credential.', '嗰單傳輸而家冇等緊憑證。'],
+  txWaitLost: ['That transfer IS waiting — the engine reports it as "{0}" — but the question itself never reached this window, so it cannot be answered here. The transfer will stay stopped until it is cancelled.', '嗰單傳輸真係等緊——引擎報住係「{0}」——但係條問題根本冇送到嚟呢個視窗，所以喺呢度答唔到。除非取消，否則佢會一直停喺度。'],
 });
+
+/**
+ * "Show the query" with nothing captured. Two genuinely different situations —
+ * the transfer is not waiting at all, or it is waiting and the question was
+ * lost on the way here — and reporting the second as the first tells the user
+ * a stopped transfer is fine. design/main/ipc.js forwards the queue's `query`
+ * and `prompt` events with the emitter's `respond` FUNCTION still in the
+ * payload, which webContents.send cannot structured-clone, so today the second
+ * case is the one that actually happens.
+ */
+function reportMissingWait(id, kind) {
+  const item = queueModel.item(id);
+  const waiting = item && (item.state === 'query' || item.state === 'prompt');
+  if (waiting) {
+    notify.warning(t('queueTitle'), t('txWaitLost', t(stateKey(item.state))));
+    return;
+  }
+  notify.info(t('queueTitle'), t(kind === 'query' ? 'txNoPendingQuery' : 'txNoPendingPrompt'));
+}
 
 let popover = null;
 

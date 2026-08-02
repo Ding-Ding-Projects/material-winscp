@@ -148,6 +148,27 @@ function compose(build) {
   return en === yue ? en : `${en} · ${yue}`;
 }
 
+/**
+ * The paragraphs of a multi-paragraph string, one language at a time — the same
+ * rule as `compose`, applied to block text. Resolving first and splitting after
+ * joins the WHOLE English text to the WHOLE Cantonese one, so the split fuses
+ * the last English paragraph to the first Cantonese one and orphans the rest.
+ */
+function paragraphs(key, ...params) {
+  const mode = getLanguage();
+  const split = (language) => strIn(language, key, ...params).split('\n\n');
+  if (mode !== 'both') return split(mode);
+  const en = split('en');
+  const yue = split('yue');
+  const out = [];
+  for (let i = 0; i < Math.max(en.length, yue.length); i += 1) {
+    const a = en[i] || '';
+    const b = yue[i] || '';
+    out.push(a && b && a !== b ? `${a} · ${b}` : (a || b));
+  }
+  return out;
+}
+
 /** Every action main derives, named. An action it invents later still shows —
  *  the list is built from the data and this only supplies a nicer label. */
 const ACTION_LABELS = {
@@ -202,13 +223,32 @@ const SECRET_PATH_RE = /(^|\.)(password|passphrase|secret|token|credential|apike
  */
 export function isSecretPath(path) { return SECRET_PATH_RE.test(String(path || '')); }
 
+/**
+ * The path is not always the leaf. `history.diff` walks to scalars, so its
+ * paths reach `sites.0.password` and the check above catches them — but the
+ * FIRST revision has no predecessor to diff against, so its rows carry whole
+ * subtrees under a top-level path (`sites`) that is not itself secret. Printing
+ * that subtree raw would put every stored credential on screen, which is the
+ * one thing this panel promises not to do. So a value that is rendered whole is
+ * scrubbed by key name before it is ever turned into text.
+ */
+function scrubSecrets(value) {
+  if (Array.isArray(value)) return value.map(scrubSecrets);
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = isSecretPath(k) ? s('hpSecretHidden') : scrubSecrets(v);
+    return out;
+  }
+  return value;
+}
+
 export function renderDiffValue(path, value) {
   if (isSecretPath(path)) return s('hpSecretHidden');
   if (value === undefined) return '—';
   if (value === null) return 'null';
   if (typeof value === 'string') return value.length > 200 ? `${value.slice(0, 199)}…` : value;
   if (typeof value === 'object') {
-    const json = JSON.stringify(value);
+    const json = JSON.stringify(scrubSecrets(value));
     return json.length > 200 ? `${json.slice(0, 199)}…` : json;
   }
   return String(value);
@@ -582,7 +622,7 @@ export function createHistoryPanel(opts = {}) {
       title: s('hpRestoreTitle', row.short),
       width: 560,
       content: h('div', { class: 'stack' },
-        ...s('hpRestoreBody', row.short, fmtTime(row.time)).split('\n\n').map((p) => h('p', { class: 'prose' }, p)),
+        ...paragraphs('hpRestoreBody', row.short, fmtTime(row.time)).map((p) => h('p', { class: 'prose' }, p)),
         h('p', { class: 'prose muted' }, row.label)),
       actions: [
         { label: t('cancel'), kind: 'text' },
@@ -689,7 +729,7 @@ export function createHistoryPanel(opts = {}) {
       title: s('hpPruneTitle'),
       width: 560,
       content: h('div', { class: 'stack' },
-        ...s('hpPruneBody').split('\n\n').map((p) => h('p', { class: 'prose' }, p))),
+        ...paragraphs('hpPruneBody').map((p) => h('p', { class: 'prose' }, p))),
       actions: [
         { label: t('cancel'), kind: 'text' },
         {

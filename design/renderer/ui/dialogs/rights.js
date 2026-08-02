@@ -911,8 +911,11 @@ export function createRightsEditor(opts = {}) {
     try {
       rights = fromOctal(value);
       showOctalError('');
-      paintChecks();
-      paintAddX();
+      // paint(), not just the checkboxes: the symbolic readout beside the field
+      // is derived from the same state and would otherwise keep showing the
+      // mode the dialog opened with while the user types a different one.
+      // paintOctal() bails out while this input has focus, so the caret is safe.
+      paint();
       emit();
     } catch (err) {
       showOctalError(err.message);
@@ -1132,22 +1135,31 @@ registerDialog('rights', ({ props, close }) => {
   recursiveRow.element.hidden = !anyDirectories || !supported;
 
   const preview = h('div', { class: 'mono muted', style: { fontSize: 'var(--type-label-md)' } });
+  // The headline names the mode that OK would write, so it has to be rebuilt on
+  // every edit — a sentence that still says "rw-r--r-- will be set" while the
+  // editor holds 0700 is a statement of fact that has gone wrong.
+  const headline = h('p', { class: 'prose' });
+  function paintHeadline() {
+    headline.textContent = files.length
+      ? (files.length === 1
+        ? tx('rightsApplyBody', editor.text, files[0].name)
+        : tx('rightsApplyBodyMany', editor.text, files.length))
+      : tx('rightsNothing');
+  }
+  bindRender(headline, paintHeadline);
   function paintPreview() {
     // With undefined bits the text IS the chmod argument, so printing both
     // would say the same thing twice.
     const mode = chmodStrOf(rights, anyDirectories);
     preview.textContent = editor.text === mode ? mode : `${editor.text}  ·  ${mode}`;
+    paintHeadline();
   }
   paintPreview();
 
   const targets = files.map((f) => f.path || joinPath(props.directory || '', f.name)).filter(Boolean);
 
   const content = h('div', { class: 'stack' },
-    h('p', { class: 'prose' }, files.length
-      ? (files.length === 1
-        ? tx('rightsApplyBody', editor.text, files[0].name)
-        : tx('rightsApplyBodyMany', editor.text, files.length))
-      : tx('rightsNothing')),
+    headline,
     supported ? null : h('p', { class: 'prose' }, tx('rightsUnsupported', props.protocolName || 'This protocol')),
     editor.element,
     recursiveRow.element,

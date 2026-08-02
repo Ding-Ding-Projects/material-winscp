@@ -457,7 +457,7 @@ export function createCommandList({ value = [], sessionId, onChange } = {}) {
 
   const bar = createSearchBar({
     id: 'preferences-commands', labelKey: 'prefsSearchPh',
-    placeholder: 'Search custom commands',
+    placeholder: tx('Search custom commands', '搵自訂指令'),
     persist: false, compact: true,
     sampleProvider: () => rows.map((r) => `${r.name}\t${r.command}`).join('\n'),
     onChange: () => paint(),

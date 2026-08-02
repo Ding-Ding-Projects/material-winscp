@@ -884,7 +884,10 @@ export function createPreferences(opts = {}) {
       await prefs.set(control.key, value, label);
       for (const also of control.alsoKeys || []) await prefs.set(also, value, label);
     } catch (err) {
-      notify.error(t('settingsSaved'), `${localized(control.label)}: ${err.message}`);
+      // NOT t('settingsSaved') — that string reads "Preferences applied." and
+      // titling a failure with it tells the user the opposite of what happened.
+      notify.error(tx('The setting could not be saved', '呢個設定儲存唔到'),
+        `${localized(control.label)}: ${err.message}`);
       paintPage(page);
       return;
     }
@@ -915,7 +918,8 @@ export function createPreferences(opts = {}) {
     const a = api.raw;
     if (!a?.app?.pickPath) {
       notify.warning(localized(control.label),
-        'A file picker needs the application shell; type the path instead.');
+        tx('A file picker needs the application shell; type the path instead.',
+          '要有應用程式外殼先開到檔案揀選器，請直接打路徑。'));
       return null;
     }
     const wantsDirectory = /directory|folder|seed|temporary/i.test(control.key)
@@ -925,7 +929,7 @@ export function createPreferences(opts = {}) {
       defaultPath: current || undefined,
       properties: wantsDirectory ? ['openDirectory'] : ['openFile'],
     });
-    if (res && res.ok === false) { notify.error(localized(control.label), res.error?.message || 'The picker was refused.'); return null; }
+    if (res && res.ok === false) { notify.error(localized(control.label), res.error?.message || tx('The picker was refused.', '揀選器俾人拒絕咗。')); return null; }
     const value = res && res.ok ? res.value : res;
     if (!value) return null;
     return Array.isArray(value) ? value[0] : (value.path || value.filePath || value);
@@ -974,7 +978,7 @@ export function createPreferences(opts = {}) {
   function masterPasswordToggle(control, page, wantOn) {
     const a = api.raw;
     if (!a?.config?.enableMasterPassword) {
-      notify.error(t('masterPassword'), 'The configuration bridge is not available in this window.');
+      notify.error(t('masterPassword'), tx('The configuration bridge is not available in this window.', '呢個視窗接唔到設定橋接。'));
       paintPage(page);
       return;
     }
@@ -985,7 +989,7 @@ export function createPreferences(opts = {}) {
         fields: ['new', 'confirm'],
         onSubmit: async ({ next }) => {
           const res = await a.config.enableMasterPassword(next);
-          if (res && res.ok === false) throw new Error(res.error?.message || 'The master password could not be set.');
+          if (res && res.ok === false) throw new Error(res.error?.message || tx('The master password could not be set.', '設唔到主密碼。'));
           await prefs.load(true);
           notify.success(t('masterPassword'), t('settingsSaved'));
           paintPage(page);
@@ -1013,7 +1017,7 @@ export function createPreferences(opts = {}) {
   function changeMasterPassword(page) {
     const a = api.raw;
     if (!a?.config?.changeMasterPassword) {
-      notify.error(t('masterPassword'), 'The configuration bridge is not available in this window.');
+      notify.error(t('masterPassword'), tx('The configuration bridge is not available in this window.', '呢個視窗接唔到設定橋接。'));
       return;
     }
     passwordPrompt({
@@ -1031,9 +1035,9 @@ export function createPreferences(opts = {}) {
 
   async function checkUpdatesNow() {
     const a = api.raw;
-    if (!a?.app?.checkUpdates) { notify.warning(t('checkUpdates'), 'Update checks need the application shell.'); return; }
+    if (!a?.app?.checkUpdates) { notify.warning(t('checkUpdates'), tx('Update checks need the application shell.', '要有應用程式外殼先檢查到更新。')); return; }
     const res = await a.app.checkUpdates({ force: true });
-    if (res && res.ok === false) { notify.error(t('checkUpdates'), res.error?.message || 'The check failed.'); return; }
+    if (res && res.ok === false) { notify.error(t('checkUpdates'), res.error?.message || tx('The check failed.', '檢查失敗。')); return; }
     const value = res && res.ok ? res.value : res;
     await prefs.load(true);
     if (value && value.newer && value.version) {
@@ -1048,19 +1052,19 @@ export function createPreferences(opts = {}) {
 
   async function exportConfiguration() {
     const a = api.raw;
-    if (!a?.config?.export || !a?.app?.pickPath) { notify.warning(t('exportCfg'), 'Exporting needs the application shell.'); return; }
+    if (!a?.config?.export || !a?.app?.pickPath) { notify.warning(t('exportCfg'), tx('Exporting needs the application shell.', '要有應用程式外殼先匯出到。')); return; }
     const picked = await a.app.pickPath({ title: t('exportCfg'), properties: ['save'], defaultPath: 'winscp-material-config.json' });
     const file = picked && picked.ok ? picked.value : picked;
     const target = Array.isArray(file) ? file[0] : (file && (file.path || file.filePath)) || file;
     if (!target) return;
     const res = await a.config.export(target);
-    if (res && res.ok === false) { notify.error(t('exportCfg'), res.error?.message || 'The export failed.'); return; }
+    if (res && res.ok === false) { notify.error(t('exportCfg'), res.error?.message || tx('The export failed.', '匯出失敗。')); return; }
     notify.success(t('cfgExported'), String(target));
   }
 
   async function importConfiguration() {
     const a = api.raw;
-    if (!a?.config?.import || !a?.app?.pickPath) { notify.warning(t('importCfg'), 'Importing needs the application shell.'); return; }
+    if (!a?.config?.import || !a?.app?.pickPath) { notify.warning(t('importCfg'), tx('Importing needs the application shell.', '要有應用程式外殼先匯入到。')); return; }
     const picked = await a.app.pickPath({ title: t('importCfg'), properties: ['openFile'] });
     const file = picked && picked.ok ? picked.value : picked;
     const target = Array.isArray(file) ? file[0] : (file && (file.path || file.filePath)) || file;
@@ -1076,7 +1080,7 @@ export function createPreferences(opts = {}) {
           label: t('importCfg'), kind: 'filled', autofocus: true,
           onSelect: async () => {
             const res = await a.config.import(target, `Imported the configuration from ${target}`);
-            if (res && res.ok === false) { notify.error(t('importCfg'), res.error?.message || 'The import failed.'); return; }
+            if (res && res.ok === false) { notify.error(t('importCfg'), res.error?.message || tx('The import failed.', '匯入失敗。')); return; }
             await prefs.load(true);
             renderMain();
             notify.success(t('cfgImported'), String(target));

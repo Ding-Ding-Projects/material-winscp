@@ -1660,16 +1660,25 @@ function row(control, language, controlNode, opts = {}) {
   return rowEl;
 }
 
+/**
+ * Enable or disable a whole row's controls. An option the build marked
+ * `data-perm-disabled` stays disabled whatever the row's dependency says: that
+ * flag is how the schema greys out something this port genuinely cannot do
+ * (registry storage), and re-enabling it here would offer the user a choice
+ * that cannot be honoured — the exact failure the disabled state exists to
+ * prevent.
+ */
 function applyDisabled(node, disabled) {
   if (!node) return;
+  const set = (el) => { el.disabled = el.dataset?.permDisabled === '1' ? true : !!disabled; };
   if (node.tagName === 'INPUT' || node.tagName === 'SELECT' || node.tagName === 'BUTTON' || node.tagName === 'TEXTAREA') {
-    node.disabled = !!disabled;
+    set(node);
     return;
   }
   // A custom renderer may hand back a fragment or a text node; those have no
   // controls to disable and must not take the whole page down with them.
   if (typeof node.querySelectorAll !== 'function') return;
-  for (const el of node.querySelectorAll('input, select, button, textarea')) el.disabled = !!disabled;
+  for (const el of node.querySelectorAll('input, select, button, textarea')) set(el);
 }
 
 /**
@@ -1709,7 +1718,7 @@ export function renderControl(control, ctx) {
             onchange: () => { if (input.checked) commit(o.value); },
           });
           input.checked = stored === o.value;
-          if (o.disabled) input.disabled = true;
+          if (o.disabled) { input.disabled = true; input.dataset.permDisabled = '1'; }
           const item = h('label', { class: `pref-radio${o.disabled ? ' is-disabled' : ''}`, for: rid },
             input,
             h('span', { class: 'pref-radio-dot' }),
@@ -1860,5 +1869,13 @@ export function renderControl(control, ctx) {
 
   const built = build();
   applyDisabled(built.node, !enabled);
-  return row(control, language, built.node, { id: built.id || id, labelInline: built.labelInline, disabled: !enabled });
+  // A colour swatch or a font button is built by a shared component that owns
+  // its own markup, so the id the row's <label for> points at has to be put
+  // onto whatever inside it takes focus. Without this the label is an orphan:
+  // clicking it does nothing and it names no control.
+  const rowId = built.id || id;
+  if (!built.labelInline && built.focusable instanceof Element && !built.focusable.id) {
+    built.focusable.id = rowId;
+  }
+  return row(control, language, built.node, { id: rowId, labelInline: built.labelInline, disabled: !enabled });
 }

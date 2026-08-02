@@ -110,12 +110,45 @@ const STR = {
   edReplacedNone: ['Nothing matched, so nothing was replaced.', '冇嘢符合，所以冇取代過。'],
 };
 
-function s(key, ...params) {
-  const raw = resolveI18n(STR[key], getLanguage(), getFunnyLevel('en'), getFunnyLevel('yue'));
+function strIn(language, key, ...params) {
+  const raw = resolveI18n(STR[key], language, getFunnyLevel('en'), getFunnyLevel('yue'));
   const out = raw == null ? key : raw;
   return params.length
     ? String(out).replace(/\{(\d+)\}/g, (m, i) => (params[Number(i)] === undefined ? m : String(params[Number(i)])))
-    : out;
+    : String(out);
+}
+
+function s(key, ...params) {
+  const mode = getLanguage();
+  if (mode !== 'both') return strIn(mode, key, ...params);
+  const en = strIn('en', key, ...params);
+  const yue = strIn('yue', key, ...params);
+  return en === yue ? en : `${en} · ${yue}`;
+}
+
+/**
+ * The paragraphs of a multi-paragraph string, one language at a time.
+ *
+ * Resolving first and splitting afterwards is what produces
+ * "…whichever you choose. · 伺服器上面嘅…": bilingual mode joins the WHOLE
+ * English text to the WHOLE Cantonese text, so the split fuses the last English
+ * paragraph to the first Cantonese one and orphans the rest. Splitting per
+ * language and pairing by index keeps each paragraph a paragraph. Same rule as
+ * `compose` in ui/changelog.js, applied to block text.
+ */
+function paragraphs(key, ...params) {
+  const mode = getLanguage();
+  const split = (language) => strIn(language, key, ...params).split('\n\n');
+  if (mode !== 'both') return split(mode);
+  const en = split('en');
+  const yue = split('yue');
+  const out = [];
+  for (let i = 0; i < Math.max(en.length, yue.length); i += 1) {
+    const a = en[i] || '';
+    const b = yue[i] || '';
+    out.push(a && b && a !== b ? `${a} · ${b}` : (a || b));
+  }
+  return out;
 }
 
 /** What editors.js can decode. `auto` re-detects from the bytes. */
@@ -799,8 +832,8 @@ export function createEditorWindow(record, initial, opts = {}) {
       title: s('edConflictTitle'),
       width: 600,
       content: h('div', { class: 'stack' },
-        ...s('edConflictBody', record.remotePath, was.size ?? '—', stamp(was.mtime), now.size ?? '—', stamp(now.mtime))
-          .split('\n\n').map((p) => h('p', { class: 'prose', style: { whiteSpace: 'pre-wrap' } }, p))),
+        ...paragraphs('edConflictBody', record.remotePath, was.size ?? '—', stamp(was.mtime), now.size ?? '—', stamp(now.mtime))
+          .map((p) => h('p', { class: 'prose', style: { whiteSpace: 'pre-wrap' } }, p))),
       actions: [
         { label: t('cancel'), kind: 'text' },
         {

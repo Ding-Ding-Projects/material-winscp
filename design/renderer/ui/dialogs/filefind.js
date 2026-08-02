@@ -223,9 +223,10 @@ export function openFileFind(props = {}) {
     onChange: () => paintResults(),
   });
 
+  const listId = uid('ff-list');
   const resultList = h('div', {
     role: 'listbox', tabindex: '0', 'aria-multiselectable': 'true',
-    'aria-label': tx('ffResults'),
+    id: listId, 'aria-label': tx('ffResults'),
     style: {
       flex: '1 1 auto', minHeight: 'calc(180px * var(--uiscale))',
       overflow: 'auto', border: '1px solid var(--outline-var)',
@@ -252,6 +253,7 @@ export function openFileFind(props = {}) {
   function paintResults() {
     const items = visibleResults();
     clear(resultList);
+    resultList.removeAttribute('aria-activedescendant');
     if (!items.length) {
       resultList.appendChild(h('div', {
         class: 'muted',
@@ -265,6 +267,11 @@ export function openFileFind(props = {}) {
       const selected = selection.has(hit.path);
       const row = h('div', {
         role: 'option', 'aria-selected': String(selected), tabindex: '-1',
+        // The listbox is one tab stop with roving focus in state rather than in
+        // the DOM, so the focused row has to be named through
+        // aria-activedescendant or a screen reader announces nothing as the
+        // arrows move.
+        id: `${listId}-o${index}`,
         'data-index': String(index),
         style: {
           display: 'flex', alignItems: 'center', gap: 'calc(10px * var(--den))',
@@ -297,6 +304,9 @@ export function openFileFind(props = {}) {
         formatTimestamp(hit.mtime)));
       resultList.appendChild(row);
     });
+    if (focusedIndex >= 0 && focusedIndex < items.length) {
+      resultList.setAttribute('aria-activedescendant', `${listId}-o${focusedIndex}`);
+    }
   }
 
   resultList.addEventListener('keydown', (e) => {

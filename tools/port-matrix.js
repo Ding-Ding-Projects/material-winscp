@@ -38,6 +38,32 @@ function lineCount(file) {
   } catch { return 0; }
 }
 
+/**
+ * Delphi .dfm files embed binary resources — icon sheets, animation frames — as
+ * page after page of hex. Animations144.dfm is 18,155 lines of which 15,747 are
+ * pure hex behind a 14-line .cpp.
+ *
+ * That matters because line-weighted coverage is meaningless if a third of the
+ * "code" is base64 bitmaps: classifying eight such units as replaced moved the
+ * headline figure from 9.1% to 39.5% without a single behaviour being ported.
+ * So both numbers are reported — the raw one, and the one that counts only
+ * lines a person actually wrote logic into. The second is the honest one.
+ */
+function resourceLines(file) {
+  if (!/\.dfm$/i.test(file)) return 0;
+  try {
+    const text = fs.readFileSync(file, 'utf8');
+    let n = 0;
+    for (const line of text.split('\n')) {
+      const t = line.trim();
+      // A run of hex pairs, optionally space-separated, and long enough that it
+      // cannot be an ordinary property value.
+      if (t.length >= 20 && /^[0-9A-F]+(\s[0-9A-F]+)*$/.test(t)) n++;
+    }
+    return n;
+  } catch { return 0; }
+}
+
 function walk(dir, exts) {
   const out = [];
   const stack = [dir];
@@ -71,10 +97,11 @@ function collectUnits() {
     for (const file of walk(dir, ['.cpp', '.h', '.dfm', '.rc'])) {
       const rel = path.relative(WINSCP, file).replace(/\\/g, '/');
       const stem = rel.replace(/\.(cpp|h|dfm|rc)$/i, '');
-      if (!units.has(stem)) units.set(stem, { stem, area, files: [], lines: 0 });
+      if (!units.has(stem)) units.set(stem, { stem, area, files: [], lines: 0, resource: 0 });
       const u = units.get(stem);
       u.files.push(rel);
       u.lines += lineCount(file);
+      u.resource += resourceLines(file);
     }
   }
   return [...units.values()].sort((a, b) => b.lines - a.lines);
@@ -104,11 +131,14 @@ function main() {
   const vendored = collectVendored();
 
   let totalLines = 0, coveredLines = 0;
+  let totalLogic = 0, coveredLogic = 0;
   const rows = [];
   const problems = [];
 
   for (const u of units) {
     totalLines += u.lines;
+    const logic = Math.max(0, u.lines - u.resource);
+    totalLogic += logic;
     const m = map.units[u.stem];
     const status = m ? (m.status || 'todo') : 'todo';
     const targets = (m && m.targets) || [];
@@ -116,16 +146,22 @@ function main() {
     // coverage — surface it loudly instead of counting it.
     const missing = targets.filter((t) => !fileExists(t));
     if (missing.length) problems.push(`${u.stem}: mapped to missing file(s) ${missing.join(', ')}`);
-    if ((status === 'done' || status === 'replaced') && !missing.length) coveredLines += u.lines;
-    else if (status === 'partial') coveredLines += u.lines * ((m && m.progress) || 0.5);
+    if ((status === 'done' || status === 'replaced') && !missing.length) {
+      coveredLines += u.lines; coveredLogic += logic;
+    } else if (status === 'partial') {
+      const p = (m && m.progress) || 0.5;
+      coveredLines += u.lines * p; coveredLogic += logic * p;
+    }
 
     rows.push({
-      stem: u.stem, area: u.area, lines: u.lines, status,
+      stem: u.stem, area: u.area, lines: u.lines, resource: u.resource, status,
       targets, note: (m && m.note) || '', missing,
     });
   }
 
   const pct = totalLines ? (coveredLines / totalLines) * 100 : 0;
+  const logicPct = totalLogic ? (coveredLogic / totalLogic) * 100 : 0;
+  const resourceLinesTotal = totalLines - totalLogic;
   const byArea = {};
   for (const r of rows) {
     const a = byArea[r.area] || (byArea[r.area] = { lines: 0, covered: 0, units: 0, done: 0 });
@@ -146,7 +182,14 @@ function main() {
   lines.push('problem. The percentage is weighted by source lines, so a large subsystem');
   lines.push('cannot be made to look finished by porting a handful of small files.');
   lines.push('');
-  lines.push(`**Overall: ${pct.toFixed(1)}% of ${totalLines.toLocaleString()} lines across ${units.length} units.**`);
+  lines.push(`**Logic coverage: ${logicPct.toFixed(1)}%** of ${totalLogic.toLocaleString()} lines that are actually code.`);
+  lines.push('');
+  lines.push(`Raw line coverage is ${pct.toFixed(1)}% of ${totalLines.toLocaleString()} lines across ${units.length} units, but that figure is`);
+  lines.push(`distorted: ${resourceLinesTotal.toLocaleString()} of those lines (${((resourceLinesTotal / totalLines) * 100).toFixed(0)}%) are binary resources embedded as hex in`);
+  lines.push('`.dfm` files — icon sheets and animation frames, at four DPI variants each.');
+  lines.push('Classifying those eight units as replaced moved the raw number from 9.1% to');
+  lines.push('39.5% without a single behaviour being ported, which is precisely why the');
+  lines.push('**logic figure is the one to quote**.');
   lines.push('');
 
   if (problems.length) {
@@ -198,7 +241,8 @@ function main() {
   console.log(`Wrote ${path.relative(ROOT, OUT)}`);
   console.log(`  units:     ${units.length}`);
   console.log(`  lines:     ${totalLines.toLocaleString()} (WinSCP's own code)`);
-  console.log(`  coverage:  ${pct.toFixed(1)}%`);
+  console.log(`  LOGIC coverage:  ${logicPct.toFixed(1)}%  (of ${totalLogic.toLocaleString()} real code lines)`);
+  console.log(`  raw coverage:    ${pct.toFixed(1)}%  (includes ${resourceLinesTotal.toLocaleString()} lines of embedded hex resources — distorted, do not quote)`);
   for (const [area, a] of Object.entries(byArea).sort((x, y) => y[1].lines - x[1].lines)) {
     console.log(`    ${area.padEnd(12)} ${a.done}/${a.units} units  ${((a.covered / a.lines) * 100).toFixed(1)}%`);
   }

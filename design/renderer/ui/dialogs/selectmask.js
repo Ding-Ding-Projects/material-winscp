@@ -40,6 +40,11 @@ const STRINGS = {
   smInvalid: ['Problem at character {0}: {1}', '第 {0} 個字元有問題：{1}'],
   smSelected: ['{0} item(s) selected by "{1}".', '「{1}」揀咗 {0} 個項目。'],
   smUnselected: ['{0} item(s) unselected by "{1}".', '「{1}」唔揀咗 {0} 個項目。'],
+  // Used when the preview did not cover the whole panel (it is capped) or the
+  // mask engine could not answer for every name: a count would be a guess, and
+  // a guessed number is worse than no number.
+  smSelectedNoCount: ['Selection applied with "{0}".', '用「{0}」揀咗嘢。'],
+  smUnselectedNoCount: ['Deselection applied with "{0}".', '用「{0}」唔揀咗嘢。'],
   smFiltered: ['Filter set to "{0}".', '篩選設做「{0}」。'],
   smFilterCleared: ['Filter cleared.', '篩選清咗。'],
   smColorSet: ['Files matching "{0}" are now coloured.', '符合「{0}」嘅檔案而家有色。'],
@@ -284,10 +289,23 @@ registerDialog('selectmask', ({ props, close }) => {
       await writePrefs({ selectMask: mask, selectDirectories: directories }, 'Remembered the selection mask');
     }
     const result = { mask, directories, color: showColor ? color : undefined };
-    const count = Array.from(matched.values()).filter(Boolean).length;
     props.onApply?.(result);
-    if (mode === 'select') { notify.success(tx('smSelected', count, mask || '*')); announce(tx('smSelected', count, mask || '*')); }
-    else if (mode === 'deselect') notify.success(tx('smUnselected', count, mask || '*'));
+    // The preview is capped at 200 names and can still be in flight, so its
+    // tally is the real answer only when it covered every name and the engine
+    // answered for all of them. Otherwise say what was applied, without a
+    // number — a guessed count is worse than no count.
+    const answers = Array.from(matched.values());
+    const exact = entries.length > 0
+      && matched.size === entries.length
+      && answers.every((v) => typeof v === 'boolean');
+    const count = answers.filter(Boolean).length;
+    const shown = mask || '*';
+    if (mode === 'select') {
+      const msg = exact ? tx('smSelected', count, shown) : tx('smSelectedNoCount', shown);
+      notify.success(msg); announce(msg);
+    } else if (mode === 'deselect') {
+      notify.success(exact ? tx('smUnselected', count, shown) : tx('smUnselectedNoCount', shown));
+    }
     else if (mode === 'filter') notify.info(mask ? tx('smFiltered', mask) : tx('smFilterCleared'));
     else notify.success(tx('smColorSet', mask));
   }
