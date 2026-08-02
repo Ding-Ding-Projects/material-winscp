@@ -1461,6 +1461,7 @@ export function createWorkspace(opts = {}) {
       return true;
     },
     destroy() {
+      docks.forEach((d) => d.destroy());
       menuBar?.destroy();
       toolbars?.destroy();
       Object.values(statusBars).forEach((s) => s.destroy());
@@ -1535,10 +1536,12 @@ export function createWorkspace(opts = {}) {
   function rebuild() {
     Object.values(statusBars).forEach((s) => s.destroy());
     Object.values(panels).forEach((p) => p.destroy());
+    docks.forEach((d) => d.destroy());
     menuBar?.destroy();
     toolbars?.destroy();
     panels = {};
     statusBars = {};
+    docks = [];
     const columnsBySide = {};
     clear(panelsHost);
     clear(topDock);
@@ -1606,12 +1609,12 @@ export function createWorkspace(opts = {}) {
           widgets: { path: panelWidget(side) },
           ctxFor: () => ({ side, panel: panels[side], other: workspace.other(side) }),
         });
-        if (side === 'local') localDock = dock; else remoteDock = dock;
+        docks.push(dock);
         columnsBySide[side].prepend(dock.element);
       }
     }
 
-    mainDock = toolbars.createDock({
+    const mainDock = toolbars.createDock({
       id: 'main',
       label: t('toolbars'),
       menuFactory: () => menuBar.element,
@@ -1621,6 +1624,7 @@ export function createWorkspace(opts = {}) {
       },
       ctxFor: () => ({ side: activeSide, panel: panels[activeSide], other: workspace.other(activeSide) }),
     });
+    docks.push(mainDock);
     topDock.appendChild(mainDock.element);
 
     if (mode === 'commander' && panels.local) {

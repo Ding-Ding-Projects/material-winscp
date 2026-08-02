@@ -27,10 +27,11 @@
 
 import {
   h, icon, clear, uid, appearanceTarget, announce, layer, anchorTo, focusMemory,
-  copyText, downloadText, oneLine, on,
+  copyText, downloadText, on,
 } from '../dom.js';
 import { t, tIn, bindRender, getLanguage, getFunnyLevel } from '../i18n.js';
 import { resolveI18n } from '../../winscp-i18n.js';
+import { api } from '../state.js';
 import { styleSheet } from '../theme.js';
 import { createSearchBar } from './searchbar.js';
 import { notify } from './notifications.js';
@@ -72,6 +73,11 @@ const STR = {
   clCodeName: ['Release code name', '版本代號'],
   clUnreleased: ['Unreleased', '未發布'],
   clCommit: ['Commit', '提交'],
+  clOpenCommit: ['Open this commit', '開呢個 commit'],
+  clOpenFailed: ['{0} could not be opened.', '開唔到 {0}。'],
+  clNoCommit: [
+    'No commit is recorded for this entry.',
+    '呢一條冇記低係邊個 commit。'],
   clIssues: ['Issues', '議題'],
 
   dpFrom: ['From', '由'],
@@ -181,7 +187,7 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
-    id: 'c07dc48', kind: 'commit', ref: 'c07dc48', date: '2026-08-02',
+    id: 'c07dc48', kind: 'commit', ref: 'c07dc48', oid: 'c07dc487482a7b7b0469b68a3ce0fd2008b8754f', date: '2026-08-02',
     title: 'Ship a real Squirrel installer: 124.86 MB Setup.exe, plus CI, docs and the site',
     refs: ['#14'],
     changes: [
@@ -193,7 +199,7 @@ export const DEVELOPMENT = [
     ],
   },
   {
-    id: '0809178', kind: 'commit', ref: '0809178', date: '2026-08-02',
+    id: '0809178', kind: 'commit', ref: '0809178', oid: '0809178a0d75e4b6ce65dbef8f0bef075b8c5c81', date: '2026-08-02',
     title: 'The app boots: main process, 130 IPC channels, and a Material 3 shell on screen',
     refs: ['#6', '#12', '#13', '#15'],
     changes: [
@@ -204,7 +210,7 @@ export const DEVELOPMENT = [
     ],
   },
   {
-    id: 'd45724d', kind: 'commit', ref: 'd45724d', date: '2026-08-02',
+    id: 'd45724d', kind: 'commit', ref: 'd45724d', oid: 'd45724d3e488dc18e043cd72b6ed253c0a226bb2', date: '2026-08-02',
     title: 'Ledger the ssh2-vs-PuTTY gaps, cover find.js, wire the parallel-transfer prefs',
     refs: ['#2', '#3', '#4', '#5'],
     changes: [
@@ -217,7 +223,7 @@ export const DEVELOPMENT = [
     ],
   },
   {
-    id: '74a00c4', kind: 'commit', ref: '74a00c4', date: '2026-08-02',
+    id: '74a00c4', kind: 'commit', ref: '74a00c4', oid: '74a00c41f974d6516dc15130f4ef694008636e5a', date: '2026-08-02',
     title: 'FTP, WebDAV and S3 land for real: 240 tests green, coverage 7.1% to 9.6%',
     refs: ['#3'],
     changes: [
@@ -230,7 +236,7 @@ export const DEVELOPMENT = [
     ],
   },
   {
-    id: 'bf47b59', kind: 'commit', ref: 'bf47b59', date: '2026-08-02',
+    id: 'bf47b59', kind: 'commit', ref: 'bf47b59', oid: 'bf47b59f196654b4b97d9a35fab75dfda3050583', date: '2026-08-02',
     title: 'Six protocol and engine modules land; coverage 3.2% to 7.1%, 88 tests green',
     refs: ['#2', '#3', '#4', '#5', '#6', '#11'],
     changes: [
@@ -242,7 +248,7 @@ export const DEVELOPMENT = [
     ],
   },
   {
-    id: 'ecd9d02', kind: 'commit', ref: 'ecd9d02', date: '2026-08-02',
+    id: 'ecd9d02', kind: 'commit', ref: 'ecd9d02', oid: 'ecd9d02fc55ed6d2a8f7a67099df961e51060e0a', date: '2026-08-02',
     title: 'Extract the spec from WinSCP itself: 301 actions, 48 dialogs, 2,982 controls',
     refs: [],
     changes: [
@@ -251,7 +257,7 @@ export const DEVELOPMENT = [
     ],
   },
   {
-    id: '3869beb', kind: 'commit', ref: '3869beb', date: '2026-08-01',
+    id: '3869beb', kind: 'commit', ref: '3869beb', oid: '3869bebf8f0d7724f980ab842e0b6dcdf576bfe4', date: '2026-08-01',
     title: 'Lay the foundation: adapter contract, config store, and an honest coverage ledger',
     refs: [],
     changes: [
@@ -260,7 +266,7 @@ export const DEVELOPMENT = [
     ],
   },
   {
-    id: '6f4b7d9', kind: 'commit', ref: '6f4b7d9', date: '2026-08-01',
+    id: '6f4b7d9', kind: 'commit', ref: '6f4b7d9', oid: '6f4b7d9330a28af715522a5a4605339799837cd5', date: '2026-08-01',
     title: 'Add WinSCP submodule under vendor/winscp',
     refs: [],
     changes: [
@@ -268,7 +274,7 @@ export const DEVELOPMENT = [
     ],
   },
   {
-    id: 'cef414f', kind: 'commit', ref: 'cef414f', date: '2026-08-01',
+    id: 'cef414f', kind: 'commit', ref: 'cef414f', oid: 'cef414f5a56a1aa7d70caca2296dabf7f4c90cb4', date: '2026-08-01',
     title: 'Initial commit',
     refs: [],
     changes: [],
@@ -289,6 +295,21 @@ export const CHANGELOG = {
   developmentUpTo: DEVELOPMENT[0] ? DEVELOPMENT[0].ref : '',
 };
 
+/**
+ * Where this project's commits live. A changelog entry that says what changed
+ * but not where is unverifiable, so every entry carrying an `oid` renders a
+ * link resolved against this. A WRONG sha is worse than none — it sends the
+ * reader somewhere confidently irrelevant — which is why
+ * test/changelog.test.js resolves every one of them against the repository and
+ * fails the build rather than shipping a dead link.
+ */
+export const COMMIT_BASE = 'https://github.com/Ding-Ding-Projects/material-winscp/commit/';
+
+/** The forge URL for an entry's commit, or '' when it has no recorded sha. */
+export function commitUrl(entry) {
+  return entry && entry.oid ? `${COMMIT_BASE}${entry.oid}` : '';
+}
+
 /** One flat, filterable list: releases first, then this build, then commits. */
 export function changelogEntries() {
   const rows = [];
@@ -300,7 +321,7 @@ export function changelogEntries() {
 
 /** Everything an entry can be matched against, as one array of strings. */
 export function entryText(entry) {
-  const out = [entry.version || '', entry.title || '', entry.ref || '', entry.date || ''];
+  const out = [entry.version || '', entry.title || '', entry.ref || '', entry.oid || '', entry.date || ''];
   for (const c of entry.changes || []) { out.push(c.category || ''); out.push(c.text || ''); }
   for (const r of entry.refs || []) out.push(r);
   if (entry.codeName) { out.push(entry.codeName.en || ''); out.push(entry.codeName.zh || ''); }
@@ -632,7 +653,12 @@ export function entriesToMarkdown(entries, statement, title) {
     out.push(head);
     if (e.version && e.title) out.push(`_${e.title}_`);
     if (e.codeName) out.push(`Release code name: ${e.codeName.en}${e.codeName.zh ? ` · ${e.codeName.zh}` : ''}`);
-    if (e.ref) out.push(`Commit \`${e.ref}\`${e.date ? ` — ${e.date}` : ''}`);
+    // The sha stays in the exported TEXT, so a copied changelog is still
+    // traceable once it has left the app.
+    if (e.ref) {
+      const url = commitUrl(e);
+      out.push(`Commit \`${e.oid || e.ref}\`${e.date ? ` — ${e.date}` : ''}${url ? ` — ${url}` : ''}`);
+    }
     out.push('');
     if (!(e.changes || []).length) {
       out.push('_No recorded changes._');
@@ -712,6 +738,10 @@ function ensureStyles() {
 .cl-entry-head { display: flex; align-items: baseline; gap: calc(8px * var(--den)); flex-wrap: wrap; }
 .cl-ver { font-size: var(--type-title-md); font-weight: 700; }
 .cl-date { font-size: var(--type-label-md); color: var(--onsv); }
+.cl-commit { display: inline-flex; align-items: center; gap: 4px; color: var(--p);
+  font-size: var(--type-label-md); font-weight: 600; border-radius: var(--shape-xs);
+  padding: 1px calc(5px * var(--den)); }
+.cl-commit:hover { background: color-mix(in srgb, var(--p) 12%, transparent); }
 .cl-badge { display: inline-flex; align-items: center; gap: 4px; border-radius: var(--shape-full);
   padding: 0 calc(8px * var(--den)); min-height: calc(20px * var(--den));
   font-size: var(--type-label-sm); font-weight: 600; background: var(--terc); color: var(--onterc); }
@@ -1282,7 +1312,23 @@ export function createChangelogViewer(opts = {}) {
     }
     if (entry.date) head.appendChild(h('span', { class: 'cl-date mono' }, entry.date));
     if (entry.ref) {
-      head.appendChild(h('span', { class: 'cl-date mono', title: `${s('clCommit')} ${entry.ref}` }, `${s('clCommit')} ${entry.ref}`));
+      const url = commitUrl(entry);
+      head.appendChild(url
+        ? h('button', {
+          type: 'button', class: 'cl-commit mono',
+          title: `${s('clOpenCommit')} — ${url}`,
+          'aria-label': `${s('clOpenCommit')} ${entry.ref}`,
+          onclick: async () => {
+            const ok = await api.openExternal(url);
+            if (ok === false) {
+              const copied = await copyText(url);
+              notify.warning(s('clTitle'), `${s('clOpenFailed', url)}${copied ? ` ${t('copiedClip')}` : ''}`);
+            }
+          },
+        }, icon('open_in_new', 13), `${s('clCommit')} ${entry.ref}`)
+        // No recorded sha: say so rather than offering a link that guesses at
+        // a neighbouring commit.
+        : h('span', { class: 'cl-date mono', title: s('clNoCommit') }, `${s('clCommit')} ${entry.ref}`));
     }
 
     const card = h('div', { class: 'cl-entry' }, head);

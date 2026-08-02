@@ -25,7 +25,7 @@ import { registerDialog, openDialog } from '../../app.js';
 import { notify } from '../notifications.js';
 import { createSearchBar, filterBy, noMatchMessage } from '../searchbar.js';
 import {
-  PROTOCOLS, protocolInfo, defaultPortFor, schemeFor, isDefaultPort,
+  protocolInfo, defaultPortFor, schemeFor, isDefaultPort,
   installSessionDialogStyles, SECRET_SENTINEL, siteLabel,
 } from './sitetree.js';
 

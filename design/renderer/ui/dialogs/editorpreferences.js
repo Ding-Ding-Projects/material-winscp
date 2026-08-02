@@ -222,7 +222,7 @@ export function openEditorPreferences({ entry, onSave, title } = {}) {
   return openModal({
     title: title || (entry ? `${t('edit')} — ${draft.mask}` : `${t('add')} — ${t('pEditor')}`),
     width: 620,
-    content: h('div', { class: 'stack' },
+    content: h('div', { class: 'stack dlg-wide' },
       h('section', { class: 'prefs-section' },
         h('h4', { class: 'prefs-section-title' }, tx('Editor', '編輯器')),
         typeBox, programRow, paramsCheck.row, sdiCheck.row),

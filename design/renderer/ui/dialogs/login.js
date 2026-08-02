@@ -26,11 +26,11 @@ import { t, bindText, bindRender } from '../../i18n.js';
 import { api, bus, store, persistCurrent } from '../../state.js';
 import { registerDialog, openDialog, runCommand, registerCommand } from '../../app.js';
 import { notify } from '../notifications.js';
-import { openMenu, attachMenuButton, SEPARATOR } from '../contextmenu.js';
+import { attachMenuButton, SEPARATOR } from '../contextmenu.js';
 import { colorSwatchButton } from '../colorpicker.js';
 import { createSearchBar } from '../searchbar.js';
 import {
-  SESSION_DEFAULTS, SECRET_FIELDS, SECRET_SENTINEL, PROTOCOLS, protocolInfo,
+  SESSION_DEFAULTS, SECRET_FIELDS, SECRET_SENTINEL, PROTOCOLS, protocolInfo, s,
   encryptionOptions, defaultPortFor, fieldVisibility, isAnonymous, newSiteData,
   normalizeSite, siteLabel, siteSummary, siteStore, notifySitesChanged,
   installSessionDialogStyles, stripSecrets, createSiteTree, SITE_SEARCH_MODES,
@@ -104,7 +104,13 @@ export function createLoginPanel(opts = {}) {
     appearanceKey: 'search-login-sites',
     appearanceLabel: 'Site list search',
     sampleProvider: () => tree.data.sites.map((s) => `${s.name}\t${s.hostName}\t${s.userName}\t${s.note || ''}`).join('\n'),
-    onChange: (snapshot) => tree.setFilter(snapshot.mode === 'regex' ? '' : snapshot.query),
+    // In plain-text mode the tree filters with the active WinSCP match mode;
+    // in regex mode the bar's own predicate takes over, so switching the .*
+    // chip narrows the list rather than quietly clearing the filter.
+    onChange: (snapshot) => {
+      const regex = snapshot.mode === 'regex' && snapshot.pattern;
+      tree.setFilter(regex ? snapshot.pattern : snapshot.query, regex ? snapshot.predicate : null);
+    },
   });
 
   // The regex builder answers "find anything matching a pattern"; WinSCP's own
@@ -450,7 +456,7 @@ export function createLoginPanel(opts = {}) {
       out.push(h('div', { class: 'sd-row' },
         h('label', { class: 'sd-check', for: envId }, envBox,
           h('span', { class: 'sd-check-text' }, t('credAws'))),
-        h('label', { class: `sd-label${vis.s3ProfileEnabled ? '' : ' is-disabled'}`, for: profileId }, 'Profile'),
+        h('label', { class: `sd-label${vis.s3ProfileEnabled ? '' : ' is-disabled'}`, for: profileId }, s('profile')),
         profileInput));
     }
 
@@ -458,7 +464,7 @@ export function createLoginPanel(opts = {}) {
       const keyId = uid('lg-key');
       const keyInput = h('input', {
         type: 'text', id: keyId, class: 'sd-input', spellcheck: 'false',
-        placeholder: 'No private key file',
+        placeholder: s('noKeyFile'),
         oninput: () => { state.site.publicKeyFile = keyInput.value; state.dirty = true; },
       });
       keyInput.value = state.site.publicKeyFile || '';
@@ -470,7 +476,7 @@ export function createLoginPanel(opts = {}) {
         },
       }, icon('key', 15), h('span', {}, t('browse')));
       out.push(h('div', { class: 'sd-grid' },
-        h('label', { class: 'sd-label', for: keyId }, 'Private key file'),
+        h('label', { class: 'sd-label', for: keyId }, s('privateKeyFile')),
         h('div', { class: 'sd-row is-tight' }, keyInput, browse)));
     }
 
@@ -740,12 +746,18 @@ export function createLoginPanel(opts = {}) {
     return modal;
   }
 
-  /** The Advanced dialog's own buttons come back here for the real work. */
-  async function advancedAction(id, site) {
+  /**
+   * The Advanced dialog's own buttons come back here for the real work.
+   * `helpers` is how a handler writes back: setSecret() also marks the field
+   * as touched, without which the save path would treat the value as unchanged
+   * and drop it.
+   */
+  async function advancedAction(id, site, helpers) {
     switch (id) {
       case 'generateEncryptionKey': {
         const key = randomBase64Key(32);
-        site.encryptKey = key;
+        helpers.setSecret('encryptKey', key);
+        if (!site.encryptFiles) helpers.setValue('encryptFiles', true);
         // Shown once, in a modal the user must acknowledge: this key is the
         // only thing that can decrypt the files, and nothing else holds a copy.
         openModal({
@@ -772,7 +784,7 @@ export function createLoginPanel(opts = {}) {
       }
       case 'browseProxyCommand': {
         const picked = await pickLocalPath({ title: 'Local proxy command' });
-        if (picked) site.proxyLocalCommand = picked;
+        if (picked) helpers.setValue('proxyLocalCommand', picked);
         return picked;
       }
       default:
@@ -811,7 +823,7 @@ export function createLoginPanel(opts = {}) {
     const searchSub = {
       label: t('searchSites'), icon: 'search',
       submenu: [
-        { label: 'Find site…', icon: 'search', shortcut: 'Ctrl+F', onSelect: () => filterBar.focus() },
+        { label: s('findSite'), icon: 'search', shortcut: 'Ctrl+F', onSelect: () => filterBar.focus() },
         SEPARATOR,
         ...SITE_SEARCH_MODES.map((m) => ({
           label: m.label, checked: tree.searchMode === m.id, radio: true,
@@ -820,15 +832,15 @@ export function createLoginPanel(opts = {}) {
       ],
     };
     const sessionSub = {
-      label: 'Session', icon: 'dns',
+      label: s('sessionMenu'), icon: 'dns',
       submenu: [
         { label: t('advancedBtn'), icon: 'tune', onSelect: () => openAdvanced() },
         { label: t('editRaw'), icon: 'code', onSelect: openRawSettings },
-        { label: 'Transfer Settings Rule…', icon: 'swap_vert', onSelect: openTransferRule },
+        { label: s('transferRule'), icon: 'swap_vert', onSelect: openTransferRule },
       ],
     };
     const globalSub = {
-      label: 'Global Preferences', icon: 'settings',
+      label: s('globalPrefsMenu'), icon: 'settings',
       submenu: [
         { label: t('loggingBtn'), icon: 'receipt_long', onSelect: () => openPreferencesPage('logging') },
         { label: t('preferences'), icon: 'settings', onSelect: () => runCommand('app.preferences') },
@@ -837,8 +849,8 @@ export function createLoginPanel(opts = {}) {
     const shellSub = (label) => ({
       label, icon: 'computer',
       submenu: [
-        { label: 'Desktop Icon', icon: 'open_in_new', onSelect: () => createShortcut('desktop') },
-        { label: 'Explorer’s "Send To" shortcut', icon: 'open_in_new', onSelect: () => createShortcut('sendto') },
+        { label: s('desktopIcon'), icon: 'open_in_new', onSelect: () => createShortcut('desktop') },
+        { label: s('sendToShortcut'), icon: 'open_in_new', onSelect: () => createShortcut('sendto') },
       ],
     });
 
@@ -856,7 +868,7 @@ export function createLoginPanel(opts = {}) {
         { label: t('setDefaults'), icon: 'star', onSelect: setDefaults },
         SEPARATOR,
         { label: t('newFolder'), icon: 'folder', onSelect: () => tree.promptNewFolder(selected.path) },
-        shellSub('Site Shell Icon'),
+        shellSub(s('siteShellIcon')),
         searchSub,
         SEPARATOR,
         sessionSub,
@@ -872,7 +884,7 @@ export function createLoginPanel(opts = {}) {
         { label: t('rename'), icon: 'label', shortcut: 'F2', onSelect: () => tree.beginRename(selected.id) },
         SEPARATOR,
         { label: t('newFolder'), icon: 'folder', onSelect: () => tree.promptNewFolder(selected.path) },
-        shellSub('Site Folder Shell Icon'),
+        shellSub(s('folderShellIcon')),
         searchSub,
         SEPARATOR,
         globalSub,
@@ -884,7 +896,7 @@ export function createLoginPanel(opts = {}) {
         SEPARATOR,
         { label: t('delete_'), icon: 'delete', danger: true, onSelect: deleteSelected },
         { label: t('rename'), icon: 'label', shortcut: 'F2', onSelect: () => tree.beginRename(selected.id) },
-        shellSub('Workspace Shell Icon'),
+        shellSub(s('workspaceShellIcon')),
         searchSub,
         SEPARATOR,
         globalSub,

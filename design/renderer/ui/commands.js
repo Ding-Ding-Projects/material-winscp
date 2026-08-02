@@ -2604,13 +2604,29 @@ const LINKS = {
   HomepageAction: 'https://winscp.net/',
   HistoryPageAction: 'https://winscp.net/eng/docs/history',
   ForumPageAction: 'https://winscp.net/forum/',
-  DonatePageAction: 'https://winscp.net/eng/donate.php',
   DownloadPageAction: 'https://winscp.net/eng/download.php',
   TableOfContentsAction: 'https://winscp.net/eng/docs/start',
 };
 for (const [name, url] of Object.entries(LINKS)) {
   def(name, { run: () => api.openExternal(url) });
 }
+
+// WinSCP's Donate action is deliberately NOT ported. It is registered so the
+// coverage ledger records a decision rather than an oversight, and hidden so no
+// menu, toolbar, command palette or search result can surface it.
+//
+// This is one of the few places the port knowingly diverges from the original.
+// Asking a user for money is an annoyance, and the shared instructions forbid
+// unsolicited promotional prompts outright — including behind a "don't show
+// again" switch, which is just an admission that the app nags by default.
+// WinSCP is excellent software by other people; the About dialog credits them
+// and links to the project. That is the right place for it.
+def('DonatePageAction', {
+  visible: () => false,
+  enabled: () => false,
+  unavailable: 'This port does not ask for donations. WinSCP itself is credited '
+    + 'and linked from the About dialog — support the original project there.',
+});
 def('AboutAction', {
   run: () => {
     if (services.openDialog) { const hnd = services.openDialog('about'); if (hnd) return hnd; }
@@ -2743,7 +2759,7 @@ const I18N_KEYS = {
   FileColorsPreferencesAction: 'fileColorsMenu', PreferencesAction: 'preferences',
   CommanderLocalPanelAction: 'localPanel', CommanderRemotePanelAction: 'remotePanel',
   AboutAction: 'aboutMenu', HomepageAction: 'homepage', HistoryPageAction: 'versionHistory',
-  ForumPageAction: 'supportForum', CheckForUpdatesAction: 'checkUpdates', DonatePageAction: 'donate',
+  ForumPageAction: 'supportForum', CheckForUpdatesAction: 'checkUpdates',
   TableOfContentsAction: 'docs', TipsAction: 'showTips',
   CurrentOpenAction: 'view_', CurrentEditInternalAction: 'editorTitle', CurrentEditInternalFocusedAction: 'editorTitle',
   SelectOneAction: 'selectFiles',

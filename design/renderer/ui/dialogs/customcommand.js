@@ -357,7 +357,7 @@ export function openCustomCommand({ entry, sessionId, onSave, title } = {}) {
   return openModal({
     title: title || (entry ? `${t('edit')} — ${draft.name || draft.command}` : `${t('add')} — ${t('customCmdTitle')}`),
     width: 720,
-    content: h('div', { class: 'stack' },
+    content: h('div', { class: 'stack dlg-wide' },
       h('label', { class: 'field' },
         h('span', { class: 'field-label' }, tx('Description', '描述')), nameInput),
       h('label', { class: 'field' },

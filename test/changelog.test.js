@@ -392,6 +392,8 @@ test('every development entry names a real commit and a real date', () => {
   assert.ok(C.CHANGELOG.development.length > 0);
   for (const e of C.CHANGELOG.development) {
     assert.match(e.ref, /^[0-9a-f]{7,40}$/, `${e.id} should carry a commit id`);
+    assert.match(e.oid, /^[0-9a-f]{40}$/, `${e.id} should carry the FULL sha, not just the abbreviation`);
+    assert.ok(e.oid.startsWith(e.ref), `${e.id}: the abbreviation and the full sha disagree`);
     assert.match(e.date, /^\d{4}-\d{2}-\d{2}$/, `${e.id} should carry an ISO date`);
     assert.ok(e.title && e.title.length > 0, `${e.id} should carry its subject`);
     for (const c of e.changes || []) {
@@ -400,6 +402,52 @@ test('every development entry names a real commit and a real date', () => {
       assert.ok(c.text && c.text.length > 0);
     }
   }
+});
+
+test('every entry links to its commit, and the link is built from the full sha', () => {
+  for (const e of C.CHANGELOG.development) {
+    const url = C.commitUrl(e);
+    assert.ok(url.startsWith(C.COMMIT_BASE), `${e.id}: the link must resolve against this project's forge`);
+    assert.ok(url.endsWith(e.oid), `${e.id}: the link must carry the full sha`);
+  }
+  // An entry with no recorded commit gets no link at all rather than one that
+  // guesses at a neighbour.
+  assert.equal(C.commitUrl({ ref: 'abc1234' }), '');
+  assert.equal(C.commitUrl(null), '');
+});
+
+/**
+ * The referenced commits are resolved against the repository itself. A WRONG
+ * sha is worse than none — it sends a reader somewhere confidently irrelevant —
+ * so this fails the build rather than letting a dead link ship. It is skipped
+ * only when the tree genuinely is not a git checkout (an unpacked tarball),
+ * because there is then nothing to resolve against.
+ */
+test('every referenced commit exists in this repository', (t) => {
+  const cp = require('node:child_process');
+  const repo = path.join(__dirname, '..');
+  try {
+    cp.execFileSync('git', ['rev-parse', '--git-dir'], { cwd: repo, stdio: 'pipe' });
+  } catch {
+    t.skip('not a git checkout, so there is nothing to resolve the shas against');
+    return;
+  }
+  for (const e of C.CHANGELOG.development) {
+    let type = '';
+    try {
+      type = cp.execFileSync('git', ['cat-file', '-t', e.oid], { cwd: repo, stdio: 'pipe' }).toString().trim();
+    } catch (err) {
+      assert.fail(`${e.id}: commit ${e.oid} is not in this repository — a changelog link that 404s is worse than no link`);
+    }
+    assert.equal(type, 'commit', `${e.id}: ${e.oid} is a ${type}, not a commit`);
+  }
+});
+
+test('the exported Markdown keeps the full sha and the link in plain text', () => {
+  const entry = C.CHANGELOG.development[0];
+  const md = C.entriesToMarkdown([entry], 'x', 'Changelog');
+  assert.ok(md.includes(entry.oid), 'a copied changelog must stay traceable');
+  assert.ok(md.includes(C.commitUrl(entry)));
 });
 
 test('every entry is searchable by its own text', () => {

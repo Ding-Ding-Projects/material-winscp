@@ -268,7 +268,7 @@ export function openTransferSettings({ value, title, presets, onApply } = {}) {
 
   return openModal({
     title: title || t('transferSettingsShort'),
-    content: h('div', { class: 'stack' },
+    content: h('div', { class: 'stack dlg-widest' },
       list.length ? h('div', {},
         h('p', { class: 'prefs-result-where' }, t('presetsHint')), presetRow) : null,
       frame.element),
@@ -360,7 +360,7 @@ export function openCopyParamPreset({ preset, current, onSave } = {}) {
 
   return openModal({
     title: preset ? `${t('edit')} — ${preset.name}` : `${t('add')} — ${t('transferSettingsShort')}`,
-    content: h('div', { class: 'stack' },
+    content: h('div', { class: 'stack dlg-widest' },
       h('label', { class: 'field' },
         h('span', { class: 'field-label' }, tx('Preset description', '預設組合描述')),
         nameInput),
@@ -595,9 +595,9 @@ export function openCopyDialog(props = {}) {
     : (tx(`Copy ${files.length} ${files.length === 1 ? 'item' : 'items'} to the remote directory`, `上載 ${files.length} 個項目去遠端目錄`));
 
   return openModal({
-    title: direction === 'download' ? t('downloadTitle') : t('uploadTitle'),
+    title: direction === 'download' ? t('downloadTitle', files.length) : t('uploadTitle', files.length),
     width: 620,
-    content: h('div', { class: 'stack' },
+    content: h('div', { class: 'stack dlg-wide' },
       h('p', { class: 'prose' }, caption),
       h('label', { class: 'field' },
         h('span', { class: 'field-label' }, t('targetPath')),

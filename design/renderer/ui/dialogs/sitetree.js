@@ -21,9 +21,10 @@
 // SearchSite, UpdateControls) and vendor/winscp/source/core/SessionData.cpp.
 
 import {
-  h, icon, clear, uid, appearanceTarget, announce, oneLine, rovingFocus,
+  h, icon, clear, uid, appearanceTarget, announce,
 } from '../../dom.js';
-import { t, bindText } from '../../i18n.js';
+import { t, bindText, getLanguage, getFunnyLevel } from '../../i18n.js';
+import { resolveI18n } from '../../../winscp-i18n.js';
 import { api, bus } from '../../state.js';
 import { styleSheet } from '../../theme.js';
 import { registerContextMenu, SEPARATOR } from '../contextmenu.js';
@@ -420,13 +421,49 @@ export function siteSummary(site = {}) {
 /* ------------------------------------------------------------------ */
 
 /**
+ * Strings this dialog needs that design/winscp-i18n.js does not carry. That
+ * file is another module's to own, so the entries live here in its own shape
+ * and resolve through the same resolveI18n() the shared dictionary uses — the
+ * language mode and both funny levels therefore apply to them identically.
+ */
+const STR = {
+  searchModeStart: ['Beginning of site name only', '淨係搵站點名開頭'],
+  searchModeName: ['Any part of site name', '站點名任何一部分'],
+  searchModeAll: ['All major site fields', '所有主要站點欄位'],
+  findSite: ['Find site…', '搵站點…'],
+  checkAll: ['Un/check all', '全選／全部唔要'],
+  paste: ['Paste', '貼上'],
+  siteShellIcon: ['Site Shell Icon', '站點捷徑'],
+  folderShellIcon: ['Site Folder Shell Icon', '資料夾捷徑'],
+  workspaceShellIcon: ['Workspace Shell Icon', '工作區捷徑'],
+  desktopIcon: ['Desktop Icon', '桌面圖示'],
+  sendToShortcut: ['Explorer’s "Send To" shortcut', '檔案總管「傳送到」捷徑'],
+  sessionMenu: ['Session', '連線'],
+  globalPrefsMenu: ['Global Preferences', '全域偏好設定'],
+  transferRule: ['Transfer Settings Rule…', '傳輸設定規則…'],
+  noKeyFile: ['None', '冇'],
+  privateKeyFile: ['Private key file', '私鑰檔案'],
+  profile: ['Profile', '設定檔'],
+};
+
+/** The local dictionary's counterpart to t(). */
+export function s(key, ...params) {
+  const raw = resolveI18n(STR[key], getLanguage(), getFunnyLevel('en'), getFunnyLevel('yue'));
+  const out = raw == null ? key : raw;
+  return params.length
+    ? String(out).replace(/\{(\d+)\}/g, (m, i) => (params[Number(i)] === undefined ? m : String(params[Number(i)])))
+    : out;
+}
+
+/**
  * The three modes SearchSiteNameStartOnlyAction / SearchSiteNameAction /
  * SearchSiteAction select between, with the ids used in config and in menus.
+ * `label` is a getter so the menu follows the language mode live.
  */
 export const SITE_SEARCH_MODES = Object.freeze([
-  { id: 'nameStartOnly', label: 'Beginning of site name only' },
-  { id: 'name', label: 'Any part of site name' },
-  { id: 'all', label: 'All major site fields' },
+  { id: 'nameStartOnly', key: 'searchModeStart', get label() { return s('searchModeStart'); } },
+  { id: 'name', key: 'searchModeName', get label() { return s('searchModeName'); } },
+  { id: 'all', key: 'searchModeAll', get label() { return s('searchModeAll'); } },
 ]);
 
 export const DEFAULT_SITE_SEARCH_MODE = 'name';
@@ -1040,6 +1077,7 @@ export function createSiteTree(opts = {}) {
     incremental: '',
     incrementalFailed: false,
     filter: '',
+    filterPredicate: null,
     renamingId: null,
   };
 
@@ -1091,8 +1129,8 @@ export function createSiteTree(opts = {}) {
       }
     };
     walk(state.nodes);
-    if (!state.filter) return out;
-    const matched = new Set(filterSiteNodes(state.nodes, state.filter, state.searchMode).map((n) => n.id));
+    if (!state.filter && !state.filterPredicate) return out;
+    const matched = new Set(matchingNodeIds());
     // A matching descendant keeps its ancestors on screen; otherwise a hit
     // inside a folder would be invisible and the filter would look broken.
     const keep = new Set();
@@ -1121,6 +1159,21 @@ export function createSiteTree(opts = {}) {
     return withFilter;
   }
 
+  /**
+   * Which nodes match the active filter. The search bar's own predicate wins
+   * when regex mode is on — otherwise switching the .* chip would silently
+   * stop filtering, which looks exactly like a broken search.
+   */
+  function matchingNodeIds() {
+    if (state.filterPredicate) {
+      return flattenTree(state.nodes)
+        .filter((n) => [n.label, n.site?.hostName, n.site?.userName, n.site?.note]
+          .some((value) => value && state.filterPredicate.test(String(value))))
+        .map((n) => n.id);
+    }
+    return filterSiteNodes(state.nodes, state.filter, state.searchMode).map((n) => n.id);
+  }
+
   /* ---------------- rendering ---------------- */
 
   let rowsById = new Map();
@@ -1131,8 +1184,11 @@ export function createSiteTree(opts = {}) {
     rowsById = new Map();
 
     if (!visible.length) {
+      const active = state.filterPredicate || state.filter;
       listEl.appendChild(h('p', { class: 'st-empty prose' },
-        state.filter ? `Nothing in the site list matches "${state.filter}".` : t('emptySites')));
+        active
+          ? `Nothing in the site list matches ${state.filterPredicate ? state.filterPredicate.describe : `"${state.filter}"`}.`
+          : t('emptySites')));
       paintIncremental();
       return;
     }
@@ -1634,12 +1690,18 @@ export function createSiteTree(opts = {}) {
     if (!SITE_SEARCH_MODES.some((m) => m.id === mode)) return;
     state.searchMode = mode;
     opts.onSearchModeChanged?.(mode);
-    if (state.filter) render();
+    if (state.filter || state.filterPredicate) render();
     paintIncremental();
   }
 
-  function setFilter(text) {
+  /**
+   * setFilter(text) filters with the active WinSCP match mode.
+   * setFilter(text, predicate) filters with the search bar's own predicate
+   * instead, which is how regex mode reaches the tree.
+   */
+  function setFilter(text, predicate = null) {
     state.filter = String(text || '');
+    state.filterPredicate = predicate && predicate.ok ? predicate : null;
     render();
   }
 
@@ -1672,5 +1734,3 @@ export function createSiteTree(opts = {}) {
 
 /** Sites/folders changed somewhere else in the app; every tree re-reads. */
 export function notifySitesChanged() { bus.emit('sites:changed', null); }
-
-export { oneLine, bindText };

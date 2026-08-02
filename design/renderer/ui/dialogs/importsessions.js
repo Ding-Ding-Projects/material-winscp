@@ -23,14 +23,14 @@
 // ImportFromOpenssh, ImportFromKnownHosts, TSessionData::DoLoad).
 
 import { h, icon, clear, uid, appearanceTarget, announce, pickTextFile } from '../../dom.js';
-import { t, bindText } from '../../i18n.js';
+import { t } from '../../i18n.js';
 import { api } from '../../state.js';
 import { registerDialog, openDialog } from '../../app.js';
 import { notify } from '../notifications.js';
 import { createSearchBar, filterBy, noMatchMessage } from '../searchbar.js';
 import {
   SESSION_DEFAULTS, siteStore, notifySitesChanged, installSessionDialogStyles,
-  defaultPortFor, protocolInfo, ANONYMOUS_USER, ANONYMOUS_PASSWORD,
+  defaultPortFor, protocolInfo, ANONYMOUS_USER, ANONYMOUS_PASSWORD, s,
 } from './sitetree.js';
 
 /** Guard rails. An import file is user-supplied data, not a trusted format. */
@@ -891,9 +891,9 @@ export function createImportPanel(opts = {}) {
   const browseBtn = h('button', { type: 'button', class: 'btn-tonal', onclick: browse },
     icon('folder_open', 16), h('span', {}, t('browse')));
   const pasteBtn = h('button', { type: 'button', class: 'btn-tonal', onclick: paste },
-    icon('content_copy', 16), h('span', {}, 'Paste'));
+    icon('content_copy', 16), h('span', {}, s('paste')));
   const checkAllBtn = h('button', { type: 'button', class: 'btn-text', onclick: toggleAll },
-    icon('done_all', 16), h('span', {}, 'Un/check all'));
+    icon('done_all', 16), h('span', {}, s('checkAll')));
 
   const element = h('div', { class: 'stack sd-wide sd-wide-sm' },
     h('div', { class: 'sd-grid' },
@@ -1114,5 +1114,3 @@ if (typeof document !== 'undefined') {
     try { registerImportSessionsDialog(); } catch (err) { console.error('[importSessions] registration failed', err); }
   });
 }
-
-export { bindText };

@@ -23,16 +23,13 @@
 // Reference: vendor/winscp/source/forms/SiteAdvanced.{dfm,cpp} (LoadSession,
 // SaveSession, UpdateControls) and vendor/winscp/source/core/SessionData.cpp.
 
-import {
-  h, icon, clear, uid, appearanceTarget, announce, rovingFocus, oneLine,
-} from '../../dom.js';
+import { h, icon, clear, uid, appearanceTarget, announce } from '../../dom.js';
 import { t, bindText } from '../../i18n.js';
 import { api } from '../../state.js';
 import { registerDialog, openDialog } from '../../app.js';
 import { notify } from '../notifications.js';
 import { createSearchBar, filterBy, noMatchMessage } from '../searchbar.js';
 import { openMenu } from '../contextmenu.js';
-import { openColorPicker } from '../colorpicker.js';
 import {
   SESSION_DEFAULTS, SECRET_SENTINEL, SECRET_FIELDS, protocolInfo,
   installSessionDialogStyles, stripSecrets,
@@ -940,8 +937,24 @@ export function createSiteAdvancedPanel(site, opts = {}) {
     return typeof page.enabled === 'function' ? !!page.enabled(ctx()) : true;
   }
 
+  /**
+   * A button's handler gets the working site AND the helpers below, because a
+   * handler that writes a secret has to mark it as touched — otherwise the
+   * save path strips it as "unchanged" and the value the user just generated
+   * is silently thrown away.
+   */
+  const actionHelpers = {
+    setValue(key, value) { setKey(state.site, key, value); renderPage(); },
+    setSecret(key, value) {
+      state.touchedSecrets.add(key);
+      setKey(state.site, key, value);
+      renderPage();
+    },
+    refresh() { renderNav(); renderPage(); },
+  };
+
   function runAction(id, ...args) {
-    if (typeof opts.onAction === 'function') return opts.onAction(id, state.site, ...args);
+    if (typeof opts.onAction === 'function') return opts.onAction(id, state.site, actionHelpers, ...args);
     notify.info(t('advancedBtn'), `"${id}" is handled by the login dialog that opened this panel.`);
     return null;
   }
@@ -1220,7 +1233,7 @@ export function createSiteAdvancedPanel(site, opts = {}) {
    */
   function buildSecret(control, id, enabled) {
     const stored = getKey(state.site, control.key);
-    const isStored = stored === SECRET_SENTINEL || (stored && state.touchedSecrets.has(control.key) === false && stored === SECRET_SENTINEL);
+    const isStored = stored === SECRET_SENTINEL;
     const input = h(control.multiline ? 'textarea' : 'input', {
       id, class: 'sd-input', spellcheck: 'false', autocomplete: 'new-password',
       rows: control.multiline ? 3 : undefined,
@@ -1597,4 +1610,4 @@ if (typeof document !== 'undefined') {
 }
 
 export { GAPS as PROTOCOL_GAP_NOTES, getKey as getSiteKey, setKey as setSiteKey };
-export { bindText, rovingFocus, oneLine, openColorPicker };
+export { bindText };

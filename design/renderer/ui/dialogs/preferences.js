@@ -24,7 +24,7 @@
 // and the two search bars (all pages / this page) are the shared
 // createSearchBar with its anchored regex builder — never a hand-rolled field.
 
-import { h, icon, uid, clear, appearanceTarget, announce, openModal, anchorTo, layer, focusMemory, rovingFocus, copyText } from '../../dom.js';
+import { h, icon, clear, appearanceTarget, announce, openModal, anchorTo, layer, focusMemory, rovingFocus, copyText } from '../../dom.js';
 import { store, bus, api, persistCurrent, session } from '../../state.js';
 import { t, getLanguage, bindRender, disclosureText, setLanguage, setFunnyLevel } from '../../i18n.js';
 import { theme as themeApi, styleSheet } from '../../theme.js';
@@ -35,7 +35,7 @@ import { notify } from '../notifications.js';
 import { registerDialog, registerCommand, funnySlider } from '../../app.js';
 import {
   PAGES, orderedPages, pageById, flattenControls, renderControl, localized,
-  describeValue, matchPreferences, matchesByPage, controlEnabled, getAt, searchFieldsFor,
+  describeValue, matchPreferences, matchesByPage, getAt, searchFieldsFor,
 } from './prefpages.js';
 import { createCopyParamsFrame, createPresetList, openCopyParamPreset } from './copyparams.js';
 import { createEditorList } from './editorpreferences.js';
@@ -226,7 +226,13 @@ export function ensurePreferenceStyles() {
   if (stylesInstalled) return;
   stylesInstalled = true;
   styleSheet('preferences').set(`
+/* openModal() sizes with max-width, but .modal already declares
+   width: min(560px, 100%) — so a max-width alone never widens a dialog. These
+   rules key off a class on the content instead, which is the only way to make
+   a settings-sized dialog without editing the shared stylesheet. */
 .modal:has(.prefs) { width: min(1080px, 100%); max-width: none; padding: 0; gap: 0; }
+.modal:has(.dlg-wide) { width: min(760px, 100%); max-width: none; }
+.modal:has(.dlg-widest) { width: min(980px, 100%); max-width: none; }
 .modal:has(.prefs) .modal-title { padding: calc(18px * var(--den)) calc(22px * var(--den)) 0; }
 .modal:has(.prefs) .modal-body { padding: 0; }
 .modal:has(.prefs) .modal-actions { padding: calc(12px * var(--den)) calc(22px * var(--den)) calc(16px * var(--den)); }

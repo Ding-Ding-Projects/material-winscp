@@ -22,7 +22,7 @@
 // cleanup.
 
 import {
-  h, icon, clear, uid, appearanceTarget, announce, openModal, oneLine,
+  h, icon, clear, uid, appearanceTarget, announce, openModal,
 } from '../../dom.js';
 import { t, tIn, bindRender, getLanguage, getFunnyLevel } from '../../i18n.js';
 import { resolveI18n } from '../../../winscp-i18n.js';
