@@ -817,6 +817,26 @@ class RetryLoop {
 // The "reconnect and carry on" loop, used for whole transfers and for directory
 // listings. Unlike RetryLoop it never asks about the file; it asks about the
 // *session*, and only when the session is actually down.
+//
+// THE BUDGET IS OPT-IN, AND OPTING IN MAKES IT STRICTER, NOT LOOSER. Read
+// TryReopen (Terminal.cpp:538-559) with the brace nesting in mind: BOTH arms —
+// the progress-based reset AND the `ContinueReopen(FStart)` call that is the
+// budget itself — sit inside `if (FAnyTransfer != NULL)`. A loop built without
+// the flag therefore never consults SessionReopenTimeout at all and reconnects
+// for as many drops as QueryReopen accepts. Handing it a flag is what imposes
+// the ceiling; the reset merely softens it by restarting the window whenever
+// bytes actually moved.
+//
+// WHICH bool the pointer points at is the rest of the design, and JavaScript
+// has no `bool *`, so the caller passes a HOLDER OBJECT carrying a
+// `fileTransferAny` property:
+//
+//   * `null` — no budget (every non-FTP transfer; Terminal.cpp:7767, :8348
+//     resolve `tfUseFileTransferAny` to NULL for them).
+//   * the terminal — budget WITH the reset, because `Terminal::FFileTransferAny`
+//     is the flag `DoProgress` raises whenever a byte lands (Terminal.cpp:2277).
+//   * a fresh throwaway object — budget with NO reset, because nothing ever
+//     raises it. That is CustomReadDirectory's function-local (Terminal.cpp:3760).
 // ===========================================================================
 
 class RobustLoop {
@@ -826,22 +846,30 @@ class RobustLoop {
     this._progress = progress || null;
     this._retry = false;
     this._canRetry = o.canRetry !== false;
-    this._trackTransfer = !!o.trackTransfer;
-    this._start = Date.now();
+    this._anyTransfer = o.anyTransfer || null;
+    // The terminal's own clock, because ContinueReopen subtracts this from
+    // `this._now()`. A start stamped from a different clock than the one the
+    // comparison uses makes the budget either instantly spent or eternal.
+    this._start = this._nowMs();
     // The C++ constructor takes the flag by pointer, saves it, and zeroes it;
     // the destructor puts it back. Without that, a loop entered after some
     // *earlier* operation moved bytes sees a stale "there was a transfer" and
     // restarts the retry budget forever instead of letting it expire.
-    if (this._trackTransfer && terminal) {
-      this._prevTransferAny = !!terminal.fileTransferAny;
-      terminal.fileTransferAny = false;
+    if (this._anyTransfer) {
+      this._prevTransferAny = !!this._anyTransfer.fileTransferAny;
+      this._anyTransfer.fileTransferAny = false;
     }
+  }
+
+  _nowMs() {
+    return (this._terminal && typeof this._terminal._now === 'function')
+      ? this._terminal._now() : Date.now();
   }
 
   /** Restores the transfer flag the constructor borrowed (the C++ destructor). */
   dispose() {
-    if (this._trackTransfer && this._terminal && this._prevTransferAny !== undefined) {
-      this._terminal.fileTransferAny = this._prevTransferAny;
+    if (this._anyTransfer && this._prevTransferAny !== undefined) {
+      this._anyTransfer.fileTransferAny = this._prevTransferAny;
       this._prevTransferAny = undefined;
     }
   }
@@ -857,11 +885,16 @@ class RobustLoop {
       return false;
     }
     this._retry = true;
-    if (this._trackTransfer) {
-      if (this._terminal.fileTransferAny) {
+    if (this._anyTransfer) {
+      if (this._anyTransfer.fileTransferAny) {
         // Bytes moved since the last attempt, so the budget starts again.
-        this._start = Date.now();
-        this._terminal.fileTransferAny = false;
+        this._start = this._nowMs();
+        // Terminal.cpp:546. The destructor hands the flag back to whatever
+        // scope owns it, so a loop that DID see progress has to say so on the
+        // way out — otherwise an enclosing loop is told "nothing moved" by an
+        // operation that moved bytes, and expires a window it should restart.
+        this._prevTransferAny = true;
+        this._anyTransfer.fileTransferAny = false;
       } else {
         this._retry = this._terminal.continueReopen(this._start);
         if (!this._retry) this._terminal.logEvent('Retry interval expired, will not retry transfer');
@@ -1731,9 +1764,19 @@ class Terminal extends EventEmitter {
    * The `_opening` guard is WinSCP's: during Open() the whole connection
    * attempt is retried instead, and recursing into a reconnect from here would
    * re-enter Open.
+   *
+   * The budget flag is a FUNCTION-LOCAL that nothing ever raises, exactly as at
+   * Terminal.cpp:3760 ("To match FTP upload/download, we also limit directory
+   * listing. For simplicity, we limit it unconditionally, for all protocols for
+   * any kind of errors"). So a listing gets the SessionReopenTimeout ceiling
+   * with no way to reset it — which is the point, because a listing moves no
+   * bytes of its own. Pointing it at the terminal-wide flag instead would let
+   * some unrelated transfer's progress hand this loop a fresh window, and a
+   * directory that is genuinely unreadable would be re-listed forever.
    */
   async customReadDirectory(fileList) {
-    const loop = new RobustLoop(this, this.operationProgress, { trackTransfer: true });
+    const fileTransferAny = { fileTransferAny: false };
+    const loop = new RobustLoop(this, this.operationProgress, { anyTransfer: fileTransferAny });
     try {
       do {
         try {

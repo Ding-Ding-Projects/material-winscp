@@ -1111,6 +1111,41 @@ class TransferEngine {
     return !String(a.protocolName || '').toLowerCase().includes('scp');
   }
 
+  /**
+   * tfUseFileTransferAny — does a transfer over this protocol get a RECONNECT
+   * BUDGET?
+   *
+   * The flag reads backwards until you check the braces. Both arms that consult
+   * a budget live inside `if (FAnyTransfer != NULL)` (Terminal.cpp:538-559), so
+   * WITHOUT the flag TRobustOperationLoop never calls ContinueReopen at all and
+   * keeps reconnecting for as long as QueryReopen says yes. Setting it is what
+   * IMPOSES the SessionReopenTimeout ceiling and the "Retry interval expired,
+   * will not retry transfer" giving-up; the progress-based reset only softens
+   * that, by restarting the window whenever bytes actually moved.
+   *
+   * WinSCP sets it in exactly two places — TFTPFileSystem::CopyToLocal and
+   * ::CopyToRemote (FtpFileSystem.cpp:1585, :1682) — the FTP back end's own
+   * transfer entry points, and nowhere else. Not its listings, not its deletes,
+   * and not any other protocol: an SFTP transfer that keeps dropping is retried
+   * indefinitely. FTP is singled out because of its second connection: a data
+   * transfer that stalls drags the control connection down with it, so an FTP
+   * transfer can fail-and-reconnect in a tight loop while moving nothing at
+   * all, which is precisely what the ceiling stops.
+   *
+   * An adapter may state it outright with `caps.limitTransferReconnects`.
+   */
+  limitedTransferReconnects() {
+    const a = this.remote;
+    if (!a) return false;
+    if (a.caps && a.caps.limitTransferReconnects !== undefined) {
+      return !!a.caps.limitTransferReconnects;
+    }
+    // Exact names, not `includes('ftp')`: that substring is also in SFTP, the
+    // one protocol WinSCP deliberately leaves unlimited.
+    const p = String(a.protocolName || '').toLowerCase();
+    return p === 'ftp' || p === 'ftps';
+  }
+
   /** Configuration->ConfirmOverwriting. */
   get confirmOverwriting() { return this.prefs.confirmOverwriting !== false; }
 
@@ -1652,7 +1687,11 @@ class TransferEngine {
     const action = new TransferAction(this.actionsLog, 'upload');
     const loop = new RobustLoop(this.terminal, progress, {
       canRetry: true,
-      trackTransfer: !!(flags & TRANSFER_FLAGS.useFileTransferAny),
+      // Terminal.cpp:7767 — `FLAGSET(Flags, tfUseFileTransferAny) ?
+      // &FFileTransferAny : NULL`. Handing the loop the terminal is what turns
+      // the reconnect BUDGET ON, with the terminal's progress flag as its
+      // reset; `null` leaves the loop reconnecting without a ceiling.
+      anyTransfer: (flags & TRANSFER_FLAGS.useFileTransferAny) ? this.terminal : null,
     });
     let p = Number(params) || 0;
     let f = Number(flags) || 0;
@@ -1694,7 +1733,8 @@ class TransferEngine {
     const action = new TransferAction(this.actionsLog, 'download');
     const loop = new RobustLoop(this.terminal, progress, {
       canRetry: true,
-      trackTransfer: !!(flags & TRANSFER_FLAGS.useFileTransferAny),
+      // Terminal.cpp:8348 — the download's half of the same choice.
+      anyTransfer: (flags & TRANSFER_FLAGS.useFileTransferAny) ? this.terminal : null,
     });
     let p = Number(params) || 0;
     let f = Number(flags) || 0;
@@ -2323,7 +2363,8 @@ class TransferEngine {
               await this.copyParallel(parallelOperation, progress);
             }
           } else {
-            await this.doCopyToLocal(normalizeCopyList(filesToCopy), targetDir, cp, effectiveParams, progress, 0);
+            await this.doCopyToLocal(normalizeCopyList(filesToCopy), targetDir, cp, effectiveParams,
+              progress, this.downloadFlags());
           }
           this.logTotalTransferDone(progress);
         } finally {
@@ -2412,7 +2453,7 @@ class TransferEngine {
       if (parallelOperation.side === SIDES.local) {
         await this.doCopyToRemote([entry], out.targetDir, copyParam, params, progress, this.transferFlags());
       } else {
-        await this.doCopyToLocal([entry], out.targetDir, copyParam, params, progress, 0);
+        await this.doCopyToLocal([entry], out.targetDir, copyParam, params, progress, this.downloadFlags());
       }
       success = progress.filesFinishedSuccessfully > before;
       transferred = progress.transferredSize;
@@ -2486,11 +2527,26 @@ class TransferEngine {
    * any other adapter here, so the pre-create branch is the right one for all
    * of them. An adapter that genuinely creates directories implicitly can say
    * so with `caps.postCreateDir` and get WinSCP's FTP branch instead.
+   *
+   * `tfUseFileTransferAny` rides along here because WinSCP adds it at the same
+   * seam — TFTPFileSystem::CopyToRemote (FtpFileSystem.cpp:1682) is one call
+   * that passes both this back end's flags down to DoCopyToRemote.
    */
   transferFlags() {
     const a = this.remote;
-    if (a && a.caps && a.caps.postCreateDir) return 0;
-    return TRANSFER_FLAGS.preCreateDir;
+    let flags = (a && a.caps && a.caps.postCreateDir) ? 0 : TRANSFER_FLAGS.preCreateDir;
+    if (this.limitedTransferReconnects()) flags |= TRANSFER_FLAGS.useFileTransferAny;
+    return flags;
+  }
+
+  /**
+   * The same for a download. There is no directory-ordering question going this
+   * way, so `tfUseFileTransferAny` is the only flag in play, and WinSCP's
+   * TFTPFileSystem::CopyToLocal (FtpFileSystem.cpp:1584-1585) passes exactly
+   * that one while every other back end's CopyToLocal passes nothing.
+   */
+  downloadFlags() {
+    return this.limitedTransferReconnects() ? TRANSFER_FLAGS.useFileTransferAny : 0;
   }
 
   /** TFileSystemIntf::TransferOnDirectory — S3 creates the bucket here. */

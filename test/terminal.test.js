@@ -644,6 +644,113 @@ test('refusing to reconnect leaves the error reported, not swallowed', async () 
   assert.strictEqual(session.disconnects, 0);
 });
 
+test('a listing that keeps dropping runs out of its reconnect budget', async () => {
+  // Terminal.cpp:3759-3761 — "To match FTP upload/download, we also limit
+  // directory listing. For simplicity, we limit it unconditionally, for all
+  // protocols for any kind of errors." A directory that is unreadable because
+  // the transport keeps dying must eventually be reported rather than re-listed
+  // for the rest of the session.
+  let clock = 1000;
+  const { terminal, adapter, session, queries } = makeTerminal({
+    cwd: '/d',
+    now: () => clock,
+    prefs: { security: { sessionReopenTimeout: 5000 } },
+    answers: [ANSWERS.retry, ANSWERS.retry, ANSWERS.retry],
+  });
+  adapter.add('/d/a.txt', {});
+
+  let attempts = 0;
+  adapter.list = async () => {
+    attempts += 1;
+    clock += 4000;                     // under the ceiling on its own attempt...
+    adapter.connected = false;
+    const e = new Error('read ECONNRESET'); e.code = 'ECONNRESET';
+    throw e;
+  };
+
+  await assert.rejects(() => terminal.readDirectory(false), (e) => classifyException(e) === 'fatal');
+  assert.strictEqual(attempts, 2, '...but cumulative, so the second drop is past it');
+  assert.strictEqual(session.reconnects, 1);
+  assert.strictEqual(queries.length, 1);
+  assert.ok(session.lines.some((l) => /Retry interval expired, will not retry transfer/.test(l)));
+});
+
+test('a listing budget is not handed a fresh window by a transfer that moved bytes', async () => {
+  // The flag CustomReadDirectory gives the loop is a FUNCTION-LOCAL that
+  // nothing ever raises (Terminal.cpp:3760), not the terminal-wide
+  // FFileTransferAny that DoProgress sets on every byte (Terminal.cpp:2277).
+  // Binding the listing to the terminal's flag instead lets a transfer running
+  // on the same session restart the listing's window, and an unreadable
+  // directory is then re-listed for as long as anything else is downloading.
+  let clock = 1000;
+  const { terminal, adapter, session } = makeTerminal({
+    cwd: '/d',
+    now: () => clock,
+    prefs: { security: { sessionReopenTimeout: 5000 } },
+    answers: [ANSWERS.retry, ANSWERS.retry, ANSWERS.retry],
+  });
+  adapter.add('/d/a.txt', {});
+
+  let attempts = 0;
+  adapter.list = async () => {
+    attempts += 1;
+    // Exactly what terminal.js's own progress callback does when a byte lands
+    // on some other operation sharing this terminal.
+    terminal.fileTransferAny = true;
+    clock += 4000;
+    adapter.connected = false;
+    const e = new Error('read ECONNRESET'); e.code = 'ECONNRESET';
+    throw e;
+  };
+
+  await assert.rejects(() => terminal.readDirectory(false), (e) => classifyException(e) === 'fatal');
+  assert.strictEqual(attempts, 2, 'the transfer\'s progress must not reset the listing budget');
+  assert.ok(session.lines.some((l) => /Retry interval expired, will not retry transfer/.test(l)));
+  // And the listing must not have eaten the flag the transfer set, either.
+  assert.strictEqual(terminal.fileTransferAny, true);
+});
+
+test('a robust loop reports outward that it saw bytes move', async () => {
+  // Terminal.cpp:546. The reset arm sets FPrevAnyTransfer as well as restarting
+  // the window, and the destructor hands that back to whichever scope owns the
+  // flag. Skip it and an enclosing loop is told "nothing moved" by an operation
+  // that moved bytes, and expires a window it should have restarted.
+  const { terminal, adapter } = makeTerminal({ answers: [ANSWERS.retry] });
+  const loop = new T.RobustLoop(terminal, null, { anyTransfer: terminal });
+  assert.strictEqual(terminal.fileTransferAny, false, 'the constructor zeroes the borrowed flag');
+
+  terminal.fileTransferAny = true;                 // a chunk landed
+  adapter.connected = false;
+  const lost = new Error('read ECONNRESET'); lost.code = 'ECONNRESET';
+
+  assert.strictEqual(await loop.tryReopen(lost), true);
+  assert.strictEqual(terminal.fileTransferAny, false, 'the reset arm consumes the flag');
+  loop.dispose();
+  assert.strictEqual(terminal.fileTransferAny, true,
+    'and the destructor reports the progress outwards');
+});
+
+test('a robust loop with no flag has no reconnect budget at all', async () => {
+  // The half of TryReopen that is easy to read backwards: ContinueReopen is
+  // only ever called inside `if (FAnyTransfer != NULL)` (Terminal.cpp:538-559),
+  // so a loop built without a flag ignores SessionReopenTimeout entirely. This
+  // is what every non-FTP transfer gets, and it is deliberate.
+  let clock = 1000;
+  const { terminal, adapter, session } = makeTerminal({
+    now: () => clock,
+    prefs: { security: { sessionReopenTimeout: 5000 } },
+    answers: [ANSWERS.retry],
+  });
+  const loop = new T.RobustLoop(terminal, null, {});
+  clock += 1000 * 1000;                            // long past any ceiling
+  adapter.connected = false;
+  const lost = new Error('read ECONNRESET'); lost.code = 'ECONNRESET';
+
+  assert.strictEqual(await loop.tryReopen(lost), true, 'still reconnects');
+  assert.strictEqual(session.reconnects, 1);
+  assert.ok(!session.lines.some((l) => /Retry interval expired/.test(l)));
+});
+
 test('a fatal error on a still-open session closes it before reporting', async () => {
   const { terminal, adapter, session } = makeTerminal({ cwd: '/d' });
   // Fatal by message while the transport still claims to be up: WinSCP closes

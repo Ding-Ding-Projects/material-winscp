@@ -23,7 +23,7 @@ const T = require('../design/main/terminal');
 const { Terminal, SIDES, ANSWERS, CANCEL } = T;
 const X = require('../design/main/transfer');
 const {
-  COPY_FLAGS, BATCH_OVERWRITE, OVERWRITE_MODE,
+  COPY_FLAGS, TRANSFER_FLAGS, BATCH_OVERWRITE, OVERWRITE_MODE,
   OverwriteFileParams, CollectedFileList, ParallelOperation,
   TransferEngine, StandaloneHost, SimpleProgress,
   validLocalFileName, restoreChars, changeFileName, allowResume, useAsciiTransfer,
@@ -282,6 +282,9 @@ function makeTerminal(options = {}) {
       if (!answers.length) throw new Error(`Unexpected query: ${q.message} [${q.answers.join(',')}]`);
       return answers.shift();
     },
+    // Injectable so a reconnect-budget test can step the clock rather than
+    // sleep on it — ContinueReopen measures against exactly this function.
+    now: options.now,
   });
   terminal.session.state.remotePath = options.cwd || '/';
   return { terminal, session, remote, queries, answers };
@@ -1885,6 +1888,132 @@ test('SinkRobust does not download again when only the source delete failed', as
   assert.strictEqual(remote.calls.reads.filter((r) => r.path === '/r/a.txt').length, 1,
     'the file was downloaded exactly once');
   assert.strictEqual(remote.has('/r/a.txt'), false, 'and the delete was retried and succeeded');
+});
+
+// ===========================================================================
+// tfUseFileTransferAny — the FTP reconnect budget
+// ===========================================================================
+
+test('tfUseFileTransferAny is set for FTP transfers and for nothing else', () => {
+  // FtpFileSystem.cpp:1585 and :1682 — TFTPFileSystem's two transfer entry
+  // points, and no other back end's. Setting it is what gives a transfer a
+  // SessionReopenTimeout ceiling, so over-applying it would make an SFTP
+  // transfer give up where the original never does.
+  const both = (name, caps) => {
+    const { engine } = makeEngine({ remote: new MemoryAdapter({ name, caps }) });
+    return [
+      !!(engine.transferFlags() & TRANSFER_FLAGS.useFileTransferAny),
+      !!(engine.downloadFlags() & TRANSFER_FLAGS.useFileTransferAny),
+    ];
+  };
+  assert.deepStrictEqual(both('FTP'), [true, true]);
+  assert.deepStrictEqual(both('FTPS'), [true, true]);
+  // "SFTP" contains "ftp": a substring test here would flag the one protocol
+  // WinSCP deliberately leaves unlimited.
+  assert.deepStrictEqual(both('SFTP'), [false, false]);
+  assert.deepStrictEqual(both('SCP'), [false, false]);
+  assert.deepStrictEqual(both('WebDAV'), [false, false]);
+  assert.deepStrictEqual(both('Amazon S3'), [false, false]);
+
+  // An adapter may state it outright, in either direction.
+  assert.deepStrictEqual(both('SFTP', { limitTransferReconnects: true }), [true, true]);
+  assert.deepStrictEqual(both('FTP', { limitTransferReconnects: false }), [false, false]);
+
+  // And the upload flags keep their directory-ordering half.
+  const { engine } = makeEngine({ remote: new MemoryAdapter({ name: 'FTP' }) });
+  assert.ok(engine.transferFlags() & TRANSFER_FLAGS.preCreateDir);
+  assert.strictEqual(engine.downloadFlags() & TRANSFER_FLAGS.preCreateDir, 0);
+});
+
+/**
+ * A download whose byte pump drops the connection on the first `dropCount`
+ * attempts and succeeds after that, stepping a fake clock 4000 ms each time.
+ * `bytesOn` names the attempts that manage to move a chunk before dying.
+ */
+async function droppingDownload(protocolName, dropCount, bytesOn) {
+  let clock = 1000;
+  const remote = new MemoryAdapter({ name: protocolName });
+  let attempts = 0;
+  const ctx = makeEngine({
+    remote,
+    now: () => clock,
+    prefs: { security: { sessionReopenTimeout: 5000 } },
+    answers: [ANSWERS.retry, ANSWERS.retry, ANSWERS.retry, ANSWERS.retry],
+    copyBytes: async (plan) => {
+      attempts += 1;
+      if (attempts > dropCount) {
+        const rs = await plan.sourceAdapter.createReadStream(plan.sourcePath);
+        const ws = await plan.targetAdapter.createWriteStream(plan.targetPath, { size: plan.size });
+        let written = 0;
+        for await (const chunk of rs) { ws.write(chunk); written += chunk.length; }
+        await new Promise((resolve, reject) => { ws.on('error', reject); ws.end(resolve); });
+        plan.onBytes(written);
+        return written;
+      }
+      // The one signal the budget's reset arm reads, raised the only way
+      // production raises it: bytes reported through the progress object.
+      if (bytesOn.includes(attempts)) plan.onBytes(4);
+      clock += 4000;
+      remote.connected = false;
+      const e = new Error('Connection lost'); e.code = 'ECONNRESET';
+      throw e;
+    },
+  });
+  remote.put('/r/a.txt', 'PAYLOAD');
+  ctx.local.putDir('/l');
+
+  let error = null;
+  try {
+    await ctx.engine.copyToLocal(['/r/a.txt'], '/l',
+      cp({ preserveTime: false, resumeSupport: 'off' }), 0, null);
+  } catch (e) { error = e; }
+  return {
+    error,
+    attempts,
+    reconnects: ctx.session.reconnects,
+    expired: ctx.session.lines.some((l) => /Retry interval expired, will not retry transfer/.test(l)),
+    delivered: ctx.local.has('/l/a.txt'),
+  };
+}
+
+test('a dropping FTP transfer gives up on the budget where SFTP keeps trying', async () => {
+  // Both arms that consult the budget sit inside `if (FAnyTransfer != NULL)`
+  // (Terminal.cpp:538-559), so the flag IMPOSES the ceiling rather than lifting
+  // it. Two drops 4000 ms apart put the second one past a 5000 ms
+  // SessionReopenTimeout; the third attempt would have succeeded.
+  const ftp = await droppingDownload('FTP', 2, []);
+  assert.strictEqual(ftp.attempts, 2, 'FTP never reaches the attempt that works');
+  assert.strictEqual(ftp.reconnects, 1);
+  assert.ok(ftp.expired, 'and says why in the log');
+  assert.strictEqual(ftp.delivered, false);
+  assert.ok(ftp.error && T.classifyException(ftp.error) === 'fatal');
+
+  // The identical script over SFTP, where WinSCP hands the loop no flag: no
+  // ceiling is consulted at all and the transfer completes on the third try.
+  const sftp = await droppingDownload('SFTP', 2, []);
+  assert.strictEqual(sftp.attempts, 3);
+  assert.strictEqual(sftp.reconnects, 2);
+  assert.strictEqual(sftp.expired, false, 'SessionReopenTimeout is never consulted');
+  assert.strictEqual(sftp.delivered, true);
+  assert.strictEqual(sftp.error, null);
+});
+
+test('bytes moving restart the FTP reconnect budget', async () => {
+  // TryReopen's other arm (Terminal.cpp:541-547): progress since the last
+  // attempt makes FStart today's, so a transfer that is slowly getting
+  // somewhere is not killed by a ceiling measured from when it began.
+  const moved = await droppingDownload('FTP', 3, [2]);
+  assert.strictEqual(moved.attempts, 4, 'the window restarted at the drop that moved bytes');
+  assert.strictEqual(moved.reconnects, 3);
+  assert.strictEqual(moved.expired, false);
+  assert.strictEqual(moved.delivered, true, 'and 13 seconds of a 5-second budget still delivered');
+
+  // The same three drops with nothing moving die on the second one — which is
+  // what makes the run above evidence of the reset rather than of no budget.
+  const stalled = await droppingDownload('FTP', 3, []);
+  assert.strictEqual(stalled.attempts, 2);
+  assert.ok(stalled.expired);
+  assert.strictEqual(stalled.delivered, false);
 });
 
 // ===========================================================================
