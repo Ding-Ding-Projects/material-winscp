@@ -348,6 +348,16 @@ node tools/count-lines.js
 > `tools/extract-forms.js` — a person did not type them, so they are reported
 > separately rather than folded into the total.
 
+> [!IMPORTANT]
+> **The release notes are the record; this table is a convenience copy.** Every
+> release states the count, measured by CI with the committed counter at exactly
+> the tagged commit — including the `git blame` split of how many surviving lines
+> agents wrote versus people, and the grand total with the excluded rows visible.
+> A number pinned to a tag can be compared across releases; one floating in a
+> README goes stale the day after it is written. The table above is refreshed
+> from a published release, so run `node tools/count-lines.js --markdown` for the
+> current figure rather than reading this one as today's.
+
 ---
 
 ## Project layout

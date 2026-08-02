@@ -93,14 +93,72 @@ pass.
 
 ```bash
 node tools/count-lines.js            # human-readable
-node tools/count-lines.js --markdown # the README section
+node tools/count-lines.js --markdown # the table CI pastes into a release
+node tools/count-lines.js --json     # every number, machine-readable
+node tools/count-lines.js --no-blame # size only, skips attribution
 ```
 
 Counts only files git tracks, split by part, with both total and non-blank
 lines, and states its exclusions out loud rather than applying them quietly:
 `vendor/winscp` is 421,584 lines of someone else's C++ and folding it in would
 inflate this project roughly tenfold. Generated files are reported on their own
-row, because a person did not type them.
+row, because a person did not type them. The excluded rows are printed **in the
+same table** as the totals they are held out of, so "the project" (280 files)
+and "everything the repository tracks" (304 files) are two visible numbers
+rather than one number with a silent asterisk.
+
+### Who wrote it
+
+Authorship is attributed **per surviving line** with `git blame`, never by
+summing added lines out of `git log`. Churn is not authorship: a line written in
+one commit and deleted in the next belongs to nobody, and a log-based tally
+credits whoever rewrote a file most often. Blame answers the only question worth
+asking — of the code that is here *now*, who wrote it.
+
+A commit counts as agent-written under exactly two rules, both printed with the
+numbers so the split can be re-derived:
+
+1. **Automation author** — the commit author's own name or e-mail is an agent
+   identity (`Claude <noreply@anthropic.com>`, anything `[bot]`, and so on).
+2. **Agent co-author** — a person authored the commit but its message carries a
+   `Co-Authored-By:` trailer naming an agent.
+
+Anything matching neither is human-written; lines not yet committed are their
+own row rather than being folded into either.
+
+Two failure modes it refuses rather than guesses through:
+
+- **A shallow clone.** `git blame` does not fail on one — it exits 0 and credits
+  every line of every file to the single grafted boundary commit, which prints a
+  tidy and completely fictional 100%. The counter detects the shallow clone,
+  prints no split, and says how to fix it. This is why both CI checkouts set
+  `fetch-depth: 0`.
+- **Its own arithmetic disagreeing.** The size table counts bytes and the
+  authorship table counts what blame accounts for; if the two totals differ then
+  one is wrong and a reader cannot tell which. The counter withholds the split
+  and **exits non-zero**, which fails the release step rather than publishing two
+  numbers that do not add up. (The classic cause is counting the empty string
+  after a file's trailing newline as a line, which blame does not.)
+
+Blaming ~280 files takes about **2 seconds** at concurrency 8 — one `git blame
+--porcelain` per file, run through a small pool, because on Windows the process
+spawn dominates everything else. Serially it is closer to 14.
+
+### Where the number gets published
+
+CI does the counting, not a person and not an agent. The release job runs the
+committed script over the tagged commit:
+
+```bash
+node tools/count-lines.js --markdown > LINE_COUNT.md
+```
+
+`build/release-notes.js` reads that file through `LINE_COUNT_PATH` and embeds the
+table in the release body under **How much code this is**, together with the
+command above so a reader can reproduce it. The same table is written to the
+workflow run summary. If the file is missing the notes say so plainly instead of
+dropping the section, because an absent section is indistinguishable from a
+release that never had one.
 
 ## Node 26 build workarounds
 

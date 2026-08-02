@@ -28,6 +28,26 @@ function readCodename() {
   try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; }
 }
 
+/**
+ * The line-count table, as produced by the COMMITTED counter in an earlier CI
+ * step over the exact commit being released.
+ *
+ * Deliberately read from a file rather than recomputed here. A line count is a
+ * fact about one commit, so the number in the notes has to be the one the run
+ * measured — and this file only ever prints things that already exist on disk.
+ * A missing file says so plainly instead of quietly omitting the section, which
+ * would look identical to a release that was never supposed to have one.
+ */
+function readLineCount() {
+  // resolve, not join: CI passes a repo-relative name, a test passes an
+  // absolute path, and join would quietly glue the two together.
+  const f = path.resolve(REPO_ROOT, process.env.LINE_COUNT_PATH || 'LINE_COUNT.md');
+  try {
+    const text = fs.readFileSync(f, 'utf8').trim();
+    return text || null;
+  } catch { return null; }
+}
+
 function main() {
   const tag = arg('tag', `v${pkg.version}-local`);
   const out = arg('out', 'RELEASE_NOTES.md');
@@ -115,6 +135,33 @@ function main() {
   L.push('- **粵語：** 成個 WinSCP 搬咗過嚟 Material Design 3，仲有分頁、每個元件都改得靚、每個搜尋框都有 regex 產生器，同埋本機版本記錄。');
   L.push('');
 
+  // ------------------------------------------------------------ line count --
+  // A line count is a fact about a specific commit, which is exactly why it
+  // belongs on a release rather than floating in prose that goes stale the day
+  // after it is written. CI measured this one, at the tagged commit, with the
+  // script that is committed to the repository — so it can be re-run.
+  const loc = readLineCount();
+  L.push('## 📏 How much code this is');
+  L.push('');
+  if (loc) {
+    // No sha means this was composed outside CI; say so rather than filling the
+    // slot with the version, which reads as a commit and is not one.
+    L.push(`Measured by this run${sha ? `, at commit \`${sha.slice(0, 12)}\`,` : ' (composed outside CI, so no commit is recorded)'} by the counter committed to the repository. Reproduce the whole table locally with one command:`);
+    L.push('');
+    L.push('```bash');
+    L.push('node tools/count-lines.js --markdown');
+    L.push('```');
+    L.push('');
+    L.push(loc);
+    L.push('');
+  } else {
+    L.push('> [!WARNING]');
+    L.push('> **No line count was measured for this build.** `LINE_COUNT.md` was not produced by the run, so');
+    L.push('> nothing is reported rather than a figure copied from an earlier release — a stale count is worse');
+    L.push('> than an absent one, because it looks current. Reproduce it with `node tools/count-lines.js --markdown`.');
+    L.push('');
+  }
+
   // ------------------------------------------------------------ provenance --
   L.push('## Build provenance');
   L.push('');
@@ -149,7 +196,7 @@ function main() {
   L.push(`Full documentation: [\`docs/\`](${server}/${repo}/tree/main/docs) · Site: [\`site/\`](${server}/${repo}/tree/main/site)`);
   L.push('');
 
-  fs.writeFileSync(path.join(REPO_ROOT, out), L.join('\n'));
+  fs.writeFileSync(path.resolve(REPO_ROOT, out), L.join('\n'));
   console.log(`wrote ${out} (${L.length} lines) for ${tag}`);
 }
 

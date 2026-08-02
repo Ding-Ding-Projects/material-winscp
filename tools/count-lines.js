@@ -1,22 +1,37 @@
-// count-lines.js — measure how much code this project actually is.
+// count-lines.js — measure how much code this project actually is, and who
+// wrote it.
 //
-// The README states the project's size, and that figure has to be measured
-// rather than guessed. This counts only files git tracks, splits the total the
+// Every release states the project's size, and that figure has to be MEASURED
+// rather than typed. This counts only files git tracks, splits the total the
 // ways a reader actually cares about (own source vs tests vs styles and markup,
-// hand-written vs generated), and says out loud what it excluded.
+// hand-written vs generated, agent-written vs human-written), and says out loud
+// what it excluded.
 //
 // Deliberate exclusions, all stated in the output rather than applied silently:
 //   * vendor/winscp — WinSCP's own C++ source, vendored READ-ONLY as the
 //     porting reference. It is not this project's code and counting it would
-//     misrepresent the project by roughly 300,000 lines.
+//     misrepresent the project by roughly 400,000 lines. It is a submodule, so
+//     `git ls-files` reports it as a single gitlink entry rather than as files.
 //   * node_modules, out/, dist/ — dependencies and build output, untracked.
 //   * package-lock.json — a lockfile is not code.
+//   * binary assets — images, icons and fonts have no lines.
+// The excluded rows are still PRINTED, in the same table, so that "the project"
+// and "everything this repository tracks" are two visible numbers rather than
+// one number with a silent asterisk.
+//
+// AUTHORSHIP is attributed per SURVIVING line with `git blame`, never by
+// summing added lines out of `git log`. Churn is not authorship: a line written
+// in one commit and deleted in the next belongs to nobody, and a log-based
+// tally would credit whoever rewrote a file most often. Blame answers the only
+// question worth asking — of the code that is here NOW, who wrote it.
 //
 // Run: node tools/count-lines.js            (human-readable table)
-//      node tools/count-lines.js --markdown (the README section)
+//      node tools/count-lines.js --markdown (release notes / README section)
 //      node tools/count-lines.js --json
+//      node tools/count-lines.js --no-blame (size only; skips attribution)
 'use strict';
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const cp = require('child_process');
 
@@ -67,7 +82,10 @@ function countFile(rel) {
   if (buf.includes(0)) return null;
   const text = buf.toString('utf8');
   const lines = text.split('\n');
-  // A trailing newline produces a final empty element that is not a line.
+  // A trailing newline produces a final empty element that is not a line. This
+  // is also exactly what `git blame` does, which is what lets the two totals
+  // reconcile to the line; drop this pop and every file gains a phantom line
+  // that blame will not account for.
   if (lines.length && lines[lines.length - 1] === '') lines.pop();
   const total = lines.length;
   let nonBlank = 0;
@@ -76,13 +94,30 @@ function countFile(rel) {
 }
 
 function measure() {
-  const excluded = { vendored: { files: 0 }, binary: { files: 0 }, lockfile: { files: 0 } };
-  const buckets = new Map(BUCKETS.map((b) => [b.key, { ...b, files: 0, total: 0, nonBlank: 0 }]));
-  const generated = { files: 0, total: 0, nonBlank: 0 };
+  const zero = () => ({ files: 0, total: 0, nonBlank: 0 });
+  const excluded = { vendored: zero(), binary: zero(), lockfile: zero() };
+  const buckets = new Map(BUCKETS.map((b) => [b.key, { ...b, ...zero() }]));
+  const generated = zero();
+  /** Every counted file, so attribution can blame exactly this set. */
+  const files = [];
 
   for (const rel of trackedFiles()) {
-    if (EXCLUDED_PREFIXES.some((p) => rel.startsWith(p))) { excluded.vendored.files++; continue; }
-    if (EXCLUDED_FILES.includes(rel)) { excluded.lockfile.files++; continue; }
+    // vendor/winscp is a submodule: ls-files yields one gitlink entry, so there
+    // are no lines to read here even when the submodule IS checked out. The row
+    // is reported anyway — an exclusion nobody can see is an exclusion nobody
+    // can check.
+    if (EXCLUDED_PREFIXES.some((p) => rel.startsWith(p))) {
+      const c = countFile(rel);
+      excluded.vendored.files++;
+      if (c) { excluded.vendored.total += c.total; excluded.vendored.nonBlank += c.nonBlank; }
+      continue;
+    }
+    if (EXCLUDED_FILES.includes(rel)) {
+      const c = countFile(rel);
+      excluded.lockfile.files++;
+      if (c) { excluded.lockfile.total += c.total; excluded.lockfile.nonBlank += c.nonBlank; }
+      continue;
+    }
     if (isBinary(rel)) { excluded.binary.files++; continue; }
 
     const c = countFile(rel);
@@ -90,20 +125,35 @@ function measure() {
 
     if (GENERATED.includes(rel)) {
       generated.files++; generated.total += c.total; generated.nonBlank += c.nonBlank;
+      files.push({ rel, scope: 'generated', ...c });
       continue;
     }
     const b = buckets.get(BUCKETS.find((x) => x.match(rel)).key);
     b.files++; b.total += c.total; b.nonBlank += c.nonBlank;
+    files.push({ rel, scope: 'hand', ...c });
   }
 
   const rows = [...buckets.values()].filter((b) => b.files > 0);
   const handTotal = rows.reduce((a, b) => a + b.total, 0);
   const handNonBlank = rows.reduce((a, b) => a + b.nonBlank, 0);
+  const ex = [excluded.vendored, excluded.lockfile, excluded.binary];
 
   return {
-    rows, generated, excluded,
+    rows, generated, excluded, files,
     handWritten: { total: handTotal, nonBlank: handNonBlank, files: rows.reduce((a, b) => a + b.files, 0) },
-    grand: { total: handTotal + generated.total, nonBlank: handNonBlank + generated.nonBlank },
+    // `grand` is the PROJECT total: what this project's own code adds up to.
+    grand: {
+      files: rows.reduce((a, b) => a + b.files, 0) + generated.files,
+      total: handTotal + generated.total,
+      nonBlank: handNonBlank + generated.nonBlank,
+    },
+    // `tracked` is the GRAND total: every file this repository tracks, with the
+    // excluded rows folded back in, so a reader can see both numbers at once.
+    tracked: {
+      files: rows.reduce((a, b) => a + b.files, 0) + generated.files + ex.reduce((a, e) => a + e.files, 0),
+      total: handTotal + generated.total + ex.reduce((a, e) => a + e.total, 0),
+      nonBlank: handNonBlank + generated.nonBlank + ex.reduce((a, e) => a + e.nonBlank, 0),
+    },
     commit: (() => {
       try { return cp.execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(); }
       catch { return 'unknown'; }
@@ -134,9 +184,354 @@ function vendoredReference() {
   return { total, files };
 }
 
-const n = (x) => x.toLocaleString('en-US');
+/* ====================================================================== */
+/* Authorship — per surviving line, via git blame                         */
+/* ====================================================================== */
 
-function markdown(m, ref) {
+// The two rules, and only these two. They are printed with the numbers so the
+// split can be re-derived by anyone who doubts it.
+//
+//   (1) AUTOMATION AUTHOR — the commit's own author is an agent identity.
+//   (2) AGENT CO-AUTHOR   — a person authored the commit but its message
+//       carries a `Co-Authored-By:` trailer naming an agent, which is how this
+//       project records work an agent actually wrote.
+//
+// Anything matching neither is human-written. Kept as two separate rows rather
+// than one, because they are different claims: (1) says a machine made the
+// commit, (2) says a person committed what a machine wrote.
+const AGENT_EMAIL = /(@anthropic\.com|@openai\.com)$|^(claude|codex|copilot|aider|devin|opencode)@|\[bot\]/i;
+const AGENT_NAME = /^(claude|codex|copilot|opencode|cursor|aider|devin|gemini|github-actions|dependabot|renovate)\b|\[bot\]/i;
+
+const AGENT_RULES = [
+  'automation author — the commit author\'s own name or e-mail is an agent identity '
+  + `(name \`${AGENT_NAME}\`, e-mail \`${AGENT_EMAIL}\`)`,
+  'agent co-author — the commit message carries a `Co-Authored-By:` trailer whose name or e-mail matches those same two patterns',
+];
+
+function isAgentIdentity(name, email) {
+  return AGENT_NAME.test(name || '') || AGENT_EMAIL.test(email || '');
+}
+
+/** `Co-Authored-By: Some Name <mail@host>` — one entry per matching trailer. */
+function trailers(body) {
+  const out = [];
+  const re = /^\s*Co-Authored-By:\s*(.*)$/gim;
+  let m;
+  while ((m = re.exec(body || ''))) {
+    const raw = m[1].trim();
+    const angle = /^(.*?)\s*<([^>]*)>\s*$/.exec(raw);
+    out.push(angle ? { name: angle[1], email: angle[2] } : { name: raw, email: '' });
+  }
+  return out;
+}
+
+function classifyCommit(c) {
+  if (isAgentIdentity(c.name, c.email)) return 'agentAuthor';
+  if (trailers(c.body).some((t) => isAgentIdentity(t.name, t.email))) return 'agentCoAuthor';
+  return 'human';
+}
+
+/** Metadata for a set of shas, in batches so the argument list stays sane. */
+function commitMetadata(shas) {
+  const meta = new Map();
+  const list = [...shas];
+  // Unit/record separators: a commit body contains newlines, blank lines and
+  // anything else a person felt like typing, so any printable delimiter is a
+  // delimiter somebody will eventually commit.
+  const US = '\x1f', RS = '\x1e';
+  for (let i = 0; i < list.length; i += 200) {
+    const batch = list.slice(i, i + 200);
+    const out = cp.execFileSync(
+      'git',
+      ['log', '--no-walk=unsorted', `--format=%H${US}%an${US}%ae${US}%B${RS}`, ...batch],
+      { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+    );
+    for (const rec of out.split(RS)) {
+      const parts = rec.replace(/^\s+/, '').split(US);
+      if (parts.length < 4) continue;
+      meta.set(parts[0], { sha: parts[0], name: parts[1], email: parts[2], body: parts[3] });
+    }
+  }
+  return meta;
+}
+
+/**
+ * The refusal, kept as a pure function of one flag so it can be tested without
+ * fabricating a shallow clone.
+ *
+ * A shallow clone does not make blame FAIL — that is exactly the trap. Blame
+ * exits 0 and attributes every line of every file to the single grafted
+ * boundary commit, so the split is not merely imprecise, it is uniformly wrong,
+ * and it looks perfectly plausible on the page. A caller without history has to
+ * be told, not quietly handed a fabricated 100%.
+ */
+function shallowNotice(isShallow) {
+  if (!isShallow) return null;
+  return 'this is a shallow clone, so `git blame` would attribute every line to the grafted '
+    + 'boundary commit. Re-run with full history (`fetch-depth: 0` in CI, or `git fetch --unshallow` locally).';
+}
+
+/** A string reason when this clone cannot support honest blame, else null. */
+function historyProblem() {
+  try {
+    const shallow = cp.execFileSync('git', ['rev-parse', '--is-shallow-repository'], { cwd: ROOT, encoding: 'utf8' }).trim();
+    const notice = shallowNotice(shallow === 'true');
+    if (notice) return notice;
+    cp.execFileSync('git', ['rev-parse', '--verify', 'HEAD'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch (e) {
+    return `git history is not readable here (${String(e.message).split('\n')[0]}).`;
+  }
+  return null;
+}
+
+const ZERO_SHA = '0'.repeat(40);
+
+function blameOne(rel) {
+  return new Promise((resolve, reject) => {
+    // --porcelain, not --line-porcelain: line-porcelain repeats the full author
+    // header for every single line, which for a 49,000-line generated file is
+    // ~10x the output for information already known from the first occurrence.
+    // The sha on each line header is all that is needed here.
+    const p = cp.spawn('git', ['blame', '--porcelain', '--', rel], { cwd: ROOT });
+    let out = '', err = '';
+    p.stdout.setEncoding('utf8');
+    p.stdout.on('data', (d) => { out += d; });
+    p.stderr.setEncoding('utf8');
+    p.stderr.on('data', (d) => { err += d; });
+    p.on('error', reject);
+    p.on('close', (code) => (code === 0
+      ? resolve(out)
+      : reject(new Error(err.trim().split('\n')[0] || `git blame exited ${code}`))));
+  });
+}
+
+/** Per-sha {total, nonBlank} for one file, parsed out of porcelain blame. */
+function parseBlame(out) {
+  const per = new Map();
+  let sha = null, lines = 0;
+  let start = 0;
+  while (start <= out.length) {
+    let end = out.indexOf('\n', start);
+    if (end === -1) end = out.length;
+    const line = out.slice(start, end);
+    start = end + 1;
+    if (line.charCodeAt(0) === 9) {                       // a TAB begins content
+      lines++;
+      const content = line.slice(1);
+      let e = per.get(sha);
+      if (!e) per.set(sha, (e = { total: 0, nonBlank: 0 }));
+      e.total++;
+      if (content.trim()) e.nonBlank++;
+    } else if (line.length >= 41 && /^[0-9a-f]{40} \d+ \d+/.test(line)) {
+      sha = line.slice(0, 40);
+    }
+    if (end === out.length) break;
+  }
+  return { per, lines };
+}
+
+async function pool(items, limit, fn) {
+  let next = 0;
+  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+}
+
+/**
+ * Attribute every counted line to a class. Returns a structure whose totals MUST
+ * equal the measured totals; a disagreement is reported, never smoothed over.
+ */
+async function attribute(files, opts = {}) {
+  const started = Date.now();
+  // opts.historyProblem is the seam the tests use to prove the degradation path
+  // without fabricating a shallow clone on disk.
+  const problem = (opts.historyProblem || historyProblem)();
+  if (problem) return { available: false, reason: problem, rules: AGENT_RULES };
+
+  const zero = () => ({ total: 0, nonBlank: 0, hand: 0, generated: 0 });
+  const classes = { agentAuthor: zero(), agentCoAuthor: zero(), human: zero(), uncommitted: zero() };
+  const perFile = new Map();
+  const shas = new Set();
+  const failures = [];
+
+  const jobs = files.map((f) => async () => {
+    try {
+      const { per, lines } = parseBlame(await blameOne(f.rel));
+      perFile.set(f.rel, { per, lines });
+      for (const sha of per.keys()) if (sha && sha !== ZERO_SHA) shas.add(sha);
+    } catch (e) {
+      failures.push({ rel: f.rel, error: String(e.message) });
+    }
+  });
+
+  // git blame is one process per file, and on Windows the spawn dominates the
+  // work for anything short of a huge file. A small pool turns ~14 s of mostly
+  // waiting into a few seconds; the cap keeps CI runners from thrashing.
+  const limit = opts.concurrency || Math.max(2, Math.min(8, os.cpus().length));
+  await pool(jobs, limit, (j) => j());
+
+  if (failures.length) {
+    return {
+      available: false,
+      rules: AGENT_RULES,
+      reason: `git blame failed on ${failures.length} file(s), starting with ${failures[0].rel}: ${failures[0].error}`,
+      failures,
+    };
+  }
+
+  const meta = commitMetadata(shas);
+  const kindOf = new Map();
+  for (const [sha, c] of meta) kindOf.set(sha, classifyCommit(c));
+  const commits = { agentAuthor: 0, agentCoAuthor: 0, human: 0 };
+  for (const k of kindOf.values()) commits[k]++;
+
+  const mismatches = [];
+  const unknown = new Set();
+  for (const f of files) {
+    const b = perFile.get(f.rel);
+    // The reconciliation that matters: blame and the byte counter must see the
+    // SAME number of lines in the same file. They only do because both drop the
+    // empty string after a trailing newline (see countFile).
+    if (b.lines !== f.total) mismatches.push({ rel: f.rel, counted: f.total, blamed: b.lines });
+    for (const [sha, e] of b.per) {
+      let cls;
+      if (!sha || sha === ZERO_SHA) cls = 'uncommitted';
+      else if (kindOf.has(sha)) cls = kindOf.get(sha);
+      else {
+        // A blamed commit whose metadata could not be read. Defaulting it to
+        // either column would be a guess printed as a measurement, so it is
+        // collected and the whole split is withheld below instead.
+        unknown.add(sha || '(no sha)');
+        cls = 'human';
+      }
+      const c = classes[cls];
+      c.total += e.total;
+      c.nonBlank += e.nonBlank;
+      c[f.scope === 'generated' ? 'generated' : 'hand'] += e.total;
+    }
+  }
+
+  const total = Object.values(classes).reduce((a, c) => a + c.total, 0);
+  const nonBlank = Object.values(classes).reduce((a, c) => a + c.nonBlank, 0);
+  const counted = files.reduce((a, f) => a + f.total, 0);
+  const countedNonBlank = files.reduce((a, f) => a + f.nonBlank, 0);
+
+  if (unknown.size) {
+    return {
+      available: false,
+      rules: AGENT_RULES,
+      reason: `${unknown.size} blamed commit(s) could not be read back from the log, `
+        + `starting with ${[...unknown][0]}. Every line they own would have to be guessed at, so no split is printed.`,
+      unknown: [...unknown],
+    };
+  }
+
+  return {
+    available: true,
+    rules: AGENT_RULES,
+    method: 'per surviving line, `git blame --porcelain` (plain blame: no -M/-C rename or copy detection, so a moved line is credited to the commit that moved it)',
+    classes,
+    commits,
+    files: files.length,
+    total, nonBlank, counted, countedNonBlank,
+    // Two numbers in one table that disagree destroy the credibility of both,
+    // so the disagreement is the headline, not a footnote.
+    reconciled: total === counted && nonBlank === countedNonBlank && mismatches.length === 0,
+    mismatches,
+    elapsedMs: Date.now() - started,
+    concurrency: limit,
+  };
+}
+
+const n = (x) => x.toLocaleString('en-US');
+/**
+ * A share, rounded to one decimal — except where rounding would state something
+ * that is not true. 242,418 of 242,423 lines is 99.998%, and printing that as
+ * "100.0%" next to a row saying five lines are human-written is a table
+ * arguing with itself. The same in reverse: five lines are not "0.0%".
+ */
+const pct = (a, b) => {
+  if (!b) return '—';
+  if (a === b) return '100%';
+  const v = (a / b) * 100;
+  if (a > 0 && v < 0.05) return '<0.1%';
+  if (v > 99.95) return '>99.9%';
+  return `${v.toFixed(1)}%`;
+};
+
+function attributionRows(a) {
+  const c = a.classes;
+  const agentTotal = c.agentAuthor.total + c.agentCoAuthor.total;
+  const agentHand = c.agentAuthor.hand + c.agentCoAuthor.hand;
+  const agentGen = c.agentAuthor.generated + c.agentCoAuthor.generated;
+  return { agentTotal, agentHand, agentGen };
+}
+
+function markdownAttribution(a) {
+  const L = [];
+  L.push('### Who wrote the lines that are still here');
+  L.push('');
+  if (!a || !a.available) {
+    L.push('> [!WARNING]');
+    L.push(`> **Authorship was not measured.** ${a ? a.reason : 'Attribution was skipped.'}`);
+    L.push('> No split is printed rather than a wrong one — a plausible-looking wrong number is worse than an absent one.');
+    L.push('');
+    return L;
+  }
+  if (!a.reconciled) {
+    L.push('> [!WARNING]');
+    L.push(`> **The counter disagrees with itself and the split is withheld.** \`git blame\` attributed ${n(a.total)} lines`);
+    L.push(`> against ${n(a.counted)} lines counted${a.mismatches.length ? `, first differing in \`${a.mismatches[0].rel}\` (counted ${n(a.mismatches[0].counted)}, blamed ${n(a.mismatches[0].blamed)})` : ''}.`);
+    L.push('> Two numbers in one table that do not agree destroy the credibility of both, so this one is not published until the counter is fixed.');
+    L.push('');
+    return L;
+  }
+  const { agentTotal, agentHand, agentGen } = attributionRows(a);
+  const c = a.classes;
+  L.push('Attributed **per surviving line** with `git blame` — not by summing added lines out of `git log`, because churn is not authorship and a line written then deleted belongs to nobody.');
+  L.push('');
+  L.push('| Authorship of surviving lines | Hand-written | Generated | All counted | Share |');
+  L.push('|---|---:|---:|---:|---:|');
+  L.push(`| Agent — commit authored by an automation identity | ${n(c.agentAuthor.hand)} | ${n(c.agentAuthor.generated)} | ${n(c.agentAuthor.total)} | ${pct(c.agentAuthor.total, a.total)} |`);
+  L.push(`| Agent — \`Co-Authored-By:\` trailer naming an agent | ${n(c.agentCoAuthor.hand)} | ${n(c.agentCoAuthor.generated)} | ${n(c.agentCoAuthor.total)} | ${pct(c.agentCoAuthor.total, a.total)} |`);
+  L.push(`| **Agent-written, both rules together** | **${n(agentHand)}** | **${n(agentGen)}** | **${n(agentTotal)}** | **${pct(agentTotal, a.total)}** |`);
+  L.push(`| Human-written | ${n(c.human.hand)} | ${n(c.human.generated)} | ${n(c.human.total)} | ${pct(c.human.total, a.total)} |`);
+  if (c.uncommitted.total) {
+    L.push(`| Uncommitted in the working tree | ${n(c.uncommitted.hand)} | ${n(c.uncommitted.generated)} | ${n(c.uncommitted.total)} | ${pct(c.uncommitted.total, a.total)} |`);
+  }
+  L.push(`| **Attributed total** | **${n(c.agentAuthor.hand + c.agentCoAuthor.hand + c.human.hand + c.uncommitted.hand)}** | **${n(c.agentAuthor.generated + c.agentCoAuthor.generated + c.human.generated + c.uncommitted.generated)}** | **${n(a.total)}** | **100%** |`);
+  L.push('');
+  L.push(`The attributed total is **${n(a.total)}** lines against **${n(a.counted)}** lines counted, over ${n(a.files)} files — the same number twice, on purpose. If those two ever differ the split is withheld instead of published.`);
+  L.push('');
+  L.push('<details><summary>Which rule decided each commit, and how to check it</summary>');
+  L.push('');
+  L.push('A commit counts as agent-written under either of exactly two rules:');
+  L.push('');
+  for (const r of a.rules) L.push(`1. ${r}`);
+  L.push('');
+  L.push(`Of the ${n(a.commits.agentAuthor + a.commits.agentCoAuthor + a.commits.human)} commits still owning at least one surviving line: **${n(a.commits.agentAuthor)}** matched the automation-author rule, **${n(a.commits.agentCoAuthor)}** matched the co-author-trailer rule, **${n(a.commits.human)}** matched neither and are counted as human.`);
+  L.push('');
+  L.push(`Method: ${a.method}. Measured in ${(a.elapsedMs / 1000).toFixed(1)}s at concurrency ${a.concurrency}.`);
+  L.push('');
+  L.push('This is stated plainly and is neither a boast nor an apology. It is a fact about how the repository was built, and it is checkable:');
+  L.push('');
+  L.push('```bash');
+  L.push('node tools/count-lines.js --json          # every number above, machine-readable');
+  L.push('git blame --line-porcelain -- <file> \\');
+  L.push('  | grep \'^author-mail \' | sort | uniq -c   # one file, by hand');
+  L.push('```');
+  L.push('');
+  L.push('</details>');
+  L.push('');
+  return L;
+}
+
+function markdown(m, ref, a) {
   const L = [];
   L.push('| Part | Files | Lines | Non-blank |');
   L.push('|---|---:|---:|---:|');
@@ -144,12 +539,20 @@ function markdown(m, ref) {
   L.push(`| **Hand-written total** | **${n(m.handWritten.files)}** | **${n(m.handWritten.total)}** | **${n(m.handWritten.nonBlank)}** |`);
   if (m.generated.files) {
     L.push(`| Generated (extracted from WinSCP's own definitions) | ${n(m.generated.files)} | ${n(m.generated.total)} | ${n(m.generated.nonBlank)} |`);
-    L.push(`| **Total including generated** | | **${n(m.grand.total)}** | **${n(m.grand.nonBlank)}** |`);
+    L.push(`| **Project total (hand-written + generated)** | **${n(m.grand.files)}** | **${n(m.grand.total)}** | **${n(m.grand.nonBlank)}** |`);
   }
+  // The excluded rows sit in the SAME table as the totals they are held out of,
+  // so "the project" and "the repository" are two visible numbers rather than
+  // one number with a silent asterisk.
+  L.push(`| _Excluded_ — \`vendor/winscp\` (submodule gitlink; WinSCP's own C++${ref ? `, ${n(ref.total)} lines when checked out` : ', not checked out in this run'}) | ${n(m.excluded.vendored.files)} | ${n(m.excluded.vendored.total)} | ${n(m.excluded.vendored.nonBlank)} |`);
+  L.push(`| _Excluded_ — \`package-lock.json\` (a lockfile is not code) | ${n(m.excluded.lockfile.files)} | ${n(m.excluded.lockfile.total)} | ${n(m.excluded.lockfile.nonBlank)} |`);
+  L.push(`| _Excluded_ — binary assets (images, icons, fonts: no lines) | ${n(m.excluded.binary.files)} | ${n(m.excluded.binary.total)} | ${n(m.excluded.binary.nonBlank)} |`);
+  L.push(`| **Grand total — every file this repository tracks** | **${n(m.tracked.files)}** | **${n(m.tracked.total)}** | **${n(m.tracked.nonBlank)}** |`);
   L.push('');
+  L.push(...markdownAttribution(a));
   L.push('**Excluded, deliberately:**');
   L.push('');
-  L.push(`- \`vendor/winscp\` — ${ref ? n(ref.total) + ' lines of' : ''} WinSCP's own C++ source, vendored read-only as the porting reference. It is not this project's code.`);
+  L.push(`- \`vendor/winscp\` — ${ref ? n(ref.total) + ' lines of ' : ''}WinSCP's own C++ source, vendored read-only as the porting reference. It is not this project's code${ref ? '' : ', and the submodule is not checked out in this run'}.`);
   L.push('- `node_modules`, `out/`, `dist/` — dependencies and build output (untracked).');
   L.push('- `package-lock.json` — a lockfile is not code.');
   L.push('- Binary assets (images, icons, fonts).');
@@ -157,21 +560,30 @@ function markdown(m, ref) {
   L.push(`Measured over \`git ls-files\` at commit \`${m.commit}\` on ${m.date}. Reproduce with:`);
   L.push('');
   L.push('```bash');
-  L.push('node tools/count-lines.js');
+  L.push('node tools/count-lines.js --markdown');
   L.push('```');
   return L.join('\n');
 }
 
-function main() {
+async function main() {
   const m = measure();
   const ref = vendoredReference();
+  const a = process.argv.includes('--no-blame')
+    ? { available: false, reason: 'Attribution was skipped by request (`--no-blame`).', rules: AGENT_RULES }
+    : await attribute(m.files);
+
+  // A counter whose own arithmetic disagrees must not have its figure
+  // published, so this exits non-zero and CI stops rather than shipping it.
+  const broken = a.available && !a.reconciled;
 
   if (process.argv.includes('--json')) {
-    console.log(JSON.stringify({ ...m, vendoredReference: ref }, null, 2));
+    console.log(JSON.stringify({ ...m, files: undefined, attribution: a, vendoredReference: ref }, null, 2));
+    process.exitCode = broken ? 1 : 0;
     return;
   }
   if (process.argv.includes('--markdown')) {
-    console.log(markdown(m, ref));
+    console.log(markdown(m, ref, a));
+    process.exitCode = broken ? 1 : 0;
     return;
   }
 
@@ -183,14 +595,42 @@ function main() {
   console.log(`  ${'HAND-WRITTEN TOTAL'.padEnd(w)}  ${String(n(m.handWritten.files)).padStart(5)} files  ${String(n(m.handWritten.total)).padStart(8)} lines  ${String(n(m.handWritten.nonBlank)).padStart(8)} non-blank`);
   if (m.generated.files) {
     console.log(`  ${'generated (extracted)'.padEnd(w)}  ${String(n(m.generated.files)).padStart(5)} files  ${String(n(m.generated.total)).padStart(8)} lines  ${String(n(m.generated.nonBlank)).padStart(8)} non-blank`);
-    console.log(`  ${'TOTAL incl. generated'.padEnd(w)}  ${' '.repeat(5)}        ${String(n(m.grand.total)).padStart(8)} lines  ${String(n(m.grand.nonBlank)).padStart(8)} non-blank`);
+    console.log(`  ${'TOTAL incl. generated'.padEnd(w)}  ${String(n(m.grand.files)).padStart(5)} files  ${String(n(m.grand.total)).padStart(8)} lines  ${String(n(m.grand.nonBlank)).padStart(8)} non-blank`);
   }
-  console.log('\nExcluded:');
-  console.log(`  vendor/winscp        ${n(m.excluded.vendored.files)} files` + (ref ? `  (${n(ref.total)} lines of WinSCP's own C++ — the porting reference, not our code)` : ''));
-  console.log(`  binary assets        ${n(m.excluded.binary.files)} files`);
-  console.log(`  lockfile             ${n(m.excluded.lockfile.files)} file`);
+  console.log('\nExcluded, and still counted so both totals are visible:');
+  console.log(`  ${'vendor/winscp'.padEnd(w)}  ${String(n(m.excluded.vendored.files)).padStart(5)} files  ${String(n(m.excluded.vendored.total)).padStart(8)} lines` + (ref ? `  (${n(ref.total)} lines of WinSCP's own C++ — the porting reference, not our code)` : '  (submodule not checked out here)'));
+  console.log(`  ${'package-lock.json'.padEnd(w)}  ${String(n(m.excluded.lockfile.files)).padStart(5)} files  ${String(n(m.excluded.lockfile.total)).padStart(8)} lines`);
+  console.log(`  ${'binary assets'.padEnd(w)}  ${String(n(m.excluded.binary.files)).padStart(5)} files  ${String(n(m.excluded.binary.total)).padStart(8)} lines`);
+  console.log(`  ${'GRAND TOTAL (tracked)'.padEnd(w)}  ${String(n(m.tracked.files)).padStart(5)} files  ${String(n(m.tracked.total)).padStart(8)} lines  ${String(n(m.tracked.nonBlank)).padStart(8)} non-blank`);
+
+  console.log('\nWho wrote the lines that are still here (per surviving line, git blame):');
+  if (!a.available) {
+    console.log(`  not measured — ${a.reason}`);
+  } else if (!a.reconciled) {
+    console.log(`  WITHHELD — blame attributed ${n(a.total)} lines against ${n(a.counted)} counted.`);
+    for (const mm of a.mismatches.slice(0, 5)) console.log(`    ${mm.rel}: counted ${n(mm.counted)}, blamed ${n(mm.blamed)}`);
+    console.log('  The counter disagrees with itself; fix it before publishing either number.');
+  } else {
+    const { agentTotal, agentHand, agentGen } = attributionRows(a);
+    const c = a.classes;
+    const row = (label, cls) => console.log(`  ${label.padEnd(w)}  ${String(n(cls.hand)).padStart(8)} hand  ${String(n(cls.generated)).padStart(8)} gen  ${String(n(cls.total)).padStart(8)} lines  ${pct(cls.total, a.total).padStart(6)}`);
+    row('agent (author identity)', c.agentAuthor);
+    row('agent (co-author trailer)', c.agentCoAuthor);
+    console.log(`  ${'AGENT-WRITTEN TOTAL'.padEnd(w)}  ${String(n(agentHand)).padStart(8)} hand  ${String(n(agentGen)).padStart(8)} gen  ${String(n(agentTotal)).padStart(8)} lines  ${pct(agentTotal, a.total).padStart(6)}`);
+    row('human-written', c.human);
+    if (c.uncommitted.total) row('uncommitted (worktree)', c.uncommitted);
+    console.log(`  ${'ATTRIBUTED TOTAL'.padEnd(w)}  ${' '.repeat(8)}       ${' '.repeat(8)}      ${String(n(a.total)).padStart(8)} lines  ${String(n(a.counted)).padStart(8)} counted`);
+    console.log(`  ${a.commits.agentAuthor} commits by an automation identity, ${a.commits.agentCoAuthor} co-authored by an agent, ${a.commits.human} human — of those still owning a surviving line.`);
+    console.log(`  Blamed ${n(a.files)} files in ${(a.elapsedMs / 1000).toFixed(1)}s at concurrency ${a.concurrency}.`);
+  }
+
   console.log(`\nMeasured over \`git ls-files\` at commit ${m.commit} on ${m.date}.`);
+  process.exitCode = broken ? 1 : 0;
 }
 
 if (require.main === module) main();
-module.exports = { measure, vendoredReference, markdown };
+module.exports = {
+  measure, vendoredReference, markdown, attribute,
+  classifyCommit, isAgentIdentity, trailers, parseBlame,
+  shallowNotice, historyProblem, AGENT_RULES,
+};

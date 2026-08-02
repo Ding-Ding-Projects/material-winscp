@@ -132,6 +132,42 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # THE LINE COUNT IS CI'S JOB, NOT A PERSON'S AND NOT AN AGENT'S.
+      #
+      # A line count is a fact about one specific commit, so the only figure
+      # worth publishing is the one measured by the same run that built the
+      # artefacts, at exactly the commit being released. Typed by hand it is
+      # wrong the following week and nobody can tell.
+      #
+      # Two things this step relies on, both easy to break silently:
+      #   * `fetch-depth: 0` above. The counter attributes every surviving line
+      #     with `git blame`, and blame on a shallow clone does not fail — it
+      #     credits the whole tree to the grafted boundary commit. The counter
+      #     refuses to print a split in that case rather than publishing a
+      #     confident 100%, so a regression here shows up as a MISSING table.
+      #   * The counter exits non-zero when its own arithmetic disagrees — when
+      #     blame accounts for a different number of lines than the byte counter
+      #     found. Two numbers in one table that do not add up destroy the
+      #     credibility of both, so this step fails the release instead. It runs
+      #     before `npm run make` so that failure costs seconds, not a build.
+      #
+      # Position also matters for a quieter reason: this runs BEFORE the version
+      # step, which rewrites package.json with `npm version`. Counting after
+      # that would blame the rewritten line on nobody and add an "uncommitted"
+      # row to a release table describing a tagged commit.
+      - name: Count the lines of code at this commit
+        id: loc
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tools/count-lines.js --markdown > LINE_COUNT.md
+          echo "Wrote LINE_COUNT.md ($(wc -l < LINE_COUNT.md) lines)"
+          {
+            echo "## 📏 Lines of code at \`${{ github.sha }}\`"
+            echo
+            cat LINE_COUNT.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Regenerate the application icon from the tracked catalog image
         run: node build/make-icon.js
 
@@ -240,6 +276,10 @@ jobs:
           NUPKG_PATH: ${{ steps.art.outputs.nupkg }}
           ZIP_PATH: ${{ steps.art.outputs.zip }}
           PHOTO_PATH: ${{ steps.photo.outputs.photo }}
+          # Written by the "Count the lines of code" step above. release-notes.js
+          # reads it rather than recomputing, so the notes report the figure this
+          # run actually measured.
+          LINE_COUNT_PATH: LINE_COUNT.md
 
       # Exactly one release per run. --draft is deliberately absent: releases
       # are published, not staged. The token chain prefers a repository-scoped
@@ -305,5 +345,6 @@ jobs:
             out/make/**
             codename.json
             RELEASE_NOTES.md
+            LINE_COUNT.md
           if-no-files-found: warn
           retention-days: 30

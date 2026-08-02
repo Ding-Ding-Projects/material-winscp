@@ -35,6 +35,9 @@ RELEASES
 # published as release assets, never committed.
 /codename.json
 /RELEASE_NOTES.md
+# The line-count table CI measures at the tagged commit and pastes into the
+# release body. Committing it would freeze one release's figure into the tree.
+/LINE_COUNT.md
 
 # --- site build -------------------------------------------------------------
 site/_site/

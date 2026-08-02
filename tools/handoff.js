@@ -71,9 +71,14 @@ function tests(skip) {
 }
 
 function lines() {
-  const out = sh(process.execPath, [path.join(__dirname, 'count-lines.js')]);
+  // --no-blame: the handoff wants the SIZE, and attributing every surviving
+  // line costs a couple of seconds of `git blame` that nothing here reads.
+  const out = sh(process.execPath, [path.join(__dirname, 'count-lines.js'), '--no-blame']);
   const hand = /HAND-WRITTEN TOTAL\s+([\d,]+) files\s+([\d,]+) lines/.exec(out);
-  const total = /TOTAL incl\. generated\s+([\d,]+) lines/.exec(out);
+  // The "files" column on this row is optional on purpose: it was added after
+  // this parser was written, and a regex that silently degrades to "?" is how
+  // a handoff comes to describe a project of unknown size.
+  const total = /TOTAL incl\. generated\s+(?:[\d,]+ files\s+)?([\d,]+) lines/.exec(out);
   return { files: hand ? hand[1] : '?', hand: hand ? hand[2] : '?', total: total ? total[1] : '?' };
 }
 
