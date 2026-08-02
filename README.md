@@ -52,8 +52,11 @@ Requires **Node 22 LTS** on Windows — [here is why the version matters](docs/p
 Behaviour, configuration, failure modes, security considerations and
 verification for each.
 
-🌐 **`site/`** — the Material 3 landing page and documentation site. Open
-`site/index.html`, or see [running the site](site/README.md).
+🌐 **`site/`** — the Material 3 landing page and documentation site, generated
+from `docs/`. Build and browse it with `node site/build.js --serve`, or see
+[running the site](site/README.md). There is no `site/index.html` to open
+directly: the sources live in `site/src/` and the site is emitted into
+`site/_site/`.
 
 🏗 **[`docs/architecture.md`](docs/architecture.md)** — read this before writing
 any code here.

@@ -1,0 +1,187 @@
+# Pages — build the documentation site, prove it will work, publish it.
+#
+# The repository's homepage field has advertised
+# https://ding-ding-projects.github.io/material-winscp/ while nothing published
+# it: Pages was never enabled, and .github/workflows/ held one workflow, which
+# builds the installer. A site that only builds on a laptop is a site nobody
+# can read.
+#
+# Trigger: pushes to the default branch that touch the site's inputs, plus
+#          manual dispatch. `tags-ignore` is not decoration — see below.
+# Runner:  GitHub-hosted ubuntu-latest. The site builder is dependency-free
+#          Node; it needs no Windows toolchain, no Electron and no self-hosted
+#          machine, and a public repository gets unlimited standard minutes.
+#
+# Contract:
+#   * The site is BUILT and then VERIFIED. `node site/build.js --verify` reads
+#     the emitted bytes and fails on a missing referenced file, a remote
+#     subresource, an unsubstituted placeholder or — the one that produces a
+#     green deployment where every page 404s — a root-absolute URL that does not
+#     carry the /material-winscp/ prefix. A failing verify stops the deploy.
+#   * Nothing here pushes a commit or creates a tag, and nothing here publishes
+#     a release. Note ci.yml's hard-won lesson anyway: publishing a release
+#     CREATES A TAG, a bare `on: push` fires for tag pushes too, and this
+#     repository once turned four commits into nine releases that way. Both the
+#     branch filter and `tags-ignore` are kept, because the branch filter is the
+#     thing that is quietly deleted first when somebody widens the trigger.
+name: Pages
+
+on:
+  push:
+    branches:
+      # The default branch only. A Pages deployment overwrites the live site,
+      # so publishing from every branch would mean the last branch to build
+      # wins — including a half-finished one.
+      - main
+    tags-ignore:
+      - '**'
+    paths:
+      # Everything the built site is made of. docs/ is in the list because the
+      # articles are GENERATED from it: a documentation change is a site change.
+      - 'site/**'
+      - 'docs/**'
+      - 'design/winscp-data.js'
+      - 'design/assets/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: Why the site is being published (recorded in the run log)
+        required: false
+        default: Manual dispatch
+
+# Least privilege: read the source, write a Pages deployment, and mint the OIDC
+# token deploy-pages authenticates the artifact with. No contents: write.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One live site, so one deployment at a time. In-flight runs are NOT cancelled:
+# a cancelled deploy can leave the published site as whatever was there before,
+# which is indistinguishable from a deploy that never ran.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # Node 22 LTS, matching ci.yml. The site builder uses nothing exotic, but a
+  # single pinned major keeps "works in CI" meaning the same thing everywhere.
+  NODE_VERSION: '22'
+
+jobs:
+  # ------------------------------------------------------- 1. build+verify --
+  build:
+    name: Build and verify the site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          # vendor/winscp is the upstream porting reference and is enormous.
+          # The site is built from docs/ and design/, so it is not needed.
+          submodules: false
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # No `npm ci`. site/build.js requires nothing but node:fs and node:path,
+      # and installing Electron to render 56 markdown files would cost minutes
+      # per run for no output.
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+        with:
+          # `enablement` turns Pages on for a repository that has never had it,
+          # which is this repository's actual state — the Pages API answers 404
+          # today. The ephemeral workflow token cannot flip that setting, so the
+          # repository's usual chain is used: an optional repo-scoped PAT first,
+          # then the organization token, then the workflow token as a last
+          # resort. It is passed only as an input and is never echoed.
+          enablement: true
+          token: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
+
+      # The landing page carries a download button only when it can point at a
+      # REAL, IMMUTABLE release asset, and shows no button at all otherwise. So
+      # the release is fetched here, by the one participant that actually knows
+      # what shipped, and written to a file the builder validates. Three things
+      # make this safe rather than a guess:
+      #
+      #   * `|| true` — a repository with no release yet, or a token that cannot
+      #     read releases, must not fail the docs build. The manifest is simply
+      #     absent and the page says there is no installer.
+      #   * the builder re-validates every asset URL against
+      #     <repository>/releases/download/<tag>/ and drops anything else, so a
+      #     mutable "latest" link or another host can never become a button.
+      #   * site/release.json is generated, never committed. A checked-in copy
+      #     would be stale the moment the next release published, and a stale
+      #     download link is worse than none: it 404s and looks like the project
+      #     does not ship.
+      - name: Resolve the published release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view --repo "$GITHUB_REPOSITORY" \
+            --json tagName,name,publishedAt,isDraft,assets > site/release.json || true
+          if [ -s site/release.json ]; then
+            echo "release manifest:"; head -c 400 site/release.json; echo
+          else
+            rm -f site/release.json
+            echo "no published release; the page will show no download button"
+          fi
+
+      - name: Build the site
+        env:
+          # The published prefix, taken FROM PAGES rather than guessed. A
+          # project page is served from /<repo>/, and a site that hardcodes a
+          # root emits /app.css, deploys green and 404s on every asset.
+          #
+          # An empty value here is deliberate and safe: site/build.js falls back
+          # to `base` in site/config.json, so a Pages configuration that reports
+          # no base path cannot silently publish the site at the wrong prefix.
+          SITE_BASE: ${{ steps.pages.outputs.base_path }}
+        run: node site/build.js
+
+      - name: Verify the built output
+        env:
+          SITE_BASE: ${{ steps.pages.outputs.base_path }}
+        # Rebuilds and then checks the emitted files. This is the gate: if it
+        # exits non-zero the artifact is never uploaded and the deploy job never
+        # starts, so a site that would 404 in production does not reach it.
+        run: node site/build.js --verify
+
+      - name: Test the builder and its verifier
+        # Dependency-free, so it runs here without npm ci. ci.yml runs the whole
+        # suite; this is the part that governs what is about to be published.
+        run: node --test --test-timeout=120000 test/site-build.test.js
+
+      - name: List what will be published
+        # Evidence in the log: the exact file list that goes to Pages, so a
+        # missing module is visible in the run rather than in a browser later.
+        run: |
+          echo "base path: '${{ steps.pages.outputs.base_path }}'"
+          find site/_site -type f | sort
+          du -sh site/_site
+
+      - name: Upload the Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/_site
+
+  # ------------------------------------------------------------- 2. deploy --
+  deploy:
+    name: Deploy to GitHub Pages
+    # Only after a green verify. `needs` is what makes the check a gate rather
+    # than a comment.
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
