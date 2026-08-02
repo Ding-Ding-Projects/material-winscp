@@ -8,9 +8,9 @@ not started; a mapping pointing at a file that does not exist is reported as a
 problem. The percentage is weighted by source lines, so a large subsystem
 cannot be made to look finished by porting a handful of small files.
 
-**Logic coverage: 43.5%** of 209,889 lines that are actually code.
+**Logic coverage: 52.3%** of 209,889 lines that are actually code.
 
-Raw line coverage is 60.1% of 318,002 lines across 125 units, but that figure is
+Raw line coverage is 65.9% of 318,002 lines across 125 units, but that figure is
 distorted: 108,113 of those lines (34%) are binary resources embedded as hex in
 `.dfm` files — icon sheets and animation frames, at four DPI variants each.
 Classifying those eight units as replaced moved the raw number from 9.1% to
@@ -22,8 +22,8 @@ Classifying those eight units as replaced moved the raw number from 9.1% to
 | Area | Units | Ported | Lines | Coverage |
 |---|---:|---:|---:|---:|
 | `forms` | 51 | 10 | 199,082 | 74.9% |
-| `core` | 36 | 1 | 76,572 | 37.0% |
-| `windows` | 20 | 0 | 32,403 | 15.6% |
+| `core` | 36 | 1 | 76,572 | 46.1% |
+| `windows` | 20 | 0 | 32,403 | 36.9% |
 | `resource` | 9 | 0 | 4,110 | 0.0% |
 | `components` | 6 | 0 | 3,734 | 0.0% |
 | `console` | 2 | 0 | 1,178 | 0.0% |
@@ -49,7 +49,7 @@ counted as replaced rather than transcribed.
 | 🚧 In progress | `forms/CustomScpExplorer` | forms | 14,045 | `design/renderer/ui/panels.js`<br>`design/renderer/ui/commands.js`<br>`design/renderer/ui/menus.js`<br>`design/renderer/ui/toolbars.js`<br>`design/renderer/ui/statusbar.js` | The shared explorer behaviour: panels, selection, the command layer over all 301 actions, both menu bars, the bands and the status bars. |
 | 🔁 Replaced by an equivalent | `forms/Animations120` | forms | 13,492 | `design/renderer/styles/components.css` | 120 DPI animation frame bitmaps. |
 | 🔁 Replaced by an equivalent | `forms/Animations96` | forms | 11,335 | `design/renderer/styles/components.css` | Embedded animation frame bitmaps. M3 motion is expressed in CSS, so frame sheets are not transcribed. |
-| 🚧 In progress | `core/Terminal` | core | 10,449 | `design/main/session.js`<br>`design/main/sync.js` | Session lifecycle and the synchronization engine. Terminal is 7,000+ lines; most of it is still ahead. |
+| 🚧 In progress | `core/Terminal` | core | 10,449 | `design/main/terminal.js`<br>`design/main/session.js`<br>`design/main/sync.js` | Operation lifecycle, delete/rename/move with their real confirmations and refusals, retry/skip/abort, directory cache, recursive properties, size calculation. The TRANSFER machinery (CopyToRemote/CopyToLocal/Source/Sink, TParallelOperation, the overwrite decision) is NOT ported here — queue.js owns transfers today. |
 | 🔁 Replaced by an equivalent | `forms/Glyphs192` | forms | 9,952 | `design/renderer/ui/commands.js` | 192 DPI variant of the same bitmap sheet (9,123 of 9,916 lines are pure hex). |
 | 🔁 Replaced by an equivalent | `forms/Glyphs144` | forms | 9,177 | `design/renderer/ui/commands.js` | 144 DPI variant of the same bitmap sheet. |
 | 🚧 In progress | `forms/Login` | forms | 8,977 | `design/renderer/ui/dialogs/login.js`<br>`design/renderer/ui/dialogs/sitetree.js` | The whole dialog: tree, three search modes, per-protocol visibility, all 33 ActionList entries wired, real session:open and configuration import/export. Four actions delegate and say so; the roughly 250 dfm captions are English only. |
@@ -57,27 +57,27 @@ counted as replaced rather than transcribed.
 | 🚧 In progress | `forms/Preferences` | forms | 8,171 | `design/renderer/ui/dialogs/preferences.js`<br>`design/renderer/ui/dialogs/prefpages.js` | 28 pages, 207 controls over 207 real keys, live writes through config:setPref one key at a time. 45 of those options are stored and not yet honoured - each says so on its own row, and test/preferences.test.js holds the list to the real consumer scan. |
 | 🚧 In progress | `forms/Editor` | forms | 8,150 | `design/renderer/ui/dialogs/editor.js` | Modeless editor with find/replace from one RegExp, six encodings, word wrap, go-to-line and a working conflict path. No undo/redo toolbar buttons (execCommand is deprecated) and the remote-changed path is unverified against a live server. |
 | 🔁 Replaced by an equivalent | `forms/Glyphs` | forms | 7,981 | `design/renderer/ui/commands.js` | Embedded PNG bitmap sheet (7,981 lines, ~90% pure hex; the .cpp behind it is 14 lines). Material Symbols replace it — the action-to-icon mapping is iconFor() in commands.js. |
-| 🚧 In progress | `core/SessionData` | core | 6,884 | `design/main/defaults.js`<br>`design/main/config.js` | Full option set declared; URL parsing and raw-settings editing pending. |
+| 🚧 In progress | `core/SessionData` | core | 6,884 | `design/main/sessiondata.js`<br>`design/main/defaults.js`<br>`design/main/config.js` | Full option model, session URL parse/generate for every protocol, raw settings, INI and PuTTY import. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative. |
 | 🚧 In progress | `forms/NonVisual` | forms | 6,486 | `tools/extract-actions.js`<br>`design/renderer/actions.js`<br>`design/renderer/ui/commands.js`<br>`design/renderer/ui/wiring.js` | All 301 actions are registered and reachable from the running app: 296 have a working handler, 5 are declared unavailable with a reason the UI shows. 79 shortcut-carrying actions over 52 combinations, one conflict WinSCP itself has. |
 | 🚧 In progress | `forms/SiteAdvanced` | forms | 6,290 | `design/renderer/ui/dialogs/siteadvanced.js` | All 18 sheets and 134 control descriptors bound to SESSION_DEFAULTS. About 20 of them reach no engine code yet, and the captions are English only. |
 | 🚧 In progress | `core/SftpFileSystem` | core | 6,074 | `design/main/protocols/sftp.js` | SFTP over ssh2: auth, tunnels, proxies, listing, transfers with resume. Bug-workaround matrix still to verify against a real server. |
 | 🚧 In progress | `forms/SynchronizeChecklist` | forms | 5,850 | `design/renderer/ui/dialogs/checklist.js` | The checklist arranged around one question, with per-row overrides only where legal and deletions needing a second explicit yes. Check/uncheck-all, Move and the Calculate and Commands menus are not built. |
 | 🚧 In progress | `forms/ScpCommander` | forms | 5,807 | `design/renderer/ui/panels.js`<br>`design/renderer/ui/toolbars.js`<br>`design/renderer/ui/menus.js`<br>`design/renderer/ui/statusbar.js`<br>`design/renderer/ui/panelcolumns.js`<br>`design/renderer/ui/driveview.js` | Two-pane Commander with the real filesystem, both menu bars complete (194 of 194 dfm actions), the column sets, the drive tree and the status bars. 33 band buttons and the DropdownCombo split buttons are still missing from the toolbars. |
-| ⬜ Not started | `core/Common` | core | 5,234 | — |  |
+| 🚧 In progress | `core/Common` | core | 5,234 | `design/main/common.js` | String/path/time/size helpers ported as pure logic with tests. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative. |
 | 🚧 In progress | `core/FtpFileSystem` | core | 5,106 | `design/main/protocols/ftp.js` | FTP/FTPS over basic-ftp; MLSD and multi-dialect LIST parsing covered by tests. |
-| ⬜ Not started | `windows/WinConfiguration` | windows | 4,989 | — |  |
+| 🚧 In progress | `windows/WinConfiguration` | windows | 4,989 | `design/main/winconfig.js`<br>`design/main/config.js` | Preference set with load/save/defaults and version-upgrade migrations, editor list, custom commands, presets, bookmarks, file colours. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative. |
 | 🚧 In progress | `forms/Progress` | forms | 4,841 | `design/renderer/ui/dialogs/progress.js` | Non-modal progress window with per-file and total bars, a live throughput graph and the speed-limit and once-finished menus. |
-| ⬜ Not started | `core/RemoteFiles` | core | 4,145 | — |  |
+| 🚧 In progress | `core/RemoteFiles` | core | 4,145 | `design/main/remotefiles.js` | File list model, rights (octal/symbolic/partial-selection), symlink resolution, unix and VMS path shapes. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative. |
 | 🚧 In progress | `core/Queue` | core | 3,760 | `design/main/queue.js` | Parallel transfers, pause/resume, throttling, overwrite queries. |
-| ⬜ Not started | `core/Script` | core | 3,336 | — |  |
-| ⬜ Not started | `windows/GUITools` | windows | 3,331 | — |  |
+| 🚧 In progress | `core/Script` | core | 3,336 | `design/main/script.js`<br>`design/main/consolerunner.js` | The scripting command set with switch parsing, masks and the exit-code contract. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative. |
+| 🚧 In progress | `windows/GUITools` | windows | 3,331 | `design/main/guitools.js` | External-application resolution, parameter expansion, temp-file naming policy, process execution with Windows quoting. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative. |
 | ⬜ Not started | `windows/VCLCommon` | windows | 3,323 | — |  |
 | 🚧 In progress | `core/SecureShell` | core | 3,208 | `design/main/protocols/sftp.js` | Transport, host-key verification and keepalives live with the SSH adapter. |
 | 🚧 In progress | `forms/Rights` | forms | 3,151 | `design/renderer/ui/dialogs/rights.js` | A faithful TRights port - set/unset masks, octal and text round-tripping over all 4096 modes, cycling group buttons and the full right-click menu. |
 | 🚧 In progress | `core/S3FileSystem` | core | 3,046 | `design/main/protocols/s3.js` | Hand-written SigV4 verified against published AWS vectors; multipart, paging, AssumeRole. No live endpoint tested yet. |
-| ⬜ Not started | `windows/ConsoleRunner` | windows | 3,044 | — |  |
+| 🚧 In progress | `windows/ConsoleRunner` | windows | 3,044 | `design/main/consolerunner.js` | Batch/non-interactive script driving. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative. |
 | 🚧 In progress | `core/ScpFileSystem` | core | 3,041 | `design/main/protocols/scp.js` | SCP over the shared SSH transport, with listing-command parsing. |
-| 🚧 In progress | `windows/Setup` | windows | 2,980 | `design/main/setup.js`<br>`test/shellintegration.test.js` | Search path, URL-protocol registration, Default Programs capabilities, shortcuts, Send To hook, jump list, temporary-folder cleanup, /UninstallCleanup and the maintenance switches. HKCU only (no elevation) and no COM registration inspection - see docs/protocol-gaps.md. The update-download half lives in updates.js/autoupdate.js; the tips and donation surfaces are deliberately not ported (issue #22). |
+| 🚧 In progress | `windows/Setup` | windows | 2,980 | `design/main/setup.js`<br>`design/main/squirrel.js` | Shortcuts, search path, file associations, winscp:// registration, uninstall cleanup. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative. |
 | 🚧 In progress | `core/Configuration` | core | 2,875 | `design/main/config.js`<br>`design/main/defaults.js`<br>`design/main/paths.js` | Store, atomic writes, defaults. INI import/export still to do. |
 | 🚧 In progress | `forms/Console` | forms | 2,828 | `design/renderer/ui/dialogs/console.js` | Modeless console over session:exec with capability gating, scrollback, history and search. No interrupt channel exists, and event:console carries no session id so two open consoles cannot be told apart - both are main-process gaps. |
 | 🚧 In progress | `windows/TerminalManager` | windows | 2,772 | `design/main/session.js` | Multiple sessions, reconnect policy, verification callbacks. |
@@ -89,8 +89,8 @@ counted as replaced rather than transcribed.
 | ⬜ Not started | `core/SessionInfo` | core | 2,274 | — |  |
 | 🚧 In progress | `forms/ScpExplorer` | forms | 2,054 | `design/renderer/ui/panels.js`<br>`design/renderer/ui/toolbars.js`<br>`design/renderer/ui/menus.js` | The single-pane Explorer interface with its own bands and menu bar (146 of 146 dfm actions). The same toolbar gaps as Commander. |
 | 🔁 Replaced by an equivalent | `forms/Custom` | forms | 2,008 | `design/renderer/dom.js` | replaced: openModal() is the one modal primitive the shell offers. |
-| 🚧 In progress | `windows/Tools` | windows | 1,821 | `design/main/setup.js`<br>`design/main/guitools.js` | Shortcut creation (CreateDesktopShortCut / CreateAppDesktopShortCut / CreateDesktopSessionShortCut), the info tips, ValidLocalFileName and the shell-open helpers. The VCL dialog helpers that make up the rest of the file have no meaning outside VCL. |
-| ⬜ Not started | `windows/GUIConfiguration` | windows | 1,728 | — |  |
+| 🚧 In progress | `windows/Tools` | windows | 1,821 | `design/main/guitools.js`<br>`design/main/setup.js` | Application helpers. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative. |
+| 🚧 In progress | `windows/GUIConfiguration` | windows | 1,728 | `design/main/winconfig.js` | Folded into winconfig.js. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative. |
 | 🚧 In progress | `core/FileMasks` | core | 1,707 | `design/main/masks.js` | WinSCP mask syntax including size and time masks, with a test table. |
 | ⬜ Not started | `core/PuttyIntf` | core | 1,689 | — |  |
 | 🚧 In progress | `forms/Properties` | forms | 1,599 | `design/renderer/ui/dialogs/properties.js`<br>`design/renderer/ui/dialogs/rights.js` | Three sheets, the multi-selection aggregate, streamed size calculation that can now be stopped, permissions/owner/group with recursion and per-file checksums. The S3 tag sheet stays hidden because no adapter exposes tagging. |
@@ -107,10 +107,10 @@ counted as replaced rather than transcribed.
 | ⬜ Not started | `console/Main` | console | 1,078 | — |  |
 | 🚧 In progress | `forms/FullSynchronize` | forms | 1,014 | `design/renderer/ui/dialogs/synchronize.js`<br>`design/renderer/ui/dialogs/checklist.js` | Direction, mode, criteria, masks and transfer settings, with forbidden combinations refused in words before the call. Timestamp options are greyed from caps. The OK split menu and the transfer-settings button are not built. |
 | 🚧 In progress | `forms/OpenDirectory` | forms | 994 | `design/renderer/ui/dialogs/opendirectory.js` | Path box with history and both bookmark sheets, each with its own search bar and regex builder. The shortcuts are bound by ui/wiring.js. |
-| 🚧 In progress | `core/Cryptography` | core | 993 | `design/main/crypto.js` | AES-GCM + scrypt in place; file-encryption feature pending. |
+| 🚧 In progress | `core/Cryptography` | core | 993 | `design/main/crypto.js`<br>`design/main/security.js` | AES-GCM + scrypt for our storage; WinSCP's AES file encryption (contents and filenames). |
 | 🚧 In progress | `forms/SynchronizeProgress` | forms | 954 | `design/renderer/ui/dialogs/progress.js`<br>`design/renderer/ui/dialogs/synchronize.js` | The comparison progress is reported through the same progress surface rather than its own form. |
 | 🚧 In progress | `forms/FileSystemInfo` | forms | 938 | `design/renderer/ui/dialogs/fileysteminfo.js` | Protocol, capabilities and space, rendered from session:fsInfo so the greyed-out commands and this list are one object read twice. Full certificate is not built. |
-| 🚧 In progress | `dragext/DragExt` | dragext | 923 | `design/main/shellintegration.js`<br>`test/shellintegration.test.js` | The INTENT is ported: dragging out stages real files and uses webContents.startDrag, which is WinSCP's own temporary-folder branch. The COM ICopyHook itself cannot exist in Electron - see docs/protocol-gaps.md for what it did that this does not. |
+| 🚧 In progress | `dragext/DragExt` | dragext | 923 | `design/main/shellintegration.js` | A COM shell extension cannot exist in Electron; the drop-to-Explorer INTENT is implemented via startDrag with a real temp file. The difference is recorded in docs/protocol-gaps.md. |
 | 🚧 In progress | `forms/Copy` | forms | 909 | `design/renderer/ui/dialogs/copyparams.js`<br>`design/renderer/ui/wiring.js`<br>`design/renderer/ui/commands.js` | The copy dialog is what every transfer action now opens, and its result is queued through one path. Confirm transfers is honoured; the named preset reaches queue:add. |
 | ⬜ Not started | `resource/TextsFileZilla` | resource | 902 | — |  |
 | ⬜ Not started | `components/ThemePageControl` | components | 882 | — |  |
@@ -124,18 +124,18 @@ counted as replaced rather than transcribed.
 | 🔁 Replaced by an equivalent | `core/NeonIntf` | core | 701 | `design/main/protocols/webdav.js` | neon (the C WebDAV/HTTP library WinSCP links) is replaced by a hand-written client on node:http/https. |
 | ⬜ Not started | `core/Bookmarks` | core | 700 | — |  |
 | 🚧 In progress | `forms/ImportSessions` | forms | 698 | `design/renderer/ui/dialogs/importsessions.js` | Six real parsers: PuTTY/KiTTY .reg, FileZilla XML, OpenSSH config, WinSCP INI and known_hosts. |
-| ⬜ Not started | `windows/CustomWinConfiguration` | windows | 672 | — |  |
+| 🚧 In progress | `windows/CustomWinConfiguration` | windows | 672 | `design/main/winconfig.js` | Folded into winconfig.js. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative. |
 | ⬜ Not started | `resource/TextsCore` | resource | 580 | — |  |
 | 🚧 In progress | `forms/CustomCommand` | forms | 550 | `design/renderer/ui/dialogs/customcommand.js` | The command editor with the full pattern reference, a live preview from main own expansion, and a validator faithful to ValidatePattern. It still reports the shipped interactive commands as valid where main rejects them, because ipc.js validates before resolving the interactive pass. |
 | ⬜ Not started | `resource/TextsCore1` | resource | 550 | — |  |
 | 🚧 In progress | `forms/EditorPreferences` | forms | 506 | `design/renderer/ui/dialogs/editorpreferences.js` | The ordered editor list with add/edit/remove/reorder and a live first-match-wins probe. |
 | 🚧 In progress | `forms/CopyParamPreset` | forms | 498 | `design/renderer/ui/dialogs/copyparams.js` | Preset list, preset editor and the four-mask autoselection rule. |
-| ⬜ Not started | `core/Option` | core | 476 | — |  |
+| 🚧 In progress | `core/Option` | core | 476 | `design/main/options.js` | Switch parsing and command-line semantics. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative. |
 | 🚧 In progress | `forms/EditMask` | forms | 474 | `design/renderer/ui/dialogs/editmask.js` | The four memos, the recursion shortcut, the live composed mask and a validation-only port of the grammar cross-checked against design/main/masks.js. |
 | 🚧 In progress | `forms/SelectMask` | forms | 462 | `design/renderer/ui/dialogs/selectmask.js` | All four modes with the live which-names-would-this-pick-up preview and the infinite colour picker. |
 | ⬜ Not started | `core/Usage` | core | 408 | — |  |
 | 🚧 In progress | `forms/RemoteTransfer` | forms | 388 | `design/renderer/ui/dialogs/remotetransfer.js` | Duplicate/Move on ONE session, queued as a server-side copy. Another session is listed and refused with the reason: main remote-copy builds both ends from a single session, so a cross-session target would copy the wrong file. |
-| ⬜ Not started | `core/FileBuffer` | core | 374 | — |  |
+| 🚧 In progress | `core/FileBuffer` | core | 374 | `design/main/filebuffer.js`<br>`design/main/queue.js` | EOL state machine surviving chunk boundaries, BOM and Ctrl-Z handling. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative. |
 | 🚧 In progress | `core/Http` | core | 366 | `design/main/protocols/webdav.js`<br>`design/main/protocols/s3.js` | HTTP plumbing lives with the two protocols that need it. |
 | 🚧 In progress | `windows/SynchronizeController` | windows | 364 | `design/main/sync.js` | Comparison checklist across all direction/mode/criteria combinations, DST handling, keep-up-to-date watching. |
 | ⬜ Not started | `resource/TextsCore2` | resource | 353 | — |  |
@@ -144,13 +144,13 @@ counted as replaced rather than transcribed.
 | 🚧 In progress | `forms/CreateDirectory` | forms | 292 | `design/renderer/ui/dialogs/createdirectory.js`<br>`design/renderer/ui/dialogs/rights.js` | Name, attributes with the rights frame, use-same-settings-next-time, and a real mkdir plus chmod. Help button absent. |
 | 🚧 In progress | `forms/Symlink` | forms | 292 | `design/renderer/ui/dialogs/symlink.js` | Create and edit, hard links gated on caps, and edit really performing remove-then-create with that stated before OK. |
 | ⬜ Not started | `core/CoreMain` | core | 269 | — |  |
-| 🚧 In progress | `core/Security` | core | 252 | `design/main/crypto.js` | Credential protection and master password. WinSCP password obfuscation compat pending. |
+| 🚧 In progress | `core/Security` | core | 252 | `design/main/crypto.js`<br>`design/main/security.js` | Credential protection, master password, and WinSCP's own password obfuscation format so imported sites actually work. |
 | ⬜ Not started | `core/NamedObjs` | core | 218 | — |  |
 | ⬜ Not started | `windows/WinApi` | windows | 198 | — |  |
 | ⬜ Not started | `core/Interface` | core | 197 | — |  |
-| ⬜ Not started | `core/FileInfo` | core | 174 | — |  |
+| 🚧 In progress | `core/FileInfo` | core | 174 | `design/main/security.js` | Version info for About and the update check. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative. |
 | ⬜ Not started | `components/DirView` | components | 165 | — |  |
-| ⬜ Not started | `core/FileSystems` | core | 161 | — |  |
+| 🚧 In progress | `core/FileSystems` | core | 161 | `design/main/filesystems.js` | Capability model derived from the adapters' caps so the two cannot disagree. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative. |
 | 🚧 In progress | `forms/CopyParamCustom` | forms | 160 | `design/renderer/ui/dialogs/copyparams.js` | The transfer-settings frame, rendered from the shared descriptor table. |
 | ⬜ Not started | `core/Global` | core | 132 | — |  |
 | 🔁 Replaced by an equivalent | `forms/InputDlg` | forms | 123 | `design/renderer/ui/commands.js` | replaced: promptText() and confirm() in the command layer are the shell input prompts. |

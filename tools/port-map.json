@@ -22,28 +22,31 @@
     },
     "core/SessionData": {
       "status": "partial",
-      "progress": 0.5,
+      "progress": 0.6,
       "targets": [
+        "design/main/sessiondata.js",
         "design/main/defaults.js",
         "design/main/config.js"
       ],
-      "note": "Full option set declared; URL parsing and raw-settings editing pending."
+      "note": "Full option model, session URL parse/generate for every protocol, raw settings, INI and PuTTY import. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
     },
     "core/Security": {
       "status": "partial",
-      "progress": 0.6,
+      "progress": 0.75,
       "targets": [
-        "design/main/crypto.js"
+        "design/main/crypto.js",
+        "design/main/security.js"
       ],
-      "note": "Credential protection and master password. WinSCP password obfuscation compat pending."
+      "note": "Credential protection, master password, and WinSCP's own password obfuscation format so imported sites actually work."
     },
     "core/Cryptography": {
       "status": "partial",
-      "progress": 0.4,
+      "progress": 0.65,
       "targets": [
-        "design/main/crypto.js"
+        "design/main/crypto.js",
+        "design/main/security.js"
       ],
-      "note": "AES-GCM + scrypt in place; file-encryption feature pending."
+      "note": "AES-GCM + scrypt for our storage; WinSCP's AES file encryption (contents and filenames)."
     },
     "core/HierarchicalStorage": {
       "status": "partial",
@@ -180,12 +183,13 @@
     },
     "core/Terminal": {
       "status": "partial",
-      "progress": 0.15,
+      "progress": 0.45,
       "targets": [
+        "design/main/terminal.js",
         "design/main/session.js",
         "design/main/sync.js"
       ],
-      "note": "Session lifecycle and the synchronization engine. Terminal is 7,000+ lines; most of it is still ahead."
+      "note": "Operation lifecycle, delete/rename/move with their real confirmations and refusals, retry/skip/abort, directory cache, recursive properties, size calculation. The TRANSFER machinery (CopyToRemote/CopyToLocal/Source/Sink, TParallelOperation, the overwrite decision) is NOT ported here — queue.js owns transfers today."
     },
     "windows/TerminalManager": {
       "status": "partial",
@@ -261,21 +265,21 @@
     },
     "windows/Setup": {
       "status": "partial",
-      "progress": 0.55,
+      "progress": 0.5,
       "targets": [
         "design/main/setup.js",
-        "test/shellintegration.test.js"
+        "design/main/squirrel.js"
       ],
-      "note": "Search path, URL-protocol registration, Default Programs capabilities, shortcuts, Send To hook, jump list, temporary-folder cleanup, /UninstallCleanup and the maintenance switches. HKCU only (no elevation) and no COM registration inspection - see docs/protocol-gaps.md. The update-download half lives in updates.js/autoupdate.js; the tips and donation surfaces are deliberately not ported (issue #22)."
+      "note": "Shortcuts, search path, file associations, winscp:// registration, uninstall cleanup. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
     },
     "windows/Tools": {
       "status": "partial",
-      "progress": 0.3,
+      "progress": 0.4,
       "targets": [
-        "design/main/setup.js",
-        "design/main/guitools.js"
+        "design/main/guitools.js",
+        "design/main/setup.js"
       ],
-      "note": "Shortcut creation (CreateDesktopShortCut / CreateAppDesktopShortCut / CreateDesktopSessionShortCut), the info tips, ValidLocalFileName and the shell-open helpers. The VCL dialog helpers that make up the rest of the file have no meaning outside VCL."
+      "note": "Application helpers. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
     },
     "windows/WinMain": {
       "status": "partial",
@@ -288,12 +292,11 @@
     },
     "dragext/DragExt": {
       "status": "partial",
-      "progress": 0.5,
+      "progress": 0.35,
       "targets": [
-        "design/main/shellintegration.js",
-        "test/shellintegration.test.js"
+        "design/main/shellintegration.js"
       ],
-      "note": "The INTENT is ported: dragging out stages real files and uses webContents.startDrag, which is WinSCP's own temporary-folder branch. The COM ICopyHook itself cannot exist in Electron - see docs/protocol-gaps.md for what it did that this does not."
+      "note": "A COM shell extension cannot exist in Electron; the drop-to-Explorer INTENT is implemented via startDrag with a real temp file. The difference is recorded in docs/protocol-gaps.md."
     },
     "putty/putty": {
       "status": "na",
@@ -635,6 +638,105 @@
         "design/renderer/ui/dialogs/synchronize.js"
       ],
       "note": "The comparison progress is reported through the same progress surface rather than its own form."
+    },
+    "core/Common": {
+      "status": "partial",
+      "progress": 0.5,
+      "targets": [
+        "design/main/common.js"
+      ],
+      "note": "String/path/time/size helpers ported as pure logic with tests. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
+    },
+    "core/RemoteFiles": {
+      "status": "partial",
+      "progress": 0.6,
+      "targets": [
+        "design/main/remotefiles.js"
+      ],
+      "note": "File list model, rights (octal/symbolic/partial-selection), symlink resolution, unix and VMS path shapes. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
+    },
+    "core/Script": {
+      "status": "partial",
+      "progress": 0.6,
+      "targets": [
+        "design/main/script.js",
+        "design/main/consolerunner.js"
+      ],
+      "note": "The scripting command set with switch parsing, masks and the exit-code contract. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
+    },
+    "windows/ConsoleRunner": {
+      "status": "partial",
+      "progress": 0.4,
+      "targets": [
+        "design/main/consolerunner.js"
+      ],
+      "note": "Batch/non-interactive script driving. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
+    },
+    "windows/WinConfiguration": {
+      "status": "partial",
+      "progress": 0.55,
+      "targets": [
+        "design/main/winconfig.js",
+        "design/main/config.js"
+      ],
+      "note": "Preference set with load/save/defaults and version-upgrade migrations, editor list, custom commands, presets, bookmarks, file colours. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
+    },
+    "windows/CustomWinConfiguration": {
+      "status": "partial",
+      "progress": 0.5,
+      "targets": [
+        "design/main/winconfig.js"
+      ],
+      "note": "Folded into winconfig.js. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
+    },
+    "windows/GUIConfiguration": {
+      "status": "partial",
+      "progress": 0.5,
+      "targets": [
+        "design/main/winconfig.js"
+      ],
+      "note": "Folded into winconfig.js. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
+    },
+    "windows/GUITools": {
+      "status": "partial",
+      "progress": 0.5,
+      "targets": [
+        "design/main/guitools.js"
+      ],
+      "note": "External-application resolution, parameter expansion, temp-file naming policy, process execution with Windows quoting. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
+    },
+    "core/Option": {
+      "status": "partial",
+      "progress": 0.6,
+      "targets": [
+        "design/main/options.js"
+      ],
+      "note": "Switch parsing and command-line semantics. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
+    },
+    "core/FileBuffer": {
+      "status": "partial",
+      "progress": 0.6,
+      "targets": [
+        "design/main/filebuffer.js",
+        "design/main/queue.js"
+      ],
+      "note": "EOL state machine surviving chunk boundaries, BOM and Ctrl-Z handling. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
+    },
+    "core/FileSystems": {
+      "status": "partial",
+      "progress": 0.5,
+      "targets": [
+        "design/main/filesystems.js"
+      ],
+      "note": "Capability model derived from the adapters' caps so the two cannot disagree. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
+    },
+    "core/FileInfo": {
+      "status": "partial",
+      "progress": 0.5,
+      "targets": [
+        "design/main/security.js"
+      ],
+      "note": "Version info for About and the update check. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
     }
   }
 }
