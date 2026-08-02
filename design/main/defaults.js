@@ -325,6 +325,13 @@ const PREF_DEFAULTS = {
   // ---------- Queue ----------
   queue: {
     transfersLimit: 2,
+    // "Use multiple connections for single transfer" — how many ranged chunks
+    // one large file is split across. Only used when the protocol can resume
+    // from an offset; 1 disables it.
+    parallelTransfers: 1,
+    // Below this size, splitting a file costs more in round trips than it
+    // saves in throughput.
+    parallelTransferThreshold: 10 * 1024 * 1024,
     keepDoneItemsFor: 15,          // seconds; -1 = forever, 0 = never
     autoPopup: true,
     rememberPassword: false,

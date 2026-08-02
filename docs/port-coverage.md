@@ -8,15 +8,15 @@ not started; a mapping pointing at a file that does not exist is reported as a
 problem. The percentage is weighted by source lines, so a large subsystem
 cannot be made to look finished by porting a handful of small files.
 
-**Overall: 7.9% of 318,002 lines across 125 units.**
+**Overall: 9.1% of 318,002 lines across 125 units.**
 
 ## By area
 
 | Area | Units | Ported | Lines | Coverage |
 |---|---:|---:|---:|---:|
-| `forms` | 51 | 0 | 199,082 | 1.6% |
-| `core` | 36 | 1 | 76,572 | 30.2% |
-| `windows` | 20 | 0 | 32,403 | 1.2% |
+| `forms` | 51 | 0 | 199,082 | 2.3% |
+| `core` | 36 | 1 | 76,572 | 37.0% |
+| `windows` | 20 | 0 | 32,403 | 6.0% |
 | `resource` | 9 | 0 | 4,110 | 0.0% |
 | `components` | 6 | 0 | 3,734 | 0.0% |
 | `console` | 2 | 0 | 1,178 | 0.0% |
@@ -42,7 +42,7 @@ counted as replaced rather than transcribed.
 | ⬜ Not started | `forms/CustomScpExplorer` | forms | 14,045 | — |  |
 | ⬜ Not started | `forms/Animations120` | forms | 13,492 | — |  |
 | ⬜ Not started | `forms/Animations96` | forms | 11,335 | — |  |
-| ⬜ Not started | `core/Terminal` | core | 10,449 | — |  |
+| 🚧 In progress | `core/Terminal` | core | 10,449 | `design/main/session.js`<br>`design/main/sync.js` | Session lifecycle and the synchronization engine. Terminal is 7,000+ lines; most of it is still ahead. |
 | ⬜ Not started | `forms/Glyphs192` | forms | 9,952 | — |  |
 | ⬜ Not started | `forms/Glyphs144` | forms | 9,177 | — |  |
 | ⬜ Not started | `forms/Login` | forms | 8,977 | — |  |
@@ -73,10 +73,10 @@ counted as replaced rather than transcribed.
 | ⬜ Not started | `windows/Setup` | windows | 2,980 | — |  |
 | 🚧 In progress | `core/Configuration` | core | 2,875 | `design/main/config.js`<br>`design/main/defaults.js`<br>`design/main/paths.js` | Store, atomic writes, defaults. INI import/export still to do. |
 | ⬜ Not started | `forms/Console` | forms | 2,828 | — |  |
-| ⬜ Not started | `windows/TerminalManager` | windows | 2,772 | — |  |
+| 🚧 In progress | `windows/TerminalManager` | windows | 2,772 | `design/main/session.js` | Multiple sessions, reconnect policy, verification callbacks. |
 | ⬜ Not started | `windows/WinInterface` | windows | 2,545 | — |  |
 | ⬜ Not started | `forms/LocationProfiles` | forms | 2,529 | — |  |
-| ⬜ Not started | `forms/FileFind` | forms | 2,525 | — |  |
+| 🚧 In progress | `forms/FileFind` | forms | 2,525 | `design/main/find.js` | Streaming recursive search with mask + content grep. 17 tests. The dialog itself is not built yet. |
 | 🚧 In progress | `core/WebDAVFileSystem` | core | 2,511 | `design/main/protocols/webdav.js` | Hand-written client; PROPFIND parsing and RFC 7616 Digest auth covered by tests. |
 | 🚧 In progress | `core/HierarchicalStorage` | core | 2,407 | `design/main/config.js` | JSON store replaces INI/registry hierarchy; INI compatibility layer pending. |
 | ⬜ Not started | `core/SessionInfo` | core | 2,274 | — |  |
@@ -130,7 +130,7 @@ counted as replaced rather than transcribed.
 | ⬜ Not started | `forms/RemoteTransfer` | forms | 388 | — |  |
 | ⬜ Not started | `core/FileBuffer` | core | 374 | — |  |
 | 🚧 In progress | `core/Http` | core | 366 | `design/main/protocols/webdav.js`<br>`design/main/protocols/s3.js` | HTTP plumbing lives with the two protocols that need it. |
-| ⬜ Not started | `windows/SynchronizeController` | windows | 364 | — |  |
+| 🚧 In progress | `windows/SynchronizeController` | windows | 364 | `design/main/sync.js` | Comparison checklist across all direction/mode/criteria combinations, DST handling, keep-up-to-date watching. |
 | ⬜ Not started | `resource/TextsCore2` | resource | 353 | — |  |
 | ⬜ Not started | `forms/CopyLocal` | forms | 334 | — |  |
 | ⬜ Not started | `forms/Cleanup` | forms | 332 | — |  |

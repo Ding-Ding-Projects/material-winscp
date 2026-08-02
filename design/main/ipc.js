@@ -164,12 +164,14 @@ const syncModule = lazy('./sync', 'Synchronization');
 const findModule = lazy('./find', 'File search');
 const masksModule = lazy('./masks', 'File-mask matching');
 
-/** Call a method on a lazily loaded module, naming it precisely if it is absent. */
-function callOn(mod, names, label, ...args) {
-  for (const n of [].concat(names)) {
-    if (typeof mod[n] === 'function') return mod[n](...args);
-  }
-  throw new Error(`${label} is unavailable: the module exports none of ${[].concat(names).join('/')}.`);
+/**
+ * Drop the keys the renderer did not set, so a module's own defaults win
+ * instead of being overwritten with `undefined`.
+ */
+function stripUndefined(o) {
+  const out = {};
+  for (const [k, v] of Object.entries(o)) if (v !== undefined) out[k] = v;
+  return out;
 }
 
 // ==================================================================== IPC
@@ -242,30 +244,46 @@ class Ipc {
 
   session(id) { return this.sessions.require(str(id, 'sessionId', 128)); }
 
+  /** The one transfer queue, created on first use and wired to the renderer. */
   queue() {
     if (this._queue) return this._queue;
     const mod = queueModule();
-    const Cls = mod.Queue || mod.TransferQueue || mod.default;
-    if (typeof Cls !== 'function') throw new Error('design/main/queue.js does not export a Queue class.');
-    this._queue = new Cls({
-      config: this.config,
-      sessions: this.sessions,
-      emit: (payload) => this.emit('event:queue', payload),
-      onProgress: (payload) => this.emit('event:progress', payload),
-    });
-    return this._queue;
+    if (typeof mod.TransferQueue !== 'function') throw new Error('design/main/queue.js does not export TransferQueue.');
+    const q = new mod.TransferQueue({ prefs: this.config ? this.config.prefs : undefined });
+
+    // Every queue event becomes one renderer event, with the internals left
+    // behind: `view()` is the only shape that crosses the bridge.
+    for (const ev of ['item-added', 'item-removed', 'item-state', 'item-error', 'item-done', 'idle', 'once-done', 'reconnect']) {
+      q.on(ev, (payload, extra) => this.emit('event:queue', { type: ev, item: payload, extra }));
+    }
+    q.on('progress', (item) => this.emit('event:progress', { kind: 'transfer', item }));
+    // A query or a prompt from inside a transfer is a decision the user must
+    // make; it goes out on the prompt channel like every other one.
+    q.on('query', (id, query) => this.emit('event:prompt', { promptId: id, kind: 'custom', payload: { source: 'queue', query } }));
+    q.on('prompt', (id, prompt) => this.emit('event:prompt', { promptId: id, kind: 'password', payload: { source: 'queue', prompt } }));
+
+    this._queue = q;
+    return q;
   }
 
+  /** sync.js is a module of functions rather than a class; use it as one. */
   sync() {
     if (this._sync) return this._sync;
-    const mod = syncModule();
-    const Cls = mod.Synchronizer || mod.Sync || mod.default;
-    if (typeof Cls === 'function') {
-      this._sync = new Cls({ config: this.config, sessions: this.sessions, queue: () => this.queue(), emit: (p) => this.emit('event:sync', p) });
-    } else {
-      this._sync = mod;   // a plain function module is fine too
-    }
+    this._sync = syncModule();
     return this._sync;
+  }
+
+  /** The local-side adapter every transfer needs on one end. */
+  localAdapter() {
+    if (this._local) return this._local;
+    let mod;
+    try { mod = require('./protocols/local'); } catch (e) {
+      throw new Error(`The local backend is unavailable: design/main/protocols/local.js could not be loaded (${e.message}).`);
+    }
+    if (typeof mod.LocalAdapter !== 'function') throw new Error('design/main/protocols/local.js does not export LocalAdapter.');
+    this._local = new mod.LocalAdapter({});
+    this._local.connected = true;
+    return this._local;
   }
 
   // =========================================================== registration
@@ -918,88 +936,214 @@ class Ipc {
     });
 
     // ---- find --------------------------------------------------------
-    this.handle('fs:find', async (req) => {
+    /** Running searches, so one can be cancelled without cancelling another. */
+    this._finders = new Map();
+
+    this.handle('fs:find', (req) => {
       const r = obj(req, 'request');
       const mod = findModule();
+      need(typeof mod.find === 'function', 'design/main/find.js does not export find().');
+
       const session = r.sessionId ? this.session(r.sessionId) : null;
-      const cid = optStr(r.correlationId, 'correlationId', 64);
-      return callOn(mod, ['find', 'search', 'run'], 'File search', {
-        session,
-        adapter: session ? session.adapter : null,
-        root: session ? remotePath(session, r.root || '/', 'root') : path.resolve(str(r.root, 'root', LIMITS.path)),
-        mask: optStr(r.mask, 'mask', LIMITS.small),
-        text: optStr(r.text, 'text', LIMITS.small),
-        regex: r.regex === true,
-        caseSensitive: r.caseSensitive === true,
-        recursive: r.recursive !== false,
+      const adapter = session ? session.adapter : this.localAdapter();
+      need(adapter && adapter.connected, 'The session is not connected.');
+      const root = session
+        ? remotePath(session, r.root || '/', 'root')
+        : path.resolve(str(r.root, 'root', LIMITS.path));
+
+      const cid = optStr(r.correlationId, 'correlationId', 64) || `find-${Date.now().toString(36)}`;
+      const finder = mod.find(adapter, root, stripUndefined({
+        mask: optStr(r.mask, 'mask', LIMITS.small) || undefined,
+        text: optStr(r.text, 'text', LIMITS.small) || undefined,
+        regex: r.regex === undefined ? undefined : bool(r.regex, 'regex'),
+        caseSensitive: r.caseSensitive === undefined ? undefined : bool(r.caseSensitive, 'caseSensitive'),
+        recursive: r.recursive === undefined ? undefined : bool(r.recursive, 'recursive'),
         maxResults: r.maxResults === undefined ? 10000 : num(r.maxResults, 'maxResults', 1, 200000),
-        onResult: (hit) => { if (cid) this.emit('event:progress', { correlationId: cid, kind: 'find', hit }); },
-      });
+      }));
+
+      this._finders.set(cid, finder);
+      // Results stream as they are found: a search over a slow server must show
+      // its first hit long before it shows its last.
+      if (typeof finder.on === 'function') {
+        finder.on('match', (hit) => this.emit('event:progress', { correlationId: cid, kind: 'find', hit }));
+        finder.on('error', (e, at) => this.emit('event:progress', { correlationId: cid, kind: 'find', error: e.message, at }));
+        finder.on('done', (summary) => {
+          this._finders.delete(cid);
+          this.emit('event:progress', { correlationId: cid, kind: 'find', done: true, count: (summary && summary.results ? summary.results.length : 0), cancelled: !!(summary && summary.cancelled) });
+        });
+      }
+      return { correlationId: cid };
+    });
+
+    this.handle('fs:findCancel', (correlationId) => {
+      const f = this._finders.get(str(correlationId, 'correlationId', 64));
+      if (!f) return false;
+      if (typeof f.cancel === 'function') f.cancel();
+      else if (typeof f.abort === 'function') f.abort();
+      return true;
     });
   }
 
   // ----------------------------------------------------------- queue:*
   registerQueue() {
+    /** Build the queue spec for one file, with the adapters on the right ends. */
+    const specFor = (session, direction, file, target, copyParam) => {
+      const local = this.localAdapter();
+      const remote = session.adapter;
+      need(remote && remote.connected, 'The session is not connected.');
+      if (direction === 'upload') {
+        return {
+          side: 'upload',
+          source: path.resolve(file),
+          target: remotePath(session, target, 'target'),
+          targetIsDir: true,
+          sourceAdapter: local,
+          targetAdapter: remote,
+          copyParam,
+          session,
+        };
+      }
+      if (direction === 'download') {
+        return {
+          side: 'download',
+          source: remotePath(session, file, 'file'),
+          target: path.resolve(target),
+          targetIsDir: true,
+          sourceAdapter: remote,
+          targetAdapter: local,
+          copyParam,
+          session,
+        };
+      }
+      // remote-copy: both ends are the same server.
+      need(remote.caps.copyRemote || remote.caps.exec, `${remote.protocolName} cannot copy files on the server.`);
+      return {
+        side: 'remote-copy',
+        source: remotePath(session, file, 'file'),
+        target: remotePath(session, target, 'target'),
+        targetIsDir: true,
+        sourceAdapter: remote,
+        targetAdapter: remote,
+        copyParam,
+        session,
+      };
+    };
+
     this.handle('queue:add', (req) => {
       const r = obj(req, 'request');
       const q = this.queue();
       const session = this.session(r.sessionId);
       const direction = str(r.direction, 'direction', 16);
-      need(['upload', 'download', 'remoteCopy', 'remoteMove'].includes(direction), 'Unknown transfer direction.');
+      need(['upload', 'download', 'remote-copy'].includes(direction), 'direction must be upload, download or remote-copy.');
       const files = strArr(r.files, 'files', 200000);
-      return callOn(q, ['add', 'enqueue'], 'The transfer queue', {
-        sessionId: session.id,
-        session,
-        direction,
-        files: direction === 'upload' ? files.map((f) => path.resolve(f)) : files.map((f) => remotePath(session, f, 'file')),
-        target: direction === 'upload' ? remotePath(session, r.target || session.state.remotePath, 'target') : path.resolve(str(r.target, 'target', LIMITS.path)),
-        copyParam: optObj(r.copyParam, 'copyParam'),
-        move: r.move === true,
-        queueNow: r.queueNow !== false,
-      });
+      need(files.length, 'No files were given to transfer.');
+      const target = r.target === undefined
+        ? (direction === 'upload' ? session.state.remotePath : session.state.localPath)
+        : str(r.target, 'target', LIMITS.path);
+      need(target, 'No transfer target was given.');
+      const copyParam = optObj(r.copyParam, 'copyParam');
+
+      const added = [];
+      for (const f of files) added.push(q.view(q.add(specFor(session, direction, f, target, copyParam))));
+      return added;
     });
 
-    this.handle('queue:list', () => callOn(this.queue(), ['list', 'items'], 'The transfer queue'));
-    this.handle('queue:pause', (id) => callOn(this.queue(), ['pause'], 'The transfer queue', id === undefined ? undefined : str(id, 'id', 128)));
-    this.handle('queue:resume', (id) => callOn(this.queue(), ['resume'], 'The transfer queue', id === undefined ? undefined : str(id, 'id', 128)));
-    this.handle('queue:cancel', (id) => callOn(this.queue(), ['cancel', 'remove'], 'The transfer queue', str(id, 'id', 128)));
-    this.handle('queue:move', (id, delta) => callOn(this.queue(), ['move', 'reorder'], 'The transfer queue', str(id, 'id', 128), num(delta, 'delta', -100000, 100000)));
-    this.handle('queue:clear', (which) => callOn(this.queue(), ['clear'], 'The transfer queue', optStr(which, 'which', 32) || 'done'));
-    this.handle('queue:setLimit', (n) => callOn(this.queue(), ['setLimit', 'setTransfersLimit'], 'The transfer queue', num(n, 'limit', 1, 32)));
-    this.handle('queue:setSpeed', (id, bytesPerSecond) => callOn(this.queue(), ['setSpeed', 'setCpsLimit'], 'The transfer queue',
-      id === undefined || id === null ? null : str(id, 'id', 128), num(bytesPerSecond, 'bytesPerSecond', 0, 1024 * 1024 * 1024)));
-    this.handle('queue:retry', (id) => callOn(this.queue(), ['retry'], 'The transfer queue', str(id, 'id', 128)));
-    this.handle('queue:answer', (id, answer) => callOn(this.queue(), ['answer', 'respond'], 'The transfer queue', str(id, 'id', 128), optObj(answer, 'answer')));
+    this.handle('queue:list', () => this.queue().list());
+    this.handle('queue:item', (id) => {
+      const q = this.queue();
+      const it = q.get(str(id, 'id', 128));
+      return it ? q.view(it) : null;
+    });
+
+    this.handle('queue:pause', (id) => {
+      const q = this.queue();
+      return id === undefined || id === null ? q.pauseAll() : q.pauseItem(str(id, 'id', 128));
+    });
+    this.handle('queue:resume', (id) => {
+      const q = this.queue();
+      return id === undefined || id === null ? q.resumeAll() : q.resumeItem(str(id, 'id', 128));
+    });
+    this.handle('queue:cancel', (id) => this.queue().remove(str(id, 'id', 128)));
+    this.handle('queue:move', (id, delta) => {
+      const q = this.queue();
+      const d = num(delta, 'delta', -1, 1);
+      need(d === -1 || d === 1, 'delta must be -1 or 1.');
+      return d < 0 ? q.moveUp(str(id, 'id', 128)) : q.moveDown(str(id, 'id', 128));
+    });
+    this.handle('queue:clear', () => this.queue().removeDone());
+    this.handle('queue:setEnabled', (on) => this.queue().setEnabled(bool(on, 'enabled')));
+    this.handle('queue:setLimit', (n) => this.queue().setTransfersLimit(num(n, 'limit', 1, 32)));
+    this.handle('queue:setSpeed', (id, bytesPerSecond) => this.queue().setSpeedLimit(
+      id === undefined || id === null ? null : str(id, 'id', 128),
+      num(bytesPerSecond, 'bytesPerSecond', 0, 1024 * 1024 * 1024)));
+    this.handle('queue:answerQuery', (id, answer, options) =>
+      this.queue().answerQuery(str(id, 'id', 128), str(answer, 'answer', 64), optObj(options, 'options')));
+    this.handle('queue:answerPrompt', (id, value) =>
+      this.queue().answerPrompt(str(id, 'id', 128), str(value, 'value', 4096)));
   }
 
   // ------------------------------------------------------------ sync:*
   registerSync() {
-    this.handle('sync:compare', (req) => {
-      const r = obj(req, 'request');
-      const session = this.session(r.sessionId);
-      const s = this.sync();
-      const cid = optStr(r.correlationId, 'correlationId', 64);
-      return callOn(s, ['compare', 'checklist', 'buildChecklist'], 'Synchronization', {
-        session,
-        localPath: path.resolve(str(r.localPath, 'localPath', LIMITS.path)),
-        remotePath: remotePath(session, r.remotePath, 'remotePath'),
-        mode: optStr(r.mode, 'mode', 32) || 'both',
-        criteria: optStr(r.criteria, 'criteria', 32) || 'time',
-        recursive: r.recursive !== false,
-        deleteFiles: r.deleteFiles === true,
-        mirror: r.mirror === true,
-        copyParam: optObj(r.copyParam, 'copyParam'),
-        onProgress: (p) => { if (cid) this.emit('event:progress', { correlationId: cid, kind: 'sync', ...p }); },
-      });
+    /** Comparison options, validated here so sync.js sees only clean input. */
+    const syncOptions = (r) => ({
+      mode: optStr(r.mode, 'mode', 32) || undefined,
+      direction: optStr(r.direction, 'direction', 32) || undefined,
+      criteria: optStr(r.criteria, 'criteria', 32) || undefined,
+      recursive: r.recursive === undefined ? undefined : bool(r.recursive, 'recursive'),
+      fileMask: optStr(r.fileMask, 'fileMask', LIMITS.small) || undefined,
+      caseSensitive: r.caseSensitive === undefined ? undefined : bool(r.caseSensitive, 'caseSensitive'),
+      transferMode: optStr(r.transferMode, 'transferMode', 32) || undefined,
+      copyParam: optObj(r.copyParam, 'copyParam'),
+      timeTolerance: r.timeTolerance === undefined ? undefined : num(r.timeTolerance, 'timeTolerance', 0, 86400000),
+      dstMode: optStr(r.dstMode, 'dstMode', 16) || undefined,
+      timeDifference: r.timeDifference === undefined ? undefined : num(r.timeDifference, 'timeDifference', -86400, 86400),
     });
 
-    this.handle('sync:apply', (req) => {
+    /** The comparison result, kept here so apply() gets the real context object
+     *  back — the checklist that crosses the bridge is a plain, safe copy. */
+    this._checklists = new Map();
+
+    this.handle('sync:compare', async (req) => {
       const r = obj(req, 'request');
       const session = this.session(r.sessionId);
-      return callOn(this.sync(), ['apply', 'synchronize', 'run'], 'Synchronization', {
-        session,
-        checklist: arr(r.checklist, 'checklist', 500000),
-        queue: this.queue(),
+      need(session.adapter && session.adapter.connected, 'The session is not connected.');
+      const s = this.sync();
+      need(typeof s.compare === 'function', 'design/main/sync.js does not export compare().');
+
+      const result = await s.compare(
+        this.localAdapter(), path.resolve(str(r.localPath, 'localPath', LIMITS.path)),
+        session.adapter, remotePath(session, r.remotePath, 'remotePath'),
+        stripUndefined(syncOptions(r)));
+
+      // The checklist itself is small and JSON-safe; the context is not, so it
+      // stays here under a token the renderer hands back to sync:apply.
+      const token = `cl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      this._checklists.set(token, result);
+      // Bound the memory: a user comparing all afternoon must not accumulate
+      // every checklist they looked at.
+      if (this._checklists.size > 16) this._checklists.delete(this._checklists.keys().next().value);
+      return { token, items: result.items, counts: result.counts };
+    });
+
+    this.handle('sync:apply', async (req) => {
+      const r = obj(req, 'request');
+      const s = this.sync();
+      need(typeof s.apply === 'function', 'design/main/sync.js does not export apply().');
+      const checklist = this._checklists.get(str(r.token, 'token', 64));
+      need(checklist, 'That comparison is no longer available; run the comparison again.');
+
+      // Only the ticked flags come back from the renderer, matched by index —
+      // never a whole re-serialized checklist, which could be edited into
+      // deleting something the comparison never proposed.
+      if (r.checked !== undefined) {
+        const checked = arr(r.checked, 'checked', 500000);
+        need(checked.length === checklist.items.length, 'The checked flags do not match the comparison.');
+        checklist.items.forEach((it, i) => { it.checked = !!checked[i]; });
+      }
+
+      return s.apply(checklist, this.queue(), {
+        onlyChecked: r.onlyChecked !== false,
+        performDeletions: r.performDeletions !== false,
         copyParam: optObj(r.copyParam, 'copyParam'),
       });
     });
@@ -1007,15 +1151,36 @@ class Ipc {
     this.handle('sync:keepUpToDate', (req) => {
       const r = obj(req, 'request');
       const session = this.session(r.sessionId);
-      return callOn(this.sync(), ['keepUpToDate', 'watch'], 'Synchronization', {
-        session,
-        localPath: path.resolve(str(r.localPath, 'localPath', LIMITS.path)),
-        remotePath: remotePath(session, r.remotePath, 'remotePath'),
-        options: optObj(r.options, 'options'),
-      });
+      need(session.adapter && session.adapter.connected, 'The session is not connected.');
+      const s = this.sync();
+      need(typeof s.startWatch === 'function', 'design/main/sync.js does not export startWatch().');
+
+      const watcher = s.startWatch(
+        this.localAdapter(), path.resolve(str(r.localPath, 'localPath', LIMITS.path)),
+        session.adapter, remotePath(session, r.remotePath, 'remotePath'),
+        this.queue(), stripUndefined(syncOptions(r)));
+
+      const id = `kutd-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      this._watchers = this._watchers || new Map();
+      this._watchers.set(id, watcher);
+      if (watcher && typeof watcher.on === 'function') {
+        for (const ev of ['change', 'error', 'synchronized', 'stopped']) {
+          watcher.on(ev, (payload) => this.emit('event:sync', { type: ev, id, payload }));
+        }
+      }
+      return { id };
     });
 
-    this.handle('sync:stop', (id) => callOn(this.sync(), ['stop', 'cancel'], 'Synchronization', id === undefined ? undefined : str(id, 'id', 128)));
+    this.handle('sync:stop', (id) => {
+      const s = this.sync();
+      const key = str(id, 'id', 128);
+      const watcher = this._watchers && this._watchers.get(key);
+      need(watcher, 'No such keep-up-to-date watcher.');
+      if (typeof s.stopWatch === 'function') s.stopWatch(watcher);
+      else if (typeof watcher.stop === 'function') watcher.stop();
+      this._watchers.delete(key);
+      return true;
+    });
   }
 
   // ---------------------------------------------------------- editor:*
@@ -1056,7 +1221,13 @@ class Ipc {
 
   // --------------------------------------------------------- history:*
   registerHistory() {
+    // Reads wait for the writes already in flight. config.js records revisions
+    // without awaiting them (a history write must never delay a save), so a
+    // read that did not wait would show a log one event out of date.
+    const settled = () => this.history.settled();
+
     this.handle('history:list', async (options) => {
+      await settled();
       const o = optObj(options, 'options');
       const r = await this.history.list({
         limit: o.limit === undefined ? undefined : num(o.limit, 'limit', 1, 100000),
@@ -1069,18 +1240,21 @@ class Ipc {
     });
 
     this.handle('history:actions', async () => {
+      await settled();
       const r = await this.history.actions();
       if (!r.ok) throw Object.assign(new Error(r.error.message), { code: r.error.code });
       return r.value;
     });
 
     this.handle('history:read', async (rev) => {
+      await settled();
       const r = await this.history.read(str(rev, 'revision', 64));
       if (!r.ok) throw Object.assign(new Error(r.error.message), { code: r.error.code });
       return r.value;
     });
 
     this.handle('history:diff', async (a, b) => {
+      await settled();
       const r = await this.history.diff(str(a, 'a', 64), b === undefined ? undefined : str(b, 'b', 64));
       if (!r.ok) throw Object.assign(new Error(r.error.message), { code: r.error.code });
       return r.value;
@@ -1102,8 +1276,12 @@ class Ipc {
       // config.attachHistory, which is what keeps the history append-only:
       // the revision that was current a moment ago is still there to go back to.
       this.config.importState(read.value, optStr(label, 'label', 256) || `Restored revision ${revision.slice(0, 8)}`);
+      // Wait for that new revision to land before replying, so the panel that
+      // refreshes on this reply sees the restore in the log.
+      await settled();
+      const now = await this.history.list({ limit: 1 });
       this.emit('event:config', { type: 'restored', revision });
-      return { restored: revision };
+      return { restored: revision, newRevision: now.ok && now.value[0] ? now.value[0].oid : null };
     });
 
     this.handle('history:prune', async () => {

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  Content-Security-Policy: everything this window loads comes from the app's
+  own files. No CDN fonts, no remote scripts, no analytics, no network
+  requests of any kind. 'unsafe-inline' for style is required because theme.js
+  writes design tokens onto :root at runtime and the appearance editor injects
+  a managed stylesheet; script-src stays strict.
+
+  worker-src blob: is what lets ui/regexbuilder.js evaluate a pattern inside a
+  Worker it can terminate — that is the protection against a runaway regular
+  expression, not a convenience.
+-->
+<!--
+  `file:` is listed beside 'self' because Chromium treats a file:// document's
+  origin as opaque, so 'self' alone would block this window's own modules when
+  the app is loaded with loadFile(). It permits local files only — every
+  network scheme stays blocked, which is the protection that matters here.
+-->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none';
+               script-src 'self' file:;
+               style-src 'self' file: 'unsafe-inline';
+               img-src 'self' file: data:;
+               font-src 'self' file:;
+               worker-src 'self' file: blob:;
+               connect-src 'none';
+               form-action 'none';
+               base-uri 'none';
+               frame-src 'none';
+               object-src 'none'">
+<title>WinSCP Material</title>
+<link rel="stylesheet" href="./styles/tokens.css">
+<link rel="stylesheet" href="./styles/components.css">
+</head>
+<body>
+  <!--
+    A skip link is the first tab stop, so keyboard users are never forced
+    through the whole title bar and tab strip to reach the content.
+  -->
+  <a class="sr-only" href="#content" id="skip-link">Skip to content</a>
+
+  <div id="app" role="application" aria-label="WinSCP Material"></div>
+
+  <noscript>
+    <p style="padding:24px;font:14px system-ui">
+      WinSCP Material needs JavaScript. This window is the application's own
+      renderer; enable scripts for it and reopen the window.
+    </p>
+  </noscript>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

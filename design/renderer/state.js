@@ -52,7 +52,11 @@ function unwrap(res) {
   if (res == null) return null;
   if (typeof res === 'object' && 'ok' in res) {
     if (res.ok) return res.value;
-    throw new Error(res.error || 'IPC call failed');
+    const e = res.error;
+    const err = new Error((e && e.message) || String(e) || 'IPC call failed');
+    if (e && e.code) err.code = e.code;
+    if (e && e.detail) err.detail = e.detail;
+    throw err;
   }
   return res;                                   // handler returned a bare value
 }
@@ -80,98 +84,150 @@ export const api = {
   get degraded() { return !hasBridge(); },
   get raw() { return typeof window !== 'undefined' ? window.api : undefined; },
 
+  /** The whole configuration document (prefs + sites + workspaces). */
   async configGet() {
     const a = this.raw;
     if (a?.config?.get) return unwrap(await a.config.get());
-    if (a?.invoke) return unwrap(await a.invoke('config:get'));
     return localConfigRead();
   },
-  async configSet(patch) {
+
+  /**
+   * Write a preferences patch. `label` becomes the version-history revision
+   * label, so history entries name what changed rather than that something did.
+   */
+  async configSet(patch, label) {
     const a = this.raw;
-    if (a?.config?.set) return unwrap(await a.config.set(patch));
-    if (a?.invoke) return unwrap(await a.invoke('config:set', patch));
+    if (a?.config?.setPrefs) return unwrap(await a.config.setPrefs(patch, label || describePatch(patch)));
     const merged = deepMerge(localConfigRead(), patch);
     localConfigWrite(merged);
     return merged;
   },
+
   onConfigChanged(fn) {
     const a = this.raw;
-    if (a?.config?.onChanged) return a.config.onChanged(fn) || (() => {});
-    if (a?.on) return a.on('config:changed', fn) || (() => {});
+    if (typeof a?.on === 'function') {
+      try { return a.on('event:config', fn) || (() => {}); }
+      catch { /* the event is allowlisted in preload; ignore if it is not */ }
+    }
     return () => {};
   },
 
-  windowMinimize() { const a = this.raw; return a?.app?.minimize?.() ?? a?.invoke?.('app:minimize'); },
-  windowMaximize() { const a = this.raw; return a?.app?.maximize?.() ?? a?.invoke?.('app:maximize'); },
-  windowClose()    { const a = this.raw; return a?.app?.close?.()    ?? a?.invoke?.('app:close'); },
+  windowMinimize() { return this.raw?.app?.window?.('minimize'); },
+  windowMaximize() { return this.raw?.app?.window?.('toggle-maximize'); },
+  windowClose() { return this.raw?.app?.window?.('close'); },
+
   async windowIsMaximized() {
-    const a = this.raw;
     try {
-      if (a?.app?.isMaximized) return !!unwrap(await a.app.isMaximized());
-      if (a?.invoke) return !!unwrap(await a.invoke('app:isMaximized'));
+      const a = this.raw;
+      if (a?.app?.windowState) return !!(unwrap(await a.app.windowState())?.maximized);
     } catch { /* window state is cosmetic; never fail the shell over it */ }
     return false;
   },
+
+  /**
+   * Window state is polled rather than pushed — preload's event allowlist has
+   * no window channel — so the title bar's maximise glyph stays truthful
+   * without inventing an event that does not exist.
+   */
   onWindowState(fn) {
-    const a = this.raw;
-    if (a?.app?.onWindowState) return a.app.onWindowState(fn) || (() => {});
-    if (a?.on) return a.on('app:windowState', fn) || (() => {});
-    return () => {};
+    if (!hasBridge()) return () => {};
+    let last = null;
+    const tick = async () => {
+      const maximized = await this.windowIsMaximized();
+      if (maximized !== last) { last = maximized; fn({ maximized }); }
+    };
+    const timer = setInterval(tick, 700);
+    window.addEventListener('resize', tick);
+    tick();
+    return () => { clearInterval(timer); window.removeEventListener('resize', tick); };
   },
 
   async appInfo() {
-    const a = this.raw;
     try {
+      const a = this.raw;
       if (a?.app?.info) return unwrap(await a.app.info());
-      if (a?.invoke) return unwrap(await a.invoke('app:info'));
-    } catch { /* fall through */ }
+    } catch { /* the shell has its own defaults */ }
     return null;
   },
 
-  /** Fonts installed on the host, for the appearance editor's family list. */
+  /**
+   * Fonts installed on the host. The preload surface has no font enumeration,
+   * so the appearance editor's family list is the bundled set plus whatever
+   * the platform's local font access exposes — never a network lookup.
+   */
   async listFonts() {
-    const a = this.raw;
     try {
-      if (a?.app?.fonts) return unwrap(await a.app.fonts()) || [];
-      if (a?.fonts?.list) return unwrap(await a.fonts.list()) || [];
-      if (a?.invoke) return unwrap(await a.invoke('app:fonts')) || [];
-    } catch { /* the bundled list is always available as a floor */ }
+      if (typeof queryLocalFonts === 'function') {
+        const fonts = await queryLocalFonts();
+        return Array.from(new Set(fonts.map((f) => f.family))).sort();
+      }
+    } catch { /* permission denied or unsupported: the bundled list stands */ }
     return [];
   },
 
-  /** A dim sum dish for the startup surprise: { id, en, zh, jy, img }. */
+  /** A dim sum dish for the startup surprise: { id, en, zh, jy, img, dataUri }. */
   async dimSumRandom() {
-    const a = this.raw;
     try {
-      if (a?.dimsum?.random) return unwrap(await a.dimsum.random());
-      if (a?.invoke) return unwrap(await a.invoke('app:dimsum'));
+      const a = this.raw;
+      if (a?.app?.dimsum) {
+        const dish = unwrap(await a.app.dimsum());
+        if (dish) {
+          // main returns a data: URI so the image never touches the network.
+          return { ...dish, img: dish.dataUri || dish.img };
+        }
+      }
     } catch { /* the bundled catalog is the fallback */ }
     return null;
   },
 
+  /** Tell main this dish was shown, so the next draws prefer a fresh one. */
+  async dimSumSeen(dishId) {
+    try { await this.raw?.app?.dimsumSeen?.(dishId); } catch { /* not fatal */ }
+  },
+
   /** Whether this launch is a first run (the dim sum surprise must not fire). */
   async isFirstRun() {
-    const a = this.raw;
     try {
-      if (a?.app?.isFirstRun) return !!unwrap(await a.app.isFirstRun());
-      if (a?.invoke) return !!unwrap(await a.invoke('app:isFirstRun'));
-    } catch { /* assume not, the caller also checks its own config */ }
+      const info = await this.appInfo();
+      if (info && typeof info.firstRun === 'boolean') return info.firstRun;
+    } catch { /* the caller also checks its own config */ }
     return false;
   },
 
   /** Record a user-visible mutation for the git-backed version history. */
-  async historyRecord(label, payload) {
-    const a = this.raw;
+  async historyRecord(label) {
     try {
-      if (a?.history?.record) return unwrap(await a.history.record(label, payload));
-      if (a?.invoke) return unwrap(await a.invoke('history:record', { label, payload }));
+      const a = this.raw;
+      if (a?.history?.snapshot) return unwrap(await a.history.snapshot(label));
     } catch (err) {
       // A history write must never fail the operation the user asked for.
       console.warn('[history] snapshot failed:', err?.message || err);
     }
     return null;
   },
+
+  /** Open an external link through main; the renderer never navigates itself. */
+  async openExternal(url) {
+    try {
+      const a = this.raw;
+      if (a?.app?.openExternal) return unwrap(await a.app.openExternal(url));
+    } catch (err) { console.warn('[app] openExternal refused:', err?.message || err); }
+    return false;
+  },
 };
+
+/** A readable revision label for a config patch: "Changed theme, language". */
+function describePatch(patch) {
+  const keys = Object.keys(patch || {});
+  if (!keys.length) return 'Changed a setting';
+  const names = {
+    theme: 'the appearance settings', language: 'the language mode',
+    funnyLevel: 'the funny level', notifications: 'the notification settings',
+    tabs: 'the tab layout', search: 'a saved search', dimSum: 'the dim sum state',
+    disclosureAccepted: 'the funny-level disclosure',
+  };
+  return `Changed ${keys.map((k) => names[k] || k).join(', ')}`;
+}
 
 /* ------------------------------------------------------------------ */
 /* deep helpers                                                        */
@@ -366,28 +422,49 @@ export function persistCurrent(...paths) {
  * Load configuration from main (or localStorage in degraded mode) and merge it
  * over the renderer defaults. Resolves to the merged state.
  */
+/**
+ * main's config:get returns { prefs, sites, folders, workspaces, needsUnlock }
+ * while config:setPrefs takes a patch relative to `prefs`. The renderer's own
+ * paths are all preferences, so both directions are rooted at prefs here and
+ * a bare document (degraded mode) still works.
+ */
+function prefsOf(doc) {
+  if (!doc || typeof doc !== 'object') return null;
+  return doc.prefs && typeof doc.prefs === 'object' ? doc.prefs : doc;
+}
+
+function pickOwned(prefs) {
+  const picked = {};
+  for (const p of PERSISTED_PATHS) {
+    const v = getPath(prefs, p);
+    if (v !== undefined) Object.assign(picked, setPath({}, p, v));
+  }
+  return picked;
+}
+
 export async function loadConfig() {
   let incoming = null;
   try { incoming = await api.configGet(); }
   catch (err) { bus.emit('config:loadFailed', { error: err?.message || String(err) }); }
-  if (incoming && typeof incoming === 'object') {
-    const picked = {};
-    for (const p of PERSISTED_PATHS) {
-      const v = getPath(incoming, p);
-      if (v !== undefined) Object.assign(picked, setPath({}, p, v));
-    }
-    store.patch(picked, { source: 'load' });
+
+  const prefs = prefsOf(incoming);
+  if (prefs) {
+    const picked = pickOwned(prefs);
+    if (Object.keys(picked).length) store.patch(picked, { source: 'load' });
+    // The rest of the document is other modules' business; publish it once so
+    // sites/workspaces panels can read it without a second round trip.
+    if (incoming && incoming.prefs) bus.emit('config:document', incoming);
   }
-  // Main may push changes made elsewhere (a preferences write, an import).
+
+  // Main pushes changes made elsewhere (a preferences write, an import).
   api.onConfigChanged((changed) => {
-    if (!changed || typeof changed !== 'object') return;
-    const picked = {};
-    for (const p of PERSISTED_PATHS) {
-      const v = getPath(changed, p);
-      if (v !== undefined) Object.assign(picked, setPath({}, p, v));
-    }
+    const next = prefsOf(changed);
+    if (!next) return;
+    const picked = pickOwned(next);
     if (Object.keys(picked).length) store.patch(picked, { source: 'external' });
+    bus.emit('config:document', changed);
   });
+
   bus.emit('config:loaded', store.state);
   return store.state;
 }

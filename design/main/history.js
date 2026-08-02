@@ -100,6 +100,17 @@ class History extends EventEmitter {
     return this._ready;
   }
 
+  /**
+   * Resolve once every write queued so far has finished.
+   *
+   * config.js records revisions fire-and-forget (a history write must never
+   * delay the user's save), which means a read issued immediately afterwards
+   * could miss the revision that was just written. Anything that reads the log
+   * waits on this first, so the panel never shows a history that is one event
+   * behind what the user just did.
+   */
+  settled() { return this._queue; }
+
   /** Serialize every mutating operation; isomorphic-git shares one index file. */
   _serial(fn) {
     const run = this._queue.then(fn, fn);

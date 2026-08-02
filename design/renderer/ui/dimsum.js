@@ -18,7 +18,7 @@
 
 import { h, layer, uid, announce } from '../dom.js';
 import { t, tPair, getLanguage } from '../i18n.js';
-import { store, persistCurrent, api, LAUNCH_ID, bus } from '../state.js';
+import { store, persistCurrent, api, hasBridge, LAUNCH_ID, bus } from '../state.js';
 import { DISHES } from '../../winscp-data.js';
 
 export const CHANCE = 0.10;
@@ -115,6 +115,7 @@ export function showDish(dish) {
   const seen = (store.get('dimSum.seen') || []).concat(dish.id).slice(-20);
   store.set('dimSum', { ...(store.get('dimSum') || {}), seen, lastLaunchId: LAUNCH_ID });
   persistCurrent('dimSum');
+  api.dimSumSeen(dish.id);
   bus.emit('dimsum:shown', { dish });
 
   return { dismiss, element: card, dish };
@@ -123,7 +124,13 @@ export function showDish(dish) {
 /**
  * The automatic path. Call once, after the shell is interactive.
  *
- * opts.firstRun   skip when true (also checked against main)
+ * WHO ROLLS THE DICE. When the preload bridge is present, the MAIN process
+ * owns the draw: it decides once per launch and pushes `event:dimsum`. The
+ * renderer only listens, so the renderer cannot re-roll and the chance stays
+ * exactly one in ten rather than compounding. Without a bridge (a plain
+ * browser), this module does the draw itself so the behaviour is the same.
+ *
+ * opts.firstRun   skip when true (main checks this too)
  * opts.errorPath  skip when the launch is recovering from an error
  * opts.busy       skip when the user is mid-task
  */
@@ -133,12 +140,27 @@ export async function maybeShowDimSum(opts = {}) {
 
   migrateAwayFromOptOut();
 
-  if (opts.errorPath) return null;
-  if (opts.busy) return null;
-  if (opts.firstRun) return null;
+  if (opts.errorPath || opts.busy || opts.firstRun) return null;
+
+  if (hasBridge()) {
+    // Main is authoritative. Listen once; if it never fires, this launch
+    // simply lost the draw, which is the correct outcome nine times in ten.
+    let shown = false;
+    try {
+      window.api.on('event:dimsum', (dish) => {
+        if (shown || !dish) return;
+        shown = true;
+        showDish({ ...dish, img: dish.dataUri || dish.img });
+      });
+    } catch (err) {
+      console.warn('[dimsum] the event channel is unavailable:', err?.message || err);
+    }
+    return null;
+  }
+
   try { if (await api.isFirstRun()) return null; } catch { /* not fatal */ }
 
-  // A fresh draw, every launch. Not a counter, not a schedule.
+  // A fresh draw, this launch. Not a counter, not a schedule.
   if (Math.random() >= CHANCE) {
     bus.emit('dimsum:skipped', { reason: 'draw' });
     return null;

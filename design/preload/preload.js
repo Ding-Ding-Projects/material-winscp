@@ -108,6 +108,7 @@ const api = {
     cancelCustomCommand: (id) => call('app:cancelCustomCommand', id),
 
     maskMatches: (mask, name, options) => call('app:maskMatches', mask, name, options),
+    maskValidate: (mask) => call('app:maskValidate', mask),
   },
 
   // ----------------------------------------------------------- config:*
@@ -205,7 +206,9 @@ const api = {
     calculateSize: (sessionId, dirs, correlationId) => call('fs:calculateSize', sessionId, dirs, correlationId),
     checksum: (sessionId, path, algorithm) => call('fs:checksum', sessionId, path, algorithm),
     spaceInfo: (sessionId, path) => call('fs:spaceInfo', sessionId, path),
+    /** Streams hits on `event:progress` with the returned correlation id. */
     find: (request) => call('fs:find', request),
+    findCancel: (correlationId) => call('fs:findCancel', correlationId),
 
     localList: (path, options) => call('fs:localList', path, options),
     localStat: (path) => call('fs:localStat', path),
@@ -217,22 +220,29 @@ const api = {
 
   // ------------------------------------------------------------ queue:*
   queue: {
+    /** direction: 'upload' | 'download' | 'remote-copy' */
     add: (request) => call('queue:add', request),
     list: () => call('queue:list'),
+    item: (id) => call('queue:item', id),
+    /** Omit the id to pause or resume the whole queue. */
     pause: (id) => call('queue:pause', id),
     resume: (id) => call('queue:resume', id),
     cancel: (id) => call('queue:cancel', id),
+    /** delta is -1 (up) or +1 (down). */
     move: (id, delta) => call('queue:move', id, delta),
-    clear: (which) => call('queue:clear', which),
+    clear: () => call('queue:clear'),
+    setEnabled: (on) => call('queue:setEnabled', on),
     setLimit: (n) => call('queue:setLimit', n),
     setSpeed: (id, bytesPerSecond) => call('queue:setSpeed', id, bytesPerSecond),
-    retry: (id) => call('queue:retry', id),
-    answer: (id, answer) => call('queue:answer', id, answer),
+    answerQuery: (id, answer, options) => call('queue:answerQuery', id, answer, options),
+    answerPrompt: (id, value) => call('queue:answerPrompt', id, value),
   },
 
   // ------------------------------------------------------------- sync:*
   sync: {
+    /** Resolves to { token, items, counts }; pass the token back to apply(). */
     compare: (request) => call('sync:compare', request),
+    /** { token, checked: boolean[], onlyChecked, performDeletions, copyParam } */
     apply: (request) => call('sync:apply', request),
     keepUpToDate: (request) => call('sync:keepUpToDate', request),
     stop: (id) => call('sync:stop', id),

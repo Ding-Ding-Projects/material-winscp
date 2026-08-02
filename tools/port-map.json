@@ -119,6 +119,30 @@
       "targets": ["design/main/queue.js"],
       "note": "Byte/file counters, throughput and ETA reporting."
     },
+    "forms/FileFind": {
+      "status": "partial",
+      "progress": 0.4,
+      "targets": ["design/main/find.js"],
+      "note": "Streaming recursive search with mask + content grep. 17 tests. The dialog itself is not built yet."
+    },
+    "windows/SynchronizeController": {
+      "status": "partial",
+      "progress": 0.5,
+      "targets": ["design/main/sync.js"],
+      "note": "Comparison checklist across all direction/mode/criteria combinations, DST handling, keep-up-to-date watching."
+    },
+    "core/Terminal": {
+      "status": "partial",
+      "progress": 0.15,
+      "targets": ["design/main/session.js", "design/main/sync.js"],
+      "note": "Session lifecycle and the synchronization engine. Terminal is 7,000+ lines; most of it is still ahead."
+    },
+    "windows/TerminalManager": {
+      "status": "partial",
+      "progress": 0.35,
+      "targets": ["design/main/session.js"],
+      "note": "Multiple sessions, reconnect policy, verification callbacks."
+    },
     "windows/EditorManager": {
       "status": "partial",
       "progress": 0.4,
