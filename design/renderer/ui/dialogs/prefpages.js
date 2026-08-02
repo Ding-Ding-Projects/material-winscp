@@ -1340,7 +1340,6 @@ export function pageById(id, pages = PAGES) { return pages.find((p) => p.id === 
  * behaviour, delete the entry.
  */
 export const PENDING_KEYS = new Set([
-  'copyParam.excludeEmptyDirectories',
   'copyParam.saveTransferOptions',
   'dDAllowMove',
   'dDAllowMoveInit',
@@ -1348,7 +1347,6 @@ export const PENDING_KEYS = new Set([
   'editor.disableSmoothScroll',
   'editor.fontCharset',
   'editor.fontName',
-  'editor.maxEditors',
   'editor.sDIShellEditor',
   'editor.warnOnEncodingFallback',
   'integration.autoOpenInPutty',
@@ -1363,7 +1361,6 @@ export const PENDING_KEYS = new Set([
   'tabs.truncateTitles',
   'timeoutOnStartup',
   'updates.authenticationEmail',
-  'updates.showOnStartup',
   'versionHistory.snapshotSettings',
   'versionHistory.snapshotSites',
   'window.largeToolbarIcons',

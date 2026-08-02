@@ -667,7 +667,15 @@ test('every option either has a consumer or says on its own row that it has none
     // Either the whole dotted path appears, or the leaf appears as a property
     // name / string key somewhere — which is how a consumer reads it after
     // destructuring a prefs object.
-    const re = new RegExp(`[^A-Za-z0-9_.]${escape(leaf)}[^A-Za-z0-9_]`);
+    //
+    // The leading class must NOT exclude `.`, however tempting it looks. A
+    // consumer almost never writes the dotted path: it holds the sub-object and
+    // reads `cp.excludeEmptyDirectories`, `p.showOnStartup`,
+    // `this.prefs().maxEditors`. Excluding a preceding dot made every one of
+    // those invisible, so the scan called three honoured options orphans and the
+    // dialog told users nothing acted on them — the guard producing exactly the
+    // lie it exists to catch, in reverse.
+    const re = new RegExp(`[^A-Za-z0-9_]${escape(leaf)}[^A-Za-z0-9_]`);
     if (!blobs.some((s) => s.includes(key) || re.test(s))) orphans.push(key);
   }
 

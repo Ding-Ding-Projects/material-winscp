@@ -2250,3 +2250,55 @@ test('copyid refuses anything that is not a public key', async () => {
   assert.ok(a.execCalls[0].command.includes('authorized_keys'));
   assert.ok(a.execCalls[0].opts.stdin.startsWith('ssh-ed25519 '));
 });
+
+// ---------------------------------------------------------------------------
+// the same timer rule, in the module that actually ships
+//
+// design/main/console.js had an unref'd prompt timer, and fixing it there left
+// the identical shape one file over — in consolerunner.js, which IS the process
+// `winscp.com` runs (console.js:1668 spawns `runConsole` from here). So the
+// version a user meets still exited at code 0, silently, with a timed prompt
+// unanswered.
+//
+// Worse than its sibling: that one only misbehaved on the Node the CI pins,
+// while this reproduced on every runtime tested, because StdConsole.input's
+// timer is the last ref'd handle rather than merely a fragile one.
+//
+// Run in a bare `node -e` child for the same reason the console tests are: the
+// test runner's own handles would hold the loop open and hide it.
+// ---------------------------------------------------------------------------
+
+test('a timed prompt in the shipped console host outlives a drained event loop', () => {
+  const { spawnSync } = require('child_process');
+  const modulePath = require.resolve('../design/main/consolerunner');
+  const source = `
+    const fs = require('fs');
+    const { PassThrough } = require('stream');
+    const CR = require(${JSON.stringify(modulePath)});
+    // A stdin that never delivers a line and never ends: the timeout timer is
+    // then the only thing that can settle the promise.
+    const c = new CR.StdConsole({ stdin: new PassThrough() });
+    let settled = false;
+    c.input(true, 25).then((v) => { settled = true; fs.writeSync(1, 'input=' + String(v)); });
+    process.on('exit', () => { if (!settled) fs.writeSync(1, 'EXITED-UNANSWERED'); });
+  `;
+  const child = spawnSync(process.execPath, ['-e', source], { encoding: 'utf8' });
+  assert.strictEqual(child.status, 0, `child failed: ${child.stderr}`);
+  assert.strictEqual(child.stdout, 'input=null',
+    'an unref\'d timer here lets winscp.com exit code 0 with the prompt unanswered');
+});
+
+test('keepuptodate does not fall out of its wait loop when the watcher is idle', () => {
+  // The 250 ms tick is the only thing on the loop between filesystem events,
+  // so unref'ing it ended the command whenever nothing happened to be changing
+  // — which is the state it exists to sit in.
+  const src = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'design', 'main', 'consolerunner.js'), 'utf8');
+  // Comments are stripped first: this file now explains at both former sites
+  // why the timer is deliberately ref'd, and a guard that trips on its own
+  // rationale is the CRLF bug all over again.
+  const code = src.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(!/\.unref\s*\(/.test(code),
+    'no timer in the shipped console host may be unref\'d — each one is the only '
+    + 'thing that can end the wait it belongs to');
+});

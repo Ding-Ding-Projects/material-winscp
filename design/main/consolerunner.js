@@ -168,12 +168,18 @@ class StdConsole extends ConsoleBase {
       const settle = (v) => { if (timer) clearTimeout(timer); resolve(v); };
       this._waiters.push(settle);
       if (timeoutMs > 0) {
+        // NOT unref'd, for the same reason console.js's prompt timer is not:
+        // this timer and an incoming line are the only two things that can
+        // settle this promise. Unref'd, it does not hold the process open, so
+        // when stdin is quiet the loop has nothing left to run and node exits
+        // — code 0, no output, mid-prompt — instead of taking the timeout
+        // branch and reporting it. `winscp.com` is this module, so that exit
+        // is the shipped script host giving up silently on a timed prompt.
         timer = setTimeout(() => {
           const i = this._waiters.indexOf(settle);
           if (i >= 0) this._waiters.splice(i, 1);
           resolve(null);
         }, timeoutMs);
-        if (typeof timer.unref === 'function') timer.unref();
       }
     });
   }
@@ -695,7 +701,11 @@ class ConsoleRunner {
 
     try {
       while (!this.isAborted(false)) {
-        await new Promise((resolve) => { const t = setTimeout(resolve, 250); t.unref(); });
+        // Same rule: this tick is the only thing keeping `keepuptodate` alive
+        // between filesystem events, so unref'ing it lets the command return
+        // the moment the watcher happens to be idle — which is most of the
+        // time, and is precisely when it is supposed to be waiting.
+        await new Promise((resolve) => { setTimeout(resolve, 250); });
       }
     } finally {
       syncModule.stopWatch(watcher);
