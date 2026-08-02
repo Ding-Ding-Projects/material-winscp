@@ -31,6 +31,22 @@ const { Options } = require('../design/main/script');
 // helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Let real time pass between two steps of a test.
+ *
+ * Deliberately **not** `unref()`ed. A test that awaits an unref'd timer is
+ * awaiting the one thing that cannot keep the process alive, so when the timer
+ * is the only work left the loop drains and the awaited promise is simply
+ * abandoned. Node 22's runner reports that honestly — `cancelledByParent:
+ * Promise resolution is still pending but the event loop has already resolved`
+ * — and cancels every remaining test in the file. Node 26 happens to keep a
+ * ref'd handle alive for the run and papers over it, which is how a whole file
+ * can look green on one major and lose half its tests on the one CI pins.
+ */
+function sleep(ms) {
+  return new Promise((resolve) => { setTimeout(resolve, ms); });
+}
+
 /** A write sink that records exactly the bytes it was given. */
 class FakeStream {
   constructor(isTTY = false) {
@@ -621,12 +637,88 @@ test('typing resets the idle timer instead of cutting a slow answer short', asyn
   // Each keystroke arrives inside the window, so the total time comfortably
   // exceeds the timeout without it ever firing.
   for (const ch of 'slow') {
-    await new Promise((r) => { const t = setTimeout(r, 30); t.unref(); });
+    await sleep(30);
     keys.push(decodeKeys(ch)[0]);
   }
-  await new Promise((r) => { const t = setTimeout(r, 30); t.unref(); });
+  await sleep(30);
   keys.push(decodeKeys('\r')[0]);
   assert.strictEqual(await pending, 'slow');
+});
+
+// ---------------------------------------------------------------------------
+// the timers a prompt is waiting on must keep the process alive
+//
+// Every one of these three waits is the *only* thing that can answer the
+// front-end, so each has to hold the event loop open until it fires. An
+// `unref()` on any of them turns "wait, then take the timeout answer" into
+// "exit while nobody is looking": Node ends the process the moment the loop has
+// nothing ref'd left, the awaited promise is abandoned, and `winscp.com`
+// vanishes mid-prompt with a success code and no message.
+//
+// They run in a child process on purpose. Inside `node --test` the runner's own
+// handles can hold the loop open by accident, which is exactly how this shipped
+// — the file was green on Node 26 and cancelled 61 tests on the Node 22 that CI
+// pins. A bare child has nothing else on its loop, so it answers the real
+// question: would the shipped binary still be alive to take this branch?
+// ---------------------------------------------------------------------------
+
+/**
+ * Run `body` in a plain `node -e` child with the console module already
+ * required as `C`, and return what it wrote to fd 1. `fs.writeSync` rather than
+ * `process.stdout.write` because a pipe write queued at exit can be dropped,
+ * and an empty result is the thing being asserted on.
+ */
+function runDetached(body) {
+  const { spawnSync } = require('child_process');
+  const modulePath = require.resolve('../design/main/console');
+  const source = `const fs = require('fs');\nconst C = require(${JSON.stringify(modulePath)});\n${body}`;
+  const child = spawnSync(process.execPath, ['-e', source], { encoding: 'utf8' });
+  assert.strictEqual(child.status, 0, `child failed: ${child.stderr}`);
+  return child.stdout;
+}
+
+test('an idle prompt outlives the drained event loop and still times out', () => {
+  // No key will ever arrive, so readKey's own timer is all that is left.
+  const out = runDetached(`
+    const keys = new C.KeySource([]);
+    keys.readKey(25).then((k) => fs.writeSync(1, 'readKey=' + String(k)));
+  `);
+  assert.strictEqual(out, 'readKey=null',
+    'an unref\'d idle timer lets the process exit with the prompt unanswered');
+});
+
+test('a timeouting prompt on redirected input waits out its timer and answers', () => {
+  // ProcessChoiceEvent's Sleep(Timer) branch: stdin is a file already read to
+  // the end, so the sleep is the last thing on the loop.
+  const out = runDetached(`
+    const sink = { write() { return true; }, flush() {} };
+    const host = new C.ConsoleHost({
+      stdout: sink, stderr: sink, stdin: '',
+      outputType: C.FILE_TYPE.PIPE, inputType: C.FILE_TYPE.PIPE,
+    });
+    const channel = new C.CommChannel({ instance: '_1_1' });
+    host.attach(channel);
+    const client = new C.ExternalConsole(channel, {});
+    client.init();
+    client.choice('YN', 3, 4, 0, 2, true, 40, 'Reconnect?')
+      .then((r) => fs.writeSync(1, 'choice=' + r));
+  `);
+  assert.strictEqual(out, 'choice=2',
+    'the timeout answer must be taken, not skipped by an early exit');
+});
+
+test('a front-end that never answers still reports the send timeout', () => {
+  // The hung-front-end case is precisely the one with nothing else pending.
+  const out = runDetached(`
+    const channel = new C.CommChannel({ instance: '_1_1' });
+    channel.setHandler(() => new Promise(() => {}));
+    const client = new C.ExternalConsole(channel, { sendTimeout: 25 });
+    client.input(true, 0).then(
+      () => fs.writeSync(1, 'answered'),
+      (e) => fs.writeSync(1, 'send=' + e.message));
+  `);
+  assert.strictEqual(out, `send=${MSG.CONSOLE_SEND_TIMEOUT}`,
+    'a hung front-end must be reported, never turned into a silent exit');
 });
 
 test('the client trims the line terminator the console hands back', () => {
@@ -747,7 +839,7 @@ test('an interrupt during an interactive prompt discards the partial line', asyn
   });
   const pending = client.input(true, 0);
   for (const k of decodeKeys('half')) keys.push(k);
-  await new Promise((r) => { const t = setTimeout(r, 10); t.unref(); });
+  await sleep(10);
   channel.cancel();
   keys.push(decodeKeys('\r')[0]);
   assert.strictEqual(await pending, null, 'a cancelled prompt answers nothing');
@@ -836,7 +928,7 @@ test('the whole of stdin is read across blocks', async () => {
 test('a stream read error fails the upload instead of truncating it', async () => {
   const failing = new Readable({ read() { this.destroy(new Error('device gone')); } });
   const source = new ByteSource(failing);
-  await new Promise((r) => { const t = setTimeout(r, 10); t.unref(); });
+  await sleep(10);
   const host = new ConsoleHost({
     stdout: new FakeStream(), outputType: FILE_TYPE.PIPE, inputType: FILE_TYPE.PIPE, source,
   });
@@ -864,7 +956,7 @@ test('the byte source waits for a stream instead of reporting a short read', asy
   const s = new ByteSource(stream);
   const pending = s.read(6);
   stream.push('abc');
-  await new Promise((r) => { const t = setTimeout(r, 5); t.unref(); });
+  await sleep(5);
   stream.push('def');
   assert.strictEqual((await pending).toString(), 'abcdef');
 });

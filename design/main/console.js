@@ -488,14 +488,30 @@ class KeySource {
     for (;;) {
       if (this._keys.length) return this._keys.shift();
       if (this._ended) return undefined;
+      let timer = null;
+      let waiter = null;
       const woken = await new Promise((resolve) => {
-        this._waiters.push(() => resolve(true));
-        if (timeoutMs > 0) {
-          const t = setTimeout(() => resolve(false), timeoutMs);
-          if (typeof t.unref === 'function') t.unref();
-        }
+        waiter = () => resolve(true);
+        this._waiters.push(waiter);
+        // The C++ Input() timer runs on its own thread, and a thread the
+        // process is waiting on keeps the process alive. So must this timer:
+        // it is the *only* other thing that can settle this promise, a
+        // keypress being the one alternative. An unref'd timer here lets the
+        // loop drain while the front-end still owes ProcessInputEvent an
+        // answer, and `winscp.com` exits silently mid-prompt instead of
+        // taking the timeout branch and reporting it.
+        if (timeoutMs > 0) timer = setTimeout(() => resolve(false), timeoutMs);
       });
-      if (!woken) return null;
+      // Whichever side won, release the other. The timer would otherwise hold
+      // the process open for the rest of a long prompt interval after the key
+      // that answered it, and the waiter would pile up once per slice on the
+      // 50 ms poll Choice runs while a prompt sits untouched.
+      if (timer !== null) clearTimeout(timer);
+      if (!woken) {
+        const stale = this._waiters.indexOf(waiter);
+        if (stale >= 0) this._waiters.splice(stale, 1);
+        return null;
+      }
     }
   }
 }
@@ -679,8 +695,14 @@ class CommChannel {
     if (timeoutMs > 0 && Number.isFinite(timeoutMs)) {
       let timer = null;
       const timeout = new Promise((_resolve, reject) => {
+        // WaitForSingleObject(RequestEvent, Timeout): the wait itself is what
+        // keeps the process alive until either the front-end answers or the
+        // timeout expires. A hung front-end is exactly the case where nothing
+        // else is on the loop, so an unref'd timer would turn "Timeout waiting
+        // for external console" into a silent exit — the one outcome that
+        // leaves the caller with no idea the command never completed. The
+        // `finally` below clears it the moment the answer arrives.
         timer = setTimeout(() => reject(new Error('__console_send_timeout__')), timeoutMs);
-        if (typeof timer.unref === 'function') timer.unref();
       });
       try {
         await Promise.race([work, timeout]);
@@ -730,10 +752,12 @@ class ConsoleHost {
       || new ByteSource(options.stdinStream || options.stdin || null);
     this.keys = options.keys || null;
 
-    this.sleep = options.sleep || ((ms) => new Promise((resolve) => {
-      const t = setTimeout(resolve, ms);
-      if (typeof t.unref === 'function') t.unref();
-    }));
+    // Sleep(Timer) in ProcessChoiceEvent. The redirected-input branch that
+    // uses it has *nothing* else pending — stdin is a file that has already
+    // been read to the end — so the timer must be a real one. Unref'd, a
+    // timeouting prompt on `winscp.com < script.txt` would end the process
+    // during the wait instead of waking up and taking the timeout answer.
+    this.sleep = options.sleep || ((ms) => new Promise((resolve) => { setTimeout(resolve, ms); }));
 
     this.channel = null;
     // LastFromBeginning: the progress line the front-end has been handed but
