@@ -159,6 +159,77 @@ function verifyExtractZip(pkgDir) {
     .catch((e) => console.error('  verification FAILED: ' + e.message));
 }
 
+/**
+ * Repair node_modules/electron/dist.
+ *
+ * The patch above arrives too late to help the install that created the mess.
+ * npm runs electron's postinstall DURING `npm install`, when extract-zip is
+ * still the broken upstream copy — so the binary is unpacked with the very bug
+ * this file exists to fix, and `npm install && node tools/fix-node26-deps.js`
+ * leaves a dist/ holding exactly one entry (LICENSES.chromium.html, whichever
+ * happens to be first in the zip) and no path.txt.
+ *
+ * Nothing complains. `require('electron')` throws "Electron failed to install
+ * correctly", which every e2e suite reports as its own failure rather than as a
+ * broken dependency, and the suite then HANGS instead of exiting — so the
+ * symptom a human meets is a test run that never finishes, three layers away
+ * from the cause.
+ *
+ * Re-running electron's own install.js now that extract-zip works is the whole
+ * repair. It re-reads the same cached zip, so there is no download.
+ */
+function repairElectronDist(check) {
+  const dirs = findPackage('electron');
+  if (!dirs.length) { console.log('  - not installed    electron'); return 0; }
+
+  let fixed = 0;
+  for (const dir of dirs) {
+    const installer = path.join(dir, 'install.js');
+    const pointer = path.join(dir, 'path.txt');
+    if (!fs.existsSync(installer)) continue;
+
+    // Believe path.txt only as far as the file it names. A pointer to a binary
+    // that is not there is exactly what a half-finished unpack leaves behind.
+    let ok = false;
+    try {
+      const bin = fs.readFileSync(pointer, 'utf8').trim();
+      ok = !!bin && fs.existsSync(path.join(dir, 'dist', bin));
+    } catch { ok = false; }
+
+    const rel = path.relative(ROOT, dir);
+    if (ok) { console.log(`  = already unpacked ${rel}/dist`); continue; }
+
+    if (check) {
+      console.log(`  ! needs unpacking  ${rel}/dist  (dist is empty or path.txt is missing)`);
+      fixed++;
+      continue;
+    }
+
+    // install.js short-circuits when it believes the version is already there,
+    // and a one-entry dist is enough to confuse that check. Clear it first.
+    fs.rmSync(path.join(dir, 'dist'), { recursive: true, force: true });
+    const res = cp.spawnSync(process.execPath, [installer],
+      { cwd: dir, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true });
+    if (res.error) { console.error(`  ! unpack FAILED    ${rel}: ${res.error.message}`); continue; }
+    if (res.status !== 0) {
+      console.error(`  ! unpack FAILED    ${rel}: install.js exited ${res.status}`);
+      if (res.stderr) console.error(`    ${res.stderr.trim().split('\n').slice(-3).join('\n    ')}`);
+      continue;
+    }
+
+    let bin = '';
+    try { bin = fs.readFileSync(pointer, 'utf8').trim(); } catch { /* reported below */ }
+    if (bin && fs.existsSync(path.join(dir, 'dist', bin))) {
+      const n = fs.readdirSync(path.join(dir, 'dist')).length;
+      console.log(`  + unpacked         ${rel}/dist  (${n} entries, ${bin})`);
+      fixed++;
+    } else {
+      console.error(`  ! unpack FAILED    ${rel}: install.js exited 0 but dist/ still has no binary`);
+    }
+  }
+  return fixed;
+}
+
 function main() {
   const check = process.argv.includes('--check');
   let patched = 0, already = 0, missing = 0, needed = 0;
@@ -194,11 +265,18 @@ function main() {
     }
   }
 
+  // Order matters: the patch above has to be on disk before this runs, because
+  // this re-unpacks electron THROUGH it. Doing it the other way round repeats
+  // the original bug and leaves the same one-entry dist behind.
+  const unpacked = repairElectronDist(check);
+
   if (check) {
     console.log(`\n${needed} need patching, ${already} already patched, ${missing} not installed.`);
-    process.exit(needed ? 1 : 0);
+    if (unpacked) console.log(`${unpacked} electron dist(s) need unpacking.`);
+    process.exit(needed || unpacked ? 1 : 0);
   }
   console.log(`\n${patched} patched, ${already} already patched, ${missing} not installed.`);
+  if (unpacked) console.log(`${unpacked} electron dist(s) unpacked.`);
 }
 
 if (require.main === module) main();

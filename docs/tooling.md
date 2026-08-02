@@ -117,12 +117,36 @@ Two packaging dependencies are broken on Node 26, and one of them lies about it:
 | `cross-zip` | Calls `fs.rmdir(path, { recursive: true })`, removed in Node 26. At least it throws. |
 
 The first is why `npm run make` sat at *Finalizing package* and then reported
-success with no `out/` directory, and why Electron's own postinstall had to be
-run by hand. **A build that claims success and produces no installer is worse
-than one that fails.**
+success with no `out/` directory. **A build that claims success and produces no
+installer is worse than one that fails.**
 
 This patches `node_modules`, which is not committed; CI runs on a Node where
 both behave. It refuses to silently "succeed" if upstream source has moved.
+
+### It also re-unpacks Electron, because the patch arrives too late to help
+
+npm runs Electron's postinstall **during** `npm install`, when `extract-zip` is
+still the broken upstream copy. So `npm install` unpacks the Electron binary
+with the very bug this tool exists to fix, and patching afterwards does nothing
+for the damage already done: `node_modules/electron/dist` is left holding a
+single file (`LICENSES.chromium.html`, whichever entry the zip happened to list
+first) and no `path.txt`.
+
+Nothing reports this. What you actually see is three layers away from the cause:
+
+| Layer | What it looks like |
+|---|---|
+| `require('electron')` | `Electron failed to install correctly` |
+| An e2e suite | Every test fails, each blaming its own assertion |
+| `npm test` | **Hangs.** The runner never exits, so there is no summary at all |
+
+So the tool now checks `path.txt` against the binary it names, and re-runs
+Electron's own `install.js` when that pointer leads nowhere. It re-reads the
+same cached zip, so there is no download. `--check` reports the state and exits
+non-zero when an unpack is needed.
+
+> Run it **after** `npm install`, never before — it repairs what that install
+> broke.
 
 ## Progress reporting
 
