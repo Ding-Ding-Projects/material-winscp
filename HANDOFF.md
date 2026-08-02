@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `74a92c6`** — Land the remaining workflow output; ledger at 53.2%, tests currently unverified
+**At commit `6050d27`** — Stop ssh2 handing us a key its own parser rejects, roughly once in 350
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **55.3%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 67.9% — includes embedded hex resources, **do not quote this one** |
-| Tests | not run in this regeneration |
-| Hand-written code | 188,928 lines across 275 files |
-| Commits | 20 on `main` |
-| Working tree | **18 uncommitted change(s)** |
-| Remote | `origin/main` at `74a92c6` — in sync |
+| Tests | 2903 run, **2902 pass, 0 fail**, 1 skipped |
+| Hand-written code | 191,829 lines across 275 files |
+| Commits | 37 on `main` |
+| Working tree | **4 uncommitted change(s)** |
+| Remote | `origin/main` at `6050d27` — in sync |
 
 ### Coverage by area
 
@@ -33,13 +33,8 @@
 
 ## Verification evidence
 
-**Installer** — built and verified on disk:
-
-| Artifact | Size (MB) | Built |
-|---|---:|---|
-| `RELEASES` | 0.00 | 2026-08-02 |
-| `WinSCP Material 0.1.0 Setup.exe` | 125.57 | 2026-08-02 |
-| `winscp_material-0.1.0-full.nupkg` | 124.21 | 2026-08-02 |
+**Installer** — not present in `out/make`. Build it with `npm run make`.
+If it stalls at "Finalizing package", run `node tools/fix-node26-deps.js` first.
 
 Reproduce every number in this file:
 
@@ -98,8 +93,9 @@ bite a successor who assumes otherwise:
 
 ## Open issues
 
-22 open on the tracker.
+23 open on the tracker.
 
+- [#24](https://github.com/Ding-Ding-Projects/material-winscp/issues/24) 🐛 excludeEmptyDirectories prunes every directory on a Windows download, losing the whole transfer · Windows 下載成個死
 - [#23](https://github.com/Ding-Ding-Projects/material-winscp/issues/23) 🗺️ Roadmap: truthful empty states and auditable discards · 真實空白狀態同可追蹤嘅捨棄
 - [#22](https://github.com/Ding-Ding-Projects/material-winscp/issues/22) 🚫 Policy: no promotional nags — do not port WinSCP's donation prompts · 唔好扭錢
 - [#21](https://github.com/Ding-Ding-Projects/material-winscp/issues/21) 🗺️ Roadmap: changelog entries link to their commits · 更新日誌要連到 commit
@@ -127,19 +123,48 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
-| `74a92c6` | 2026-08-02 | Land the remaining workflow output; ledger at 53.2%, tests currently unverified |
-| `aae58d9` | 2026-08-02 | Generate HANDOFF and ROADMAP, and unstick a test file that hung the suite |
-| `4b9022f` | 2026-08-02 | Prove the installer end to end, and generate the changelog from real commits |
-| `7756e63` | 2026-08-02 | Reconcile 24,361 lines the ledger was counting as never written |
-| `a5d3386` | 2026-08-02 | The panels are real: 1,829 tests, 301 actions wired, 43.5% of the logic ported |
-| `216ce9d` | 2026-08-02 | Stop quoting a coverage number that 108,113 lines of hex were inflating |
-| `e7dd988` | 2026-08-02 | Update silently like Chrome, and fix two reasons it never could have |
-| `5a46937` | 2026-08-02 | Delete the Donate action outright, and make the no-nag rule enforceable |
+| `6050d27` | 2026-08-02 | Stop ssh2 handing us a key its own parser rejects, roughly once in 350 |
+| `90759dc` | 2026-08-02 | Stop winscp.com exiting mid-prompt, and stop the preferences guard lying in reverse |
+| `3b3b14c` | 2026-08-02 | Prune empty directories with the target adapter's separator, and teach the engine the rule at all |
+| `8e75cb2` | 2026-08-02 | Impose the FTP reconnect budget tfUseFileTransferAny was always meant to set |
+| `bc6fbed` | 2026-08-02 | Stop the queue's resume from deleting the symlink it was told to upload over |
+| `1c7bbce` | 2026-08-02 | Give CI's checkouts full history so changelog shas can resolve |
+| `334c993` | 2026-08-02 | Stop the resource extractor exiting the test process that called it |
+| `168fac5` | 2026-08-02 | Keep the prompt timers ref'd, so a waiting prompt cannot quietly exit instead |
 
 ## Notes from whoever worked on this last
 
 <!-- hand-written: preserved across regeneration -->
 
-_Nothing recorded yet._
+**Run `node tools/fix-node26-deps.js` after `npm install`, always.** npm runs
+Electron's postinstall *during* the install, while `extract-zip` is still the
+broken Node 26 copy — so the binary is unpacked with the very bug that tool
+exists to fix, and patching afterwards cannot undo it. `dist/` is left holding
+one file. Nothing reports this: `require('electron')` throws, every e2e test
+fails blaming its own assertion, and `npm test` **hangs with no summary at all**.
+The tool now repairs it; the ordering is still the thing to remember.
+
+**The suite is green on Node 26 and CI pins Node 22 — check both.** A local pass
+proves nothing about CI on its own. Three defects this session existed only on
+one runtime or the other, in both directions. There is no version manager here;
+a portable Node 22 was unpacked to run the CI runtime locally.
+
+**`npm test` and `tools/handoff.js` now carry `--test-timeout`.** `node --test`
+has no default, so one hung test held a CI job for over an hour and blocked every
+later push behind the `concurrency` group. It is also why this file used to say
+"tests — not run in this regeneration": the only way to make the generator finish
+was `--skip-tests`.
+
+**Two open items belong to the maintainer, not to an agent.** A tag loop produced
+200+ releases — `tags-ignore` is on `main`, but Actions runs the workflow from the
+*triggering ref*, and the old tags point at commits whose `ci.yml` never had it,
+so those commits can never be fixed. The in-flight runs were cancelled; the
+releases and tags were deliberately left alone. Deleting public releases is
+irreversible and every one of those tags is a live trigger.
+
+**When a full run goes red but the file passes alone, suspect the fixture before
+the code.** `ssh2`'s own parser rejects about 3 in 1000 of the keys its own
+generator produces. Every affected run looked like a regression in whatever had
+just changed. Key generation now validates and retries.
 
 <!-- /hand-written -->

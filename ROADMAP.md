@@ -54,6 +54,7 @@ not a reason to narrow scope.
 
 ## Tracked as issues
 
+- [#24](https://github.com/Ding-Ding-Projects/material-winscp/issues/24) 🐛 excludeEmptyDirectories prunes every directory on a Windows download, losing the whole transfer · Windows 下載成個死
 - [#23](https://github.com/Ding-Ding-Projects/material-winscp/issues/23) 🗺️ Roadmap: truthful empty states and auditable discards · 真實空白狀態同可追蹤嘅捨棄
 - [#22](https://github.com/Ding-Ding-Projects/material-winscp/issues/22) 🚫 Policy: no promotional nags — do not port WinSCP's donation prompts · 唔好扭錢
 - [#21](https://github.com/Ding-Ding-Projects/material-winscp/issues/21) 🗺️ Roadmap: changelog entries link to their commits · 更新日誌要連到 commit
@@ -81,6 +82,30 @@ not a reason to narrow scope.
 
 <!-- hand-written: preserved across regeneration -->
 
-_Nothing recorded yet._
+**Reachability is the bar, not line count.** The ledger counts a unit as ported
+when its behaviour is reachable from the product, and this project has repeatedly
+written code that was tested and unreachable. The foreground transfer engine was
+the clearest case: channels existed, the byte mover was supplied, tests passed —
+and no renderer code called any of it, so all sixteen transfer actions went to the
+queue instead. It read as done from every angle except a user's.
+
+The corollary for anyone picking up a gap here: trace renderer → preload → ipc →
+main before writing anything, and again before calling it finished. A unit test
+that passes while a `registerActionDialog` override quietly discards the change is
+the failure mode to expect, because it has already happened.
+
+**A setting that is stored, mapped and rendered is not a setting that works.**
+`OverwrittenToRecycleBin` was fully wired for persistence and display and honoured
+by nothing. `excludeEmptyDirectories` was read in one place that only asked "is any
+filtering active at all?". Eight preferences are still in that state — stored,
+shown, and read by no consumer — and unlike the two above, no row warns the user.
+Closing those is worth more than the percentage suggests, because each one is the
+app telling the user something untrue.
+
+**Prefer the ledger's own correction to a comfortable number.** Several entries in
+`docs/protocol-gaps.md` were not merely stale but *backwards* — one stated a
+consequence in the opposite direction to what the C++ and the code both do. That
+table is the only record of what is actually ported, so a wrong row is worse than
+a missing one.
 
 <!-- /hand-written -->
