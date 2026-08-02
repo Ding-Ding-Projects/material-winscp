@@ -1,0 +1,103 @@
+# SFTP
+
+## What it does
+
+SFTP is the default protocol and the most complete adapter. It runs over an SSH
+transport (`ssh2`), speaks SFTP protocol versions 3 through 6, and supports
+every capability the contract defines except arbitrary shell execution — for
+that, see [SCP](scp.md).
+
+Concretely it provides: directory listing with full POSIX metadata, streaming
+upload and download with resume, `chmod`, `utime`, symbolic and hard links,
+server-side copy where the server implements it, remote checksums, a recycle
+bin, and the parallel request pipelining that makes SFTP fast over long links.
+
+## Configuration
+
+All of these live in `SESSION_DEFAULTS` (`design/main/defaults.js`) and surface
+under **Site → Advanced → SSH** and **→ SFTP**.
+
+### SSH transport
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `sshProt` | `2` | SSH protocol version. |
+| `cipherList` | aes, chacha20, 3des, **WARN**, des, blowfish, arcfour | Preference order. Anything after `WARN` prompts before use. |
+| `kexList` | ecdh, dh-gex-sha1, dh-group18/17/16/15-sha512, dh-group14-sha1, rsa, **WARN**, dh-group1-sha1 | Key-exchange preference order. |
+| `hostKeyList` | ed448, ed25519, ecdsa, rsa, dsa, **WARN** | Host-key algorithm preference. |
+| `compression` | `false` | zlib on the transport. Helps on slow links, costs CPU. |
+| `rekeyTime` / `rekeyData` | `60` min / `1G` | Rekey cadence. |
+| `tryAgent` | `true` | Use Pageant/an SSH agent if one is running. |
+| `agentFwd` | `false` | Forward the agent to the server. Off by default — see below. |
+| `authKI`, `authKIPassword` | `true` | Keyboard-interactive authentication. |
+| `authGSSAPI`, `authGSSAPIKEX`, `gssapiFwdTGT` | `false` | Kerberos/GSSAPI. |
+| `publicKeyFile`, `passphrase` | `''` | Private key and its passphrase. |
+| `sshNoUserAuth` | `false` | Skip the authentication phase entirely (rare servers). |
+
+### SFTP layer
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `sftpMaxVersion` | `6` | Highest protocol version to negotiate. Lower it for servers that misreport. |
+| `sftpMinPacketSize` / `sftpMaxPacketSize` | `0` (auto) | Override negotiated packet sizing. |
+| `sftpDownloadQueue` / `sftpUploadQueue` | `32` | Outstanding requests in flight. Raising this helps on high-latency links; lowering it helps on servers with small buffers. |
+| `sftpListingQueue` | `2` | Parallel listing requests. |
+| `sftpRealPath` | `auto` | Whether to canonicalize paths with `SSH_FXP_REALPATH`. |
+| `usePosixRename` | `false` | Use the `posix-rename@openssh.com` extension so rename can overwrite atomically. |
+| `sftpBugs.symlink` | `auto` | Work around servers that reverse `SSH_FXP_SYMLINK`'s arguments. |
+| `sftpBugs.signedTS` | `auto` | Work around servers sending signed timestamps. |
+| `sftpServer` | `''` | Run a non-default subsystem command instead of `sftp`. |
+
+`auto` for any bug workaround means: detect from the server's version banner and
+behaviour, and only then apply it.
+
+## Failure modes
+
+| Situation | What the user sees | Recoverable |
+| --- | --- | --- |
+| Host key does not match the cached one | A **blocking** dialog — this is a decision the user must make before continuing, so it is deliberately modal. It shows both fingerprints and refuses to default to "accept". | Yes, by re-verifying out of band |
+| Authentication fails | A persistent error toast naming the method that failed (password, key, keyboard-interactive) and, when the server said so, why. Passwords are never echoed. | Yes |
+| Key file needs a passphrase | A modal prompt. If the master password is set, an accepted passphrase can be saved encrypted. | Yes |
+| Server negotiates a version below `sftpMaxVersion` | Silent and normal; the capability set narrows accordingly and affected commands grey out. | n/a |
+| Server ignores `chmod` | The operation is reported as failed rather than assumed to have worked. `ignorePermErrors` in the transfer settings can downgrade it to a warning for bulk transfers. | Yes |
+| Transfer interrupted | The queue item records the byte offset and moves to `failed`. Resume restarts from that offset if `resumeSupport` permits. | Yes |
+| Rekey during a large transfer | Handled by the transport; the transfer pauses for a few hundred milliseconds. No user action. | n/a |
+| `sftpDownloadQueue` too high for the server | Stalls or resets. Lower it to 8 or 16. The error toast suggests this explicitly. | Yes |
+
+## Security considerations
+
+- **Cipher and KEX ordering matters.** Everything listed *after* the `WARN`
+  marker is considered weak. Selecting one produces an explicit warning naming
+  the algorithm; the marker is not decorative and must not be reordered casually.
+- **Agent forwarding is off by default**, and correctly so: a forwarded agent
+  lets anyone with root on the remote host use your keys for as long as you are
+  connected. The option's UI states this.
+- **Host key verification is mandatory** and never silently skipped. Trust
+  decisions are stored in `hostkeys.json` (see `paths.js`) with the algorithm and
+  fingerprint, so a changed key is detected rather than absorbed.
+- **Passphrases and passwords are held in memory only** for the life of the
+  session unless the user asks to save them, in which case `crypto.js` wraps
+  them with the OS keychain or a master-password-derived key. If neither is
+  available the secret is **not stored** rather than stored unprotected.
+- **Debug logging can capture sensitive material.** `logging.logSensitive` is
+  off by default; turning it on shows a warning that the resulting log is as
+  sensitive as the credential itself.
+
+## Verification
+
+- Path arithmetic, mask matching and listing normalization are unit-tested.
+- Bug-workaround detection is tested against recorded server banners.
+- Live-server behaviour (resume, rekey, permission handling) is exercised
+  manually against OpenSSH; there is no in-process SFTP server in the test suite
+  today, and this article does not claim one.
+
+To check a real connection by hand: connect, run **Commands → Server/protocol
+information**, and confirm the negotiated SFTP version and extension list match
+what the greyed-out state of the menus implies.
+
+## Suggested articles
+
+- [The adapter contract](adapter-contract.md) — where `caps` comes from.
+- [SCP](scp.md) — the same SSH transport, a very different file layer.
+- [Host key verification](../security-and-credentials/host-keys.md) — the trust store behind the modal.
+- [Transfers and the queue](../transfers-and-queue/) — resume, parallelism and speed limits.
