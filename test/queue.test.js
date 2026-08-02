@@ -709,9 +709,12 @@ test('automatic transfer mode consults the asciiFileMask', async () => {
   local.put('/l/a.txt', Buffer.from('x\r\ny\r\n'));      // in the default ascii mask
   local.put('/l/a.jpg', Buffer.from('x\r\ny\r\n'));      // not
 
+  // TCopyParamType::Default is tmBinary, so automatic mode is asked for here
+  // rather than assumed — which is also what a user does when they pick it.
   const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
-  q.add({ side: 'upload', source: '/l/a.txt', target: '/r/a.txt', sourceAdapter: local, targetAdapter: remote });
-  q.add({ side: 'upload', source: '/l/a.jpg', target: '/r/a.jpg', sourceAdapter: local, targetAdapter: remote });
+  const auto = { transferMode: 'automatic' };
+  q.add({ side: 'upload', source: '/l/a.txt', target: '/r/a.txt', sourceAdapter: local, targetAdapter: remote, copyParam: auto });
+  q.add({ side: 'upload', source: '/l/a.jpg', target: '/r/a.jpg', sourceAdapter: local, targetAdapter: remote, copyParam: auto });
   await q.idle();
 
   assert.strictEqual(remote.read('/r/a.txt').toString(), 'x\ny\n', 'text file converted');

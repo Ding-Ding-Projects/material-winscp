@@ -242,10 +242,15 @@ test.describe('a real SFTP server, driven through the real IPC surface', () => {
     const local = path.join(localDir, 'upload.txt');
     await fsp.writeFile(local, REMOTE_TEXT, 'utf8');
 
-    // `.txt` is in the default asciiFileMask, so this is a TEXT-mode transfer
-    // and line endings are translated on the way — WinSCP's own behaviour, and
-    // the reason the binary round trip below exists as a separate test.
-    const item = await transfer({ sessionId, direction: 'upload', files: [local], target: '/uploads' });
+    // `.txt` is in the default asciiFileMask, so in AUTOMATIC transfer mode
+    // this is a text-mode transfer and line endings are translated on the way —
+    // WinSCP's own behaviour, and the reason the binary round trip below exists
+    // as a separate test. Automatic is asked for explicitly because
+    // TCopyParamType::Default is tmBinary, exactly as WinSCP ships it.
+    const item = await transfer({
+      sessionId, direction: 'upload', files: [local], target: '/uploads',
+      copyParam: { transferMode: 'automatic' },
+    });
     assert.equal(item.progress.filesDone, 1);
 
     const landed = path.join(server.root, 'uploads', 'upload.txt');
@@ -297,7 +302,10 @@ test.describe('a real SFTP server, driven through the real IPC surface', () => {
     const target = path.join(localDir, 'down');
     await fsp.mkdir(target, { recursive: true });
 
-    await transfer({ sessionId, direction: 'download', files: ['/uploads/upload.txt'], target });
+    await transfer({
+      sessionId, direction: 'download', files: ['/uploads/upload.txt'], target,
+      copyParam: { transferMode: 'automatic' },
+    });
 
     const landed = path.join(target, 'upload.txt');
     assert.ok(fs.existsSync(landed), 'the download reported done but nothing arrived locally');

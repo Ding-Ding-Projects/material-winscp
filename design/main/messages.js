@@ -554,10 +554,21 @@ let dictionary = null;
 let dictionaryTried = false;
 
 /**
- * design/winscp-i18n.js is an ES module and this is CommonJS. Node resolves
- * that synchronously, but an older embedded Node may not, so a failure here is
- * survivable: the messages fall back to WinSCP's English rather than the
- * application losing the ability to speak at all.
+ * design/winscp-i18n.js is an ES module and this is CommonJS. Node 22.12
+ * resolves `require()` of ESM on its own, so this works in the test suite and
+ * in any tool run against the repository's own Node — but it does NOT work in
+ * the shipped application. Electron 33 embeds Node 20.18, and worse, the file
+ * carries a `.js` extension under a package.json with no `"type": "module"`,
+ * so Node classifies it as CommonJS and reports `Unexpected token 'export'`
+ * for both `require()` AND `import()`. The renderer is unaffected: the browser
+ * decides a module is a module from the `<script type="module">` graph, not
+ * from an extension.
+ *
+ * Failing here is survivable — messages fall back to WinSCP's own English —
+ * but it fails SILENTLY and identically to "the dictionary has no entry", so a
+ * shipped build renders every level the same while the tests see five. That is
+ * exactly the class of defect the tests exist to prevent, so `loadVoices()`
+ * below closes it rather than leaving the fallback to hide it.
  */
 function voices() {
   if (!dictionaryTried) {
@@ -570,6 +581,33 @@ function voices() {
       dictionary = null;
     }
   }
+  return dictionary;
+}
+
+/**
+ * The dictionary, loaded in a way that works on every Node this application
+ * runs on. Await it once at startup; `voices()` serves it synchronously after.
+ *
+ * The fallback imports the module's own source through a `data:` URL, which
+ * the ESM loader accepts on every supported version and which is classified as
+ * a module by the URL's MIME type rather than by a package.json two directories
+ * away. The dictionary is self-contained — it imports nothing — so evaluating
+ * it out of its directory changes nothing about what it produces.
+ */
+async function loadVoices() {
+  if (voices()) return dictionary;
+  try {
+    // eslint-disable-next-line global-require
+    const fs = require('fs');
+    // eslint-disable-next-line global-require
+    const path = require('path');
+    const source = fs.readFileSync(path.join(__dirname, '..', 'winscp-i18n.js'), 'utf8');
+    const mod = await import(`data:text/javascript;base64,${Buffer.from(source, 'utf8').toString('base64')}`);
+    dictionary = mod && mod.I18N ? mod.I18N : null;
+  } catch {
+    dictionary = null;
+  }
+  dictionaryTried = true;
   return dictionary;
 }
 
@@ -669,5 +707,5 @@ module.exports = {
   mainInstructions, mainInstructionsFirstParagraph, hasParagraphs,
   extractMainInstructions, removeMainInstructionsTag, unformatMessage,
   findInteractiveMsgStart, extractInteractiveMessage, removeInteractiveMsgTag,
-  voiced, voicedPair, isVoiced, registerVoices,
+  voiced, voicedPair, isVoiced, registerVoices, loadVoices,
 };

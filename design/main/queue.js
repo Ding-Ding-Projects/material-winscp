@@ -594,6 +594,11 @@ class TransferQueue extends EventEmitter {
     if (!STATES.includes(state)) throw new Error(`Unknown queue item state "${state}"`);
     if (item.state === state) return;
     item.state = state;
+    // A session transfer borrows the byte mover without ever being queued (see
+    // `moveBytes`). Announcing its state would add a row to the queue panel for
+    // an item `queue:list` does not contain, which the panel could then never
+    // pause, cancel or remove.
+    if (!this.items.includes(item)) return;
     this.emit('item-updated', this.view(item));
   }
 
@@ -892,9 +897,21 @@ class TransferQueue extends EventEmitter {
     let targetPath = entry.dstPath;
     let existing = await statOrNull(dst, targetPath);
 
+    // The transfer MODE is decided before the overwrite question, exactly as
+    // Terminal.cpp does it (SelectSourceTransferMode runs before
+    // FFileSystem->Source). The order is load-bearing rather than tidy: whether
+    // Append may be offered at all depends on whether this file is going over
+    // in text mode, because appending to a file whose line endings the far side
+    // is rewriting writes at an offset that means something different on each
+    // side. Deciding the mode afterwards meant the question was always asked as
+    // if the transfer were binary.
+    const text = useTextMode(cp, src.basename(entry.srcPath), {
+      isDir: false, size: entry.size, mtime: entry.mtime, path: entry.srcPath,
+    }, this._asciiMask(cp));
+
     let mode = 'overwrite';                       // overwrite | resume | append
     if (existing && existing.type !== 'dir') {
-      const decision = await this._decideOverwrite(item, entry, targetPath, existing);
+      const decision = await this._decideOverwrite(item, entry, targetPath, existing, text);
       if (decision.skip) { this._skip(item, entry, targetPath); return; }
       mode = decision.mode;
       if (decision.targetPath !== targetPath) {
@@ -903,9 +920,20 @@ class TransferQueue extends EventEmitter {
       }
     }
 
-    const text = useTextMode(cp, src.basename(entry.srcPath), {
-      isDir: false, size: entry.size, mtime: entry.mtime, path: entry.srcPath,
-    }, this._asciiMask(cp));
+    // A server-side copy never leaves the server. When both ends are the same
+    // adapter and it advertises copy-file/copy-data (SFTP's copy-file and
+    // copy-data extensions), duplicating a 40 GB file costs one request instead
+    // of 80 GB across the wire in both directions. It is only ever taken for a
+    // plain overwrite: append and resume are byte-offset operations the
+    // extension does not express.
+    if (item.side === 'remote-copy' && mode === 'overwrite' && !text
+        && src === dst && dst.caps && dst.caps.copyRemote && typeof dst.copyRemote === 'function') {
+      await dst.copyRemote(entry.srcPath, targetPath, { overwrite: !!existing });
+      item.progress.bytes = item._bytesDone + entry.size;
+      item.progress.filesDone += 1;
+      this._emitProgress(item, true);
+      return entry.size;
+    }
 
     const written = await this._copyBytes(item, entry, targetPath, mode, existing, text);
 
@@ -939,12 +967,15 @@ class TransferQueue extends EventEmitter {
    * vocabulary, and the fact that a cancelled query skips the file rather than
    * killing the item.
    */
-  async _decideOverwrite(item, entry, targetPath, existing) {
+  async _decideOverwrite(item, entry, targetPath, existing, text) {
     const dst = item.targetAdapter;
     const cp = item.copyParam;
     const engine = this._overwriteEngine(item);
     const progress = item._overwriteProgress;
-    progress.asciiTransfer = false;   // resume/append validity is a byte question
+    // SFTPConfirmOverwrite reads AsciiTransfer off the progress object to
+    // decide whether Append may be offered; claiming binary here offered Append
+    // for a text-mode transfer, which corrupts the tail of the target.
+    progress.asciiTransfer = !!text;
     progress.localSize = entry.size;
     progress.transferSize = entry.size;
     // The engine asks its host a question; the host builds the queue's own
@@ -975,7 +1006,11 @@ class TransferQueue extends EventEmitter {
     try {
       const result = await engine.confirmOverwrite(
         entry.srcPath, dst.basename(targetPath), cp, params, progress, fileParams, {
-          canAppend: true,
+          // SFTPConfirmOverwrite's CanAppend: never for an encrypted session,
+          // never in text mode, and never on a protocol that cannot write at an
+          // offset. Passing `true` unconditionally offered Append where WinSCP
+          // withholds it, and every one of those three cases loses data.
+          canAppend: T.canAppendTo(engine, dst, progress),
           side: item.side === 'download' ? 'local' : 'remote',
           resolveAppendOrResume: () => item._pendingAppendOrResume,
         });
@@ -1039,7 +1074,10 @@ class TransferQueue extends EventEmitter {
       },
       canResume: allowResume(item.copyParam, entry.size,
         dst.basename(item._currentTargetPath || '')),
-      canAppend: true,
+      // The dialog must offer exactly the buttons the decision layer will
+      // accept; showing Append and then refusing it is worse than not showing
+      // it, because the user believes they chose something.
+      canAppend: T.canAppendTo(item._overwriteEngine, dst, item._overwriteProgress),
     });
     item._pendingAppendOrResume = null;
     switch (reply.answer) {
@@ -1158,19 +1196,92 @@ class TransferQueue extends EventEmitter {
     return Math.min(want, Math.max(2, Math.ceil(entry.size / threshold)));
   }
 
+  /**
+   * THE byte mover, as `design/main/transfer.js` uses it.
+   *
+   * transfer.js is the port of Terminal.cpp's transfer half: it decides what
+   * happens to a file that is already there, where to start reading, where to
+   * start writing and what to do afterwards — and it opens no stream itself.
+   * This method is the other half of that bargain. Both the queue's own
+   * `queue:add` path and the session path (`terminal.copyToRemote` /
+   * `copyToLocal`, reached over `transfer:*`) therefore move bytes through the
+   * same throttle, the same pause gate, the same text converter and the same
+   * cancellation, which is what stops the two halves drifting apart.
+   *
+   * The plan's shape is documented on `AdapterFileSystem` in transfer.js.
+   * `readTo` is inclusive; ignoring it makes every part of a split download
+   * read to end-of-file.
+   *
+   * @returns {Promise<number>} bytes read from the source in this pass.
+   */
+  async moveBytes(plan) {
+    const p = plan || {};
+    if (!p.sourceAdapter || !p.targetAdapter) {
+      throw new Error('A transfer plan needs a source adapter and a target adapter.');
+    }
+    // A plan may arrive from a session transfer that has no queue item behind
+    // it. Everything the streaming loop reads off an item is supplied here, so
+    // one implementation serves both callers rather than two that agree today.
+    const item = p.item || {
+      id: `engine-${newId()}`,
+      side: p.side === 'remote' ? 'download' : 'upload',
+      source: p.sourcePath,
+      target: p.finalPath || p.targetPath,
+      state: 'active',
+      addedAt: Date.now(),
+      startedAt: Date.now(),
+      finishedAt: 0,
+      skipped: [],
+      cpsLimit: 0,
+      error: null,
+      sourceAdapter: p.sourceAdapter,
+      targetAdapter: p.targetAdapter,
+      copyParam: p.copyParam || { ...COPY_PARAM_DEFAULTS },
+      session: p.session || null,
+      progress: { bytes: 0, total: Number(p.size) || 0, filesDone: 0, files: 1, cps: 0, eta: null, currentFile: p.sourcePath },
+      _bytesDone: 0,
+      _cancelled: false,
+      _gate: new Gate(true),
+      _throttle: new Throttle(0),
+      _cpsWindow: [],
+      _lastProgressAt: 0,
+    };
+
+    const entry = { srcPath: p.sourcePath, dstPath: p.targetPath, size: Number(p.size) || 0 };
+    const before = item.progress.bytes;
+    const written = await this._copyStream(
+      item, entry, p.targetPath,
+      Number(p.writeAt) || 0, Number(p.readFrom) || 0, !!p.text, p.readTo,
+      { append: !!p.append, onBytes: typeof p.onBytes === 'function' ? p.onBytes : null });
+    // The engine's own progress object is fed through onBytes as the bytes
+    // land; this is the return value it accounts the pass with.
+    if (typeof p.onBytes !== 'function' && item.progress.bytes < before) item.progress.bytes = before;
+    return written;
+  }
+
   /** Single-stream copy with throttling, pause checks and text conversion. */
-  async _copyStream(item, entry, writePath, startAt, readFrom, text) {
+  async _copyStream(item, entry, writePath, startAt, readFrom, text, readTo, opts) {
     const src = item.sourceAdapter;
     const dst = item.targetAdapter;
     const cp = item.copyParam;
 
-    const rs = await src.createReadStream(entry.srcPath,
-      readFrom > 0 ? { start: readFrom } : {});
+    // `readTo` is inclusive and is what stops ONE PART of a split file where
+    // the next part begins. Without it every part reads to end-of-file and the
+    // merged download is a multiple of the file's true length.
+    const range = {};
+    if (readFrom > 0) range.start = readFrom;
+    if (readTo !== undefined && readTo !== null && readTo >= 0) range.end = readTo;
+    const o = opts || {};
+    // A plan may append into an EMPTY file, where `startAt` is 0 and yet the
+    // file must not be truncated. The queue's own path has no such case, so it
+    // derives the flag from the offset; a supplied plan says so outright.
+    const append = o.append === undefined ? startAt > 0 : !!o.append;
+    const rs = await src.createReadStream(entry.srcPath, range);
     const ws = await dst.createWriteStream(writePath, {
       size: entry.size,
       start: startAt,
-      append: startAt > 0,
-      flags: startAt > 0 ? 'r+' : 'w',
+      append,
+      flags: append || startAt > 0 ? 'r+' : 'w',
     });
     const writer = new StreamWriter(ws);
     const conv = text
@@ -1190,6 +1301,7 @@ class TransferQueue extends EventEmitter {
         if (out.length) await writer.write(out);
         written += chunk.length;
         item.progress.bytes += chunk.length;
+        if (o.onBytes) o.onBytes(chunk.length);
         this._recordCps(item, chunk.length);
         this._emitProgress(item, false);
       }

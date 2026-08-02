@@ -1675,3 +1675,38 @@ test('the banner reaches its consumer as text', async (t) => {
     assert.equal(count, 0);
   });
 });
+
+// -------------------------------------- what the workaround log may claim
+
+test('the workaround log only claims what the code really does', async (t) => {
+  await t.test('a workaround this port does not implement is documented, not announced', () => {
+    const bugs = ext.resolveSftpBugs({ implementation: 'openssh', ident: 'OpenSSH_9.6', version: 3 });
+    const activeIds = bugs.active.map((b) => b.id);
+    const documentedIds = bugs.documented.map((b) => b.id);
+    // The FTPShell opendir fallback is not implemented: list() and stat() still
+    // send SSH_FXP_LSTAT. Announcing it in the session log would be a false
+    // statement about our own behaviour on every single connection.
+    assert.ok(!activeIds.includes('lstatUnsupported'));
+    assert.ok(documentedIds.includes('lstatUnsupported'));
+    // The two SSH_FXP_STATUS tolerances belong to the SSH library's parser.
+    assert.ok(!activeIds.includes('statusMessageOmitted'));
+    assert.ok(!activeIds.includes('languageTagOmitted'));
+    // The detection itself is still available, so nothing is lost.
+    assert.equal(bugs.lstatUnsupported, true);
+    assert.equal(bugs.statusMessageOmitted, true);
+  });
+
+  await t.test('everything still announced is something this code performs', () => {
+    const bugs = ext.resolveSftpBugs({ implementation: 'openssh', ident: 'OpenSSH_9.6', version: 3 });
+    assert.deepEqual(bugs.active.map((b) => b.id).sort(), [
+      'checkFileAnnouncedByRequestName',
+      'copyFileCannotOverwrite',
+      'hardlinkArgumentOrderReversed',
+      'limitedPacketSize',
+      'signedTimestamps',
+      'spaceAvailableAllocationUnitIs16Bit',
+      'symlinkArgumentOrderReversed',
+      'versionsExtensionIsStruct',
+    ]);
+  });
+});

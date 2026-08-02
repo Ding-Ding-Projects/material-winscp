@@ -444,8 +444,12 @@ test('the transfer summary names only what differs from the defaults', async () 
   const { copy } = await load();
   assert.equal(copy.summariseCopyParam({}, 'en'), 'Default transfer settings');
   assert.equal(copy.summariseCopyParam(COPY_PARAM_DEFAULTS, 'en'), 'Default transfer settings');
-  const summary = copy.summariseCopyParam({ transferMode: 'binary', newerOnly: true, cpsLimit: 65536 }, 'en');
-  assert.match(summary, /Binary/);
+  // Binary is the DEFAULT transfer mode (TCopyParamType::Default is tmBinary),
+  // so it must not appear in a summary of differences; text must.
+  assert.ok(!/Binary/i.test(copy.summariseCopyParam({ transferMode: 'binary' }, 'en')),
+    'the default transfer mode is not a difference');
+  const summary = copy.summariseCopyParam({ transferMode: 'text', newerOnly: true, cpsLimit: 65536 }, 'en');
+  assert.match(summary, /Text/);
   assert.match(summary, /new and updated only/);
   assert.match(summary, /64 KB\/s/);
   assert.ok(!/Preserve timestamp/i.test(summary), 'an unchanged option must not be listed');

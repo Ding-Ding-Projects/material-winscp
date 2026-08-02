@@ -189,6 +189,20 @@ export function plainCompare(a, b) {
   return s < o ? -1 : 1;
 }
 
+/**
+ * TCustomIEListView::SortAscendingByDefault — which direction a column starts
+ * in the first time it is clicked.
+ *
+ * design/main/dirview.js is the authority (it is the port of the column sets
+ * themselves, and `panel:sortAscendingByDefault` serves the same answer over
+ * IPC); this is the same rule kept locally because a header click must not wait
+ * on a round trip to decide which arrow to draw. Both column sets agree: only
+ * Size and the modification date start descending.
+ */
+export function sortAscendingByDefault(key) {
+  return !(key === 'size' || key === 'changed');
+}
+
 /** The raw value a column sorts on — not the display string. */
 function sortValue(entry, key) {
   switch (key) {
@@ -220,14 +234,23 @@ export function makeComparator(sort, opts = {}) {
   const key = sort.key || 'name';
 
   return function compare(a, b) {
-    if (a.name === '..') return -1;
-    if (b.name === '..') return 1;
+    // Two parent entries compare EQUAL. Returning -1 for both orders makes the
+    // comparator non-antisymmetric, which is undefined behaviour for
+    // Array.prototype.sort and can reorder unrelated rows around it.
+    const ap = a.name === '..';
+    const bp = b.name === '..';
+    if (ap || bp) return ap && bp ? 0 : (ap ? -1 : 1);
     const ad = a.type === 'dir' ? 0 : 1;
     const bd = b.type === 'dir' ? 0 : 1;
     if (ad !== bd) return ad - bd;
     if (dirsByName && ad === 0) {
-      const r = cmpText(a.name, b.name);
-      return r || 0;
+      // The direction still applies here. DirViewInt.pas keeps ConsiderDirection
+      // True through the AlwaysSortDirectoriesByName fallback — only the
+      // parent-entry and directories-before-files decisions turn it off — and
+      // UnixDirView.cpp negates inside the same-kind branch, after the
+      // fallback. Returning early left the directories ascending while the
+      // files beside them reversed.
+      return cmpText(a.name, b.name) * dir;
     }
     const av = sortValue(a, key);
     const bv = sortValue(b, key);
@@ -399,8 +422,13 @@ export function createColumnModel(opts = {}) {
     setSort(k, ascending) {
       if (!model.has(k)) return false;
       const asc = ascending === undefined
-        // Clicking the active column flips the direction, exactly as WinSCP does.
-        ? (sort.key === k ? !sort.ascending : true)
+        // Clicking the active column flips the direction; clicking a different
+        // one starts it at THAT column's default. TCustomIEListView's
+        // SortAscendingByDefault makes Size and Date modified start DESCENDING,
+        // which is the point of clicking them — the biggest and the newest
+        // belong at the top. Defaulting everything to ascending meant the first
+        // click on Size put the empty files first.
+        ? (sort.key === k ? !sort.ascending : sortAscendingByDefault(k))
         : !!ascending;
       sort = { key: k, ascending: asc };
       persist(); changed('sort');

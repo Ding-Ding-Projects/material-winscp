@@ -164,6 +164,17 @@ const queueModule = lazy('./queue', 'The transfer queue');
 const syncModule = lazy('./sync', 'Synchronization');
 const findModule = lazy('./find', 'File search');
 const masksModule = lazy('./masks', 'File-mask matching');
+// The subsystems reconciled in this pass. Each was a complete, tested module
+// that nothing imported; every one of them is reachable from here now, which is
+// the difference between "ported" and "written" under docs/porting-mandate.md.
+const messagesModule = lazy('./messages', "WinSCP's message resources");
+const dirviewModule = lazy('./dirview', 'The file-panel model');
+const patheditModule = lazy('./pathedit', 'The path edit and history model');
+const explorerModule = lazy('./explorershell', 'The explorer shell');
+const interfacesModule = lazy('./interfaces', 'The Commander and Explorer interfaces');
+const uiModule = lazy('./userinterface', 'The user-interface contract');
+const terminalModule = lazy('./terminal', 'The session terminal');
+const transferModule = lazy('./transfer', 'The transfer engine');
 
 /**
  * Drop the keys the renderer did not set, so a module's own defaults win
@@ -264,6 +275,21 @@ class Ipc {
     /** Lazily created queue/sync instances, one per app. */
     this._queue = null;
     this._sync = null;
+
+    /**
+     * The orchestration layer's own state.
+     *
+     * `_panels` is what the renderer pushes over `explorer:setPanels`; every
+     * predicate ExplorerShell answers is derived from it, so the main process
+     * never has to guess what the user has selected. `_asks` is the round trip
+     * for a confirmation: a refusal ported from WinSCP is only a refusal if it
+     * genuinely waits for an answer, so `ask()` returns a promise the renderer
+     * settles over `ui:answer` and NEVER a default.
+     */
+    this._panels = { local: null, remote: null };
+    this._asks = new Map();
+    this._askSeq = 0;
+    this._explorer = null;
 
     this._registered = [];
   }
@@ -373,6 +399,237 @@ class Ipc {
     return this._local;
   }
 
+  /**
+   * Ask the user a question and WAIT for the answer.
+   *
+   * This is the seam every ported refusal hangs off. WinSCP's confirmations are
+   * modal VCL dialogs; here they are a promise the renderer settles. What must
+   * never happen is a default: answering "yes" on the renderer's behalf is a
+   * data-loss bug and answering "no" is an invisible one, so an unanswered
+   * question stays unanswered until the window that was asked goes away, at
+   * which point it resolves to `cancel` — the only answer that is safe when
+   * nobody is listening.
+   *
+   * @param {object} request  { kind, message, moreMessages, answers, ... }
+   * @returns {Promise<string>} one of the answer names the request offered
+   */
+  ask(request) {
+    const w = this.getWindow();
+    if (!w || w.isDestroyed()) return Promise.resolve('cancel');
+    this._askSeq += 1;
+    const promptId = `ask-${Date.now().toString(36)}-${this._askSeq.toString(36)}`;
+    return new Promise((resolve) => {
+      this._asks.set(promptId, resolve);
+      this.emit('event:prompt', {
+        promptId,
+        kind: 'question',
+        payload: { source: 'shell', ...request },
+      });
+    });
+  }
+
+  /** Settle a pending `ask`. Returns false when the question is already gone. */
+  answerAsk(promptId, answer) {
+    const resolve = this._asks.get(promptId);
+    if (!resolve) return false;
+    this._asks.delete(promptId);
+    resolve(answer);
+    return true;
+  }
+
+  /** The one ExplorerShell, built over the live session manager and queue. */
+  explorer() {
+    if (this._explorer) return this._explorer;
+    const mod = explorerModule();
+    if (typeof mod.ExplorerShell !== 'function') {
+      throw new Error('design/main/explorershell.js does not export ExplorerShell.');
+    }
+    this._explorer = new mod.ExplorerShell({
+      config: this.config,
+      ask: (request) => this.ask(request),
+      note: (n) => this.emit('event:notify', { source: 'shell', ...n }),
+      panels: (side) => this._panels[side === 'local' ? 'local' : 'remote'],
+      session: () => this.sessions.active(),
+      sessions: () => this.sessions.all(),
+      setActiveSession: (s) => this.sessions.setActive(s && s.id ? s.id : s),
+      queue: this.queue(),
+      editors: this.editors,
+      clipboard: {
+        readText: () => clipboard.readText(),
+        writeText: (t) => clipboard.writeText(String(t)),
+      },
+      ops: this.explorerOps(),
+    });
+    return this._explorer;
+  }
+
+  /**
+   * The operations ExplorerShell decides about but does not perform.
+   *
+   * Anything absent stays absent: the module throws `NotSupportedError` for an
+   * operation it has no implementation for, which is the honest outcome — a
+   * silent no-op would report success for work that never happened.
+   */
+  explorerOps() {
+    const remoteAdapter = () => {
+      const s = this.sessions.active();
+      need(s && s.adapter && s.adapter.connected, 'The session is not connected.');
+      return { s, a: s.adapter };
+    };
+    return {
+      directoryExists: async (side, p) => {
+        if (side === 'local') { try { return (await fsp.stat(path.resolve(p))).isDirectory(); } catch { return false; } }
+        const { a } = remoteAdapter();
+        try { return (await a.stat(a.normalize(p))).type === 'dir'; } catch { return false; }
+      },
+      createDirectory: async (side, p) => {
+        if (side === 'local') { await fsp.mkdir(path.resolve(p), { recursive: true }); return path.resolve(p); }
+        const { s, a } = remoteAdapter();
+        const target = a.normalize(p);
+        await a.mkdir(target);
+        s.invalidate(a.dirname(target));
+        return target;
+      },
+      deleteFiles: async (files, options) => {
+        const { s, a } = remoteAdapter();
+        const o = options || {};
+        const removed = [];
+        for (const f of files) {
+          await a.remove(a.normalize(f), { recursive: true, toRecycleBin: !!o.toRecycleBin });
+          s.log.actions.record('rm', { filename: f });
+          removed.push(f);
+        }
+        s.invalidate();
+        return removed;
+      },
+      deleteLocalFiles: async (files, options) => {
+        const o = options || {};
+        const removed = [];
+        for (const f of files) {
+          const full = path.resolve(f);
+          if (o.toRecycleBin !== false) await shell.trashItem(full);
+          else await fsp.rm(full, { recursive: true, force: false });
+          removed.push(full);
+        }
+        return removed;
+      },
+      moveFiles: async (files, target) => {
+        const { s, a } = remoteAdapter();
+        for (const f of files) {
+          const dst = a.join(a.normalize(target), a.basename(f));
+          await a.rename(a.normalize(f), dst);
+          s.log.actions.record('mv', { filename: f, destination: dst });
+        }
+        s.invalidate();
+        return files.length;
+      },
+      lockFiles: async (files) => {
+        const { a } = remoteAdapter();
+        for (const f of files) await a.lockFile(a.normalize(f));
+        return files.length;
+      },
+      unlockFiles: async (files) => {
+        const { a } = remoteAdapter();
+        for (const f of files) await a.unlockFile(a.normalize(f));
+        return files.length;
+      },
+      changePath: (side, p) => {
+        const s = this.sessions.active();
+        if (!s) return false;
+        s.setState(side === 'local' ? { localPath: path.resolve(p) } : { remotePath: p });
+        this.emit('event:session', { type: 'path', sessionId: s.id, side, path: p });
+        return true;
+      },
+      closeSession: (session) => this.sessions.close(session && session.id ? session.id : String(session)),
+      disconnectSession: async (session) => {
+        const s = session && session.id ? session : this.sessions.active();
+        if (!s) return false;
+        await s.disconnect({ keepOpen: true });
+        return true;
+      },
+      saveWorkspace: (name, sessions) => {
+        need(this.config, 'The configuration store is not available.');
+        return this.config.saveWorkspace(String(name),
+          sessions === undefined ? this.sessions.snapshotWorkspace() : sessions);
+      },
+      // The transfer path. Both directions go through the queue, which is the
+      // one byte mover in this application (see queue.moveBytes).
+      copyToRemote: (files, target, copyParam) =>
+        this.enqueueTransfer('upload', files, target, copyParam),
+      copyToLocal: (files, target, copyParam) =>
+        this.enqueueTransfer('download', files, target, copyParam),
+      customCommand: (line, options) => {
+        const o = options || {};
+        return o.local
+          ? this.commands.runLocal(line, { cwd: o.cwd })
+          : this.commands.runRemote(this.sessions.active(), line, {});
+      },
+    };
+  }
+
+  /** Queue a transfer the way `queue:add` does, from inside the main process. */
+  enqueueTransfer(direction, files, target, copyParam) {
+    const session = this.sessions.active();
+    need(session, 'There is no active session.');
+    const q = this.queue();
+    const local = this.localAdapter();
+    const remote = session.adapter;
+    need(remote && remote.connected, 'The session is not connected.');
+    const added = [];
+    for (const f of files) {
+      added.push(q.view(q.add(direction === 'upload'
+        ? {
+          side: 'upload',
+          source: path.resolve(f),
+          target,
+          targetIsDir: true,
+          sourceAdapter: local,
+          targetAdapter: remote,
+          copyParam,
+          session,
+        }
+        : {
+          side: 'download',
+          source: f,
+          target: path.resolve(target),
+          targetIsDir: true,
+          sourceAdapter: remote,
+          targetAdapter: local,
+          copyParam,
+          session,
+        })));
+    }
+    return added;
+  }
+
+  /**
+   * The session's Terminal, with the queue wired in as its byte mover.
+   *
+   * This is what closes the transfer half's reachability gap: `transfer.js`
+   * decides and `queue.js` moves, and the two are joined here rather than each
+   * growing its own copy of the other's job.
+   */
+  terminalFor(session) {
+    if (session.__terminal) return session.__terminal;
+    const mod = terminalModule();
+    if (typeof mod.Terminal !== 'function') throw new Error('design/main/terminal.js does not export Terminal.');
+    const t = new mod.Terminal(session, {
+      config: this.config,
+      queryUser: async (query) => this.ask({ kind: 'terminal', sessionId: session.id, ...query }),
+      onProgress: (p) => this.emit('event:progress', { kind: 'operation', sessionId: session.id, progress: p }),
+    });
+    // The engine is created here, once, with the byte mover attached. Without
+    // it every Source/Sink would throw "this transfer engine has no byte mover".
+    t.transferEngine({
+      localAdapter: this.localAdapter(),
+      copyBytes: (plan) => this.queue().moveBytes(plan),
+    });
+    Object.defineProperty(session, '__terminal', {
+      value: t, enumerable: false, configurable: true, writable: true,
+    });
+    return t;
+  }
+
   // =========================================================== registration
   registerAll() {
     this.registerApp();
@@ -383,12 +640,22 @@ class Ipc {
     this.registerSync();
     this.registerEditor();
     this.registerHistory();
+    this.registerMessages();
+    this.registerPanel();
+    this.registerExplorer();
+    this.registerInterface();
+    this.registerUi();
+    this.registerTransfer();
     return this.channels;
   }
 
   dispose() {
     for (const c of this._registered) ipcMain.removeHandler(c);
     this._registered.length = 0;
+    // A pending confirmation whose window is going away must not leave the
+    // operation that asked it parked on a promise nobody can settle.
+    for (const resolve of this._asks.values()) resolve('cancel');
+    this._asks.clear();
   }
 
   // ------------------------------------------------------------- app:*
@@ -1325,6 +1592,594 @@ class Ipc {
     this.handle('editor:list', () => this.editors.list());
     this.handle('editor:orphans', () => this.editors.findOrphans());
     this.handle('editor:discardOrphans', (paths) => this.editors.discardOrphans(strArr(paths, 'paths', 20000)));
+  }
+
+
+  // -------------------------------------------------------- messages:*
+  //
+  // WinSCP's five STRINGTABLE resources, extracted into
+  // design/renderer/messages.json and resolved by design/main/messages.js.
+  // Every sentence the original shows a user is in there with its printf shape,
+  // so a module that needs one asks for it by resource id instead of
+  // transcribing the English into its own source and drifting from it.
+  registerMessages() {
+    const M = () => messagesModule();
+
+    /**
+     * design/winscp-i18n.js is an ES module and this is CommonJS. Node 22.12
+     * resolves `require()` of ESM on its own, but Electron 33 embeds Node
+     * 20.18, which does not — so messages.js's synchronous fallback quietly
+     * gave up and every message rendered in plain English at every funny level
+     * in the SHIPPED app while the test suite, on a newer Node, saw the
+     * dictionary and passed. A dynamic import works on every version.
+     *
+     * The promise is awaited by the handler that needs it rather than blocking
+     * registration, and a failure to load is survivable: the message still
+     * renders in WinSCP's own English rather than the app losing the ability to
+     * say anything at all.
+     */
+    const voices = M().loadVoices().then((dict) => {
+      if (!dict) {
+        this.emit('event:log', {
+          source: 'messages',
+          kind: 'warning',
+          text: 'The bilingual dictionary could not be loaded; messages render in English only.',
+        });
+      }
+      return !!dict;
+    });
+
+    /** One message, formatted. `fmtLoad` throws on a missing argument, by design. */
+    this.handle('messages:load', (id, args) => {
+      const m = M();
+      const key = str(id, 'id', 128);
+      need(m.has(key), `No such message resource: ${key}`);
+      const list = args === undefined || args === null ? [] : arr(args, 'args', 32);
+      return list.length ? m.fmtLoad(key, ...list) : m.loadStr(key);
+    });
+
+    /** The metadata a caller needs before it can format: arity and shape. */
+    this.handle('messages:meta', (id) => {
+      const m = M();
+      const key = str(id, 'id', 128);
+      need(m.has(key), `No such message resource: ${key}`);
+      return { ...m.meta(key), params: m.paramsOf(key), arity: m.arityOf(key), help: m.helpKeyword(key) };
+    });
+
+    /** The whole table, for a renderer that wants to resolve locally. */
+    this.handle('messages:table', () => ({
+      ids: messagesModule().ids(),
+      excluded: messagesModule().EXCLUDED_BY_POLICY,
+    }));
+
+    /**
+     * The bilingual render. The resource English is the fact; the dictionary
+     * supplies the Cantonese and the five funny levels around it.
+     */
+    this.handle('messages:voiced', async (id, options) => {
+      await voices;
+      const m = M();
+      const key = str(id, 'id', 128);
+      need(m.has(key), `No such message resource: ${key}`);
+      const o = optObj(options, 'options');
+      const language = optStr(o.language, 'options.language', 8) || 'en';
+      need(m.LANG_MODES.includes(language), 'options.language must be en, yue or both.');
+      // Two INDEPENDENT funny levels, one per language, as the shared
+      // instructions require: the English voice and the Cantonese voice are
+      // adjusted separately and neither changes the facts the resource states.
+      return m.voiced(key, {
+        language,
+        enLevel: o.enLevel === undefined ? 3 : num(o.enLevel, 'options.enLevel', 1, 5),
+        yueLevel: o.yueLevel === undefined ? 3 : num(o.yueLevel, 'options.yueLevel', 1, 5),
+      }, ...(o.args === undefined ? [] : arr(o.args, 'options.args', 32)));
+    });
+
+    /**
+     * The `**` and `$$` tags WinSCP wraps a headline and an interactive prompt
+     * in. Splitting them is what lets a long error render as a headline plus
+     * collapsible detail instead of one undifferentiated block.
+     */
+    this.handle('messages:split', (text) => {
+      const m = M();
+      const s = str(text, 'text', LIMITS.text);
+      return {
+        ...m.extractMainInstructions(s),
+        firstParagraph: m.mainInstructionsFirstParagraph(s),
+        unformatted: m.unformatMessage(s),
+        interactiveAt: m.findInteractiveMsgStart(s),
+      };
+    });
+  }
+
+  // ----------------------------------------------------------- panel:*
+  //
+  // design/main/dirview.js and design/main/pathedit.js — the models inside
+  // WinSCP's file panels, drive trees and path edits. The renderer owns the
+  // DOM; these own the RULES, so there is one comparator, one filter, one
+  // rename refusal and one mask validator rather than a second set that agrees
+  // until the day it does not.
+  registerPanel() {
+    const dv = () => dirviewModule();
+    const pe = () => patheditModule();
+    const sideOf = (v) => {
+      const s = optStr(v, 'side', 16) || 'remote';
+      need(s === 'local' || s === 'remote', 'side must be "local" or "remote".');
+      return s;
+    };
+    const entriesOf = (v) => arr(v || [], 'entries', 200000);
+
+    this.handle('panel:columns', (s) => dv().columnsFor(sideOf(s)));
+    this.handle('panel:sortAscendingByDefault', (s, key) =>
+      dv().sortAscendingByDefault(sideOf(s), str(key, 'key', 64)));
+
+    /**
+     * The sort state and its SortStr persistence format ("index;direction"),
+     * which is what a WinSCP INI actually carries. `click` names the column a
+     * header click landed on: clicking the current column flips the direction,
+     * clicking another starts it at THAT column's default — which for Size and
+     * Date modified is descending, not ascending.
+     */
+    this.handle('panel:sortState', (req) => {
+      const r = optObj(req, 'request');
+      const state = new (dv().SortState)(sideOf(r.side));
+      if (r.sortStr) state.sortStr = str(r.sortStr, 'sortStr', 64);
+      if (r.click) state.sortBy(str(r.click, 'click', 64));
+      else if (r.column) state.setSort(str(r.column, 'column', 64), r.ascending !== false);
+      return { column: state.column, ascending: state.ascending, sortStr: state.sortStr };
+    });
+
+    /**
+     * TUnixDirView::LoadFiles / TDirViewInt::LoadFiles — the mask filter, the
+     * hidden-file rule, the counters the status bar shows, and the sort.
+     */
+    this.handle('panel:buildView', (req) => {
+      const r = obj(req, 'request');
+      const d = dv();
+      const s = sideOf(r.side);
+      const view = d.buildView({
+        files: entriesOf(r.entries),
+        side: s,
+        mask: optStr(r.mask, 'mask', LIMITS.small),
+        showHiddenFiles: r.showHiddenFiles !== false,
+        showInaccesibleDirectories: r.showInaccesibleDirectories !== false,
+      });
+      if (r.sortColumn) {
+        const key = str(r.sortColumn, 'sortColumn', 64);
+        view.items = d.sortItems(view.items, {
+          side: s,
+          sortColumn: key,
+          sortAscending: r.ascending === undefined
+            ? d.sortAscendingByDefault(s, key) : bool(r.ascending, 'ascending'),
+          alwaysSortDirectoriesByName: r.alwaysSortDirectoriesByName === true,
+          naturalOrderNumericalSorting: r.naturalOrderNumericalSorting !== false,
+        });
+      }
+      return view;
+    });
+
+    /** The Copy-file-list-to-clipboard payload, byte for byte. */
+    this.handle('panel:export', (req) => {
+      const r = obj(req, 'request');
+      const d = dv();
+      const kind = optStr(r.kind, 'kind', 32) || d.PANEL_EXPORT.FileList;
+      const dir = optStr(r.path, 'path', LIMITS.path);
+      const trimmed = dir.endsWith('/') ? dir.slice(0, -1) : dir;
+      const lines = d.panelExport(kind, {
+        items: entriesOf(r.entries),
+        pathName: dir,
+        // FullFileList prefixes the directory the panel is showing; the model
+        // has no way to know that path, so the panel supplies it here.
+        fullPath: (item) => (dir ? `${trimmed}/${d.itemFileName(item)}` : d.itemFileName(item)),
+      });
+      return { lines, text: d.stringsToText(lines, optStr(r.eol, 'eol', 8) || undefined) };
+    });
+
+    /** TUnixDirView::CanEdit and the invalid-character refusal behind it. */
+    this.handle('panel:validateRename', (req) => {
+      const r = obj(req, 'request');
+      const d = dv();
+      const s = sideOf(r.side);
+      const item = optObj(r.item, 'item');
+      // CanEdit ANDs in IsCapable[fcRename] with no default-allow: an edit box
+      // that promises a rename the protocol cannot perform is worse than a
+      // greyed-out one, so an unstated capability counts as absent.
+      const can = d.canEdit(item, {
+        renameCapable: r.renameCapable === true,
+        loading: r.loading === true,
+        readOnly: r.readOnly === true,
+        isRecycleBin: r.isRecycleBin === true,
+      });
+      if (!can) return { canEdit: false, action: 'refuse', error: '' };
+      return { canEdit: true, ...d.validateRename(item, optStr(r.name, 'name', LIMITS.name), s) };
+    });
+
+    /** ComposeMaskStr / ValidateMask, with the 0-based caret offset. */
+    this.handle('panel:composeMask', (lines, directory) =>
+      dirviewModule().composeMaskStr(strArr(lines, 'lines', 2000), directory === true));
+
+    this.handle('panel:validateMask', (mask, forceDirectoryMasks) => dirviewModule().validateMask(
+      str(mask, 'mask', LIMITS.small),
+      forceDirectoryMasks === undefined || forceDirectoryMasks === null
+        ? undefined : num(forceDirectoryMasks, 'forceDirectoryMasks', 0, 1)));
+
+    /** ProcessChangedFiles — the Compare-panels marking. */
+    this.handle('panel:compare', (req) => {
+      const r = obj(req, 'request');
+      return dirviewModule().compareWithPanel(
+        entriesOf(r.items), entriesOf(r.otherItems), {
+          criteria: r.criteria === undefined ? undefined : strArr(r.criteria, 'criteria', 8),
+          existingOnly: r.existingOnly === true,
+          caseSensitive: r.caseSensitive === true,
+          side: sideOf(r.side),
+        });
+    });
+
+    // ---- pathedit ---------------------------------------------------
+    this.handle('path:segments', (p, s) => patheditModule().pathSegments(str(p, 'path', LIMITS.path), sideOf(s)));
+    this.handle('path:complete', (typed, candidates) => patheditModule().completeInline(
+      str(typed, 'typed', LIMITS.path), strArr(candidates, 'candidates', 20000)));
+    this.handle('path:completions', (typed, list, options) => patheditModule().pathCompletions(
+      str(typed, 'typed', LIMITS.path), strArr(list, 'entries', 20000), optObj(options, 'options')));
+    this.handle('path:word', (text, caret, direction) => {
+      const p = pe();
+      const t = str(text, 'text', LIMITS.path);
+      const c = num(caret, 'caret', 0, t.length);
+      const d = optStr(direction, 'direction', 16) || 'at';
+      if (d === 'left') return p.wordLeft(t, c);
+      if (d === 'right') return p.wordRight(t, c);
+      return p.wordAt(t, c);
+    });
+    this.handle('path:saveToHistory', (list, value, options) => patheditModule().saveToHistory(
+      strArr(list, 'list', 5000), str(value, 'value', LIMITS.path), optObj(options, 'options')));
+    this.handle('path:minimize', (p, chars) =>
+      patheditModule().minimizeStr(str(p, 'path', LIMITS.path), num(chars, 'chars', 1, 4096)));
+  }
+
+  // -------------------------------------------------------- explorer:*
+  //
+  // design/main/explorershell.js — the orchestration half of
+  // forms/CustomScpExplorer.cpp. Everything here is a DECISION: what a command
+  // applies to, whether it may run at all, which confirmation to ask and what
+  // to do with the answer. The renderer stopped computing these itself; it
+  // pushes its panel state and asks.
+  registerExplorer() {
+    const E = () => this.explorer();
+
+    /** The renderer's panels, as the shell needs to see them. */
+    this.handle('explorer:setPanels', (patch) => {
+      const p = obj(patch, 'panels');
+      const mod = explorerModule();
+      for (const s of ['local', 'remote']) {
+        if (p[s] === undefined) continue;
+        if (p[s] === null) { this._panels[s] = null; continue; }
+        const spec = obj(p[s], `panels.${s}`);
+        this._panels[s] = new mod.PanelState({
+          side: s,
+          local: spec.local === undefined ? s === 'local' : !!spec.local,
+          path: optStr(spec.path, 'path', LIMITS.path),
+          entries: arr(spec.entries || [], 'entries', 200000),
+          selected: strArr(spec.selected || [], 'selected', 200000),
+          focusedName: spec.focusedName === undefined || spec.focusedName === null
+            ? null : str(spec.focusedName, 'focusedName', LIMITS.name),
+          hasFocus: spec.hasFocus === true,
+          foreground: spec.foreground !== false,
+          enabled: spec.enabled !== false,
+          mask: optStr(spec.mask, 'mask', LIMITS.small),
+        });
+      }
+      if (p.currentSide !== undefined) {
+        const s = str(p.currentSide, 'currentSide', 16);
+        need(s === 'local' || s === 'remote', 'currentSide must be "local" or "remote".');
+        E().currentSide = s;
+      }
+      if (p.sessionId !== undefined && p.sessionId !== null) {
+        this.sessions.setActive(str(p.sessionId, 'sessionId', 128));
+      }
+      if (p.localBrowserMode !== undefined) E().localBrowserMode = !!p.localBrowserMode;
+      if (p.synchronizeBrowsing !== undefined) E().synchronizeBrowsing = !!p.synchronizeBrowsing;
+      return true;
+    });
+
+    /**
+     * Whether a command may run, and on what — TCustomScpExplorerForm's
+     * UpdateControls predicates. This is the one that stops "Delete" and
+     * "Delete focused" disagreeing about which files they mean.
+     */
+    this.handle('explorer:state', (name, context) =>
+      E().commandState(str(name, 'command', 64), optObj(context, 'context')));
+
+    this.handle('explorer:fileList', (s, options) =>
+      E().createFileList(optStr(s, 'side', 16) || 'current', optObj(options, 'options')));
+
+    /**
+     * The delete path in full: recycle-versus-delete decided from the SITE's
+     * setting rather than the protocol's, the two SEPARATE confirmation
+     * preferences (confirmRecycling and confirmDeleting), and the
+     * already-in-the-recycle-bin case that must not be recycled twice.
+     */
+    this.handle('explorer:delete', (s, files, alternative) =>
+      E().executeDeleteFileOperation(
+        optStr(s, 'side', 16) || 'current',
+        files === undefined || files === null ? undefined : strArr(files, 'files', 200000),
+        alternative === true));
+
+    this.handle('explorer:deleteDecision', (s, files, alternative) =>
+      E().deleteDecision(
+        optStr(s, 'side', 16) || 'current',
+        files === undefined || files === null ? [] : strArr(files, 'files', 200000),
+        alternative === true));
+
+    this.handle('explorer:fileOperation', (operation, s, options) => {
+      const o = optObj(options, 'options');
+      return E().executeFileOperationOnSelection(
+        str(operation, 'operation', 32),
+        optStr(s, 'side', 16) || 'current',
+        o.onFocused === true,
+        o.noConfirmation === true,
+        o.param);
+    });
+
+    /** TransferPresetAutoSelect — run it on every remote directory load. */
+    this.handle('explorer:presetAutoSelect', () => E().transferPresetAutoSelect());
+    this.handle('explorer:presetAutoSelectData', () => E().transferPresetAutoSelectData());
+
+    /** The queue predicates: what Pause/Resume/Up/Down may do to THIS item. */
+    this.handle('explorer:queueOp', (operation, context) =>
+      E().allowQueueOperation(str(operation, 'operation', 32), optObj(context, 'context')));
+    this.handle('explorer:defaultQueueOp', (item) => E().defaultQueueOperation(optObj(item, 'item')));
+
+    /** The three meanings of a double click, resolved the way WinSCP does. */
+    this.handle('explorer:doubleClick', (s, entry) =>
+      E().resolveDoubleClick(optStr(s, 'side', 16) || 'current', optObj(entry, 'entry')));
+
+    this.handle('explorer:canPaste', () => E().canPasteFromClipBoard());
+    this.handle('explorer:paste', (options) => E().pasteFromClipBoardPlan(optObj(options, 'options')));
+
+    /** Drag and drop: which operation a drop effect means, and where it lands. */
+    this.handle('explorer:dropEffect', (spec) => E().chooseDropEffect(obj(spec, 'spec')));
+    this.handle('explorer:dropTarget', (spec) => E().ddGetTarget(obj(spec, 'spec')));
+    this.handle('explorer:dragDrop', (spec) => E().dragDropFileOperation(obj(spec, 'spec')));
+
+    /** Closing: the pending-queue warning and the workspace branch. */
+    this.handle('explorer:canCloseQueue', () => E().canCloseQueue());
+    this.handle('explorer:closeQuery', (options) => E().formCloseQuery(optObj(options, 'options')));
+    this.handle('explorer:closeTab', () => E().closeTab());
+
+    /** Synchronized browsing, including its refusal ladder. */
+    this.handle('explorer:syncBrowse', (spec) => E().applySynchronizeBrowsing(obj(spec, 'spec')));
+    this.handle('explorer:syncOptions', (params) => E().getSynchronizeOptions(optObj(params, 'params')));
+    this.handle('explorer:fullSyncOptions', () => E().fullSynchronizeOptions());
+
+    /** Custom commands: the tri-state that depends on which menu is asking. */
+    this.handle('explorer:customCommandState', (command, onFocused, listType) =>
+      E().customCommandState(str(command, 'command', LIMITS.command), onFocused === true,
+        optStr(listType, 'listType', 32) || undefined));
+
+    /** The answer channel every ported confirmation waits on. */
+    this.handle('explorer:answer', (promptId, answer) =>
+      this.answerAsk(str(promptId, 'promptId', 128), str(answer, 'answer', 64)));
+  }
+
+  // ------------------------------------------------------- interface:*
+  //
+  // design/main/interfaces.js — TScpCommanderForm and TScpExplorerForm as pure
+  // decisions. The renderer's toolbars, panel arrangement, shortcut tables and
+  // workspace handling take their answers from here instead of each carrying a
+  // shallower copy of the same per-mode rules.
+  registerInterface() {
+    const I = () => interfacesModule();
+    const modeOf = (v) => {
+      const m = optStr(v, 'mode', 16) || 'commander';
+      need(m === 'commander' || m === 'explorer', 'mode must be "commander" or "explorer".');
+      return m;
+    };
+
+    this.handle('interface:shortcuts', (m, options) => I().shortcutsFor(modeOf(m), optObj(options, 'options')));
+    this.handle('interface:allowedAction', (m, action, phase) =>
+      I().allowedAction(modeOf(m), str(action, 'action', 64), optStr(phase, 'phase', 16) || undefined));
+    this.handle('interface:commands', (m) => I().commandsFor(modeOf(m)));
+    this.handle('interface:panels', (m, options) => I().panelArrangement(modeOf(m), optObj(options, 'options')));
+    this.handle('interface:bands', (m) => I().bandsFor(modeOf(m)));
+    this.handle('interface:components', (m) => I().componentsFor(modeOf(m)));
+    this.handle('interface:statusBars', (m) => I().statusBarsFor(modeOf(m)));
+
+    this.handle('interface:restoreParams', (m, stored) =>
+      I().restoreParams(modeOf(m), optObj(stored, 'stored')));
+    this.handle('interface:storeParams', (m, state) =>
+      I().storeParams(modeOf(m), optObj(state, 'state')));
+
+    this.handle('interface:toolbarLayout', (text) => I().parseToolbarsLayout(str(text, 'layout', 64 * 1024)));
+    this.handle('interface:formatToolbarLayout', (layout) => I().formatToolbarsLayout(optObj(layout, 'layout')));
+
+    this.handle('interface:doubleClickAction', (m, context) =>
+      I().doubleClickAction(modeOf(m), optObj(context, 'context')));
+
+    // ---- workspaces --------------------------------------------------
+    //
+    // `stored` is the saved workspace/site list; the live sessions come from
+    // the session manager, so a caller cannot pass a workspace that does not
+    // match what is actually open.
+    const storedWorkspaces = () => {
+      need(this.config, 'The configuration store is not available.');
+      const data = this.config.data || {};
+      return Array.isArray(data.workspaces) ? data.workspaces : [];
+    };
+
+    this.handle('interface:workspaceCollect', (options) =>
+      I().collectWorkspace(storedWorkspaces(),
+        this.sessions.all().map((s) => ({
+          active: s === this.sessions.active(),
+          stateData: { ...s.state, name: s.name, siteId: s.data.id || '' },
+          sessionData: s.data,
+        })),
+        optObj(options, 'options')));
+
+    this.handle('interface:workspacePasswordDecision', (dataList, state) =>
+      I().workspacePasswordDecision(arr(dataList, 'dataList', 500),
+        this.sessions.all().map((s) => ({ sessionData: s.data })),
+        optObj(state, 'state')));
+
+    this.handle('interface:workspaceList', (name) =>
+      I().folderOrWorkspaceList(storedWorkspaces(), optStr(name, 'name', LIMITS.name)));
+
+    this.handle('interface:workspaceOpen', (name, options) =>
+      I().openFolderOrWorkspace(storedWorkspaces(), str(name, 'name', LIMITS.name),
+        optObj(options, 'options')));
+
+    // ---- synchronized browsing ---------------------------------------
+    this.handle('interface:syncBrowseLocal', (prev, next, remote) =>
+      I().synchronizeBrowsingLocal(str(prev, 'prev', LIMITS.path), str(next, 'next', LIMITS.path),
+        str(remote, 'remote', LIMITS.path)));
+    this.handle('interface:syncBrowseRemote', (prev, next, local) =>
+      I().synchronizeBrowsingRemote(str(prev, 'prev', LIMITS.path), str(next, 'next', LIMITS.path),
+        str(local, 'local', LIMITS.path)));
+
+    this.handle('interface:tabHint', (m, session, state) =>
+      I().tabHintDetails(modeOf(m), optObj(session, 'session'), optObj(state, 'state')));
+  }
+
+  // --------------------------------------------------------------- ui:*
+  //
+  // design/main/userinterface.js — the message-dialog contract from
+  // windows/WinInterface.cpp: which buttons a question offers, which one is the
+  // default, what Escape answers, and when the never-ask-again box may appear
+  // at all. The renderer draws; this decides.
+  registerUi() {
+    const U = () => uiModule();
+
+    /**
+     * CreateMoreMessageDialogEx. `answers` is a list of answer NAMES (or the
+     * bit mask); the reply carries the button list, the default, the Escape
+     * answer and the never-ask-again box, all decided here rather than by the
+     * renderer's own idea of which button looks primary.
+     */
+    this.handle('ui:messageDialog', (spec) => {
+      const s = obj(spec, 'spec');
+      need(Array.isArray(s.answers) || typeof s.answers === 'number',
+        'spec.answers must be a list of answer names or an answer mask.');
+      return U().buildMessageDialog(
+        optStr(s.message, 'spec.message', LIMITS.text),
+        s.moreMessages === undefined ? null : s.moreMessages,
+        optStr(s.type, 'spec.type', 32) || undefined,
+        s.answers,
+        optStr(s.helpKeyword, 'spec.helpKeyword', 128) || undefined,
+        optObj(s.params, 'spec.params'));
+    });
+
+    /** Which answer a click produced, including the never-ask-again conversion. */
+    this.handle('ui:resolveAnswer', (dialog, raw) =>
+      U().resolveMessageAnswer(obj(dialog, 'dialog'), optObj(raw, 'answer')));
+
+    /**
+     * NeverAskAgainCheckClick — ticking the box disables every button but the
+     * positive one, so a NEGATIVE answer can never be made permanent. "No, and
+     * never ask again" would refuse every future transfer with nothing on
+     * screen to say why.
+     */
+    this.handle('ui:neverAskAgain', (dialog, checked, override) => {
+      const r = U().neverAskAgainEnablement(obj(dialog, 'dialog'), bool(checked, 'checked'),
+        override === undefined || override === null ? undefined : num(override, 'override', 0));
+      // The model answers with Maps keyed by answer name; the bridge carries
+      // plain JSON, and a Map that arrives as `{}` would read as "every button
+      // is enabled" — the exact opposite of what this decides.
+      return {
+        positiveAnswer: r.positiveAnswer,
+        enabled: Object.fromEntries(r.enabled),
+        dropDown: Object.fromEntries([...r.dropDown].map(([k, v]) => [k, v])),
+      };
+    });
+
+    this.handle('ui:mayOfferNeverAskAgain', (question) =>
+      U().mayOfferNeverAskAgain(str(question, 'question', 64)));
+    this.handle('ui:neverAskAgainSetting', (question) =>
+      U().neverAskAgainSetting(str(question, 'question', 64)));
+    this.handle('ui:answerList', (mask) => U().answerList(num(mask, 'mask', 0)));
+
+    /**
+     * An exception, as a dialog. ShouldDisplayException is the caller's gate:
+     * asking for a dialog for a silent abort is a caller defect and is reported
+     * as one rather than rendering an empty box.
+     */
+    this.handle('ui:exceptionDialog', (spec) => {
+      const s = obj(spec, 'spec');
+      const e = Object.assign(new Error(optStr(s.message, 'spec.message', LIMITS.text)), {
+        name: optStr(s.name, 'spec.name', 128) || 'Error',
+        code: optStr(s.code, 'spec.code', 64) || undefined,
+      });
+      need(U().shouldDisplayException(e), 'That exception is not one a dialog is shown for.');
+      return U().buildExceptionDialog(e, optStr(s.type, 'spec.type', 32) || undefined,
+        optObj(s.options, 'spec.options'));
+    });
+    this.handle('ui:timeoutCaption', (caption, seconds) =>
+      U().formatTimeoutCaption(str(caption, 'caption', 256), num(seconds, 'seconds', 0, 86400)));
+    this.handle('ui:formCaption', (title) => U().formatFormCaption(optStr(title, 'title', 256)));
+    this.handle('ui:mainFormCaption', (title) => U().formatMainFormCaption(optStr(title, 'title', 256)));
+
+    /** The answer channel — the same one explorer:answer settles. */
+    this.handle('ui:answer', (promptId, answer) =>
+      this.answerAsk(str(promptId, 'promptId', 128), str(answer, 'answer', 64)));
+  }
+
+  // -------------------------------------------------------- transfer:*
+  //
+  // The SESSION transfer path — TTerminal::CopyToRemote / CopyToLocal through
+  // design/main/transfer.js. It is not the queue: the queue is a background
+  // pump the user can pause and reorder, this is the foreground operation with
+  // its own robust retry loop, its own directory recursion and its own
+  // parallel-file splitting. Both move their bytes through queue.moveBytes,
+  // which is what stops the two growing separate ideas of what a resume is.
+  registerTransfer() {
+    const copyParamOf = (v) => {
+      const cp = optObj(v, 'copyParam');
+      need(JSON.stringify(cp).length <= 64 * 1024, 'The transfer settings are too large.');
+      return cp;
+    };
+
+    this.handle('transfer:copyToRemote', async (req) => {
+      const r = obj(req, 'request');
+      const session = this.session(r.sessionId);
+      need(session.adapter && session.adapter.connected, 'The session is not connected.');
+      const t = this.terminalFor(session);
+      const files = strArr(r.files, 'files', 200000).map((f) => path.resolve(f));
+      need(files.length, 'No files were given to transfer.');
+      const target = remotePath(session, r.target, 'target');
+      return t.copyToRemote(files, target, copyParamOf(r.copyParam),
+        r.params === undefined ? 0 : num(r.params, 'params', 0));
+    });
+
+    this.handle('transfer:copyToLocal', async (req) => {
+      const r = obj(req, 'request');
+      const session = this.session(r.sessionId);
+      need(session.adapter && session.adapter.connected, 'The session is not connected.');
+      const t = this.terminalFor(session);
+      const files = strArr(r.files, 'files', 200000).map((f) => remotePath(session, f, 'file'));
+      need(files.length, 'No files were given to transfer.');
+      return t.copyToLocal(files, path.resolve(str(r.target, 'target', LIMITS.path)),
+        copyParamOf(r.copyParam), r.params === undefined ? 0 : num(r.params, 'params', 0));
+    });
+
+    /**
+     * CanParallel — whether ONE file may be split across several connections.
+     * Asked before the transfer so the answer can be reported rather than
+     * discovered halfway through.
+     */
+    this.handle('transfer:canParallel', (req) => {
+      const r = obj(req, 'request');
+      const session = this.session(r.sessionId);
+      const engine = this.terminalFor(session).transferEngine();
+      return engine.canParallel(copyParamOf(r.copyParam),
+        r.params === undefined ? 0 : num(r.params, 'params', 0));
+    });
+
+    /** The copy-parameter helpers a transfer dialog needs, from one place. */
+    this.handle('transfer:changeFileName', (copyParam, name, s, firstLevel) =>
+      transferModule().changeFileName(copyParamOf(copyParam), str(name, 'name', LIMITS.name),
+        optStr(s, 'side', 16) === 'local' ? 'local' : 'remote', firstLevel !== false, {}));
+    this.handle('transfer:allowResume', (copyParam, size, name) => transferModule().allowResume(
+      copyParamOf(copyParam), num(size, 'size', 0), optStr(name, 'name', LIMITS.name)));
+    this.handle('transfer:useAsciiTransfer', (copyParam, name, s) => transferModule().useAsciiTransfer(
+      copyParamOf(copyParam), str(name, 'name', LIMITS.name),
+      optStr(s, 'side', 16) === 'remote' ? 'remote' : 'local', {}));
   }
 
   // --------------------------------------------------------- history:*

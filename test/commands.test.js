@@ -300,13 +300,39 @@ test('the comparator keeps "..", then directories, then files', () => {
   assert.deepEqual(sorted.slice(3), ['a.txt', 'b.txt']);
 });
 
-test('"always sort directories by name" ignores the active sort for folders', () => {
-  const cmp = PC.makeComparator({ key: 'changed', ascending: false }, { alwaysSortDirectoriesByName: true });
+test('"always sort directories by name" ignores the active COLUMN, not the direction', () => {
   const rows = [
     { name: 'zeta', type: 'dir', mtime: 5000 },
     { name: 'alpha', type: 'dir', mtime: 9000 },
   ];
-  assert.deepEqual(rows.slice().sort(cmp).map((r) => r.name), ['alpha', 'zeta']);
+  // The column is ignored: alpha is the newer directory but still sorts by name.
+  const up = PC.makeComparator({ key: 'changed', ascending: true }, { alwaysSortDirectoriesByName: true });
+  assert.deepEqual(rows.slice().sort(up).map((r) => r.name), ['alpha', 'zeta']);
+  // The DIRECTION is not ignored. DirViewInt.pas keeps ConsiderDirection True
+  // through this fallback and UnixDirView.cpp negates after it, so a descending
+  // sort reverses the directories along with the files. Leaving them ascending
+  // produced a panel where the folders and the files ran opposite ways.
+  const down = PC.makeComparator({ key: 'changed', ascending: false }, { alwaysSortDirectoriesByName: true });
+  assert.deepEqual(rows.slice().sort(down).map((r) => r.name), ['zeta', 'alpha']);
+});
+
+test('two parent entries compare equal, so the comparator stays antisymmetric', () => {
+  const cmp = PC.makeComparator({ key: 'name', ascending: true });
+  const a = { name: '..', type: 'dir' };
+  const b = { name: '..', type: 'dir' };
+  // compare(a,b) === -compare(b,a) is what Array.prototype.sort requires;
+  // returning -1 both ways is undefined behaviour that can reorder other rows.
+  assert.equal(cmp(a, b), 0);
+  assert.equal(cmp(a, b), -cmp(b, a));
+});
+
+test('Size and Date modified start descending the first time they are clicked', () => {
+  // TCustomIEListView::SortAscendingByDefault — the biggest and the newest
+  // belong at the top, which is why anyone clicks those headers.
+  assert.equal(PC.sortAscendingByDefault('name'), true);
+  assert.equal(PC.sortAscendingByDefault('ext'), true);
+  assert.equal(PC.sortAscendingByDefault('size'), false);
+  assert.equal(PC.sortAscendingByDefault('changed'), false);
 });
 
 test('cell text formats what each column shows', () => {

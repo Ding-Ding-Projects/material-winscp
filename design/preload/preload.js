@@ -265,6 +265,141 @@ const api = {
     discardOrphans: (paths) => call('editor:discardOrphans', paths),
   },
 
+  // -------------------------------------------------------- messages:*
+  //
+  // WinSCP's own STRINGTABLE resources. A surface that needs one of WinSCP's
+  // sentences asks for it by resource id rather than re-typing the English,
+  // which is how the wording stays the wording the original ships.
+  messages: {
+    load: (id, args) => call('messages:load', id, args),
+    meta: (id) => call('messages:meta', id),
+    table: () => call('messages:table'),
+    /** { language: 'en'|'yue'|'both', enLevel: 1..5, yueLevel: 1..5, args: [] } */
+    voiced: (id, options) => call('messages:voiced', id, options),
+    /** Split the `**` headline and the `$$` interactive prompt out of a message. */
+    split: (text) => call('messages:split', text),
+  },
+
+  // ----------------------------------------------------------- panel:*
+  //
+  // The file-panel model: one comparator, one filter, one rename refusal and
+  // one mask validator, shared with everything else that has to agree with the
+  // panel about what it is showing.
+  panel: {
+    columns: (side) => call('panel:columns', side),
+    sortAscendingByDefault: (side, key) => call('panel:sortAscendingByDefault', side, key),
+    /** { side, sortStr, click } — click flips or starts at the column default. */
+    sortState: (request) => call('panel:sortState', request),
+    /** { side, entries, mask, showHiddenFiles, sortColumn, ascending } */
+    buildView: (request) => call('panel:buildView', request),
+    export: (request) => call('panel:export', request),
+    validateRename: (request) => call('panel:validateRename', request),
+    composeMask: (lines, directory) => call('panel:composeMask', lines, directory),
+    validateMask: (mask, forceDirectoryMasks) => call('panel:validateMask', mask, forceDirectoryMasks),
+    compare: (request) => call('panel:compare', request),
+  },
+
+  // ------------------------------------------------------------ path:*
+  path: {
+    segments: (path, side) => call('path:segments', path, side),
+    complete: (typed, candidates) => call('path:complete', typed, candidates),
+    completions: (typed, entries, options) => call('path:completions', typed, entries, options),
+    /** direction: 'left' | 'right' | 'at' */
+    word: (text, caret, direction) => call('path:word', text, caret, direction),
+    saveToHistory: (list, value, options) => call('path:saveToHistory', list, value, options),
+    minimize: (path, chars) => call('path:minimize', path, chars),
+  },
+
+  // -------------------------------------------------------- explorer:*
+  //
+  // The orchestration layer. The renderer pushes what its panels hold and asks
+  // what a command may do; it does not decide for itself, because the two
+  // answers used to disagree about which files a command applies to.
+  explorer: {
+    setPanels: (patch) => call('explorer:setPanels', patch),
+    state: (command, context) => call('explorer:state', command, context),
+    fileList: (side, options) => call('explorer:fileList', side, options),
+    /** The full recycle-versus-delete path, with both confirmations. */
+    delete: (side, files, alternative) => call('explorer:delete', side, files, alternative),
+    deleteDecision: (side, files, alternative) => call('explorer:deleteDecision', side, files, alternative),
+    fileOperation: (operation, side, options) => call('explorer:fileOperation', operation, side, options),
+    presetAutoSelect: () => call('explorer:presetAutoSelect'),
+    presetAutoSelectData: () => call('explorer:presetAutoSelectData'),
+    queueOp: (operation, context) => call('explorer:queueOp', operation, context),
+    defaultQueueOp: (item) => call('explorer:defaultQueueOp', item),
+    doubleClick: (side, entry) => call('explorer:doubleClick', side, entry),
+    canPaste: () => call('explorer:canPaste'),
+    paste: (options) => call('explorer:paste', options),
+    dropEffect: (spec) => call('explorer:dropEffect', spec),
+    dropTarget: (spec) => call('explorer:dropTarget', spec),
+    dragDrop: (spec) => call('explorer:dragDrop', spec),
+    canCloseQueue: () => call('explorer:canCloseQueue'),
+    closeQuery: (options) => call('explorer:closeQuery', options),
+    closeTab: () => call('explorer:closeTab'),
+    syncBrowse: (spec) => call('explorer:syncBrowse', spec),
+    syncOptions: (params) => call('explorer:syncOptions', params),
+    fullSyncOptions: () => call('explorer:fullSyncOptions'),
+    customCommandState: (command, onFocused, listType) =>
+      call('explorer:customCommandState', command, onFocused, listType),
+    /** Settle a confirmation that arrived as an `event:prompt` of kind 'question'. */
+    answer: (promptId, answer) => call('explorer:answer', promptId, answer),
+  },
+
+  // ------------------------------------------------------- interface:*
+  interface: {
+    shortcuts: (mode, options) => call('interface:shortcuts', mode, options),
+    allowedAction: (mode, action, phase) => call('interface:allowedAction', mode, action, phase),
+    commands: (mode) => call('interface:commands', mode),
+    panels: (mode, options) => call('interface:panels', mode, options),
+    bands: (mode) => call('interface:bands', mode),
+    components: (mode) => call('interface:components', mode),
+    statusBars: (mode) => call('interface:statusBars', mode),
+    restoreParams: (mode, stored) => call('interface:restoreParams', mode, stored),
+    storeParams: (mode, state) => call('interface:storeParams', mode, state),
+    toolbarLayout: (text) => call('interface:toolbarLayout', text),
+    formatToolbarLayout: (layout) => call('interface:formatToolbarLayout', layout),
+    doubleClickAction: (mode, context) => call('interface:doubleClickAction', mode, context),
+    workspaceCollect: (options) => call('interface:workspaceCollect', options),
+    workspacePasswordDecision: (dataList, state) => call('interface:workspacePasswordDecision', dataList, state),
+    workspaceList: (name) => call('interface:workspaceList', name),
+    workspaceOpen: (name, options) => call('interface:workspaceOpen', name, options),
+    syncBrowseLocal: (prev, next, remote) => call('interface:syncBrowseLocal', prev, next, remote),
+    syncBrowseRemote: (prev, next, local) => call('interface:syncBrowseRemote', prev, next, local),
+    tabHint: (mode, session, state) => call('interface:tabHint', mode, session, state),
+  },
+
+  // --------------------------------------------------------------- ui:*
+  //
+  // The message-dialog contract: which buttons a question offers, which is the
+  // default, what Escape answers, and whether "never ask again" may appear.
+  ui: {
+    messageDialog: (spec) => call('ui:messageDialog', spec),
+    resolveAnswer: (dialog, answer) => call('ui:resolveAnswer', dialog, answer),
+    neverAskAgain: (dialog, checked, override) => call('ui:neverAskAgain', dialog, checked, override),
+    mayOfferNeverAskAgain: (question) => call('ui:mayOfferNeverAskAgain', question),
+    neverAskAgainSetting: (question) => call('ui:neverAskAgainSetting', question),
+    answerList: (mask) => call('ui:answerList', mask),
+    exceptionDialog: (spec) => call('ui:exceptionDialog', spec),
+    timeoutCaption: (caption, seconds) => call('ui:timeoutCaption', caption, seconds),
+    formCaption: (title) => call('ui:formCaption', title),
+    mainFormCaption: (title) => call('ui:mainFormCaption', title),
+    answer: (promptId, answer) => call('ui:answer', promptId, answer),
+  },
+
+  // -------------------------------------------------------- transfer:*
+  //
+  // The FOREGROUND transfer path — TTerminal::CopyToRemote / CopyToLocal. The
+  // queue is the background one; both move their bytes through the same mover.
+  transfer: {
+    copyToRemote: (request) => call('transfer:copyToRemote', request),
+    copyToLocal: (request) => call('transfer:copyToLocal', request),
+    canParallel: (request) => call('transfer:canParallel', request),
+    changeFileName: (copyParam, name, side, firstLevel) =>
+      call('transfer:changeFileName', copyParam, name, side, firstLevel),
+    allowResume: (copyParam, size, name) => call('transfer:allowResume', copyParam, size, name),
+    useAsciiTransfer: (copyParam, name, side) => call('transfer:useAsciiTransfer', copyParam, name, side),
+  },
+
   // ---------------------------------------------------------- history:*
   history: {
     list: (options) => call('history:list', options),

@@ -46,7 +46,11 @@ const {
   getPartialFileExtLen,
   PARTIAL_EXT,
 } = require('./remotefiles');
-const { compareFileTime, formatSize } = require('./common');
+// `common.js` is the port of core/Common.cpp and owns ValidLocalFileName and
+// the two replacement sentinels. It is imported whole because this module both
+// re-exports that function and needs the sentinels themselves.
+const C = require('./common');
+const { compareFileTime, formatSize } = C;
 const { FileMask } = require('./masks');
 const {
   ANSWERS, CANCEL, OPERATIONS, SIDES, DELETE_FLAGS, CALC_FLAGS,
@@ -132,14 +136,18 @@ const TOKEN_PREFIX = '%';
  */
 const TOKENIZIBLE_CHARS = `${LOCAL_INVALID_CHARS}${TOKEN_PREFIX}`;
 
-const TOKEN_REPLACEMENT = TOKEN_PREFIX;
-
-/** Device names Windows still reserves, so "con.txt" cannot be created. */
-const RESERVED_NAMES = new Set([
-  'CON', 'PRN', 'AUX', 'NUL',
-  'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
-  'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
-]);
+/**
+ * `InvalidCharsReplacement` is a `wchar_t` in the original, and its two
+ * sentinels are `wchar_t(false)` and `wchar_t(true)` — U+0000 and U+0001, not
+ * printable characters. That distinction is the whole point: a user who types
+ * '%' as their replacement character gets a literal '%' substituted, they do
+ * NOT silently switch the name codec into reversible token mode. This module
+ * used its own '%' sentinel for a while, which meant the same C++ function was
+ * ported twice with incompatible signals; `common.js` carries the faithful one
+ * and is now the only implementation (see `validLocalFileName` below).
+ */
+const TOKEN_REPLACEMENT = C.TOKEN_REPLACEMENT;
+const NO_REPLACEMENT = C.NO_REPLACEMENT;
 
 // ===========================================================================
 // TCopyParamType helpers
@@ -151,77 +159,29 @@ const RESERVED_NAMES = new Set([
 // ===========================================================================
 
 /**
- * ::IsReservedName. Only the stem before the FIRST dot is considered, and only
- * when it is three or four characters long — which is why every further
- * extension is irrelevant: Windows refuses "con.txt.bak" exactly as it refuses
- * "con", so treating the second dot as making the name safe would produce a
- * local name that cannot be created.
+ * ::IsReservedName and ::ValidLocalFileName both live in core/Common.cpp, and
+ * `common.js` is this repository's port of that file. They were transcribed a
+ * second time here, which is exactly the fork this reconciliation exists to
+ * remove: the two copies disagreed about the TokenReplacement sentinel ('%'
+ * versus U+0001), about whether a trailing space is encoded outside token mode
+ * (the C++ encodes it in BOTH modes) and about whether a reserved device name
+ * is defused outside token mode (it is). `common.js` matches the original on
+ * all three, so it is the surviving implementation and these are aliases —
+ * kept because the whole transfer path and its tests import them from here.
  */
-function isReservedName(name) {
-  const n = String(name || '');
-  const dot = n.indexOf('.');
-  const stem = dot >= 0 ? n.slice(0, dot) : n;
-  if (stem.length !== 3 && stem.length !== 4) return false;
-  return RESERVED_NAMES.has(stem.toUpperCase());
-}
+const isReservedName = C.isReservedName;
 
 /**
- * ::ValidLocalFileName. Every character Windows refuses becomes the
- * replacement; when the replacement is the token prefix the character is
- * *encoded* as %XX instead, so `RestoreChars` can put it back on the way up
- * and the round trip is lossless.
- *
- * A trailing dot or space is encoded too: Windows silently strips both, which
- * would turn "report." and "report" into the same local file.
+ * ::ValidLocalFileName, with THIS module's defaults for the two character sets:
+ * `TokenizibleChars` is `LocalInvalidChars + TokenPrefix`, which is what
+ * TCopyParamType passes and what makes the %XX codec reversible.
  */
 function validLocalFileName(fileName, replacement, tokenizibleChars, invalidChars) {
-  const rep = replacement === undefined || replacement === null || replacement === '' ? '_' : replacement;
-  const tokenizible = tokenizibleChars === undefined ? TOKENIZIBLE_CHARS : tokenizibleChars;
-  const invalid = invalidChars === undefined ? LOCAL_INVALID_CHARS : invalidChars;
-  const tokenize = rep === TOKEN_REPLACEMENT;
-
-  const encode = (ch) => TOKEN_PREFIX + ch.codePointAt(0).toString(16).toUpperCase().padStart(2, '0');
-  const chars = Array.from(String(fileName === undefined || fileName === null ? '' : fileName));
-  // The set the scan looks for. In token mode that is TokenizibleChars — which
-  // includes the token prefix itself — otherwise just the characters the local
-  // file system refuses. Control characters are added to both: WinSCP reaches
-  // Win32 with them and gets an error, which here would be a failed transfer
-  // rather than a diagnosable name.
-  const scan = tokenize ? tokenizible : invalid;
-  let out = '';
-  for (let i = 0; i < chars.length; i++) {
-    const ch = chars[i];
-    const bad = scan.includes(ch) || ch.codePointAt(0) < 32;
-    if (!bad) { out += ch; continue; }
-    if (!tokenize) { out += rep; continue; }
-    // A '%' that ALREADY introduces a valid token is left alone, so a name we
-    // encoded on the way down is not encoded a second time on the way back.
-    // Anything else — including a '%' the user typed — is encoded, because
-    // RestoreChars has no other way to tell the two apart.
-    if (ch === TOKEN_PREFIX) {
-      const hex = chars.slice(i + 1, i + 3).join('');
-      const known = /^[0-9a-fA-F]{2}$/.test(hex) &&
-        parseInt(hex, 16) !== 0 &&
-        tokenizible.includes(String.fromCharCode(parseInt(hex, 16)));
-      if (!known) { out += ch; continue; }
-    }
-    out += encode(ch);
-  }
-  // Windows silently strips a trailing space or dot, which would collapse two
-  // distinct remote names into one local file, so the last character is encoded
-  // whether or not it is in the tokenizible set.
-  const lastCh = out.slice(-1);
-  if (tokenize && out.length > 0 && (lastCh === ' ' || lastCh === '.')) {
-    out = out.slice(0, -1) + encode(lastCh);
-  }
-  if (out === '') return rep;
-  // A reserved device name gets a %00 marker after its stem, which RestoreChars
-  // removes again. Encoding it is the only way to keep the name distinguishable.
-  if (tokenize && isReservedName(out)) {
-    const dot = out.indexOf('.');
-    out = dot >= 0 ? `${out.slice(0, dot)}%00${out.slice(dot)}` : `${out}%00`;
-  }
-  return out;
+  return C.validLocalFileName(
+    fileName === undefined || fileName === null ? '' : fileName,
+    replacement === undefined || replacement === null || replacement === '' ? '_' : replacement,
+    tokenizibleChars === undefined ? TOKENIZIBLE_CHARS : tokenizibleChars,
+    invalidChars === undefined ? LOCAL_INVALID_CHARS : invalidChars);
 }
 
 /** TCopyParamType::RestoreChars — the inverse, applied on the way up. */
@@ -703,7 +663,7 @@ class ParallelOperation {
       if (out.targetDir) {
         let onlyFileName = '';
         if (out.dir || this.isParallelFileTransfer) {
-          onlyFileName = extractFileName(excludeTrailingSlash(out.fileName));
+          onlyFileName = extractFileNameFor(this.side, excludeTrailingSlash(out.fileName));
           onlyFileName = changeName
             ? changeName(onlyFileName, this.side, firstLevel)
             : changeFileName(this.copyParam, onlyFileName, this.side, firstLevel);
@@ -882,6 +842,29 @@ function extractFileDirLocal(p) {
   const i = Math.max(s.lastIndexOf('/'), s.lastIndexOf('\\'));
   if (i < 0) return '';
   return i === 0 ? s.slice(0, 1) : s.slice(0, i);
+}
+
+/**
+ * The last component of a LOCAL path.
+ *
+ * `extractFileName` in terminal.js splits on '/' only, deliberately: WinSCP's
+ * remote path arithmetic is always POSIX and making it separator-agnostic would
+ * corrupt a remote name that legitimately contains a backslash. A local
+ * Windows path is the opposite case, and using the POSIX version on one returns
+ * the WHOLE path as the "file name" — which then gets joined onto the target
+ * directory, so `C:\work\a.bin` uploads to `/uploads/C:\work\a.bin`. That is a
+ * silent wrong-destination bug, not a crash, which is why it needs its own
+ * helper rather than a shared one that tries to be clever.
+ */
+function extractFileNameLocal(p) {
+  const s = String(p || '');
+  const i = Math.max(s.lastIndexOf('/'), s.lastIndexOf('\\'));
+  return i < 0 ? s : s.slice(i + 1);
+}
+
+/** The base name on whichever side the path belongs to. */
+function extractFileNameFor(side, p) {
+  return side === SIDES.local ? extractFileNameLocal(p) : extractFileName(p);
 }
 
 // ===========================================================================
@@ -1879,7 +1862,7 @@ class TransferEngine {
     }
 
     const destFileName = this.changeFileName(
-      copyParam, extractFileName(excludeTrailingSlash(fileName)),
+      copyParam, extractFileNameLocal(excludeTrailingSlash(fileName)),
       SIDES.local, !!(flags & TRANSFER_FLAGS.firstLevel));
 
     if (handle.directory) {
@@ -1933,7 +1916,7 @@ class TransferEngine {
             try { isDir = (await a.stat(a.normalize(fileName))).type === 'dir'; } catch { isDir = false; }
             if (isDir) {
               this.terminal.directoryModified(
-                fullTargetDir + extractFileName(excludeTrailingSlash(fileName)), true);
+                fullTargetDir + extractFileNameLocal(excludeTrailingSlash(fileName)), true);
             }
           }
           await this.sourceRobust(fileName, searchRec, fullTargetDir, copyParam, params, progress,
@@ -3014,6 +2997,7 @@ module.exports = {
   // constants
   COPY_FLAGS, TRANSFER_FLAGS, BATCH_OVERWRITE, OVERWRITE_MODE, OVERWRITE_ANSWERS,
   QUEUE_FILE_STATE, LOCAL_INVALID_CHARS, TOKENIZIBLE_CHARS,
+  TOKEN_PREFIX, TOKEN_REPLACEMENT, NO_REPLACEMENT,
   // copy-param logic
   validLocalFileName, restoreChars, changeFileName, allowResume, useAsciiTransfer,
   remoteFileRights, localFileReadOnly, resumeTransfer, skipTransfer, allowAnyTransfer,
@@ -3025,4 +3009,5 @@ module.exports = {
   StandaloneHost, SimpleProgress, TransferEngine, AdapterFileSystem,
   // wiring
   transferEngineFor, normalizeCopyList, canAppendTo,
+  extractFileNameLocal, extractFileDirLocal,
 };

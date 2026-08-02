@@ -29,6 +29,7 @@ const {
   validLocalFileName, restoreChars, changeFileName, allowResume, useAsciiTransfer,
   remoteFileRights, localFileReadOnly, skipTransfer, resumeTransfer, allowAnyTransfer,
   isReservedName, rollbackTransfer, addResumed,
+  TOKEN_REPLACEMENT, NO_REPLACEMENT,
 } = X;
 
 // ===========================================================================
@@ -336,24 +337,32 @@ const cp = (over) => ({ ...CP, ...(over || {}) });
 test('ValidLocalFileName encodes what Windows would silently mangle', () => {
   // Plain replacement: every invalid character becomes the replacement.
   assert.strictEqual(validLocalFileName('a:b*c?.txt', '_'), 'a_b_c_.txt');
-  // A control character counts as invalid too.
-  assert.strictEqual(validLocalFileName(`a${String.fromCharCode(7)}b`, '_'), 'a_b');
+  // A control character is NOT in LocalInvalidChars, so ValidLocalFileName
+  // leaves it exactly where the server put it — as the original does. The name
+  // then fails at the file system, which is a diagnosable error, rather than
+  // being quietly rewritten into a different file.
+  assert.strictEqual(validLocalFileName(`a${String.fromCharCode(7)}b`, '_'), `a${String.fromCharCode(7)}b`);
   // An empty result would be an unusable name.
   assert.strictEqual(validLocalFileName(':', '_'), '_');
 
-  // Token mode (%): the character is ENCODED, so restoreChars can undo it.
-  assert.strictEqual(validLocalFileName('a:b.txt', '%'), 'a%3Ab.txt');
-  assert.strictEqual(restoreChars('a%3Ab.txt', '%'), 'a:b.txt');
+  // Token mode: the character is ENCODED, so restoreChars can undo it. The
+  // sentinel is TokenReplacement (wchar_t(true) = U+0001), NOT the '%' prefix
+  // it produces — a user who types '%' as their replacement character gets a
+  // literal '%' substituted and no encoding at all.
+  assert.strictEqual(validLocalFileName('a:b.txt', TOKEN_REPLACEMENT), 'a%3Ab.txt');
+  assert.strictEqual(restoreChars('a%3Ab.txt', TOKEN_REPLACEMENT), 'a:b.txt');
+  assert.strictEqual(validLocalFileName('a:b.txt', '%'), 'a%b.txt',
+    'a literal % replacement substitutes, it does not switch on the codec');
 
   // Windows strips a trailing dot and a trailing space, which would make two
   // different remote names collide locally. Both are encoded instead.
-  assert.strictEqual(validLocalFileName('report.', '%'), 'report%2E');
-  assert.strictEqual(restoreChars('report%2E', '%'), 'report.');
-  assert.strictEqual(validLocalFileName('report ', '%'), 'report%20');
-  assert.strictEqual(restoreChars('report%20', '%'), 'report ');
+  assert.strictEqual(validLocalFileName('report.', TOKEN_REPLACEMENT), 'report%2E');
+  assert.strictEqual(restoreChars('report%2E', TOKEN_REPLACEMENT), 'report.');
+  assert.strictEqual(validLocalFileName('report ', TOKEN_REPLACEMENT), 'report%20');
+  assert.strictEqual(restoreChars('report%20', TOKEN_REPLACEMENT), 'report ');
 
   // A dot in the middle is a perfectly good file name and is left alone.
-  assert.strictEqual(validLocalFileName('a.b.txt', '%'), 'a.b.txt');
+  assert.strictEqual(validLocalFileName('a.b.txt', TOKEN_REPLACEMENT), 'a.b.txt');
 
   // Reserved device names cannot be created at all, so they get a marker.
   // Only the stem before the FIRST dot counts, and only at three or four
@@ -363,25 +372,25 @@ test('ValidLocalFileName encodes what Windows would silently mangle', () => {
   assert.ok(isReservedName('CON.txt'));
   assert.ok(isReservedName('con.txt.bak'), 'a further extension does not unreserve the stem');
   assert.ok(!isReservedName('console'));
-  assert.strictEqual(validLocalFileName('con.txt', '%'), 'con%00.txt');
-  assert.strictEqual(restoreChars('con%00.txt', '%'), 'con.txt');
-  assert.strictEqual(validLocalFileName('con.txt.bak', '%'), 'con%00.txt.bak');
-  assert.strictEqual(restoreChars('con%00.txt.bak', '%'), 'con.txt.bak');
+  assert.strictEqual(validLocalFileName('con.txt', TOKEN_REPLACEMENT), 'con%00.txt');
+  assert.strictEqual(restoreChars('con%00.txt', TOKEN_REPLACEMENT), 'con.txt');
+  assert.strictEqual(validLocalFileName('con.txt.bak', TOKEN_REPLACEMENT), 'con%00.txt.bak');
+  assert.strictEqual(restoreChars('con%00.txt.bak', TOKEN_REPLACEMENT), 'con.txt.bak');
 
   // The token prefix is itself tokenizible, which is the only thing that makes
   // the codec reversible. A '%' the USER typed is encoded ("%25") so the way
   // back can tell it from an escape we produced; a '%' that already introduces
   // a valid token is left alone so a name is never double-encoded.
-  assert.strictEqual(validLocalFileName('x%25y.txt', '%'), 'x%2525y.txt');
-  assert.strictEqual(restoreChars('x%2525y.txt', '%'), 'x%25y.txt');
-  assert.strictEqual(validLocalFileName('100%.txt', '%'), '100%.txt',
+  assert.strictEqual(validLocalFileName('x%25y.txt', TOKEN_REPLACEMENT), 'x%2525y.txt');
+  assert.strictEqual(restoreChars('x%2525y.txt', TOKEN_REPLACEMENT), 'x%25y.txt');
+  assert.strictEqual(validLocalFileName('100%.txt', TOKEN_REPLACEMENT), '100%.txt',
     'a % that is not a token is left where it is');
 
   // Space and dot are encoded ONLY as the last character, so a "%20" the user
   // typed in the middle of a name is not silently turned into a space on the
   // way up — that would upload the file under a name nobody asked for.
-  assert.strictEqual(restoreChars('a%20b.txt', '%'), 'a%20b.txt');
-  assert.strictEqual(validLocalFileName('a%20b.txt', '%'), 'a%20b.txt');
+  assert.strictEqual(restoreChars('a%20b.txt', TOKEN_REPLACEMENT), 'a%20b.txt');
+  assert.strictEqual(validLocalFileName('a%20b.txt', TOKEN_REPLACEMENT), 'a%20b.txt');
 
   // With a non-token replacement there is nothing to restore.
   assert.strictEqual(restoreChars('a%3Ab.txt', '_'), 'a%3Ab.txt');
@@ -404,7 +413,7 @@ test('ChangeFileName applies the file mask only at the first level', () => {
   // Side osRemote means the name is becoming a LOCAL one, so it is scrubbed.
   assert.strictEqual(changeFileName(cp({ invalidCharsReplacement: '_' }), 'a:b', SIDES.remote, false), 'a_b');
   // Side osLocal means it is going up, so an encoded name is restored.
-  assert.strictEqual(changeFileName(cp({ invalidCharsReplacement: '%' }), 'a%3Ab', SIDES.local, false), 'a:b');
+  assert.strictEqual(changeFileName(cp({ invalidCharsReplacement: TOKEN_REPLACEMENT }), 'a%3Ab', SIDES.local, false), 'a:b');
   // Opting out of replacement leaves the name exactly as the server gave it.
   assert.strictEqual(changeFileName(cp({ replaceInvalidChars: false }), 'a:b', SIDES.remote, false), 'a:b');
 });
@@ -432,8 +441,10 @@ test('UseAsciiTransfer, RemoteFileRights, LocalFileAttrs, SkipTransfer', () => {
   assert.strictEqual(remoteFileRights(cp({ rights: 'rw-r--r--' }), true), 'rwxr-xr-x');
   assert.strictEqual(remoteFileRights(cp({ rights: 'rw-r--r--', addXToDirectories: false }), true), 'rw-r--r--');
 
-  assert.strictEqual(localFileReadOnly(cp(), 'r--r--r--'), true);
-  assert.strictEqual(localFileReadOnly(cp(), 'rw-r--r--'), false);
+  assert.strictEqual(localFileReadOnly(cp({ preserveReadOnly: true }), 'r--r--r--'), true);
+  assert.strictEqual(localFileReadOnly(cp({ preserveReadOnly: true }), 'rw-r--r--'), false);
+  // TCopyParamType::Default has PreserveReadOnly = false, so the default does nothing.
+  assert.strictEqual(localFileReadOnly(cp(), 'r--r--r--'), false);
   assert.strictEqual(localFileReadOnly(cp({ preserveReadOnly: false }), 'r--r--r--'), false);
 
   // A directory is never skipped by the list: the path is added when a

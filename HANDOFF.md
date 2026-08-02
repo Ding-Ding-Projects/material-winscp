@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `4b9022f`** — Prove the installer end to end, and generate the changelog from real commits
+**At commit `aae58d9`** — Generate HANDOFF and ROADMAP, and unstick a test file that hung the suite
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **53.2%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 66.5% — includes embedded hex resources, **do not quote this one** |
-| Tests | 2810 run, **2809 pass, 0 fail**, 1 skipped |
-| Hand-written code | 138,083 lines across 249 files |
-| Commits | 18 on `main` |
-| Working tree | **35 uncommitted change(s)** |
-| Remote | `origin/main` at `4b9022f` — in sync |
+| Tests | not run in this regeneration |
+| Hand-written code | 187,793 lines across 274 files |
+| Commits | 19 on `main` |
+| Working tree | **19 uncommitted change(s)** |
+| Remote | `origin/main` at `aae58d9` — in sync |
 
 ### Coverage by area
 
@@ -127,6 +127,7 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `aae58d9` | 2026-08-02 | Generate HANDOFF and ROADMAP, and unstick a test file that hung the suite |
 | `4b9022f` | 2026-08-02 | Prove the installer end to end, and generate the changelog from real commits |
 | `7756e63` | 2026-08-02 | Reconcile 24,361 lines the ledger was counting as never written |
 | `a5d3386` | 2026-08-02 | The panels are real: 1,829 tests, 301 actions wired, 43.5% of the logic ported |
@@ -134,7 +135,6 @@ bite a successor who assumes otherwise:
 | `e7dd988` | 2026-08-02 | Update silently like Chrome, and fix two reasons it never could have |
 | `5a46937` | 2026-08-02 | Delete the Donate action outright, and make the no-nag rule enforceable |
 | `21e40bf` | 2026-08-02 | Report the project's real size, and take on six rules that landed mid-build |
-| `6105f2b` | 2026-08-02 | Close the CI loop: a release tag was retriggering the build that made it |
 
 ## Notes from whoever worked on this last
 

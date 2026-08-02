@@ -1196,6 +1196,10 @@ class SftpAdapter extends Adapter {
       maxPacketSize: this.maxPacketSize.size,
       abilities: this.serverAbilities,
       workarounds: this.bugs.active,
+      // Detected but NOT performed by this port — kept separate so the UI can
+      // say "we know about this server's bug and do not handle it" rather than
+      // implying it is handled.
+      unhandledWorkarounds: this.bugs.documented,
       extendedRequests: this.ext.available,
     };
     this._log('info', `SFTP version ${this.sftpVersion} session ready; home directory ${this.home}`);

@@ -170,7 +170,13 @@ const SESSION_DEFAULTS = {
 
 /** Default transfer settings (WinSCP TCopyParamType). */
 const COPY_PARAM_DEFAULTS = {
-  transferMode: 'automatic',       // text | binary | automatic
+  // TCopyParamType::Default sets TransferMode = tmBinary (CopyParam.cpp:38).
+  // The difference is not cosmetic: in automatic mode every *.txt, *.xml, *.ini
+  // and *.sh goes over in text mode, which rewrites its line endings and — via
+  // SFTPConfirmOverwrite's CanAppend — withdraws the Append button and refuses
+  // to resume. Shipping "automatic" as the default therefore silently changed
+  // both the bytes on the wire and the answers the overwrite dialog offered.
+  transferMode: 'binary',          // text | binary | automatic
   asciiFileMask: '*.*htm; *.*html; *.txt; *.php*; *.c; *.cpp; *.h; *.pas; *.bas; *.tex; *.pl; *.js; .htaccess; *.xtml; *.css; *.cfg; *.ini; *.sh; *.xml',
   fileNameCase: 'noChange',        // noChange | upper | lower | firstUpper
   preserveTime: true,
@@ -179,7 +185,10 @@ const COPY_PARAM_DEFAULTS = {
   rights: 'rw-r--r--',
   addXToDirectories: true,
   ignorePermErrors: false,
-  preserveReadOnly: true,
+  // CopyParam.cpp:29 — PreserveReadOnly = false. Defaulting it on made every
+  // downloaded file read-only, which WinSCP does not do and which a user then
+  // has to undo by hand before they can edit what they just fetched.
+  preserveReadOnly: false,
   replaceInvalidChars: true,
   invalidCharsReplacement: '_',
   calculateSize: true,

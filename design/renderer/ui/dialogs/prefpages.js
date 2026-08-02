@@ -70,7 +70,7 @@ export const COPY_PARAM_SECTIONS = [
     id: 'cp-mode',
     title: L('Transfer mode', '傳輸模式'),
     controls: [
-      radio('copyParam.transferMode', 'automatic', 'Transfer mode', '傳輸模式', [
+      radio('copyParam.transferMode', 'binary', 'Transfer mode', '傳輸模式', [
         opt('text', 'Text (plain text, HTML, scripts…)', '文字（純文字、HTML、腳本…）'),
         opt('binary', 'Binary (archives, documents…)', '二進位（壓縮檔、文件…）'),
         opt('automatic', 'Automatic (by file mask)', '自動（睇檔案遮罩）'),
@@ -106,7 +106,7 @@ export const COPY_PARAM_SECTIONS = [
     id: 'cp-download',
     title: L('Download options', '下載選項'),
     controls: [
-      check('copyParam.preserveReadOnly', true, 'Preserve read-only attribute', '保留唯讀屬性'),
+      check('copyParam.preserveReadOnly', false, 'Preserve read-only attribute', '保留唯讀屬性'),
     ],
   },
   {

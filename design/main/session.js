@@ -886,6 +886,8 @@ class SessionManager extends EventEmitter {
     this.config = d.config;
     this._send = d.emit || (() => {});
     this.sessions = new Map();
+    /** ActiveTerminal, as the renderer's tab strip reports it. */
+    this._activeId = '';
   }
 
   /**
@@ -917,6 +919,38 @@ class SessionManager extends EventEmitter {
   }
 
   get(id) { return this.sessions.get(id) || null; }
+
+  /** Every live session, in the order they were opened — TTerminalManager. */
+  all() { return [...this.sessions.values()]; }
+
+  /**
+   * The session the user is looking at — TTerminalManager::ActiveTerminal.
+   *
+   * The orchestration layer (design/main/explorershell.js) asks "what does this
+   * command apply to?" dozens of times per keystroke, and the answer is always
+   * this one. It falls back to the first open session rather than to null: a
+   * renderer that has not told us which tab is in front is much more likely to
+   * have exactly one than none, and answering null there would grey out every
+   * command on a perfectly usable session.
+   */
+  active() {
+    if (this._activeId) {
+      const s = this.sessions.get(this._activeId);
+      if (s) return s;
+      this._activeId = '';
+    }
+    for (const s of this.sessions.values()) return s;
+    return null;
+  }
+
+  /** Follow the renderer's tab selection. An unknown id clears the choice. */
+  setActive(id) {
+    const key = id === undefined || id === null ? '' : String(id);
+    this._activeId = this.sessions.has(key) ? key : '';
+    if (key && this._activeId) this.emit('active', this.sessions.get(key));
+    return this._activeId;
+  }
+
   require(id) {
     const s = this.sessions.get(id);
     if (!s) { const e = new Error(`No such session: ${id}`); e.code = 'NO_SUCH_SESSION'; throw e; }
