@@ -88,6 +88,29 @@ test('CI publishes a plain-semver tag whose version actually increments', () => 
   assert.ok(!/--draft\b/.test(ci), 'a draft release is not published');
 });
 
+test('publishing a release cannot trigger another build', () => {
+  // Publishing a release CREATES A TAG, and a bare `on: push` fires for tag
+  // pushes too — so every release triggered a build, which published a release.
+  // Nine releases came out of four commits the first time; a later recurrence
+  // produced over two hundred, and burned an afternoon of hosted minutes
+  // rebuilding the same commit under a new number each lap.
+  //
+  // `tags-ignore` is the whole fix, and it lives in exactly one line that is
+  // easy to lose in a reformat. Nothing enforced it until this test, and the
+  // loop is invisible from a green build: every individual run SUCCEEDS.
+  const ci = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8')
+    .split('\n').map((l) => l.replace(/\r$/, '').replace(/(^|\s)#.*$/, '')).join('\n');
+
+  assert.match(ci, /^\s*tags-ignore:\s*$/m,
+    'on.push must carry tags-ignore, or publishing a release retriggers this workflow');
+  assert.match(ci, /tags-ignore:\s*\n\s*-\s*'\*\*'/,
+    "tags-ignore must exclude every tag ('**'), not a subset");
+
+  // A `tags:` allow-list would re-open the same loop from the other direction.
+  assert.ok(!/^\s*tags:\s*$/m.test(ci),
+    'on.push must not also list tags — that is the loop again, spelled differently');
+});
+
 test('the update feed points at a public repository', () => {
   // update.electronjs.org only serves public repositories. If this ever moves
   // private, silent updates stop working and the failure is invisible.
