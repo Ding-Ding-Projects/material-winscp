@@ -70,6 +70,23 @@ jobs:
           # the table against upstream is a job for whoever re-runs
           # `node tools/extract-resources.js` with the submodule checked out.
           submodules: false
+          # actions/checkout defaults to `fetch-depth: 1` — a SHALLOW clone
+          # holding exactly the commit that triggered the run and nothing
+          # before it. test/changelog.test.js resolves every changelog entry's
+          # sha with `git cat-file`, so on a shallow checkout every one of them
+          # is missing and the suite fails with "commit <sha> is not in this
+          # repository" while passing on any developer's machine. The test is
+          # right and the checkout was wrong: the fix is history, never a skip
+          # when the clone is shallow, which would make the assertion
+          # permanently green on the one machine whose output anyone reads.
+          #
+          # 0 rather than a fixed number on purpose. The changelog reaches
+          # further back with every entry added, so any finite depth works
+          # until the day it silently does not. `submodules: false` is
+          # unaffected — fetch-depth governs the main repository's history and
+          # the submodules input is the only thing that fetches vendor/winscp,
+          # so this costs history, not 300k lines of C++.
+          fetch-depth: 0
 
       - name: Set up Node ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
@@ -93,6 +110,18 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: false
+          # Nothing this job runs today reads git history — build/make-icon.js,
+          # build/pick-codename.js and build/release-notes.js between them do
+          # not spawn git once. It is here anyway, for a reason worth writing
+          # down: the release notes are supposed to report per-line authorship,
+          # and `git blame` on a shallow clone does not fail. It exits 0 and
+          # attributes every line of every file to the single grafted boundary
+          # commit — README.md blames to three commits with history and to
+          # exactly one without. A release job that loses that argument
+          # publishes a confidently wrong number to a page nobody re-runs.
+          # Keeping both checkouts identical also means nobody later "tidies"
+          # the difference away in the wrong direction.
+          fetch-depth: 0
 
       - name: Set up Node ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4

@@ -443,6 +443,63 @@ test('every referenced commit exists in this repository', (t) => {
   }
 });
 
+/**
+ * The test above needs history to exist, and on CI it did not.
+ *
+ * actions/checkout defaults to `fetch-depth: 1` — a shallow clone containing
+ * the triggering commit and nothing before it. Every sha above then resolves
+ * to nothing and the suite fails on CI while passing for everyone locally,
+ * which is the worst shape a failure can take: the machine whose output people
+ * actually read is the only one that disagrees.
+ *
+ * The tempting fix is to skip the sha check when the clone is shallow. That
+ * turns the one assertion protecting against dead changelog links permanently
+ * green in the only place it is ever run, so it is not a fix. The checkout
+ * gets history instead, and this guards that single YAML line — it is one word
+ * on one line, invisible in a reformat, and dropping it costs nothing until a
+ * red build appears with no obvious cause.
+ *
+ * Other assertions about ci.yml live in test/autoupdate.test.js; this one sits
+ * here so that when the sha check above goes red on CI, its cause is the next
+ * thing a reader scrolls past.
+ */
+test('every CI checkout fetches full history, or the sha check above cannot run', () => {
+  const fs = require('node:fs');
+  const raw = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'ci.yml'), 'utf8');
+  // Strip comments first, exactly as autoupdate.test.js does, so the paragraph
+  // explaining fetch-depth cannot be what satisfies the assertion about it.
+  // The trailing \r goes first: `.` never matches a carriage return, so against
+  // a CRLF checkout a comment stripper anchored on `$` silently does nothing.
+  const ci = raw.split('\n')
+    .map((l) => l.replace(/\r$/, '').replace(/(^|\s)#.*$/, ''))
+    .join('\n');
+
+  const checkouts = (ci.match(/uses:\s*actions\/checkout@/g) || []).length;
+  assert.ok(checkouts > 0, 'ci.yml must still check the repository out');
+
+  // Checked BEFORE the count, so that a fixed depth is reported as a fixed
+  // depth. `fetch-depth: 50` would fail the count assertion too, but with a
+  // message about missing history, which sends the reader looking for a line
+  // that is right there in front of them.
+  const finite = ci.match(/^\s*fetch-depth:\s*(?!0\s*$)\S+.*$/gm);
+  assert.equal(finite, null,
+    `fetch-depth must be 0, not a fixed depth that the changelog will outgrow (found ${finite})`);
+
+  // Counted, not merely matched once. Both jobs check out, and a third job
+  // added later without full history would reintroduce exactly this bug in a
+  // way a single `assert.match` over the whole file would never notice.
+  const full = (ci.match(/^\s*fetch-depth:\s*0\s*$/gm) || []).length;
+  assert.equal(full, checkouts,
+    `every actions/checkout must set fetch-depth: 0 (${checkouts} checkouts, ${full} with full history) — ` +
+    'the default is a depth-1 shallow clone in which no changelog sha resolves');
+
+  // vendor/winscp is the large read-only porting reference. fetch-depth and
+  // submodules are independent inputs, so asking for history must never have
+  // been paid for by quietly pulling 300k lines of C++ into every run.
+  assert.equal((ci.match(/^\s*submodules:\s*false\s*$/gm) || []).length, checkouts,
+    'every checkout must still skip the vendor/winscp submodule');
+});
+
 test('the exported Markdown keeps the full sha and the link in plain text', () => {
   const entry = C.CHANGELOG.development[0];
   const md = C.entriesToMarkdown([entry], 'x', 'Changelog');
