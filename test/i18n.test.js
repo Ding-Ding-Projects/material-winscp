@@ -241,6 +241,33 @@ test('the voice really does change between level 1 and level 5', async () => {
   }
 });
 
+test('errors, warnings and destructive prompts really do respond to the slider', async () => {
+  // The category the shared instructions single out as having no exemption.
+  // Before this guard existed, every one of these was a plain pair that read
+  // identically at level 1 and level 5 while the disclosure said otherwise.
+  const VOICED_WARNINGS = [
+    'wrongPassword', 'invalidPattern', 'unsavedTabWarn', 'unsavedBody',
+    'cpGamutWarn', 'notConnected', 'siteDeleted', 'deleteBody', 'overwriteBody',
+  ];
+  const { dict, i18n } = await load();
+  for (const key of VOICED_WARNINGS) {
+    assert.ok(dict.I18N[key], `${key} is missing from the dictionary`);
+    assert.ok(isLeveled(dict.I18N[key]), `${key} has one voice; the disclosure promises five`);
+    for (const language of ['en', 'yue']) {
+      i18n.setLanguage(language);
+      i18n.setFunnyLevel(language, 1);
+      const atOne = i18n.t(key, 'SENTINEL');
+      i18n.setFunnyLevel(language, 5);
+      const atFive = i18n.t(key, 'SENTINEL');
+      assert.notStrictEqual(atFive, atOne, `${key} (${language}) reads the same at level 1 and 5`);
+      // …and the fact inside it is untouched by the voice around it.
+      const count = (str) => str.split('SENTINEL').length - 1;
+      assert.strictEqual(count(atFive), count(atOne),
+        `${key} (${language}) moved a parameter between levels`);
+    }
+  }
+});
+
 test('a plain entry is identical at every level', async () => {
   const { dict, i18n } = await load();
   const plain = Object.keys(dict.I18N).filter((k) => !isLeveled(dict.I18N[k]));
@@ -439,13 +466,22 @@ test('a byte-count, a host name and a path survive every mode and level', async 
 /* ================================================================== */
 
 test('the disclosure states that the level touches errors and warnings', async () => {
-  const { i18n } = await load();
+  const { dict, i18n } = await load();
 
   const en = await withLanguage('en', 3, 3, (m) => m.disclosureText());
   assert.match(en, /error/i);
   assert.match(en, /warning/i);
   assert.match(en, /never changes|facts?/i);
   assert.match(en, /reset|change/i);
+
+  // The disclosure must not overstate its own reach. It names the number of
+  // multi-voiced messages, and that number is read from the dictionary — so a
+  // dictionary that loses its voices cannot leave a confident claim behind.
+  const voiced = Object.keys(dict.I18N).filter((k) => isLeveled(dict.I18N[k])).length;
+  assert.ok(en.includes(String(voiced)),
+    `the disclosure does not state the real number of multi-voiced messages (${voiced})`);
+  assert.doesNotMatch(en, /every message/i,
+    'the disclosure claims every message is voiced, which the dictionary does not support');
 
   const yue = await withLanguage('yue', 3, 3, (m) => m.disclosureText());
   assert.ok(yue.includes('錯誤'), 'the Cantonese disclosure does not mention errors');

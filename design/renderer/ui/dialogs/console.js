@@ -591,7 +591,8 @@ export function registerConsoleDialog() {
     id: 'session.console',
     labelKey: 'openTerminal',
     icon: 'terminal',
-    shortcut: 'Ctrl+T',
+    // ConsoleAction in actions.js — the shortcut is WinSCP's own, not a guess.
+    shortcut: 'Ctrl+Shift+T',
     run: (sessionId) => openConsole(sessionId),
   });
 }

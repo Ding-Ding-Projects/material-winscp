@@ -230,7 +230,14 @@ export function openFileSystemInfoDialog(props = {}) {
 
   const restore = focusMemory();
   const titleId = uid('tx-fsi-title');
-  const bodyEl = h('div', { class: 'tx-pg' });
+  // ONE panel id, referenced by all three tabs. Minting an id per tab and
+  // applying only the active one leaves two tabs pointing at nothing, which is
+  // a dangling aria-controls to every screen reader.
+  const panelId = uid('tx-fsi-panel');
+  const bodyEl = h('div', {
+    class: 'tx-pg', id: panelId, role: 'tabpanel', tabindex: '0',
+    'aria-labelledby': `${panelId}-protocol`,
+  });
   const tabsEl = h('div', { class: 'tx-fsi-tabs', role: 'tablist', 'aria-label': t('txFsiTitle') });
   let active = 'protocol';
   let info = null;
@@ -279,14 +286,42 @@ export function openFileSystemInfoDialog(props = {}) {
   root.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
 
   function tabButton(id, labelKey) {
+    const selected = active === id;
     const btn = h('button', {
-      type: 'button', class: 'tx-fsi-tab', role: 'tab',
-      'aria-selected': String(active === id),
-      onclick: () => { active = id; render(); },
+      // One tab stop for the strip (roving focus below), the panel wired up,
+      // and the selected state where a screen reader reads it.
+      type: 'button', class: 'tx-fsi-tab', role: 'tab', id: `${panelId}-${id}`,
+      'aria-selected': String(selected), 'aria-controls': panelId,
+      tabindex: selected ? '0' : '-1',
+      onclick: () => activate(id),
     }, t(labelKey));
     appearanceTarget(btn, `fsi-tab-${id}`, `Server information tab: ${id}`);
     return btn;
   }
+
+  /**
+   * Activating a tab rebuilds the strip, so focus has to be put back
+   * deliberately — otherwise a keyboard user lands on the document body the
+   * moment they change tab and cannot reach the next one.
+   */
+  function activate(id) {
+    active = id;
+    render();
+    bodyEl.setAttribute('aria-labelledby', `${panelId}-${id}`);
+    const btn = tabsEl.querySelector(`#${CSS.escape(`${panelId}-${id}`)}`);
+    if (btn) btn.focus({ preventScroll: true });
+  }
+
+  const TAB_ORDER = ['protocol', 'caps', 'space'];
+  tabsEl.addEventListener('keydown', (e) => {
+    const delta = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (delta) {
+      e.preventDefault();
+      const next = TAB_ORDER[(TAB_ORDER.indexOf(active) + delta + TAB_ORDER.length) % TAB_ORDER.length];
+      activate(next);
+    } else if (e.key === 'Home') { e.preventDefault(); activate(TAB_ORDER[0]); }
+    else if (e.key === 'End') { e.preventDefault(); activate(TAB_ORDER[TAB_ORDER.length - 1]); }
+  });
 
   function currentRows() {
     if (active === 'caps') {

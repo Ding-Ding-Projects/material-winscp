@@ -68,7 +68,7 @@ function chainTo(side, path) {
 /* ------------------------------------------------------------------ */
 
 /**
- * createDriveView({ side, sessionId(), onNavigate(path), initialPath })
+ * createDriveView({ side, sessionId(), hostName(), onNavigate(path), initialPath })
  *
  * Returns { element, setPath, refresh, focus, destroy, setSessionId }.
  * The caller owns placement and width; the panel owns navigation.
@@ -92,6 +92,11 @@ export function createDriveView(opts = {}) {
 
   function sessionId() {
     return typeof opts.sessionId === 'function' ? opts.sessionId() : opts.sessionId || null;
+  }
+
+  /** The host the remote tree is reading from, for the status line. */
+  function hostName() {
+    return (typeof opts.hostName === 'function' ? opts.hostName() : opts.hostName) || '';
   }
 
   /* ---- data ---- */
@@ -149,7 +154,9 @@ export function createDriveView(opts = {}) {
 
   async function loadInto(node, container) {
     try {
-      status.textContent = t('connecting');
+      // 'connecting' carries a {0} for the host; a bare call put a literal
+      // "{0}" in the tree's status line. A local tree never dials anything.
+      status.textContent = side === 'local' ? '' : t('connecting', hostName() || t('remotePanel'));
       const items = await listChildren(node ? node.path : '');
       status.textContent = '';
       while (container.firstChild) container.removeChild(container.firstChild);

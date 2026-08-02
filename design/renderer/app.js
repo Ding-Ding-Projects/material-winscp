@@ -64,6 +64,9 @@ export function registerDialog(id, factory) {
   dialogs.set(id, factory);
   return () => dialogs.delete(id);
 }
+/** Every registered dialog id. The integration tests assert against this. */
+export function listDialogs() { return Array.from(dialogs.keys()).sort(); }
+export function hasDialog(id) { return dialogs.has(id); }
 export function openDialog(id, props = {}) {
   const factory = dialogs.get(id);
   if (!factory) {
@@ -453,9 +456,13 @@ export async function boot() {
   }
 
   /* ---- baseline commands ---- */
+  // ui/dialogs/about.js and ui/dialogs/preferences.js register the real
+  // surfaces. The shell keeps its own entry so the command exists even in a
+  // stripped build, and delegates the moment the full dialog is present —
+  // which keeps one implementation per command whichever module loads first.
   registerCommand({
     id: 'app.about', labelKey: 'aboutMenu', icon: 'info',
-    run: () => openAbout(),
+    run: () => (dialogs.has('about') ? openDialog('about') : openAbout()),
   });
   registerCommand({
     id: 'app.preferences', labelKey: 'preferences', icon: 'settings', shortcut: 'Ctrl+,',
@@ -552,8 +559,14 @@ function installShortcuts() {
 /* ================================================================== */
 
 if (typeof document !== 'undefined') {
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { boot(); });
-  else boot();
+  // Why a macrotask rather than a straight call: index.js imports this module
+  // first and the feature modules after it, and several of those register on a
+  // microtask. Yielding once lets the whole module graph finish registering its
+  // views, dialogs, commands and status items BEFORE the shell renders and
+  // `shell:ready` fires, so nothing has to race the boot it depends on.
+  const start = () => { setTimeout(() => { boot(); }, 0); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
 }
 
 // Re-exported so a later module only needs one import for the common surface.

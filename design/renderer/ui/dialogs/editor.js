@@ -676,6 +676,13 @@ export function createEditorWindow(record, initial, opts = {}) {
     }, 'Changed the editor find settings').catch(() => { /* remembering is a convenience, never a failure */ });
   }, 800);
 
+  const replaceBtn = h('button', {
+    type: 'button', class: 'btn-text', onclick: () => { replaceOne(); rememberFindState(); },
+  }, s('edReplace'));
+  const replaceAllBtn = h('button', {
+    type: 'button', class: 'btn-text', onclick: () => replaceAll(),
+  }, t('replaceAllBtn'));
+
   const findBar = h('div', { class: 'ed-find' },
     find.element,
     h('button', {
@@ -688,11 +695,22 @@ export function createEditorWindow(record, initial, opts = {}) {
     }, icon('arrow_upward', 17)),
     hits,
     replaceInput,
-    h('button', { type: 'button', class: 'btn-text', onclick: () => { replaceOne(); rememberFindState(); } }, s('edReplace')),
-    h('button', { type: 'button', class: 'btn-text', onclick: () => replaceAll() }, t('replaceAllBtn')),
+    replaceBtn,
+    replaceAllBtn,
     h('label', { class: 'check' }, matchCaseBox, h('span', {}, s('edMatchCase'))),
     h('label', { class: 'check' }, wholeWordBox, h('span', {}, s('edWholeWord'))));
   replaceInput.addEventListener('input', rememberFindState);
+  // A viewer cannot rewrite the file, so the controls that would rewrite it say
+  // so instead of accepting a click and doing nothing. replaceOne/replaceAll
+  // still refuse on their own — this is what the user can SEE.
+  if (state.readOnly) {
+    replaceInput.readOnly = true;
+    replaceInput.title = s('edReadOnly');
+    replaceBtn.disabled = true;
+    replaceAllBtn.disabled = true;
+    replaceBtn.title = s('edReadOnly');
+    replaceAllBtn.title = s('edReadOnly');
+  }
 
   /* ---------------- go to line, encoding, wrap, tab size ---------------- */
 
@@ -921,11 +939,16 @@ export function createEditorWindow(record, initial, opts = {}) {
 
   /* ---------------- the window ---------------- */
 
+  const saveBtn = h('button', {
+    type: 'button', class: 'icon-btn', title: `${t('saveFile')} (Ctrl+S)`, 'aria-label': t('saveFile'),
+    onclick: () => save(false),
+  }, icon('download', 17));
+  // The viewer opens the same window with readOnly set; save() refuses, so the
+  // button must refuse visibly rather than looking live and doing nothing.
+  if (state.readOnly) { saveBtn.disabled = true; saveBtn.title = s('edReadOnly'); }
+
   const toolbar = h('div', { class: 'ed-bar' },
-    h('button', {
-      type: 'button', class: 'icon-btn', title: `${t('saveFile')} (Ctrl+S)`, 'aria-label': t('saveFile'),
-      onclick: () => save(false),
-    }, icon('download', 17)),
+    saveBtn,
     h('button', {
       type: 'button', class: 'icon-btn', title: s('edReload'), 'aria-label': s('edReload'),
       onclick: () => reload(),

@@ -80,6 +80,142 @@ export function tIn(language, key, ...params) {
 /** True when the key exists — lets a module fall back to its own literal. */
 export function has(key) { return Object.prototype.hasOwnProperty.call(I18N, key); }
 
+/**
+ * Contribute keys a module owns. design/winscp-i18n.js carries the shell's
+ * dictionary; a feature module that ships hundreds of strings of its own adds
+ * them here at import time rather than growing that file, and gets the same
+ * resolution — three language modes, and both funny levels where the entry is
+ * written as `[[en1..en5], [yue1..yue5]]`.
+ *
+ * An existing key is never overwritten: the shared dictionary stays the one
+ * source of truth for anything two modules both render.
+ */
+export function defineStrings(dict) {
+  let added = 0;
+  for (const [key, entry] of Object.entries(dict)) {
+    if (Object.prototype.hasOwnProperty.call(I18N, key)) continue;
+    I18N[key] = entry;
+    added += 1;
+  }
+  return added;
+}
+
+/**
+ * Give an existing entry a voice.
+ *
+ * The funny level is advertised — in `disclosureText()` and in the settings
+ * menu — as applying to EVERY category of message including errors, warnings
+ * and destructive prompts. That promise was untrue: the shared dictionary
+ * shipped its error strings as plain `[en, yue]` pairs, which resolveI18n reads
+ * identically at level 1 and level 5. This is where those entries are given
+ * their five levels, without editing the dictionary file itself.
+ *
+ * The rule the levels obey is the one the whole feature rests on: **voice
+ * changes, facts do not**. Every level of every entry below carries exactly the
+ * same `{0}`/`{1}` placeholders as the plain entry it replaces, so the file
+ * name, the count, the pattern and the reason are byte-identical at level 1 and
+ * level 5 — test/i18n.test.js proves that with byte-distinct sentinels.
+ */
+export function levelStrings(dict) {
+  let upgraded = 0;
+  for (const [key, entry] of Object.entries(dict)) {
+    if (!Array.isArray(entry) || !Array.isArray(entry[0]) || !Array.isArray(entry[1])) {
+      throw new Error(`levelStrings("${key}") needs [[en1..en5],[yue1..yue5]]`);
+    }
+    if (entry[0].length !== 5 || entry[1].length !== 5) {
+      throw new Error(`levelStrings("${key}") needs exactly five levels in each language`);
+    }
+    I18N[key] = entry;
+    upgraded += 1;
+  }
+  return upgraded;
+}
+
+/*
+ * The error, warning and destructive-prompt entries the disclosure names. These
+ * are exactly the category the shared instructions refuse to exempt, and the
+ * category a reader is most likely to check.
+ */
+levelStrings({
+  wrongPassword: [[
+    'Access denied: the password was not accepted. Try again.',
+    'Access denied — wrong password. Try again.',
+    'Access denied — that password was not the one. Try again.',
+    'Access denied. The password did not land; give it another go.',
+    'Access denied! The server looked at that password and said no. One more try?'], [
+    '拒絕存取：密碼唔獲接受，請再試。',
+    '拒絕存取——密碼唔啱，再試過。',
+    '拒絕存取——嗰個密碼唔係嗰個喎，再試過。',
+    '拒絕存取。 密碼唔中，再嚟過啦。',
+    '拒絕存取！ 伺服器望咗個密碼一眼，耍手擰頭。 再試多次？']],
+  invalidPattern: [[
+    'The pattern is not valid: {0}',
+    'Invalid pattern: {0}',
+    'That pattern will not compile: {0}',
+    'The pattern did not survive being read: {0}',
+    'The pattern fell over on its way in: {0}'], [
+    '表達式唔合法：{0}',
+    '表達式唔啱：{0}',
+    '個表達式砌唔起：{0}',
+    '個表達式讀到一半就散咗：{0}',
+    '個表達式行到入嚟就仆咗街：{0}']],
+  unsavedTabWarn: [[
+    '{0} tab(s) contain unsaved work and were not closed.',
+    '{0} tab(s) have work in progress and were kept open.',
+    '{0} tab(s) still had work on the go, so they stayed.',
+    '{0} tab(s) were mid-sentence, so they are still here.',
+    '{0} tab(s) dug their heels in — unsaved work — and are still open.'], [
+    '{0} 個分頁有未儲存嘅工作，冇閂。',
+    '{0} 個分頁做緊嘢，照留返。',
+    '{0} 個分頁重做緊嘢，所以留低咗。',
+    '{0} 個分頁講到一半，唔捨得閂。',
+    '{0} 個分頁死拉唔走——有嘢未存——照樣開住。']],
+  unsavedBody: [[
+    '"{0}" has unsaved changes. Save them before closing?',
+    '"{0}" has unsaved changes. Save before closing?',
+    '"{0}" has changes you have not saved. Save before closing?',
+    '"{0}" is holding changes that only exist here. Save before closing?',
+    '"{0}" has unsaved changes, and closing is where they go to vanish. Save first?'], [
+    '「{0}」有未儲存嘅變更。 閂之前儲存唔儲存？',
+    '「{0}」有未儲存嘅變更。閂之前要唔要儲存？',
+    '「{0}」有啲改動你重未存。 閂之前存唔存？',
+    '「{0}」啲改動而家淨係喺呢度存在。 閂之前存唔存？',
+    '「{0}」有嘢未存，一閂就冇咗。 存返佢先？']],
+  cpGamutWarn: [[
+    'Outside sRGB: the value will be clipped when applied.',
+    'Outside sRGB — value will clip when applied.',
+    'Outside sRGB — this will be clipped on the way to the screen.',
+    'Outside sRGB. The screen cannot show it, so it will be clipped.',
+    'Outside sRGB — a lovely colour your monitor has never met. It will be clipped.'], [
+    '超出 sRGB：套用嗰陣個值會俾裁剪。',
+    '超出 sRGB——套用時會被裁剪。',
+    '超出 sRGB——去到螢幕嗰陣會俾裁走。',
+    '超出 sRGB。 螢幕顯示唔到，所以會俾裁剪。',
+    '超出 sRGB——好靚嘅顏色，但你部螢幕未見過。 會俾裁剪。']],
+  notConnected: [[
+    'This tab is not connected.',
+    'This tab is not connected.',
+    'This tab has no session open.',
+    'This tab is not connected to anything yet.',
+    'This tab is not connected to anything at all, yet.'], [
+    '呢個分頁未連線。',
+    '呢個分頁未連線。',
+    '呢個分頁未開任何工作階段。',
+    '呢個分頁重未連到去邊度。',
+    '呢個分頁而家邊度都未連到。']],
+  siteDeleted: [[
+    'Site "{0}" was deleted.',
+    'Site "{0}" deleted.',
+    'Site "{0}" is gone.',
+    'Site "{0}" has been deleted.',
+    'Site "{0}" has left the building.'], [
+    '站點「{0}」已刪除。',
+    '站點「{0}」刪咗。',
+    '站點「{0}」冇咗。',
+    '站點「{0}」已經刪除咗。',
+    '站點「{0}」執包袱走人喇。']],
+});
+
 /** Every key, for the changelog/settings search surfaces to index. */
 export function keys() { return Object.keys(I18N); }
 
@@ -228,11 +364,20 @@ export function getLanguage() { return lang(); }
  * never removed — only the voice around them changes.
  */
 export function disclosureText() {
-  const en = 'The funny level changes the wording of every message in the app, including errors, warnings and destructive-action prompts. '
-    + 'What a message says never changes — the file, the account, the action and whether it can be undone are always stated plainly. '
+  // The count is read from the dictionary rather than written down, so this
+  // sentence cannot drift away from the truth the way a hard-coded claim would.
+  const voiced = Object.keys(I18N).filter((k) => Array.isArray(I18N[k][0])).length;
+  const en = 'The funny level changes the WORDING of messages, never what they say. '
+    + 'No category is exempt: errors, warnings and destructive-action prompts are styled like everything else. '
+    + `${voiced} of this build's messages are written with five voices and change as you move the slider; `
+    + 'the rest are single-voiced and read the same at every level — a label, a menu entry or a column heading has one right wording. '
+    + 'What a message states never changes: the file, the account, the action and whether it can be undone are always in plain words. '
     + 'You can change or reset both sliders at any time in Preferences → Languages.';
-  const yue = '好笑程度會改變 app 入面每一句說話嘅語氣，包括錯誤、警告同埋唔可以復原嘅操作提示。'
-    + '講嘅事實永遠唔會變——邊個檔案、邊個帳戶、做乜嘢、可唔可以還原，一律照直講。'
+  const yue = '好笑程度改嘅係語氣，唔會改內容。'
+    + '冇任何一類豁免：錯誤、警告同埋唔可以復原嘅操作提示，一律照樣有語氣。'
+    + `呢個版本入面有 ${voiced} 句訊息寫咗五個語氣，會跟住拉桿變；`
+    + '其餘嘅得一個講法，每一級都一樣——標籤、選單項目、欄名，本來就得一個啱嘅寫法。'
+    + '訊息講嘅嘢永遠唔會變——邊個檔案、邊個帳戶、做乜嘢、可唔可以還原，一律照直講。'
     + '你隨時可以喺「偏好設定 → 語言」度改返或者重設兩條拉桿。';
   const mode = lang();
   if (mode === 'en') return en;

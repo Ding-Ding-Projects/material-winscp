@@ -267,7 +267,6 @@ export const PAGES = [
         id: 'lists',
         title: L('Lists', '清單'),
         controls: [
-          check('window.fullRowSelect', true, 'Select the whole row in the session list', '工作階段清單成行揀'),
         ],
       },
     ],
@@ -563,7 +562,12 @@ export const PAGES = [
           ]),
           check('panel.naturalOrderNumericalSorting', true, 'Natural order numerical sorting', '數字用自然順序排'),
           check('panel.alwaysSortDirectoriesByName', false, 'Always sort directories by name', '目錄永遠照名排'),
-          check('panel.fullRowSelect', true, 'Full row select', '成行揀選', { alsoKeys: ['window.fullRowSelect'] }),
+          // One control, one key. There used to be a second row on the
+          // Interface page writing window.fullRowSelect, which nothing reads,
+          // and this one fanned out into it — so the two rows could disagree
+          // and only one of them ever changed anything. The panel key is the
+          // one ui/panels.js honours, so it is the one the user sees.
+          check('panel.fullRowSelect', true, 'Full row select', '成行揀選'),
           select('panel.viewStyle', 'report', 'View style', '檢視方式', [
             opt('icon', 'Icons', '大圖示'),
             opt('smallIcon', 'Small icons', '細圖示'),
@@ -1316,6 +1320,76 @@ export function pageById(id, pages = PAGES) { return pages.find((p) => p.id === 
  * the preferences search bar filters, so a match on the Logging page is found
  * while the user is looking at Panels.
  */
+/* ================================================================== */
+/* options that are stored but not yet honoured                        */
+/* ================================================================== */
+
+/**
+ * WinSCP options this port stores faithfully and does NOT yet act on.
+ *
+ * docs/porting-mandate.md is blunt about this: "a setting that persists but
+ * changes no behaviour is NOT ported". Removing the controls would be worse —
+ * the values are already in the store, an imported WinSCP configuration
+ * carries them, and a control that vanished is a value the user can no longer
+ * see or reset. So they stay, and every one of them says on its own row that
+ * nothing reads it yet. Nobody has to run a grep to find out.
+ *
+ * The list is asserted against a real consumer scan in test/preferences.test.js:
+ * a key listed here that HAS gained a consumer fails, and a wired key that
+ * loses its consumer fails too. Wiring one is a two-line change — implement the
+ * behaviour, delete the entry.
+ */
+export const PENDING_KEYS = new Set([
+  "confirmExitOnCompletion",
+  "confirmResume",
+  "confirmCommandSession",
+  "timeoutOnStartup",
+  "tabs.truncateTitles",
+  "window.openedTabsShortcut",
+  "window.largeToolbarIcons",
+  "window.sessionTabCaptionTruncation",
+  "window.keepOpenWhenNoSession",
+  "window.autoSaveWorkspace",
+  "window.autoSaveWorkspacePasswords",
+  "panel.showFullPathOnAddressBar",
+  "copyOnDoubleClickConfirmation",
+  "showInaccessibleDirectories",
+  "integration.localIconsFromExplorer",
+  "editor.maxEditors",
+  "editor.sDIShellEditor",
+  "editor.warnOnEncodingFallback",
+  "editor.fontName",
+  "editor.fontCharset",
+  "editor.autoFont",
+  "editor.disableSmoothScroll",
+  "copyParam.preserveReadOnly",
+  "copyParam.clearArchive",
+  "copyParam.encryptNewFiles",
+  "copyParam.excludeEmptyDirectories",
+  "copyParam.overwriteMode",
+  "copyParam.saveTransferOptions",
+  "copyParamAutoSelectNotice",
+  "security.sessionReopenAutoIdle",
+  "queue.parallelDuplicateTransfers",
+  "queue.individualTransfers",
+  "queue.disconnectOnceEmpty",
+  "dDWarnLackOfTempSpace",
+  "dDWarnLackOfTempSpaceRatio",
+  "dDAllowMove",
+  "dDAllowMoveInit",
+  "security.tryFtpWhenSshFails",
+  "integration.autoOpenInPutty",
+  "security.randomSeedFile",
+  "versionHistory.snapshotSettings",
+  "versionHistory.snapshotSites",
+  "logging.logWindowComplete",
+  "updates.showOnStartup",
+  "updates.authenticationEmail"
+]);
+
+/** True when the option is stored but nothing in the application reads it yet. */
+export function isPending(key) { return PENDING_KEYS.has(key); }
+
 export function flattenControls(pages = PAGES) {
   const out = [];
   for (const page of pages) {
@@ -1643,6 +1717,13 @@ function row(control, language, controlNode, opts = {}) {
       language === 'yue' ? '要下次啟動先生效。'
         : language === 'both' ? 'Applies on the next start. · 要下次啟動先生效。'
           : 'Applies on the next start.'));
+  }
+  if (isPending(control.key)) {
+    meta.push(h('p', { class: 'pref-hint is-pending' },
+      language === 'yue' ? '呢個設定會存落去，但係呢個版本重未有嘢跟住佢做——所以改咗都唔會有分別。'
+        : language === 'both'
+          ? 'Stored, but nothing in this build acts on it yet — changing it will not change any behaviour. · 呢個設定會存落去，但係呢個版本重未有嘢跟住佢做——所以改咗都唔會有分別。'
+          : 'Stored, but nothing in this build acts on it yet — changing it will not change any behaviour.'));
   }
   if (control.danger) {
     meta.push(h('p', { class: 'pref-hint is-danger' },

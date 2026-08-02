@@ -489,11 +489,11 @@ class LocalAdapter extends Adapter {
     await fsp.chown(this.normalize(p), Number(uid), Number(gid));
   }
 
-  /** Times are epoch milliseconds, matching entry().mtime. */
+  /** Times are epoch milliseconds, matching entry().mtime. Both call shapes are
+   *  accepted — see normalizeTimes(). */
   async setTimes(p, mtime, atime) {
-    const m = new Date(Number(mtime));
-    const a = atime === undefined || atime === null ? m : new Date(Number(atime));
-    await fsp.utimes(this.normalize(p), a, m);
+    const t = normalizeTimes(mtime, atime);
+    await fsp.utimes(this.normalize(p), new Date(t.atime), new Date(t.mtime));
   }
 
   // ---- streaming -------------------------------------------------------
@@ -550,6 +550,31 @@ class LocalAdapter extends Adapter {
   }
 }
 
+/**
+ * Normalize the two shapes a caller can hand `setTimes()`.
+ *
+ * The IPC layer calls it positionally — `setTimes(path, mtime, atime)` — while
+ * the transfer queue and the synchronizer call it with an object, because that
+ * is what "preserve timestamps" needs to pass around. Understanding only one of
+ * them does not fail loudly here: `new Date(Number({mtime}))` is an Invalid
+ * Date, which `utimes` accepts, so a downloaded file quietly gets a nonsense
+ * timestamp and a synchronized tree never converges.
+ *
+ * Deliberately duplicated from sftp.js rather than imported: the local panel
+ * must not drag the SSH stack in behind it.
+ */
+function normalizeTimes(mtime, atime) {
+  const ms = (v) => (v instanceof Date ? v.getTime() : Number(v));
+  const isObject = mtime !== null && typeof mtime === 'object' && !(mtime instanceof Date);
+  const m = ms(isObject ? mtime.mtime : mtime);
+  const rawA = isObject ? mtime.atime : atime;
+  const a = rawA === undefined || rawA === null ? m : ms(rawA);
+  if (!Number.isFinite(m)) {
+    throw new Error('setTimes() needs a modification time in epoch milliseconds');
+  }
+  return { mtime: m, atime: Number.isFinite(a) ? a : m };
+}
+
 /** 'rwxr-xr-x' or '0644' or '644' to a numeric mode. */
 function parseRights(rights) {
   const s = String(rights || '').trim();
@@ -571,4 +596,5 @@ module.exports = {
   helpersFor,
   parseRights,
   rightsFromMode,
+  normalizeTimes,
 };

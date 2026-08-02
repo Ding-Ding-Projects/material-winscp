@@ -408,6 +408,44 @@ function rightsToOctal(rights) {
   return out;
 }
 
+/**
+ * The checksum algorithms WinSCP registers for FTP, keyed by their IANA name
+ * with the punctuation removed so `sha-256`, `SHA256` and `sha_256` all land on
+ * the same row. `hash` is the name the generic HASH command wants; `commands`
+ * are the algorithm-specific verbs, most preferred first.
+ */
+const CHECKSUM_ALGS = {
+  crc32: { hash: 'CRC-32', commands: ['XCRC'] },
+  md5: { hash: 'MD5', commands: ['XMD5', 'MD5'] },
+  sha1: { hash: 'SHA-1', commands: ['XSHA1'] },
+  sha256: { hash: 'SHA-256', commands: ['XSHA256'] },
+  sha512: { hash: 'SHA-512', commands: ['XSHA512'] },
+};
+
+function normalizeChecksumAlg(name) {
+  return String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Read a digest out of a HASH reply.
+ *
+ * The current draft is
+ *   `213 SHA-256 0-1234 <digest> <pathname>`
+ * but servers implementing an earlier one (FileZilla Server, Cerberus) leave
+ * the range out — and FileZilla Server leaves the path out too. The range is
+ * what distinguishes them: it always contains a hyphen, a digest never does.
+ */
+function parseHashReply(message) {
+  const last = String(message).split(/\r?\n/).filter((l) => l.trim()).pop() || '';
+  const tokens = last.replace(/^\d{3}[ -]?/, '').trim().split(/\s+/);
+  let digest = tokens[1];
+  if (digest && digest.includes('-')) digest = tokens[2];
+  if (!digest || !/^[0-9a-fA-F]{8,128}$/.test(digest)) {
+    throw new Error(`Unparseable HASH reply: ${last}`);
+  }
+  return digest.toLowerCase();
+}
+
 /** Date → `YYYYMMDDHHMMSS` in UTC, the format MFMT and MDTM use. */
 function ftpTimestamp(ms) {
   const d = new Date(ms);
@@ -422,6 +460,24 @@ function ftpTimestamp(ms) {
  * the moment the last byte left the process, and a 552 quota error arriving a
  * moment later would have nowhere to go.
  */
+/**
+ * Accept a time as (mtime, atime), as ({ mtime, atime }) or as Date objects,
+ * and return epoch milliseconds. Deliberately duplicated from sftp.js rather
+ * than imported: the FTP adapter must not drag the SSH stack in behind it just
+ * to normalize two numbers.
+ */
+function normalizeTimes(mtime, atime) {
+  const ms = (v) => (v instanceof Date ? v.getTime() : Number(v));
+  const isObject = mtime !== null && typeof mtime === 'object' && !(mtime instanceof Date);
+  const m = ms(isObject ? mtime.mtime : mtime);
+  const rawA = isObject ? mtime.atime : atime;
+  const a = rawA === undefined || rawA === null ? m : ms(rawA);
+  if (!Number.isFinite(m)) {
+    throw new Error('setTimes() needs a modification time in epoch milliseconds');
+  }
+  return { mtime: m, atime: Number.isFinite(a) ? a : m };
+}
+
 class FtpUploadStream extends PassThrough {
   constructor() {
     super();
@@ -569,6 +625,18 @@ class FtpAdapter extends Adapter {
     // behaviour WinSCP defaults to.
     this.client = new Client(timeoutMs);
     this.client.ftp.verbose = false;
+    // basic-ftp writes its protocol dialogue to `console.log`, and only when
+    // `verbose` is on, so the application never sees it. WinSCP's FTP session
+    // log *is* that dialogue — and logging.js already carries a redaction rule
+    // for `> PASS ...` written for lines that had no way of arriving. Replace
+    // the sink so they do. `send`/`recv` are the kinds the log window renders
+    // with the ">"/"<" markers; anything else basic-ftp narrates is debug.
+    this.client.ftp.log = (message) => {
+      const text = String(message);
+      if (text.startsWith('> ')) this._log('send', text);
+      else if (text.startsWith('< ')) this._log('recv', text);
+      else this._log('debug', text);
+    };
     this.client.ftp.encoding = encodingFor(s.codePage);
     if (s.addressFamily === 'ipv4') this.client.ftp.ipFamily = 4;
     else if (s.addressFamily === 'ipv6') this.client.ftp.ipFamily = 6;
@@ -658,8 +726,29 @@ class FtpAdapter extends Adapter {
 
     this.caps.resume = has('REST') && /STREAM/i.test(featValue('REST'));
     this.caps.timestamp = has('MFMT') || has('MDTM');
-    this.caps.checksum = has('XCRC') || has('XMD5') || has('XSHA1') || has('XSHA256') || has('HASH');
     this.serverInfo.features = [...this.features.keys()];
+
+    // `HASH SHA-1*;SHA-256;MD5` lists what the generic HASH command can
+    // compute; the '*' marks the server's current default selection. The
+    // algorithm-specific X-commands are the older convention and are still
+    // what most servers ship, so both are collected and either can serve a
+    // request.
+    this._hashAlgs = new Set();
+    if (has('HASH')) {
+      for (const part of featValue('HASH').split(';')) {
+        const alg = normalizeChecksumAlg(part.replace(/\*$/, ''));
+        if (alg && CHECKSUM_ALGS[alg]) this._hashAlgs.add(alg);
+      }
+    }
+    const viaCommand = Object.keys(CHECKSUM_ALGS)
+      .filter((k) => CHECKSUM_ALGS[k].commands.some((c) => has(c)));
+    // The capability flag has to mean "checksum() will work", not "the server
+    // said something about hashing". Advertising HASH while we could only
+    // issue XSHA1 greyed the command *in* and then threw when it was used.
+    this.caps.checksum = this._hashAlgs.size > 0 || viaCommand.length > 0;
+    // Which algorithms specifically, so the dialog offers what this server can
+    // actually do rather than a fixed list it will refuse half of.
+    this.serverInfo.checksumAlgorithms = [...new Set([...this._hashAlgs, ...viaCommand])];
 
     // SITE CHMOD is not reported by FEAT on most servers, so ask SITE HELP.
     let chmod = /CHMOD/i.test(featValue('SITE'));
@@ -887,20 +976,31 @@ class FtpAdapter extends Adapter {
           }
         }
       }
-      // Otherwise: SIZE + MDTM identify a file; a successful CWD identifies a
-      // directory. Both are near-universal even where FEAT is not.
-      let size = null; let mtime = 0;
-      try { size = await this.client.size(path); } catch { size = null; }
+      // Otherwise MDTM supplies the timestamp, and the *directory* question is
+      // settled before the file question — never the other way round.
+      //
+      // RFC 3659 reserves SIZE for regular files, but plenty of servers answer
+      // it for a directory too (returning the inode size, or zero). Asking SIZE
+      // first therefore reports those directories as files, and the queue then
+      // tries to RETR one. A successful CWD is the only portable reply that
+      // means "directory" and nothing else, so it goes first and costs one
+      // extra round trip on servers old enough to lack MLST — which the branch
+      // above has already skipped for everything modern.
+      let mtime = 0;
       try { mtime = (await this.client.lastMod(path)).getTime(); } catch { mtime = 0; }
-      if (size !== null) {
-        return entry({ name: this.basename(path), type: 'file', size, mtime });
-      }
+
       const back = this.cwd;
       try {
         await this.client.cd(path);
         await this.client.cd(back);
         return entry({ name: this.basename(path), type: 'dir', mtime });
-      } catch { /* not a directory either */ }
+      } catch { /* not a directory; try the file probes */ }
+
+      let size = null;
+      try { size = await this.client.size(path); } catch { size = null; }
+      if (size !== null) {
+        return entry({ name: this.basename(path), type: 'file', size, mtime });
+      }
       // Last resort: find it in the parent listing (VMS and some mainframes
       // support neither SIZE nor MDTM).
       const items = parseListing(await this._rawList(this.dirname(path)), {
@@ -965,7 +1065,11 @@ class FtpAdapter extends Adapter {
     const path = this.normalize(p);
     const info = await this.stat(path).catch(() => null);
     const isDir = info ? info.type === 'dir' : false;
-    if (isDir && opts.recursive !== false) {
+    // Recursion is opt-in, exactly as it is for the local and SFTP backends.
+    // Defaulting it on here would mean the same "Delete" the UI refuses on an
+    // SFTP site silently empties a tree on an FTP one — and RMD's own 550 on a
+    // non-empty directory is the refusal the user is expecting to see.
+    if (isDir && opts.recursive) {
       const items = await this.list(path);
       for (const it of items) {
         await this.remove(this.join(path, it.name), opts);
@@ -983,9 +1087,22 @@ class FtpAdapter extends Adapter {
     return this._run(() => this.client.rename(a, b));
   }
 
-  async setTimes(p, { mtime }) {
+  /**
+   * Accepts both call shapes, because both exist in this codebase and the
+   * mismatch is invisible until it is expensive: ipc.js calls
+   * `setTimes(path, mtime, atime)` positionally while the queue and the
+   * synchronizer call `setTimes(path, { mtime, atime })`. Destructuring
+   * `{ mtime }` out of a plain Number yields undefined, so the positional call
+   * used to build the timestamp string "undefined" and fail at the server —
+   * or worse, be accepted by a lenient one and stamp the wrong time.
+   *
+   * FTP has no access-time command, so an atime is accepted and ignored rather
+   * than refused; MFMT sets the modification time and nothing else.
+   */
+  async setTimes(p, mtime, atime) {
     const path = this.normalize(p);
-    const stamp = ftpTimestamp(mtime);
+    const when = normalizeTimes(mtime, atime).mtime;
+    const stamp = ftpTimestamp(when);
     return this._run(async () => {
       if (this.features.has('MFMT')) {
         await this.client.send(`MFMT ${stamp} ${path}`);
@@ -1059,19 +1176,41 @@ class FtpAdapter extends Adapter {
 
   async checksum(p, algorithm = 'sha-1') {
     const path = this.normalize(p);
-    const map = { 'sha-1': 'XSHA1', sha1: 'XSHA1', 'sha-256': 'XSHA256', sha256: 'XSHA256', md5: 'XMD5', crc32: 'XCRC' };
-    const cmd = map[String(algorithm).toLowerCase()];
-    if (!cmd || !this.features.has(cmd)) throw new Error(`Server does not support ${algorithm} checksums`);
+    const key = normalizeChecksumAlg(algorithm);
+    const alg = CHECKSUM_ALGS[key];
+    if (!alg) {
+      throw new Error(`Unknown checksum algorithm "${algorithm}". `
+        + `Expected one of ${Object.keys(CHECKSUM_ALGS).join(', ')}.`);
+    }
+    // FTP arguments are not quoted as a rule, but Serv-U and GlobalSCAPE read a
+    // trailing `SP start-end` range after the name, so an unquoted name with a
+    // space in it is parsed as a name plus garbage.
+    const arg = path.includes(' ') ? `"${path}"` : path;
+    const command = alg.commands.find((c) => this.features.has(c));
+
     return this._run(async () => {
-      const res = await this.client.send(`${cmd} ${path}`);
-      const m = /([0-9a-fA-F]{8,128})\s*$/.exec(res.message);
-      if (!m) throw new Error(`Unparseable checksum reply: ${res.message}`);
-      return m[1].toLowerCase();
+      if (command) {
+        const res = await this.client.send(`${command} ${arg}`);
+        // Most servers answer `213 <hash>`; draft-twine-ftpmd5 (Apache) puts
+        // the file name first. The digest is the last token either way.
+        const m = /([0-9a-fA-F]{8,128})\s*$/.exec(res.message);
+        if (!m) throw new Error(`Unparseable ${command} reply: ${res.message}`);
+        return m[1].toLowerCase();
+      }
+      if (this._hashAlgs && this._hashAlgs.has(key)) {
+        // draft-bryan-ftpext-hash: pick the algorithm, then ask for the file.
+        // The spec says a lower-case name must be understood; every server
+        // understands upper case, so that is what goes on the wire.
+        await this.client.send(`OPTS HASH ${alg.hash}`);
+        const res = await this.client.send(`HASH ${arg}`);
+        return parseHashReply(res.message);
+      }
+      throw new Error(`Server does not support ${algorithm} checksums`);
     });
   }
 }
 
-module.exports = {
+module.exports = { normalizeTimes,
   FtpAdapter,
   parseListing,
   detectListingStyle,
@@ -1081,4 +1220,7 @@ module.exports = {
   parseMlsdLine,
   rightsToOctal,
   ftpTimestamp,
+  parseHashReply,
+  normalizeChecksumAlg,
+  CHECKSUM_ALGS,
 };

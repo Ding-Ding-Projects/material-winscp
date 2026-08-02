@@ -21,7 +21,7 @@ import {
   backend, runAction, actionLabel, commandState, formatBytes, readPref, ensureStyle,
 } from './commands.js';
 
-const CSS = `
+const MODULE_CSS = `
 .fpstatus{display:flex;align-items:center;gap:calc(8px*var(--den,1));min-height:calc(24px*var(--den,1));
   padding:0 calc(8px*var(--den,1));font-size:var(--type-label-sm,.75rem);
   color:var(--md-sys-color-on-surface-variant,var(--onsfcv,#49454F));
@@ -49,7 +49,7 @@ const CSS = `
  * hidden, filtered } and incrementalSearch() -> { active, text, matched }.
  */
 export function createPanelStatusBar(panel) {
-  ensureStyle('winscp-statusbar', CSS);
+  ensureStyle('winscp-statusbar', MODULE_CSS);
   const side = panel.side;
 
   const main = h('span', { class: 'fpstatus-main' });
@@ -187,7 +187,7 @@ function formatDuration(ms) {
  * nothing here fights app.js for the same DOM.
  */
 export function installSessionStatus(opts = {}) {
-  ensureStyle('winscp-statusbar', CSS);
+  ensureStyle('winscp-statusbar', MODULE_CSS);
   const register = opts.registerStatusItem;
   const refresh = opts.refreshStatus || (() => {});
   if (typeof register !== 'function') return { destroy() {} };

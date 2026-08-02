@@ -303,13 +303,11 @@ export function createSearchBar(opts = {}) {
  */
 export function filterBy(items, predicate, fields) {
   if (!predicate || !predicate.ok) return [];
-  const active = predicate.mode === 'regex' ? predicate.describe !== '//' : true;
   return items.filter((item) => {
     const vals = fields ? fields(item) : [String(item)];
     const list = Array.isArray(vals) ? vals : [vals];
     return list.some((v) => predicate.test(v));
   });
-  void active;
 }
 
 /** An honest empty-state message naming what was filtered out. */

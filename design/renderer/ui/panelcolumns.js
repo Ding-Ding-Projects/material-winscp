@@ -445,12 +445,18 @@ export function createColumnHeader(model, opts = {}) {
 
   let dragging = null;      // { key, startX, startWidth }
   let reordering = null;    // { key, overIndex }
+  // The header is ONE tab stop: arrow keys move between the column headers and
+  // this remembers which one carries tabindex="0" across a rebuild. Without it
+  // only the first column is reachable, and sorting or resizing any other
+  // column becomes impossible from the keyboard.
+  let rovingKey = null;
 
   function cellFor(col, index) {
     const active = model.sort.key === col.key;
+    const tabbable = rovingKey ? col.key === rovingKey : index === 0;
     const cell = h('div', {
       class: `fp-h${active ? ' is-sorted' : ''}`,
-      role: 'columnheader', tabindex: index === 0 ? '0' : '-1',
+      role: 'columnheader', tabindex: tabbable ? '0' : '-1',
       'data-col': col.key,
       'aria-sort': active ? (model.sort.ascending ? 'ascending' : 'descending') : 'none',
       style: { width: `${col.width}px`, textAlign: col.align },
@@ -519,8 +525,31 @@ export function createColumnHeader(model, opts = {}) {
 
   function sync() {
     while (root.firstChild) root.removeChild(root.firstChild);
+    if (rovingKey && !model.visible.some((c) => c.key === rovingKey)) rovingKey = null;
     model.visible.forEach((col, i) => root.appendChild(cellFor(col, i)));
   }
+
+  /** Roving focus across the header row — one tab stop, arrows to move. */
+  function moveFocus(delta, absolute) {
+    const cells = [...root.querySelectorAll('.fp-h')];
+    if (!cells.length) return;
+    const from = Math.max(0, cells.findIndex((c) => c.tabIndex === 0));
+    const to = absolute === 'first' ? 0
+      : absolute === 'last' ? cells.length - 1
+        : Math.min(cells.length - 1, Math.max(0, from + delta));
+    cells.forEach((c) => { c.tabIndex = -1; });
+    cells[to].tabIndex = 0;
+    rovingKey = cells[to].dataset.col;
+    cells[to].focus();
+  }
+
+  root.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.altKey || e.metaKey) return;   // Ctrl+Arrow resizes
+    if (e.key === 'ArrowRight') { e.preventDefault(); moveFocus(1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); moveFocus(-1); }
+    else if (e.key === 'Home') { e.preventDefault(); moveFocus(0, 'first'); }
+    else if (e.key === 'End') { e.preventDefault(); moveFocus(0, 'last'); }
+  });
 
   /* ---- the header's own context menu, straight from commands.js ---- */
   const COLUMN_ACTION = {

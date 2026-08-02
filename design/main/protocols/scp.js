@@ -14,7 +14,7 @@ const { PassThrough, Writable } = require('stream');
 const { once } = require('events');
 
 const { Adapter, entry } = require('./base');
-const { SshTransport, shellQuote, parseRights } = require('./sftp');
+const { SshTransport, shellQuote, parseRights, normalizeTimes } = require('./sftp');
 
 const NUL = Buffer.from([0]);
 const RETURN_MARKER = 'WinSCP-material-rc:';
@@ -592,17 +592,19 @@ class ScpAdapter extends Adapter {
     await this._mustRun(`chown ${opts.recursive ? '-R ' : ''}${shellQuote(who)} -- ${shellQuote(this.normalize(p))}`, 'Changing the owner');
   }
 
-  /** `touch -t` is the portable form; -d/@epoch is GNU only. */
+  /** `touch -t` is the portable form; -d/@epoch is GNU only. Both call shapes
+   *  are accepted — see normalizeTimes() in sftp.js. */
   async setTimes(p, mtime, atime) {
+    const t = normalizeTimes(mtime, atime);
     const target = shellQuote(this.normalize(p));
     const stamp = (ms) => {
-      const d = new Date(Number(ms));
+      const d = new Date(ms);
       const two = (n) => String(n).padStart(2, '0');
       return `${d.getFullYear()}${two(d.getMonth() + 1)}${two(d.getDate())}${two(d.getHours())}${two(d.getMinutes())}.${two(d.getSeconds())}`;
     };
-    await this._mustRun(`touch -m -t ${stamp(mtime)} -- ${target}`, 'Setting the modification time');
-    if (atime !== undefined && atime !== null) {
-      await this._mustRun(`touch -a -t ${stamp(atime)} -- ${target}`, 'Setting the access time');
+    await this._mustRun(`touch -m -t ${stamp(t.mtime)} -- ${target}`, 'Setting the modification time');
+    if (t.atime !== t.mtime) {
+      await this._mustRun(`touch -a -t ${stamp(t.atime)} -- ${target}`, 'Setting the access time');
     }
   }
 

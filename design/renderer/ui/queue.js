@@ -25,9 +25,10 @@
 
 import {
   h, icon, clear, uid, appearanceTarget, announce, openModal, rovingFocus, copyText,
+  layer, anchorTo, focusMemory,
 } from '../dom.js';
 import { bus, api, session } from '../state.js';
-import { t, bindText, bindRender, I18N } from '../i18n.js';
+import { t, bindText, bindRender, defineStrings } from '../i18n.js';
 import { styleSheet } from '../theme.js';
 import { notify } from './notifications.js';
 import { createSearchBar, filterBy, noMatchMessage } from './searchbar.js';
@@ -55,15 +56,7 @@ import './dialogs/fileysteminfo.js';
  * three language modes and both funny-level sliders instead of hard-coding an
  * English literal. Keys carry a `tx` prefix so two modules cannot collide.
  */
-export function defineStrings(dict) {
-  let added = 0;
-  for (const [key, entry] of Object.entries(dict)) {
-    if (Object.prototype.hasOwnProperty.call(I18N, key)) continue;
-    I18N[key] = entry;
-    added += 1;
-  }
-  return added;
-}
+export { defineStrings };
 
 defineStrings({
   // ---- queue states and columns ----
@@ -749,6 +742,13 @@ function createQueueModel() {
     started = true;
     onMainEvent('event:queue', (payload) => {
       if (payload?.type === 'idle') handleIdle(payload);
+      // WinSCP's queue.autoPopup: the progress window comes up by itself when
+      // an item starts moving, so a transfer the user started is visible
+      // without hunting for it. Off by default, exactly as WinSCP ships it.
+      if (payload?.type === 'item-added' && transferPref('queue.autoPopup', false)) {
+        const id = payload.item && payload.item.id;
+        if (id) bus.emit('queue:openProgress', { id });
+      }
       refresh();
     });
     onMainEvent('event:progress', (payload) => {
@@ -758,7 +758,14 @@ function createQueueModel() {
       const q = normalizeQueueQuery(payload);
       if (q) { pendingQueries.set(q.itemId, q.query); openOverwriteDialog(q); return; }
       const p = normalizeQueuePrompt(payload);
-      if (p) { pendingPrompts.set(p.itemId, p.prompt); openQueueCredentialPrompt(p); }
+      if (p) {
+        pendingPrompts.set(p.itemId, p.prompt);
+        // queue.autoPopupPrompts: bring the progress window forward alongside
+        // the credential prompt, so the answer is given in the context of the
+        // transfer that asked for it.
+        if (transferPref('queue.autoPopupPrompts', false)) bus.emit('queue:openProgress', { id: p.itemId });
+        openQueueCredentialPrompt(p);
+      }
     });
     refresh();
   }
@@ -1093,6 +1100,9 @@ export function createQueuePanel(opts = {}) {
   injectTransferStyles();
 
   const listEl = h('div', { class: 'tx-q-list', role: 'list' });
+  // One tab stop for the whole list, arrows to move between transfers, and
+  // Right/Left to step into and out of a row's own buttons.
+  const rowRoving = rovingFocus(listEl, '.tx-q-row', { orientation: 'vertical', loop: false });
   const emptyEl = h('div', { class: 'tx-q-empty' });
   const summaryEl = h('span', { class: 'tx-q-summary mono' });
   let showFileList = !!transferPref('queue.fileList', false);
@@ -1310,7 +1320,10 @@ export function createQueuePanel(opts = {}) {
 
   function rowButton(glyph, labelKey, run) {
     const btn = h('button', {
-      type: 'button', class: 'icon-btn tx-q-rowbtn',
+      // The key is what lets render() put focus back on the SAME button after a
+      // rebuild. Without it a progress event twice a second would throw the
+      // keyboard user out of the row they are operating.
+      type: 'button', class: 'icon-btn tx-q-rowbtn', 'data-row-action': labelKey, tabindex: '-1',
       onclick: (e) => { e.stopPropagation(); Promise.resolve().then(run).catch((err) => notify.error(t('queueTitle'), err.message)); },
     }, icon(glyph, 16));
     bindText(btn, labelKey, { attr: 'aria-label' });
@@ -1395,13 +1408,25 @@ export function createQueuePanel(opts = {}) {
   }
 
   function onRowKey(e, item) {
-    if (e.altKey && e.key === 'ArrowUp') { e.preventDefault(); queueModel.move(item.id, -1); }
-    else if (e.altKey && e.key === 'ArrowDown') { e.preventDefault(); queueModel.move(item.id, 1); }
+    // Alt+Arrow reorders. It stops here rather than bubbling, because the
+    // roving-focus handler on the list also reads ArrowUp/ArrowDown and would
+    // otherwise move the focus at the same time as the item.
+    if (e.altKey && e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); queueModel.move(item.id, -1); }
+    else if (e.altKey && e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); queueModel.move(item.id, 1); }
     else if (e.key === 'Delete') { e.preventDefault(); queueModel.cancel(item.id); }
     else if (e.key === 'Enter') { e.preventDefault(); bus.emit('queue:openProgress', { id: item.id }); }
+    else if (e.key === 'ArrowRight' && e.target === e.currentTarget) {
+      // Right steps into the row's own buttons; Left steps back out. Standard
+      // grid behaviour, and the only way to reach pause/cancel without a mouse.
+      const first = e.currentTarget.querySelector('.tx-q-rowbtn');
+      if (first) { e.preventDefault(); e.stopPropagation(); first.focus(); }
+    } else if (e.key === 'ArrowLeft' && e.target !== e.currentTarget) {
+      e.preventDefault(); e.stopPropagation(); e.currentTarget.focus();
+    }
   }
 
   function render() {
+    const keep = focusFingerprint();
     paintToolbar();
     clear(listEl);
     clear(emptyEl);
@@ -1425,8 +1450,39 @@ export function createQueuePanel(opts = {}) {
       return;
     }
     for (const item of rows) listEl.appendChild(itemRow(item));
-    const first = listEl.querySelector('.tx-q-row');
-    if (first) first.tabIndex = 0;
+    restoreFocus(keep);
+    rowRoving.sync(listEl.querySelector('.tx-q-row[tabindex="0"]') || listEl.querySelector('.tx-q-row'));
+  }
+
+  /**
+   * The model emits on every progress event — twice a second while anything is
+   * moving — and render() rebuilds every row. Without this the keyboard focus
+   * would land on <body> each time, which is exactly when the per-item pause,
+   * resume and cancel buttons matter most.
+   */
+  function focusFingerprint() {
+    const el = document.activeElement;
+    if (!el || !listEl.contains(el)) return null;
+    const row = el.closest('.tx-q-row');
+    if (!row) return null;
+    return { id: row.getAttribute('data-queue-id'), action: el.getAttribute('data-row-action') };
+  }
+
+  function restoreFocus(fp) {
+    if (!fp || !fp.id) return;
+    let row = null;
+    for (const candidate of listEl.querySelectorAll('.tx-q-row')) {
+      if (candidate.getAttribute('data-queue-id') === fp.id) { row = candidate; break; }
+    }
+    if (!row) return;
+    let target = row;
+    if (fp.action) {
+      for (const btn of row.querySelectorAll('.tx-q-rowbtn')) {
+        if (btn.getAttribute('data-row-action') === fp.action) { target = btn; break; }
+      }
+    }
+    row.tabIndex = 0;
+    try { target.focus({ preventScroll: true }); } catch { target.focus(); }
   }
 
   const unsubscribe = queueModel.subscribe((snap) => {
@@ -1583,6 +1639,14 @@ const TRANSFER_CSS = `
    is a clipping defect, not a layout. */
 .tx-q-summary { font-size: var(--type-label-sm); color: var(--onsv); min-width: 0; flex: 1 1 100%; line-height: 1.45; }
 .tx-q-searchwrap { display: flex; min-width: 0; flex: 1 1 220px; }
+/* The queue popover reuses the floating-window chrome but is ANCHORED, so it
+   must drop the centring transform and the bottom pinning that the progress
+   window relies on — leaving them in place moved it half its own width to the
+   left of wherever anchorTo() had just put it. */
+.tx-q-popover { position: fixed; left: auto; bottom: auto; transform: none;
+  width: min(860px, calc(100vw - 32px)); max-height: min(70vh, 720px);
+  display: flex; flex-direction: column; }
+.tx-q-popbody { flex: 1 1 auto; display: flex; min-height: calc(240px * var(--uiscale)); overflow: auto; }
 .tx-q-list { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; min-height: 0; min-width: 0; padding: calc(6px * var(--den)); display: flex; flex-direction: column; gap: calc(4px * var(--den)); }
 .tx-q-empty { padding: calc(16px * var(--den)); color: var(--onsv); font-size: var(--type-body-sm); }
 .tx-q-empty-line { line-height: 1.5; }
@@ -1867,23 +1931,69 @@ function reportMissingWait(id, kind) {
 
 let popover = null;
 
-/** The queue as a floating surface, for the title-bar button. */
+/**
+ * The queue as a floating surface, for the title-bar button.
+ *
+ * It is deliberately NOT a modal. Watching a transfer is the one thing a user
+ * does while continuing to work: a scrim over the panels would make the queue
+ * unusable for its own purpose. So this is an anchored, non-modal popover —
+ * `aria-modal="false"`, Escape closes, focus returns to the button — the same
+ * shape progress.js and fileysteminfo.js use.
+ */
 export function openQueuePopover(anchorEl) {
-  // A handle whose element is gone was torn down without its onClose running;
+  // A surface whose element is gone was torn down without its close running;
   // treating it as open would make the button a dead toggle.
   if (popover && !popover.element?.isConnected) popover = null;
   if (popover) { popover.close(); return null; }
   injectTransferStyles();
+
   const panel = createQueuePanel();
-  const handle = openModal({
-    title: t('queueTitle'),
-    width: 860,
-    content: h('div', { class: 'tx-q-modalwrap', style: { minHeight: '320px', display: 'flex' } }, panel.element),
-    actions: [{ label: t('close'), kind: 'filled', autofocus: true }],
-    onClose: () => { panel.destroy(); popover = null; },
+  const titleId = uid('tx-qp-title');
+  const restoreFocus = focusMemory();
+
+  const closeBtn = h('button', { type: 'button', class: 'icon-btn', onclick: () => close() }, icon('close', 18));
+  bindText(closeBtn, 'close', { attr: 'aria-label' });
+  bindText(closeBtn, 'close', { attr: 'title' });
+
+  const root = h('div', {
+    class: 'tx-pg-window tx-q-popover surface-3', role: 'dialog', 'aria-modal': 'false',
+    'aria-labelledby': titleId, tabindex: '-1',
+  },
+  h('header', { class: 'nc-head' },
+    icon('swap_vert', 18),
+    h('span', { class: 'nc-head-title', id: titleId }, t('queueTitle')),
+    closeBtn),
+  h('div', { class: 'tx-q-popbody' }, panel.element));
+  appearanceTarget(root, 'queue-popover', 'Queue popover');
+  layer('popover').appendChild(root);
+
+  const anchored = anchorEl
+    ? anchorTo(root, anchorEl, { placement: 'bottom-end', gap: 8, onDetach: () => close() })
+    : null;
+  if (!anchored) {
+    root.style.position = 'fixed';
+    root.style.right = 'calc(16px * var(--uiscale))';
+    root.style.top = 'calc(56px * var(--uiscale))';
+  }
+
+  let closed = false;
+  function close() {
+    if (closed) return;
+    closed = true;
+    anchored?.dispose?.();
+    panel.destroy();
+    root.remove();
+    popover = null;
+    restoreFocus();
+  }
+
+  root.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.stopPropagation(); close(); }
   });
+  root.focus({ preventScroll: true });
+
+  const handle = { element: root, close, focus: () => root.focus() };
   popover = handle;
-  void anchorEl;
   return handle;
 }
 

@@ -330,6 +330,40 @@ export function openChecklistDialog(result = {}) {
     render();
   }
 
+  /**
+   * render() rebuilds the whole list, so without this every tick of a checkbox
+   * and every change of a row's action would drop focus to the document body.
+   * On Windows an arrow key on a closed <select> fires `change` per keystroke,
+   * so a keyboard user would lose the control after one press and never reach
+   * the second option — on the dialog that gates irreversible deletions.
+   */
+  function focusFingerprint() {
+    const el = document.activeElement;
+    if (!el || !listEl.contains(el)) return null;
+    const row = el.closest('.tx-cl-row');
+    if (!row) return null;
+    return {
+      index: row.getAttribute('data-row-index'),
+      part: el.classList.contains('tx-cl-action') ? 'action'
+        : (el.tagName === 'INPUT' ? 'check' : 'row'),
+      caret: typeof el.selectionStart === 'number' ? el.selectionStart : null,
+    };
+  }
+
+  function restoreFocus(fp) {
+    if (!fp) return;
+    let row = null;
+    for (const candidate of listEl.querySelectorAll('.tx-cl-row')) {
+      if (candidate.getAttribute('data-row-index') === fp.index) { row = candidate; break; }
+    }
+    if (!row) return;
+    const target = fp.part === 'action' ? row.querySelector('.tx-cl-action')
+      : fp.part === 'check' ? row.querySelector('input[type="checkbox"]')
+        : row;
+    const el = target || row;
+    try { el.focus({ preventScroll: true }); } catch { el.focus(); }
+  }
+
   function applyToAll(fn) {
     rows = rows.map((r) => fn(r) || r);
     render();
@@ -376,6 +410,10 @@ export function openChecklistDialog(result = {}) {
     const isDelete = item.action === 'deleteLocal' || item.action === 'deleteRemote';
     const row = h('div', {
       class: `tx-cl-row${isDelete && item.checked ? ' is-delete' : ''}${item.action === 'nothing' ? ' is-nothing' : ''}`,
+      // The index survives a rebuild, which is what restoreFocus() matches on.
+      'data-row-index': String(index),
+      role: 'group',
+      'aria-label': name,
     },
     h('label', { class: 'check', for: cbId }, checkbox, h('span', { class: 'sr-only' }, name)),
     h('span', { class: 'tx-cl-icon' }, icon(item.isDirectory ? 'folder' : 'description', 16)),
@@ -415,6 +453,7 @@ export function openChecklistDialog(result = {}) {
   }
 
   function render() {
+    const keep = focusFingerprint();
     clear(listEl);
     const visible = visibleRows();
     if (!visible.length) {
@@ -429,6 +468,7 @@ export function openChecklistDialog(result = {}) {
     } else {
       for (const item of visible) listEl.appendChild(rowElement(item));
     }
+    restoreFocus(keep);
     paintSummary();
   }
 

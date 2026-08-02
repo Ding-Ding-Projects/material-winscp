@@ -30,9 +30,18 @@ const ALGORITHM = 'AWS4-HMAC-SHA256';
 
 // S3 rejects parts smaller than 5 MiB (except the last) and allows at most
 // 10 000 of them, which together set the floor and the scaling rule below.
+// These are WinSCP's own S3MinMultiPartChunkSize / S3MaxMultiPartChunks, and
+// the part size is computed the same way it is in core/S3FileSystem.cpp: the
+// floor unless the object is big enough that 10 000 parts would not cover it.
 const MIN_PART_SIZE = 5 * 1024 * 1024;
-const DEFAULT_PART_SIZE = 8 * 1024 * 1024;
 const MAX_PARTS = 10000;
+
+/** The part size WinSCP would use for an object of `size` bytes. */
+function partSizeFor(size) {
+  if (!size || size <= 0) return MIN_PART_SIZE;
+  const parts = Math.min(MAX_PARTS, Math.max(1, Math.ceil(size / MIN_PART_SIZE)));
+  return Math.max(MIN_PART_SIZE, Math.ceil(size / parts));
+}
 // CopyObject cannot copy more than 5 GiB in one call; past that it is a
 // multipart copy or nothing.
 const MAX_SINGLE_COPY = 5 * 1024 * 1024 * 1024;
@@ -67,6 +76,18 @@ function uriEncode(str, encodeSlash = true) {
     }
   }
   return out;
+}
+
+/**
+ * Is this host an IP literal rather than a name?
+ *
+ * TLS forbids an SNI server name that is an IP address, and Node throws rather
+ * than dropping it — so an endpoint addressed by IP has to be connected to
+ * without SNI, not refused.
+ */
+function isIpLiteral(host) {
+  const bare = String(host || '').replace(/^\[|\]$/g, '');
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(bare) || bare.includes(':');
 }
 
 /** `2020-03-03T09:22:00Z` → `20200303T092200Z`, the only date format SigV4 uses. */
@@ -342,8 +363,7 @@ class S3UploadStream extends Writable {
     this.result = null;
     // Keep every part above S3's 5 MiB floor while staying under the 10 000
     // part ceiling for whatever size the caller did tell us about.
-    const wanted = opts.size ? Math.ceil(opts.size / MAX_PARTS) : 0;
-    this.partSize = Math.max(DEFAULT_PART_SIZE, MIN_PART_SIZE, wanted);
+    this.partSize = partSizeFor(opts.size);
   }
 
   _write(chunk, enc, cb) {
@@ -409,9 +429,22 @@ class S3Adapter extends Adapter {
   constructor(session, options = {}) {
     super(session);
     this.options = options;
-    // S3 is an HTTPS API. Plain HTTP is only reachable by deliberately asking
-    // for port 80, which is how an on-premises MinIO without TLS is addressed.
-    this.secure = Number(session.portNumber) !== 80;
+    // WinSCP decides S3's transport from the session's Encryption setting
+    // (TSessionData::Ftps) and derives the *default* port from that choice —
+    // 443 with encryption, 80 without (SessionData.cpp, GetDefaultPort). The
+    // setting is the cause and the port is the consequence, never the other way
+    // round: a self-hosted endpoint (MinIO, Ceph RGW, a test server) listens on
+    // 9000 or an ephemeral port at least as often as it listens on 80, and
+    // keying off the port alone makes every one of them unreachable.
+    //
+    // Our session record carries one shared `ftps` field whose default is
+    // 'none' for every protocol, while WinSCP defaults S3 to implicit TLS. So
+    // "no encryption" is only believed when the site is not sitting on the
+    // HTTPS port; otherwise an S3 site left at its defaults would quietly drop
+    // to plain HTTP, which is a downgrade rather than a default.
+    const declaredPort = Number(session.portNumber) || 0;
+    const encrypted = !!(session.ftps && session.ftps !== 'none');
+    this.secure = encrypted || declaredPort === 443 || declaredPort === 0;
     this.region = session.s3DefaultRegion || '';
     this.endpoint = session.hostName || '';
     this.port = Number(session.portNumber) || (this.secure ? 443 : 80);
@@ -425,7 +458,16 @@ class S3Adapter extends Adapter {
       owner: false,
       symlink: false,
       exec: false,
-      resume: true,         // GetObject honours Range everywhere
+      // WinSCP answers false to fcResumeSupport and fcParallelFileTransfers for
+      // S3 (core/S3FileSystem.cpp), and so must we. GetObject does honour Range
+      // — `createReadStream` uses it — but `caps.resume` is read by the
+      // transfer queue for BOTH sides of a copy and means "this backend can
+      // continue a transfer at an offset". There is no positioned write in S3:
+      // every PutObject replaces the whole object. Claiming otherwise makes the
+      // queue write a file's tail into a `.filepart` and rename it over the
+      // target, or split one upload across parallel streams that each overwrite
+      // the last — both of which silently produce a truncated object.
+      resume: false,
       timestamp: false,     // Last-Modified is set by S3 and cannot be chosen
       checksum: true,       // ETag is an MD5 for single-part objects
       copyRemote: true,     // CopyObject is server side
@@ -584,7 +626,10 @@ class S3Adapter extends Adapter {
   async _verifyCertificate(host, port) {
     if (!this.secure || !this.options.certVerifier) return;
     const socket = await new Promise((res, rej) => {
-      const s = tls.connect({ host, port, servername: host, rejectUnauthorized: false }, () => res(s));
+      // SNI must be omitted for an IP literal; TLS has no name to send.
+      const s = tls.connect({
+        host, port, servername: isIpLiteral(host) ? undefined : host, rejectUnauthorized: false,
+      }, () => res(s));
       s.once('error', rej);
     });
     const cert = socket.getPeerCertificate(true);
@@ -675,7 +720,7 @@ class S3Adapter extends Adapter {
         path: fullPath,
         headers: signed.headers,
         agent: host === this._agentHost ? this._agent : undefined,
-        servername: secure ? host : undefined,
+        servername: secure && !isIpLiteral(host) ? host : undefined,
         timeout: Math.max(1, Number(this.session.timeout || 15)) * 1000,
       }, (res) => {
         if (stream && res.statusCode < 300) {
@@ -764,6 +809,14 @@ class S3Adapter extends Adapter {
   async connect() {
     await this._resolveCredentials();
     const endpoint = this._defaultEndpoint();
+    if (!this.secure) {
+      // Running unencrypted is legitimate for a MinIO box on a private network
+      // and is what the Encryption setting is for, but it must never be a
+      // silent choice: the request line, the object keys and the access key id
+      // all go out in the clear.
+      this._log('warning', `Connecting to ${endpoint}:${this.port} without encryption; `
+        + 'requests and object names travel in the clear');
+    }
     await this._verifyCertificate(endpoint, this.port);
     this._makeAgent();
     this._agentHost = endpoint;

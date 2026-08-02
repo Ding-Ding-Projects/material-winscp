@@ -176,6 +176,21 @@ const prefs = {
   },
 };
 
+/**
+ * Keys that must NEVER be written as a plain preference, because the value is
+ * only half of the state it describes.
+ *
+ * `security.masterPasswordVerifier` carries the scrypt salt that every stored
+ * site password was wrapped with; `security.useMasterPassword` is what tells
+ * the application to ask for that password at all. Config.enableMasterPassword
+ * and Config.disableMasterPassword change them TOGETHER with a re-encryption
+ * pass over every stored secret. Writing either one on its own — which is what
+ * a snapshot restore or a page reset would do — leaves the secrets wrapped
+ * under a key whose salt has just been erased, and no correct password can
+ * recover them afterwards. They are reachable only through the password flow.
+ */
+const MASTER_PASSWORD_KEYS = new Set(['security.useMasterPassword', 'security.masterPasswordVerifier']);
+
 /** Declared defaults, keyed by dot path — built once from the schema. */
 let defaultMap = null;
 function schemaDefault(key) {
@@ -283,6 +298,8 @@ export function ensurePreferenceStyles() {
 .pref-label { font-size: var(--type-body-sm); color: var(--onsfc); }
 .pref-hint { font-size: var(--type-label-sm); color: var(--onsv); line-height: 1.45; margin: 0; max-width: 74ch; }
 .pref-hint.is-restart { color: var(--onterc); background: var(--terc); border-radius: var(--shape-xs); padding: 4px 7px; display: inline-block; }
+/* An option that persists but changes nothing yet says so on its own row. */
+.pref-hint.is-pending { color: var(--onterc); background: var(--terc); border-radius: var(--shape-xs); padding: 4px 7px; display: inline-block; }
 .pref-hint.is-danger { color: var(--onerrc); background: var(--errc); border-radius: var(--shape-xs); padding: 4px 7px; display: inline-block; }
 .pref-hint.is-unsupported { color: var(--onterc); background: var(--terc); border-radius: var(--shape-xs); padding: 6px 8px; }
 .pref-inline { display: inline-flex; align-items: center; gap: calc(8px * var(--den)); flex-wrap: wrap; min-width: 0; }
@@ -1091,10 +1108,17 @@ export function createPreferences(opts = {}) {
   }
 
   function resetPage(page) {
-    const pageEntries = entries.filter((e) => e.pageId === page.id && e.control.type !== 'action' && e.control.type !== 'custom');
+    const pageEntries = entries.filter((e) => e.pageId === page.id
+      && e.control.type !== 'action' && e.control.type !== 'custom'
+      && !MASTER_PASSWORD_KEYS.has(e.control.key));
     const changed = pageEntries.filter((e) => JSON.stringify(prefs.get(e.control.key)) !== JSON.stringify(e.control.def));
+    const masterHeld = page.sections?.some((s) => (s.controls || [])
+      .some((c) => MASTER_PASSWORD_KEYS.has(c.key))) && prefs.get('security.useMasterPassword');
     if (!changed.length) {
-      notify.info(localized(page.title), tx('Every option on this page is already at its default.', '呢頁全部都係預設值。'));
+      notify.info(localized(page.title), masterHeld
+        ? tx('Every option on this page that a reset can touch is already at its default. The master password is turned off through its own checkbox, so that the stored passwords are re-encrypted rather than orphaned.',
+          '呢頁凡係重設得嘅選項都已經係預設值。主密碼要用佢自己嗰個剔格熄，咁存低嘅密碼先會重新加密，唔會變成解唔開。')
+        : tx('Every option on this page is already at its default.', '呢頁全部都係預設值。'));
       return;
     }
     openModal({
@@ -1129,6 +1153,7 @@ export function createPreferences(opts = {}) {
     const snap = {};
     for (const e of entries) {
       if (e.control.virtual && e.control.type === 'custom') continue;
+      if (MASTER_PASSWORD_KEYS.has(e.control.key)) continue;
       snap[e.control.key] = clone(prefs.get(e.control.key));
     }
     return snap;
@@ -1137,6 +1162,7 @@ export function createPreferences(opts = {}) {
   async function revert(snap) {
     let n = 0;
     for (const [key, value] of Object.entries(snap)) {
+      if (MASTER_PASSWORD_KEYS.has(key)) continue;
       if (JSON.stringify(prefs.get(key)) === JSON.stringify(value)) continue;
       try { await prefs.set(key, value, 'Reverted the preferences changes made in this dialog'); n += 1; }
       catch (err) { console.warn('[preferences] revert failed for', key, err); }

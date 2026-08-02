@@ -111,6 +111,30 @@ test('an invalid pattern is reported, never thrown, and matches nothing', async 
   // Matching nothing rather than everything is the safe side for a bulk close.
 });
 
+test('the search predicate refuses a runaway pattern instead of hanging on it', async () => {
+  // makePredicate is what every search bar and both bulk closes actually run,
+  // and it runs SYNCHRONOUSLY on the UI thread: there is no Worker to
+  // terminate and no deadline to check between matches. evaluate() has that
+  // protection; this path never goes through evaluate(), so it must refuse.
+  const { makePredicate, backtrackingRisk, RUNAWAY_REFUSAL } = await loadRegex();
+
+  const evil = ['(a+)+b', '(a*)*c', '(?:a+)+b', '(a|a)*b'];
+  for (const pattern of evil) {
+    assert.ok(backtrackingRisk(pattern), `${pattern} is no longer flagged as a hazard`);
+    const p = makePredicate({ pattern, flags: '', mode: 'regex' });
+    assert.strictEqual(p.ok, false, `${pattern} was accepted by the search predicate`);
+    assert.strictEqual(p.error, RUNAWAY_REFUSAL);
+    // Refusing means matching nothing, which is the safe side for a bulk close.
+    assert.strictEqual(p.test('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'), false);
+  }
+
+  // And the refusal is narrow: ordinary patterns still work.
+  for (const pattern of ['^web-\d+$', '[a-z]+@[a-z]+', '(foo|bar)', 'a{2,4}b']) {
+    assert.strictEqual(backtrackingRisk(pattern), false, `${pattern} is falsely flagged`);
+    assert.strictEqual(makePredicate({ pattern, mode: 'regex' }).ok, true, `${pattern} was refused`);
+  }
+});
+
 test('escapeLiteral makes any string match itself', async () => {
   const { escapeLiteral, compile } = await loadRegex();
 
@@ -382,10 +406,30 @@ test('a runaway pattern is terminated, not waited for', async (t) => {
 /**
  * Notations that structurally cannot carry alpha. `hsv()` and `cmyk()` have no
  * alpha component and six-digit hex has no alpha byte; the translator lists
- * HEX8 and RGB beside them, which do. This list is asserted exactly, so a
- * fourth notation cannot start dropping alpha unnoticed.
+ * HEX8 and RGB beside them, which do. Four of them, and the list is asserted
+ * exactly, so a fifth cannot start dropping alpha unnoticed.
+ *
+ * Dropping alpha is allowed; dropping it SILENTLY is not — see the test below,
+ * which pins the picker's own declaration of this set so the warning it shows
+ * cannot drift from the notations that actually need it.
  */
 const ALPHA_FREE_NOTATIONS = ['HEX', 'HSV/HSB', 'CMYK', 'Named'];
+
+test('the picker warns on exactly the notations that cannot carry alpha', async () => {
+  const { ALPHA_FREE_NOTATIONS: shipped } = await loadColor();
+  assert.ok(shipped instanceof Set, 'ui/colorpicker.js no longer declares the alpha-free set');
+  assert.deepStrictEqual([...shipped].sort(), [...ALPHA_FREE_NOTATIONS].sort(),
+    'the set the picker warns about is not the set that actually drops alpha');
+
+  // The warning must reach the row, its accessible name and the copy button —
+  // a customization surface may not silently drop a value it cannot represent.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'design', 'renderer', 'ui', 'colorpicker.js'), 'utf8');
+  assert.match(src, /ALPHA_FREE_NOTATIONS\.has\(row\.k\)/, 'the translator no longer checks for alpha loss');
+  assert.match(src, /'aria-label': `Copy \$\{row\.k\} value\$\{note\}`/,
+    'the copy button no longer names the alpha loss in its accessible name');
+});
 
 test('every notation the translator emits reads back as the same colour', async () => {
   const { translateColor } = await loadData();

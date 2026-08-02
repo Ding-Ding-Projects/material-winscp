@@ -57,6 +57,11 @@ export function compile(pattern, flags) {
  * (\s*\w*)+ and friends — which is where exponential blow-up comes from.
  * It is a warning, not a veto: the time budget is the actual protection.
  */
+/** Why a search refuses a runaway pattern. Named so tests can assert on it. */
+export const RUNAWAY_REFUSAL = 'nested quantifier — this shape can take exponential time on the wrong input, '
+  + 'so a search will not run it. Try the builder preview, which evaluates it in a Worker it can stop, '
+  + 'or rewrite the pattern without a quantifier inside a quantified group.';
+
 export function backtrackingRisk(pattern) {
   const p = String(pattern);
   const risky = [
@@ -110,6 +115,13 @@ function evaluateInline(pattern, flags, sample, deadline) {
   const globalFlags = flags.includes('g') ? flags : `${flags}g`;
   const { ok, regex, error } = compile(pattern, globalFlags);
   if (!ok) return { ok: false, error };
+  // The deadline below is only checked BETWEEN matches, so a pattern that blows
+  // up inside one exec() would still hang this path. With no Worker to
+  // terminate, the only safe answer is not to start — which is what the module
+  // header has always claimed this path does.
+  if (backtrackingRisk(pattern)) {
+    return { ok: true, matches: [], truncated: false, timedOut: true, backtracking: true, error: null };
+  }
   const matches = [];
   let truncated = false, timedOut = false, m;
   while ((m = regex.exec(sample)) !== null) {
@@ -575,6 +587,16 @@ export function makePredicate({ query = '', pattern = '', flags = '', mode = 'te
     const f = flags.replace(/g/g, '');            // a shared regex must not carry lastIndex
     const c = compile(pattern, f);
     if (!c.ok) return { ok: false, error: c.error, test: () => false };
+    // A predicate runs SYNCHRONOUSLY, once per field per item, on the UI
+    // thread — there is no Worker to terminate and no deadline to check, so a
+    // catastrophically backtracking pattern here is an unkillable hang, not a
+    // slow search. evaluate() has the Worker; the search path does not, so a
+    // pattern of a known runaway shape is refused with the reason rather than
+    // run. The builder's preview still evaluates it safely, which is where a
+    // user can see what it does before asking a search to use it.
+    if (backtrackingRisk(pattern)) {
+      return { ok: false, error: RUNAWAY_REFUSAL, mode: 'regex', describe: `/${pattern}/${f}`, test: () => false };
+    }
     return { ok: true, error: null, mode: 'regex', describe: `/${pattern}/${f}`, test: (v) => c.regex.test(String(v ?? '')) };
   }
   const needle = String(query || '').toLocaleLowerCase();

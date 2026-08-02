@@ -184,9 +184,13 @@ export const CLEANUP_ROWS = [
     icon: 'history',
     count: (ctx) => Object.keys((ctx.prefs && ctx.prefs.history) || {}).length,
     detail: (ctx, L = s) => L('cuItems', Object.keys((ctx.prefs && ctx.prefs.history) || {}).length),
-    async remove() {
+    async remove(ctx) {
+      // One call clears them all, but the summary has to report the number the
+      // confirmation just named — saying "(1)" after promising twelve reads as
+      // eleven that were quietly left behind.
+      const n = Object.keys((ctx.prefs && ctx.prefs.history) || {}).length;
       await callMain('config.clearHistory', undefined);
-      return 1;
+      return n;
     },
   },
   {

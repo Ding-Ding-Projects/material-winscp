@@ -534,6 +534,11 @@ textarea.field-input { padding: 8px 12px; resize: vertical; }
 .cp-section { font-size: var(--type-label-sm); text-transform: uppercase; letter-spacing: .04em; color: var(--onsv); font-weight: 600; }
 .cp-translator { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto; }
 .cp-tr-row { display: flex; align-items: center; gap: 6px; }
+/* A notation that cannot carry transparency says so, rather than handing the
+   user a value that quietly differs from the colour on screen. */
+.cp-tr-lossy { display: inline-flex; margin-inline-start: 4px; color: var(--onterc); vertical-align: middle; }
+.cp-tr-val.is-lossy { border-color: var(--terc); }
+.cp-tr-foot { margin: 6px 0 0; font-size: var(--type-label-sm); color: var(--onsv); }
 .cp-tr-key { width: 8ch; flex: 0 0 auto; font-size: var(--type-label-sm); color: var(--onsv); }
 .cp-tr-val { flex: 1 1 auto; min-width: 0; min-height: calc(28px * var(--den)); border: 1px solid var(--outline-var); border-radius: var(--shape-xs); padding: 0 6px; background: var(--c-lowest); color: var(--onsfc); font-size: var(--type-label-sm); }
 .cp-tr-val.is-invalid { border-color: var(--err); }

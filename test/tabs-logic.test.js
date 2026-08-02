@@ -31,6 +31,16 @@ const TABS_SOURCE_PATH = path.join(__dirname, '..', 'design', 'renderer', 'ui', 
 const source = fs.readFileSync(TABS_SOURCE_PATH, 'utf8');
 
 const loadRegex = () => import('../design/renderer/ui/regexbuilder.js');
+// ui/tabs.js now exports the bulk-close decision as a pure function, so the
+// rule can be driven directly instead of through a copy written beside the
+// tests. It imports headlessly: createTabStrip() is what touches the DOM, and
+// nothing calls it here.
+let tabsApi = null;
+const loadTabs = async () => (tabsApi || (tabsApi = await import('../design/renderer/ui/tabs.js')));
+const bulkCloseSelection = (o) => {
+  if (!tabsApi) throw new Error('await loadTabs() before using the shipped bulk-close decision');
+  return tabsApi.bulkCloseSelection(o);
+};
 const loadSearch = () => import('../design/renderer/ui/searchbar.js');
 
 /* ================================================================== */
@@ -163,15 +173,18 @@ function createStripModel({ id = 'main', windowId = 'Main window' } = {}) {
 }
 
 /**
- * The bulk-close decision, transcribed from ui/tabs.js. ONE predicate object,
- * negated once for the inverse action, then pinned tabs removed unless the user
- * explicitly included them.
+ * The bulk-close decision — the SHIPPED one. `bulkCloseSelection` is exported
+ * from ui/tabs.js and is the only thing its own bulkClose() consults, so a
+ * mutation to the direction of the predicate, to the pinned protection, to the
+ * empty-query refusal or to the invalid-pattern refusal fails a test here.
+ *
+ * This deliberately replaced a copy of those rules written beside the tests. A
+ * reference model only ever tests itself: both mutations the verifier tried
+ * (swapping the two directions at their call sites, and defaulting
+ * includePinned to true) left all 25 tests green against the copy.
  */
-function bulkCloseVictims({ pool, predicate, containing, includePinned = false }) {
-  const matches = pool.filter((tb) => (containing ? predicate.test(tb.title) : !predicate.test(tb.title)));
-  const excludedPins = matches.filter((tb) => tb.pinned).length;
-  const victims = includePinned ? matches : matches.filter((tb) => !tb.pinned);
-  return { matches, victims, excludedPins };
+function bulkCloseVictims({ pool, predicate, containing, includePinned = false, query = 'x' }) {
+  return bulkCloseSelection({ pool, predicate, containing, includePinned, query });
 }
 
 /** Populate a strip that exercises pins, groups, collapse and Unicode titles. */
@@ -368,6 +381,7 @@ test('group order is normalised without losing or duplicating a group', async ()
 
 test('all four searches list the right rows and each holds its own predicate', async () => {
   const { makePredicate } = await loadRegex();
+  await loadTabs();
   const { filterBy } = await loadSearch();
 
   const main = sampleStrip();
@@ -434,6 +448,7 @@ test('all four searches list the right rows and each holds its own predicate', a
 
 test('a search finds a tab inside a collapsed group without expanding it', async () => {
   const { makePredicate } = await loadRegex();
+  await loadTabs();
   const { filterBy } = await loadSearch();
   const { s, prod } = sampleStrip();
 
@@ -448,6 +463,7 @@ test('a search finds a tab inside a collapsed group without expanding it', async
 
 test('an empty query lists every tab rather than none', async () => {
   const { makePredicate } = await loadRegex();
+  await loadTabs();
   const { filterBy } = await loadSearch();
   const { s } = sampleStrip();
 
@@ -461,6 +477,7 @@ test('an empty query lists every tab rather than none', async () => {
 
 test('containing and NOT containing negate the same predicate exactly', async () => {
   const { makePredicate } = await loadRegex();
+  await loadTabs();
   const { s } = sampleStrip();
   const pool = s.strip.tabs;
 
@@ -491,6 +508,7 @@ test('containing and NOT containing negate the same predicate exactly', async ()
 
 test('the inverse action cannot drift on casing, flags or Unicode', async () => {
   const { makePredicate } = await loadRegex();
+  await loadTabs();
   const { s } = sampleStrip();
   const pool = s.strip.tabs;
 
@@ -513,6 +531,7 @@ test('the inverse action cannot drift on casing, flags or Unicode', async () => 
 
 test('pinned tabs are excluded from a bulk close until the user includes them', async () => {
   const { makePredicate } = await loadRegex();
+  await loadTabs();
   const { s } = sampleStrip();
   const pool = s.strip.tabs;
   const predicate = makePredicate({ pattern: '.', flags: 'g', mode: 'regex' });   // everything
@@ -533,6 +552,7 @@ test('pinned tabs are excluded from a bulk close until the user includes them', 
 
 test('close-others and close-to-the-right skip pinned tabs too', async () => {
   const { makePredicate } = await loadRegex();
+  await loadTabs();
   const { s } = sampleStrip();
   const pool = s.strip.tabs;
   const anchor = pool.find((tb) => tb.title === 'web-01.example.com');
@@ -554,6 +574,7 @@ test('close-others and close-to-the-right skip pinned tabs too', async () => {
 
 test('a bulk close never runs on an empty query or an invalid pattern', async () => {
   const { makePredicate } = await loadRegex();
+  await loadTabs();
   const { s } = sampleStrip();
   const pool = s.strip.tabs;
 
@@ -563,21 +584,35 @@ test('a bulk close never runs on an empty query or an invalid pattern', async ()
   assert.strictEqual(emptyText.test('anything'), true,
     'an empty text predicate matches everything — hence the separate empty-query guard');
 
+  // The empty query is refused by the shipped decision itself, before the
+  // predicate is ever consulted — otherwise the strip would close entirely.
+  const emptyRun = bulkCloseVictims({ pool, predicate: emptyText, containing: true, includePinned: true, query: '' });
+  assert.strictEqual(emptyRun.ok, false);
+  assert.strictEqual(emptyRun.reason, 'empty');
+  assert.strictEqual(emptyRun.victims.length, 0, 'an empty query closed tabs');
+
   const invalid = makePredicate({ pattern: '([', flags: 'i', mode: 'regex' });
   assert.strictEqual(invalid.ok, false);
-  const attempted = bulkCloseVictims({ pool, predicate: invalid, containing: true, includePinned: true });
-  assert.strictEqual(attempted.victims.length, 0, 'an invalid pattern selected tabs');
-  // And its inverse must not become "close everything".
-  const inverse = bulkCloseVictims({ pool, predicate: invalid, containing: false, includePinned: true });
-  assert.strictEqual(inverse.matches.length, pool.length,
-    'the inverse of a broken predicate is still computed from the same predicate');
-  // Which is exactly why tabs.js refuses on `!predicate.ok` before it gets here.
+  // A broken pattern refuses in BOTH directions. This is the sharp one: a
+  // predicate that always answers false makes the inverse direction match every
+  // tab in the strip, so an invalid-pattern guard that only covers "containing"
+  // turns a typo into "close everything".
+  for (const containing of [true, false]) {
+    const attempted = bulkCloseVictims({ pool, predicate: invalid, containing, includePinned: true });
+    assert.strictEqual(attempted.ok, false, `an invalid pattern was accepted (containing: ${containing})`);
+    assert.strictEqual(attempted.reason, 'invalid');
+    assert.strictEqual(attempted.victims.length, 0, `an invalid pattern selected tabs (containing: ${containing})`);
+    assert.strictEqual(attempted.matches.length, 0);
+  }
+  // And the dialog still refuses before it reaches the decision, so the user is
+  // told what is wrong with the pattern rather than silently getting nothing.
   assert.match(source, /if \(!predicate\.ok\) \{/,
     'the invalid-pattern guard is gone; the inverse action would close every tab');
 });
 
 test('a tab with unsaved work survives a bulk close and is reported', async () => {
   const { makePredicate } = await loadRegex();
+  await loadTabs();
   const { s } = sampleStrip();
   const predicate = makePredicate({ query: '', mode: 'text' });
   const { victims } = bulkCloseVictims({ pool: s.strip.tabs, predicate, containing: true, includePinned: true });
@@ -598,20 +633,31 @@ test('a tab with unsaved work survives a bulk close and is reported', async () =
 /* source contract — the shipped strip still obeys the model           */
 /* ================================================================== */
 
-test('ui/tabs.js builds both bulk-close directions from one predicate', () => {
-  // The single most important line in the file.
-  assert.match(source,
-    /const matches = pool\.filter\(\(tb\) => \(containing \? predicate\.test\(tb\.title\) : !predicate\.test\(tb\.title\)\)\);/,
-    'the two bulk-close directions are no longer one predicate negated once');
-  assert.match(source, /const predicate = bar\.predicate;/,
-    'the predicate must come from the search bar so the builder\'s flags apply to both directions');
+test('ui/tabs.js builds both bulk-close directions from one predicate', async () => {
+  const { makePredicate } = await loadRegex();
+  await loadTabs();
+  // Behaviour first, against the SHIPPED function: the two directions partition
+  // the pool exactly, which is only possible from one predicate negated once.
+  const pool = sampleStrip().s.strip.tabs;
+  const predicate = makePredicate({ query: 'db', mode: 'text' });
+  const yes = bulkCloseSelection({ pool, predicate, query: 'db', containing: true, includePinned: true }).victims;
+  const no = bulkCloseSelection({ pool, predicate, query: 'db', containing: false, includePinned: true }).victims;
+  assert.strictEqual(yes.length + no.length, pool.length);
+  assert.strictEqual(yes.filter((tb) => no.includes(tb)).length, 0);
+  assert.ok(yes.length > 0 && no.length > 0, 'the sample must exercise both directions');
 
-  // Exactly one predicate is read inside bulkClose.
+  // And the shipped dialog must decide THROUGH it rather than for itself.
+  assert.match(source, /const predicate = bar\.predicate;/,
+    'the predicate must come from the search bar so the builder flags apply to both directions');
   const body = source.slice(source.indexOf('function bulkClose('), source.indexOf('/** Preview + confirm'));
   assert.strictEqual((body.match(/bar\.predicate/g) || []).length, 1,
     'bulkClose reads bar.predicate more than once; the two reads can diverge');
   assert.strictEqual((body.match(/makePredicate\(/g) || []).length, 0,
-    'bulkClose builds its own predicate instead of using the search bar\'s');
+    'bulkClose builds its own predicate instead of using the search bar own predicate');
+  assert.strictEqual((body.match(/bulkCloseSelection\(\{/g) || []).length, 1,
+    'bulkClose no longer decides through the one exported, tested function');
+  assert.strictEqual((body.match(/containing \? predicate\.test/g) || []).length, 0,
+    'bulkClose has grown its own copy of the direction rule again');
 });
 
 test('every "close containing" entry asks for containing, and its inverse does not', () => {
@@ -632,14 +678,24 @@ test('every "close containing" entry asks for containing, and its inverse does n
     (source.match(/labelKey: 'closeNotContaining'/g) || []).length);
 });
 
-test('ui/tabs.js excludes pinned tabs from a bulk close by default', () => {
+test('ui/tabs.js excludes pinned tabs from a bulk close by default', async () => {
+  const { makePredicate } = await loadRegex();
+  await loadTabs();
   // Not just the filter — the flag it reads. Defaulting this to true keeps the
   // filter expression intact and closes every pinned tab anyway.
   assert.match(source, /let includePinned = false;/,
     'the bulk-close dialog now includes pinned tabs before the user asks');
-  assert.match(source, /victims = includePinned \? matches : matches\.filter\(\(tb\) => !tb\.pinned\);/,
-    'pinned tabs are no longer excluded by default');
-  assert.match(source, /const excludedPins = matches\.filter\(\(tb\) => tb\.pinned\)\.length;/);
+  // Behaviour, on the shipped function: with the flag left alone a pinned tab
+  // that matches is reported as excluded and is NOT closed.
+  const pinnedPool = [
+    { title: 'pinned-db', pinned: true },
+    { title: 'plain-db', pinned: false },
+  ];
+  const guardedPins = bulkCloseSelection({
+    pool: pinnedPool, predicate: makePredicate({ query: 'db', mode: 'text' }), query: 'db', containing: true,
+  });
+  assert.deepStrictEqual(guardedPins.victims.map((tb) => tb.title), ['plain-db']);
+  assert.strictEqual(guardedPins.excludedPins, 1);
   assert.match(source, /t\('pinnedExcluded', excludedPins\)/,
     'the pinned exclusion must be shown, not silent');
   assert.match(source, /t\('emptyQueryNoClose'\)/, 'the empty-query refusal is gone');
@@ -667,7 +723,12 @@ test('ui/tabs.js gives each of the four searches its own bar', () => {
   // group manager — producing six distinct ids, because the shell is called
   // once per search with an id of its own. Each bar is created per open, so no
   // two searches share hidden state or a builder.
-  assert.strictEqual((source.match(/createSearchBar\(\{/g) || []).length, 4);
+  // A floor, not an exact count: adding a fifth search bar to the strip is the
+  // direction the tabbed-navigation rules push, and an equality here would fail
+  // on that for no behavioural reason — which trains the next reader to edit
+  // the assertion instead of reading it. The invariant that matters (no two
+  // bars share hidden state) is the id-uniqueness check below.
+  assert.ok((source.match(/createSearchBar\(\{/g) || []).length >= 4);
   const ids = (source.match(/(?:searchId|id): [`'](tabs-[^`']*)[`']/g) || []);
   assert.strictEqual(new Set(ids).size, ids.length, 'two search bars share an id');
   assert.ok(ids.length >= 6, `only ${ids.length} distinct search-bar ids`);

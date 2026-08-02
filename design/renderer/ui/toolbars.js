@@ -200,7 +200,7 @@ export function bandsFor(iface, side) {
 /* styles                                                             */
 /* ================================================================== */
 
-const CSS = `
+const MODULE_CSS = `
 .tbdock{display:flex;flex-wrap:wrap;align-items:stretch;gap:calc(4px*var(--den,1));
   padding:calc(2px*var(--den,1)) calc(4px*var(--den,1));background:var(--md-sys-color-surface-container-low,var(--sfc1,transparent));
   border-bottom:1px solid var(--md-sys-color-outline-variant,var(--outv,rgba(0,0,0,.12)))}
@@ -240,7 +240,7 @@ const ICON_PX = { normal: 17, large: 21, veryLarge: 26 };
  * docks that render themselves from that state.
  */
 export function createToolbars(opts = {}) {
-  ensureStyle('winscp-toolbars', CSS);
+  ensureStyle('winscp-toolbars', MODULE_CSS);
   const docks = new Set();
   const workspace = opts.workspace || null;
 

@@ -42,7 +42,7 @@ import { createPanelStatusBar, installSessionStatus } from './statusbar.js';
 /* styles                                                              */
 /* ================================================================== */
 
-const CSS = `
+const MODULE_CSS = `
 .fp{display:flex;flex-direction:column;min-width:0;min-height:0;flex:1 1 0;
   background:var(--md-sys-color-surface,var(--sfc,#fff));position:relative}
 .fp.is-active{outline:2px solid var(--md-sys-color-primary,var(--pri,#0B57D0));outline-offset:-2px;border-radius:var(--shape-sm,8px)}
@@ -360,7 +360,7 @@ let panelSeq = 0;
  * workspace all talk to. Nothing outside this module touches its internals.
  */
 export function createFilePanel(opts = {}) {
-  ensureStyle('winscp-panels', CSS);
+  ensureStyle('winscp-panels', MODULE_CSS);
   const side = opts.side === 'local' ? 'local' : 'remote';
   const isLocal = side === 'local';
   const panelId = opts.id || `${side}-${(panelSeq += 1)}`;
@@ -457,6 +457,7 @@ export function createFilePanel(opts = {}) {
     tree = createDriveView({
       side,
       sessionId,
+      hostName: () => (sessionInfo() && sessionInfo().hostName) || '',
       initialPath: path,
       onNavigate: (p) => navigate(p),
     });
@@ -485,7 +486,11 @@ export function createFilePanel(opts = {}) {
         entries = res.entries || [];
       } else {
         const id = sessionId();
-        if (!id) throw new Error(t('notConnected'));
+        // A tab that has not been connected yet is a STATE, not a failure. It
+        // is marked so the catch below reports it the way the panel body and
+        // the status chip already do — quietly — instead of opening the app on
+        // a red error toast every launch.
+        if (!id) { const e = new Error(t('notConnected')); e.expected = true; throw e; }
         const res = await backend.fs('list', id, want || '/', { refresh: force });
         entries = Array.isArray(res) ? res : (res.entries || []);
         path = String(want || '/');
@@ -530,7 +535,7 @@ export function createFilePanel(opts = {}) {
       addrInput.disabled = !path;
       applyView();
       render();
-      notify.error(isLocal ? t('localPanel') : t('remotePanel'), loadError);
+      if (!err || !err.expected) notify.error(isLocal ? t('localPanel') : t('remotePanel'), loadError);
     } finally {
       loading = false;
       render();
@@ -594,12 +599,21 @@ export function createFilePanel(opts = {}) {
     const rowH = m.grid ? m.tileH : m.rowH;
     const rows = Math.ceil(view.length / cols);
     sizer.style.height = `${rows * rowH}px`;
+    // In a tile view several entries share one grid row, so the row count is
+    // not the entry count; announcing the entry count there would tell a screen
+    // reader the list is five times longer than it is.
+    viewport.setAttribute('aria-rowcount', String(rows));
+    viewport.setAttribute('aria-colcount', String(m.grid ? cols : columns.visible.length));
 
-    emptyNote.hidden = !(view.length === 0);
+    // A local listing is over before a note could be read, so only a remote
+    // panel says it is connecting — and it names the host, because 'connecting'
+    // carries a {0} at every funny level and calling it bare printed a literal
+    // "{0}" into the panel.
+    emptyNote.hidden = !(view.length === 0) || (loading && isLocal);
     if (view.length === 0) {
       clear(emptyNote);
       emptyNote.appendChild(h('span', {},
-        loading ? t('connecting')
+        loading ? t('connecting', (sessionInfo() && sessionInfo().hostName) || t('remotePanel'))
           : loadError ? loadError
             : (filterMask || searchBar.isActive)
               ? noMatchMessage(searchBar.predicate, isLocal ? t('localPanel') : t('remotePanel'))
@@ -619,7 +633,13 @@ export function createFilePanel(opts = {}) {
     const dark = document.documentElement.dataset.theme === 'dark';
     for (let r = first; r < last; r += 1) {
       if (m.grid) {
-        const rowEl = h('div', { style: { display: 'flex', height: `${rowH}px` } });
+        // A visual row of tiles is a real grid row; the tiles inside it are the
+        // cells. Nesting them any other way leaves the grid with rows that are
+        // not rows and cells that claim to be.
+        const rowEl = h('div', {
+          role: 'row', 'aria-rowindex': String(r + 1),
+          style: { display: 'flex', height: `${rowH}px` },
+        });
         for (let c = 0; c < cols; c += 1) {
           const i = r * cols + c;
           if (i >= view.length) break;
@@ -632,7 +652,19 @@ export function createFilePanel(opts = {}) {
         layer.appendChild(buildRow(view[i], i, m, dark, rowH));
       }
     }
+    // The grid itself owns the keyboard, so the focused row has to be named
+    // through aria-activedescendant — without it a screen reader hears nothing
+    // as the user arrows down a directory. Virtualization means the focused row
+    // is sometimes not rendered; the attribute is dropped rather than left
+    // pointing at an element that no longer exists.
+    const activeId = focusIndex >= 0 && focusIndex < view.length ? rowId(focusIndex) : null;
+    const activeEl = activeId ? document.getElementById(activeId) : null;
+    if (activeEl && layer.contains(activeEl)) viewport.setAttribute('aria-activedescendant', activeId);
+    else viewport.removeAttribute('aria-activedescendant');
   }
+
+  /** Stable per-row id, so aria-activedescendant can name the focused row. */
+  function rowId(index) { return `${viewportId}-r${index}`; }
 
   viewport.addEventListener('scroll', () => { if (!renderScheduled) { renderScheduled = true; scheduleRender(); } });
   if (typeof ResizeObserver === 'function') new ResizeObserver(() => render()).observe(viewport);
@@ -661,7 +693,8 @@ export function createFilePanel(opts = {}) {
     for (const col of columns.visible) {
       if (col.key === 'name') {
         const nameCell = h('div', {
-          class: 'fp-c fp-c-name', style: { width: `${col.width}px`, textAlign: col.align },
+          class: 'fp-c fp-c-name', role: 'gridcell',
+          style: { width: `${col.width}px`, textAlign: col.align },
           title: entry.name,
         }, icon(iconForEntry(entry), m.iconPx),
         renaming && renaming.name === entry.name
@@ -671,13 +704,18 @@ export function createFilePanel(opts = {}) {
       } else {
         const text = cellText(entry, col.key);
         cells.push(h('div', {
-          class: 'fp-c', style: { width: `${col.width}px`, textAlign: col.align },
+          class: 'fp-c', role: 'gridcell',
+          style: { width: `${col.width}px`, textAlign: col.align },
           title: text || null,
+          // The header row sits outside the grid, so a cell has to carry its
+          // own column name or a screen reader reads a bare number. An empty
+          // cell (a directory's size) is left unlabelled and announced blank.
+          'aria-label': text ? `${t(col.labelKey)}: ${text}` : null,
         }, text));
       }
     }
     const el = h('div', {
-      class: 'fp-row', role: 'row', 'aria-rowindex': String(index + 1),
+      class: 'fp-row', role: 'row', id: rowId(index), 'aria-rowindex': String(index + 1),
       'aria-selected': String(selected.has(entry.name)),
       style: { height: `${rowH}px` },
     }, ...cells);
@@ -693,7 +731,8 @@ export function createFilePanel(opts = {}) {
       }, icon(iconForEntry(entry), Math.round(m.thumb / 2.4)))
       : icon(iconForEntry(entry), m.iconPx);
     const el = h('div', {
-      class: 'fp-tile', role: 'row', 'aria-rowindex': String(index + 1),
+      class: 'fp-tile', role: 'gridcell', id: rowId(index),
+      'aria-colindex': String((index % Math.max(1, perRow(m))) + 1),
       'aria-selected': String(selected.has(entry.name)),
       style: {
         width: `${m.tileW}px`, height: `${m.tileH}px`,
@@ -1352,7 +1391,7 @@ export function createFilePanel(opts = {}) {
  * status bars. One workspace lives in one tab.
  */
 export function createWorkspace(opts = {}) {
-  ensureStyle('winscp-panels', CSS);
+  ensureStyle('winscp-panels', MODULE_CSS);
   const tab = opts.tab || null;
   let mode = readPref('interface', 'commander');
   let activeSide = mode === 'explorer' ? 'remote' : 'local';
@@ -1666,7 +1705,7 @@ const workspaces = new Map();       // tab key -> workspace
 export async function installPanels() {
   if (installedShell) return;
   installedShell = true;
-  ensureStyle('winscp-panels', CSS);
+  ensureStyle('winscp-panels', MODULE_CSS);
 
   const app = await import('../app.js');
 

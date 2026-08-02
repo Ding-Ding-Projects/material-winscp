@@ -38,7 +38,7 @@ import { VERSION, CODENAME } from '../../../winscp-data.js';
 import { openLicense, LICENSE_ID } from './license.js';
 import { openChangelog } from '../changelog.js';
 import { openHistoryPanel } from '../historypanel.js';
-import { registerDialog, registerCommand, openDialog } from '../../app.js';
+import { registerDialog, openDialog } from '../../app.js';
 
 /* ------------------------------------------------------------------ */
 /* module-local strings                                                */
@@ -360,10 +360,10 @@ export function createAboutBody() {
 let installed = false;
 
 /**
- * Registers the `about` dialog and REPLACES the shell's own `app.about`
- * command. app.js ships a minimal About so the shell is never without one;
- * this is the full dialog from About.dfm, and registerCommand overwrites by id
- * so F1 and the title-bar menu reach this one instead.
+ * Registers the `about` dialog. app.js keeps a single `app.about` command that
+ * delegates to this dialog the moment it is registered, so F1 and the title-bar
+ * menu reach the full About.dfm surface without two modules claiming the same
+ * command id — a second registration would silently win by load order.
  */
 export function registerAboutDialog() {
   if (installed) return;
@@ -384,11 +384,6 @@ export function registerAboutDialog() {
         { label: t('ok'), kind: 'filled', autofocus: true },
       ],
     };
-  });
-
-  registerCommand({
-    id: 'app.about', labelKey: 'aboutMenu', icon: 'info',
-    run: () => openDialog('about'),
   });
 }
 

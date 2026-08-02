@@ -34,6 +34,11 @@ const STRINGS = {
   propsUnknownSize: ['Unknown', '未知'],
   propsCalculate: ['Calculate', '計算'],
   propsCalculating: ['Calculating… {0}', '計算緊… {0}'],
+  propsStopCalc: ['Stop', '停'],
+  propsPartialSize: [
+    'Stopped. This is what had been counted when you stopped, not the whole tree.',
+    '停咗。 呢個係你叫停嗰陣已經數到嘅數，唔係成棵樹。',
+  ],
   propsFileCount: ['{0} file', '{0} 個檔案'],
   propsFilesCount: ['{0} files', '{0} 個檔案'],
   propsDirCount: ['{0} folder', '{0} 個資料夾'],
@@ -622,9 +627,13 @@ registerDialog('properties', ({ props, close }) => {
       .reduce((sum, f) => sum + (Number(f.size) || 0), 0);
     if (!dirs.length) return;
 
-    calcButton.disabled = true;
+    // The button becomes Stop for the duration. Disabling it, as this used to,
+    // made the `if (cancelCalculation)` branch above unreachable and left the
+    // dialog frozen on a deep tree with no way out.
     let stopped = false;
     cancelCalculation = () => { stopped = true; };
+    calcButton.textContent = tx('propsStopCalc');
+    calcButton.title = tx('propsStopCalc');
 
     const report = (bytes, stats) => {
       sizeValue.textContent = describeSize(otherBytes + bytes, false);
@@ -637,14 +646,28 @@ registerDialog('properties', ({ props, close }) => {
     try {
       if (props.sessionId) {
         const cid = uid('calc');
+        let lastBytes = 0;
+        let lastStats = null;
         const off = ops.onProgress((payload) => {
           if (!payload || payload.correlationId !== cid) return;
-          report(Number(payload.bytes) || 0, payload);
+          lastBytes = Number(payload.bytes) || 0;
+          lastStats = payload;
+          report(lastBytes, payload);
         });
         try {
           const total = await ops.fs.calculateSize(props.sessionId, dirs, cid);
-          calculatedBytes = otherBytes + (Number(total.bytes) || 0);
-          calculatedStats = total;
+          if (stopped) {
+            // main has no cancel channel for fs:calculateSize, so the walk on
+            // the server runs to completion either way. What Stop can honestly
+            // do is stop claiming the number: the dialog keeps the last figure
+            // it actually reported and says it is partial, rather than pretending
+            // the user's Stop reached the server.
+            calculatedBytes = otherBytes + lastBytes;
+            calculatedStats = lastStats;
+          } else {
+            calculatedBytes = otherBytes + (Number(total.bytes) || 0);
+            calculatedStats = total;
+          }
         } finally { off(); }
       } else {
         // The local side has no calculateSize channel, so the walk happens here
@@ -673,13 +696,15 @@ registerDialog('properties', ({ props, close }) => {
           (calculatedStats.files || 0) + agg.files,
           (calculatedStats.dirs || 0) + agg.directories);
       }
-      announce(`${t('sizeLbl')}: ${sizeValue.textContent}`);
+      if (stopped) sizeValue.title = tx('propsPartialSize');
+      announce(`${t('sizeLbl')}: ${sizeValue.textContent}${stopped ? ` — ${tx('propsPartialSize')}` : ''}`);
     } catch (err) {
       notify.error(t('calcSize'), err.message);
       sizeValue.textContent = describeSize(agg.bytes, agg.statsNotCalculated);
     } finally {
       cancelCalculation = null;
-      calcButton.disabled = false;
+      calcButton.textContent = t('calcSize');
+      calcButton.title = t('calcSize');
     }
   }
 

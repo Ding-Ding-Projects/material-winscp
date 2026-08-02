@@ -422,31 +422,138 @@ function buildDigestHeader({ username, password, method, uri, challenge, nc, cno
 // ---------------------------------------------------------------------------
 
 /**
+ * How much of a body we are willing to hold in memory in order to be able to
+ * announce a Content-Length we have actually counted.
+ *
+ * The caller's `size` is a hint about the *source* file, not a promise about
+ * the bytes that will be written: the transfer queue passes the source size
+ * even in text mode, where CRLF folding changes the byte count on the way
+ * through. Announcing that number and then sending fewer bytes leaves the
+ * server waiting for a body that never finishes arriving — the upload hangs
+ * until the socket times out, which is exactly what a real server proved.
+ *
+ * So anything that fits in this buffer is sent with a Content-Length that was
+ * measured rather than predicted. Bigger bodies keep the streaming path (a
+ * multi-gigabyte upload cannot be buffered) and their announced length is
+ * enforced rather than assumed, so a mismatch fails loudly instead of hanging.
+ */
+const INLINE_PUT_LIMIT = 8 * 1024 * 1024;
+
+/**
  * A write stream whose `finish` waits for the server's response, so a queue
  * item is not marked complete before the PUT is acknowledged. A 507
  * (insufficient storage) arrives *after* the last byte; without this it would
  * have nowhere to be reported.
+ *
+ * The request is opened lazily — see INLINE_PUT_LIMIT above.
  */
 class PutStream extends Writable {
-  constructor(req, done) {
+  constructor(adapter, path, opts) {
     super();
+    this.adapter = adapter;
+    this.path = path;
+    this.opts = opts;
+    this.declaredSize = opts.size === undefined || opts.size === null ? null : Number(opts.size);
+    this.chunks = [];
+    this.buffered = 0;
+    this.req = null;
+    this.done = null;
+    this.contentLength = null;   // what we actually announced, once we have
+    this.sent = 0;
+    this.failure = null;
+  }
+
+  async _open(contentLength) {
+    const opts = this.opts;
+    const headers = { 'Content-Type': opts.contentType || 'application/octet-stream' };
+    if (contentLength === null) headers['Transfer-Encoding'] = 'chunked';
+    else headers['Content-Length'] = String(contentLength);
+    if (opts.etag) headers['If-Match'] = `"${opts.etag}"`;
+    if (opts.onlyIfNew) headers['If-None-Match'] = '*';
+
+    const { req } = await this.adapter._send('PUT', this.path, { headers, stream: true });
     this.req = req;
-    this.done = done;
-    req.on('error', (e) => this.destroy(e));
+    this.contentLength = contentLength;
+    this.done = new Promise((resolve, reject) => {
+      req.on('response', async (res) => {
+        const text = (await WebDavAdapter.readBody(res)).toString('utf8');
+        if (res.statusCode >= 400) {
+          const err = new Error(`PUT ${this.path} failed: ${res.statusCode} ${res.statusMessage}${this.adapter._explain(text)}`);
+          err.status = res.statusCode;
+          reject(err);
+        } else {
+          resolve({ status: res.statusCode, etag: res.headers.etag });
+        }
+      });
+      req.on('error', reject);
+    });
+    // `done` is normally awaited by `_final`, but a socket that dies part way
+    // through the body never reaches `_final`: the error listener below
+    // destroys the stream instead. That would leave `done` rejected with
+    // nobody waiting on it, and Node treats an unhandled rejection as fatal —
+    // so an interrupted upload would take the whole main process down with it.
+    // Marking it handled here costs nothing: `.catch()` returns a *new*
+    // promise, so the `await this.done` in `_final` still sees the rejection.
+    this.done.catch(() => {});
+    // Surface a socket failure on the Writable too, so a stalled `_write`
+    // is released instead of waiting for a drain that will never come.
+    req.on('error', (e) => { this.failure = e; this.destroy(e); });
+  }
+
+  _toWire(chunk) {
+    if (this.failure) return Promise.reject(this.failure);
+    if (this.contentLength !== null && this.sent + chunk.length > this.contentLength) {
+      return Promise.reject(new Error(
+        `PUT ${this.path}: the body is longer than the ${this.contentLength} bytes announced to the server`));
+    }
+    this.sent += chunk.length;
+    return new Promise((resolve) => {
+      if (this.req.write(chunk)) resolve();
+      else this.req.once('drain', resolve);
+    });
+  }
+
+  async _consume(chunk) {
+    if (this.req) { await this._toWire(chunk); return; }
+    this.chunks.push(chunk);
+    this.buffered += chunk.length;
+    if (this.buffered <= INLINE_PUT_LIMIT) return;
+    // Too big to hold. Fall back to streaming: keep the caller's size when it
+    // is at least what we have already seen, otherwise let the server read to
+    // the end of a chunked body rather than to a number we cannot honour.
+    await this._open(this.declaredSize !== null && this.declaredSize >= this.buffered
+      ? this.declaredSize : null);
+    const pending = Buffer.concat(this.chunks, this.buffered);
+    this.chunks = [];
+    this.buffered = 0;
+    await this._toWire(pending);
   }
 
   _write(chunk, enc, cb) {
-    if (!this.req.write(chunk, enc)) this.req.once('drain', cb);
-    else cb();
+    this._consume(chunk).then(() => cb(), cb);
   }
 
   _final(cb) {
-    this.req.end();
-    this.done.then(() => cb(), (e) => cb(e));
+    const finish = async () => {
+      if (!this.req) {
+        // The whole body is in hand, so the length we announce is measured.
+        const body = Buffer.concat(this.chunks, this.buffered);
+        this.chunks = [];
+        await this._open(body.length);
+        if (body.length) await this._toWire(body);
+      } else if (this.contentLength !== null && this.sent !== this.contentLength) {
+        this.req.destroy();
+        throw new Error(`PUT ${this.path}: announced ${this.contentLength} bytes but produced ${this.sent}; `
+          + 'the server would wait forever for the rest');
+      }
+      this.req.end();
+      await this.done;
+    };
+    finish().then(() => cb(), (e) => cb(e));
   }
 
   _destroy(err, cb) {
-    if (err) this.req.destroy(err);
+    if (err && this.req) this.req.destroy(err);
     cb(err);
   }
 }
@@ -481,13 +588,25 @@ class WebDavAdapter extends Adapter {
     this._nc = 0;
     this._pinned = null;         // fingerprint256 the user accepted
     this._agent = null;
+    // Whether the server serves byte ranges on GET. This is NOT the same thing
+    // as `caps.resume` — see the comment on that flag below.
+    this.rangeReads = false;
     this.caps = {
       ...this.caps,
       rights: false,        // WebDAV has no portable permission model
       owner: false,
       symlink: false,
       exec: false,
-      resume: false,        // set from Accept-Ranges during connect()
+      // WinSCP answers false to fcResumeSupport for WebDAV
+      // (core/WebDAVFileSystem.cpp), and so must we. `caps.resume` is read by
+      // the transfer queue for BOTH sides of a copy: it means "this backend can
+      // continue a transfer at an offset". A server advertising Accept-Ranges
+      // proves only that it can *serve* a range; a PUT still replaces the whole
+      // resource, so claiming resume support makes the queue write a file's
+      // tail into a `.filepart` and rename it over the target, or split the
+      // upload across parallel connections that each overwrite the last.
+      // Ranged reads stay available through `rangeReads`.
+      resume: false,
       timestamp: false,     // getlastmodified is a live property, not settable
       checksum: false,
       copyRemote: true,     // COPY
@@ -813,15 +932,16 @@ class WebDavAdapter extends Adapter {
       this._log('warning', `OPTIONS ${root} failed: ${e.message}`);
     }
 
-    // Byte ranges are what makes a resumed download possible. Ask rather than
-    // assume: a server that ignores Range answers 200 with the whole file and
-    // would silently corrupt a resumed transfer.
+    // Byte ranges are what makes a partial read possible. Ask rather than
+    // assume: a server that ignores Range answers 200 with the whole file, and
+    // appending that to a partial download would corrupt it.
     try {
       const head = await this.request('HEAD', root, { noRetry: false });
-      this.caps.resume = /bytes/i.test(String(head.headers['accept-ranges'] || ''));
+      this.rangeReads = /bytes/i.test(String(head.headers['accept-ranges'] || ''));
     } catch {
-      this.caps.resume = false;
+      this.rangeReads = false;
     }
+    this.serverInfo.acceptRanges = this.rangeReads;
 
     // A PROPFIND on the root proves the credentials and finds the quota.
     const items = await this._propfind(root, 0);
@@ -976,7 +1096,7 @@ class WebDavAdapter extends Adapter {
     const start = Number(opts.start || 0);
     const headers = {};
     if (start > 0) {
-      if (!this.caps.resume) throw new Error('Server does not advertise byte ranges; cannot resume');
+      if (!this.rangeReads) throw new Error('Server does not advertise byte ranges; cannot resume');
       headers.Range = opts.end ? `bytes=${start}-${opts.end}` : `bytes=${start}-`;
     }
 
@@ -1001,27 +1121,15 @@ class WebDavAdapter extends Adapter {
 
   async createWriteStream(p, opts = {}) {
     const path = this.normalize(p);
-    const headers = { 'Content-Type': opts.contentType || 'application/octet-stream' };
-    if (opts.size !== undefined && opts.size !== null) headers['Content-Length'] = String(opts.size);
-    else headers['Transfer-Encoding'] = 'chunked';
-    if (opts.etag) headers['If-Match'] = `"${opts.etag}"`;
-    if (opts.onlyIfNew) headers['If-None-Match'] = '*';
-
-    const { req } = await this._send('PUT', path, { headers, stream: true });
-    const done = new Promise((resolve, reject) => {
-      req.on('response', async (res) => {
-        const text = (await WebDavAdapter.readBody(res)).toString('utf8');
-        if (res.statusCode >= 400) {
-          const err = new Error(`PUT ${path} failed: ${res.statusCode} ${res.statusMessage}${this._explain(text)}`);
-          err.status = res.statusCode;
-          reject(err);
-        } else {
-          resolve({ status: res.statusCode, etag: res.headers.etag });
-        }
-      });
-      req.on('error', reject);
-    });
-    return new PutStream(req, done);
+    // A PUT replaces the whole resource: RFC 4918 has no way to write at an
+    // offset, and no server implements one portably. Quietly dropping the
+    // offset would upload the tail of a file over the top of the whole one and
+    // report success, so say what cannot be done instead.
+    if (Number(opts.start || 0) > 0 || opts.append) {
+      throw new Error('WebDAV replaces a resource on every PUT and cannot write at an offset; '
+        + 'this upload has to start from the beginning');
+    }
+    return new PutStream(this, path, opts);
   }
 }
 

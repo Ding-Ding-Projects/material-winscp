@@ -33,6 +33,10 @@ import {
   loadTransferPrefs, queueModel, onMainEvent,
 } from '../queue.js';
 import { openChecklistDialog, summarizeChecklist, describeChecklist } from './checklist.js';
+// The capability cache the server-information window fills. Importing it here
+// is what keeps "this option is greyed out" and "this protocol cannot do that"
+// reading from ONE object rather than two opinions.
+import { capabilitiesOf, fetchFileSystemInfo } from './fileysteminfo.js';
 
 defineStrings({
   txSyTitle: ['Synchronize directories', '同步目錄'],
@@ -51,6 +55,12 @@ defineStrings({
   txSyBySize: ['File size', '檔案大細'],
   txSyByChecksum: ['Checksum', '檢查碼'],
   txSyChecksumUnsupported: ['The comparison engine compares modification time and size. Checksum comparison is not implemented, so this criterion cannot be chosen.', '比較引擎淨係比修改時間同大細。檢查碼比較未實作，所以揀唔到。'],
+  txSyNoTimestamps: [
+    '{0} does not let this application set a file’s modification time, so there is nothing for a timestamp synchronization to write.',
+    '{0} 唔畀呢個程式改檔案嘅修改時間，所以時間戳同步冇嘢可以寫。'],
+  txSyNoPreserveTime: [
+    '{0} does not let this application set a file’s modification time. The transfer engine skips the call on this protocol, so ticking it would change nothing.',
+    '{0} 唔畀呢個程式改檔案嘅修改時間。 傳輸引擎喺呢個協定會跳過嗰步，所以剔咗都冇分別。'],
   txSyCaseSensitive: ['Case sensitive file names', '檔案名分大細楷'],
   txSyOptions: ['Synchronize options', '同步選項'],
   txSyDelete: ['Delete files that exist only on the target side', '刪除淨係目標側有嘅檔案'],
@@ -202,24 +212,34 @@ function group(titleKey, ...children) {
   return el;
 }
 
-function radio(name, value, labelKey, current, onChange) {
+function radio(name, value, labelKey, current, onChange, opts = {}) {
   const id = uid('tx-sy-r');
   const input = h('input', { type: 'radio', name, id, value, onchange: () => onChange(value) });
-  input.checked = current === value;
+  input.checked = current === value && !opts.disabled;
+  if (opts.disabled) input.disabled = true;
   const label = h('label', { class: 'check', for: id }, input, h('span', {}));
   bindText(label.lastChild, labelKey);
-  return label;
+  if (!opts.disabled) return label;
+  // A refused option keeps its place and says why, rather than disappearing —
+  // "where did Synchronize timestamps go?" is a worse question than "why is it
+  // greyed out?", and the answer to the second is right underneath it.
+  return h('div', { class: 'stack', style: { gap: '2px' } }, label,
+    h('p', { class: 'tx-sy-note' }, t(opts.reasonKey, ...(opts.reasonArgs || []))));
 }
 
 function check(labelKey, checked, onChange, opts = {}) {
   const id = uid('tx-sy-c');
   const input = h('input', { type: 'checkbox', id, onchange: () => onChange(input.checked) });
   input.checked = !!checked;
-  if (opts.disabled) { input.disabled = true; input.checked = false; }
+  // A disabled control still tells the truth about the state it reports: when a
+  // caller passes `checked` for a disabled box (Preview with deletions on), the
+  // box stays ticked, because that IS what will happen.
+  if (opts.disabled) { input.disabled = true; input.checked = !!checked; }
   const label = h('label', { class: 'check', for: id }, input, h('span', {}));
   bindText(label.lastChild, labelKey);
   const wrap = h('div', { class: 'stack', style: { gap: '2px' } }, label,
-    opts.disabled && opts.reasonKey ? h('p', { class: 'tx-sy-note' }, t(opts.reasonKey)) : null);
+    opts.disabled && opts.reasonKey
+      ? h('p', { class: 'tx-sy-note' }, t(opts.reasonKey, ...(opts.reasonArgs || []))) : null);
   return { element: wrap, input };
 }
 
@@ -318,10 +338,15 @@ export function openSynchronizeDialog(props = {}) {
       radio('tx-sy-dir', 'remote', 'txSyDirRemote', options.direction, setDirection),
       radio('tx-sy-dir', 'local', 'txSyDirLocal', options.direction, setDirection)));
 
+    // design/main/queue.js only calls setTimes() when the destination adapter
+    // reports caps.timestamp, and s3/webdav/plain-FTP report false. A timestamp
+    // synchronization there would compare, decide, and write nothing.
+    const canTimestamp = timestampCapable();
     grid.appendChild(group('txSyMode',
       radio('tx-sy-mode', 'synchronize', 'txSyModeSync', options.mode, setMode),
       radio('tx-sy-mode', 'mirror', 'txSyModeMirror', options.mode, setMode),
-      radio('tx-sy-mode', 'timestamp', 'txSyModeTimestamp', options.mode, setMode)));
+      radio('tx-sy-mode', 'timestamp', 'txSyModeTimestamp', options.mode, setMode,
+        canTimestamp ? {} : { disabled: true, reasonKey: 'txSyNoTimestamps', reasonArgs: [protocolLabel()] })));
 
     grid.appendChild(group('txSyCriteria',
       check('txSyByTime', options.byTime, (v) => { options.byTime = v; refresh(); }).element,
@@ -333,9 +358,13 @@ export function openSynchronizeDialog(props = {}) {
       check('txSyDelete', options.deleteFiles, (v) => { options.deleteFiles = v; refresh(); }).element,
       check('txSyExistingOnly', options.existingOnly, (v) => { options.existingOnly = v; refresh(); }).element,
       check('txSyRecursive', options.recursive, (v) => { options.recursive = v; refresh(); }).element,
-      check('txSyPreview', options.preview || options.deleteFiles, (v) => { options.preview = v; refresh(); },
-        options.deleteFiles ? { disabled: false } : {}).element,
-      options.deleteFiles ? h('p', { class: 'tx-sy-note' }, t('txSyPreviewForced')) : null,
+      // With deletions on, the checklist is not optional — start() forces it.
+      // The box therefore shows ticked AND disabled rather than ticked-but-not-
+      // in-the-model, which is a control that does not round-trip.
+      check('txSyPreview', options.deleteFiles ? true : options.preview,
+        (v) => { options.preview = v; rebuild(); },
+        options.deleteFiles ? { disabled: true, reasonKey: 'txSyPreviewForced' } : {}).element,
+
       check('txSySelectedOnly', options.selectedOnly, (v) => { options.selectedOnly = v; refresh(); }, {
         disabled: !context.selection || !context.selection.length,
         reasonKey: 'txSyNoSelection',
@@ -349,10 +378,30 @@ export function openSynchronizeDialog(props = {}) {
         ...['binary', 'text', 'automatic'].map((m) => radio('tx-sy-tm', m,
           m === 'binary' ? 'modeBinary' : m === 'text' ? 'modeText' : 'modeAuto',
           options.transferMode, (v) => { options.transferMode = v; refresh(); }))),
-      check('preserveTimestamp', options.preserveTime, (v) => { options.preserveTime = v; refresh(); }).element,
+      check('preserveTimestamp', options.preserveTime && canTimestamp, (v) => { options.preserveTime = v; refresh(); },
+        canTimestamp ? {} : { disabled: true, reasonKey: 'txSyNoPreserveTime', reasonArgs: [protocolLabel()] }).element,
       check('txSyIncludeHidden', !options.excludeHidden, (v) => { options.excludeHidden = !v; refresh(); }).element));
 
     refresh();
+  }
+
+  /**
+   * The destination adapter's own capability object, read once through
+   * fileysteminfo.js's cache — the same object the server-information window
+   * shows, so the greyed-out control and the capability list can never disagree.
+   */
+  function destinationCaps() {
+    return (context.sessionId && capabilitiesOf(context.sessionId)) || null;
+  }
+  function timestampCapable() {
+    const caps = destinationCaps();
+    // With no session yet the option stays available: refusing it before we
+    // know would be guessing, and the dialog rebuilds when the caps arrive.
+    return !caps || caps.timestamp !== false;
+  }
+  function protocolLabel() {
+    const caps = destinationCaps();
+    return (caps && caps.protocolName) || (context.protocolName || t('remotePanel'));
   }
 
   function setDirection(value) { options.direction = value; refresh(); }
@@ -413,6 +462,13 @@ export function openSynchronizeDialog(props = {}) {
   });
 
   rebuild();
+
+  // Fetch the destination's capabilities so the timestamp controls settle into
+  // their real state; until it arrives they stay available rather than being
+  // refused on a guess.
+  if (context.sessionId && !capabilitiesOf(context.sessionId)) {
+    fetchFileSystemInfo(context.sessionId).then(() => rebuild()).catch(() => { /* stays optimistic */ });
+  }
 
   async function start(close) {
     const errorKey = syncCombinationError(options);

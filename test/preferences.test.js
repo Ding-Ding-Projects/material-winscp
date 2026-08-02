@@ -609,3 +609,74 @@ test('describeCommand states where a command runs and what it does with the outp
   assert.match(text, /show output/);
   assert.match(text, /copy output/);
 });
+
+/* ================================================================== */
+/* stored-but-not-honoured                                             */
+/* ================================================================== */
+
+/**
+ * The one criterion docs/porting-mandate.md actually names: "a setting that
+ * persists but changes no behaviour is NOT ported".
+ *
+ * The rest of this file proves each key EXISTS in defaults.js with the right
+ * default, which is a weaker claim — a key can exist, persist, round-trip
+ * through the dialog and still be read by nothing at all. This test scans the
+ * whole tree for a consumer of every key the preferences surface writes, and
+ * holds the schema's own PENDING_KEYS list to exactly the set with none.
+ *
+ * It fails in both directions on purpose. An option that quietly stops being
+ * honoured fails, and so does one that gains a consumer while still telling the
+ * user on its row that nothing reads it — the note has to go when the wiring
+ * lands, or the note becomes the new lie.
+ */
+test('every option either has a consumer or says on its own row that it has none', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const { schema } = await load();
+
+  // The preferences surface itself is excluded: it declares and writes these
+  // keys, so a reference from here proves nothing about anything honouring them.
+  const SURFACE = new Set([
+    'prefpages.js', 'preferences.js', 'copyparams.js', 'editorpreferences.js',
+    'customcommand.js', 'defaults.js',
+  ]);
+  const files = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules') continue;
+      const p = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(p);
+      else if (entry.name.endsWith('.js') && !SURFACE.has(entry.name)) files.push(p);
+    }
+  };
+  const repo = path.join(__dirname, '..');
+  walk(path.join(repo, 'design'));
+  walk(path.join(repo, 'test'));
+  const blobs = files.map((f) => fs.readFileSync(f, 'utf8'));
+
+  const escape = (s) => Array.from(s)
+    .map((ch) => (/[A-Za-z0-9_]/.test(ch) ? ch : `\${ch}`)).join('');
+
+  const orphans = [];
+  for (const key of schema.allKeys()) {
+    const leaf = key.split('.').pop();
+    // Either the whole dotted path appears, or the leaf appears as a property
+    // name / string key somewhere — which is how a consumer reads it after
+    // destructuring a prefs object.
+    const re = new RegExp(`[^A-Za-z0-9_.]${escape(leaf)}[^A-Za-z0-9_]`);
+    if (!blobs.some((s) => s.includes(key) || re.test(s))) orphans.push(key);
+  }
+
+  const declared = [...schema.PENDING_KEYS].sort();
+  assert.deepEqual(orphans.sort(), declared,
+    'PENDING_KEYS no longer matches the options nothing reads — either an option '
+    + 'lost its consumer, or one gained a consumer and is still telling the user it has none');
+
+  // And the note really is rendered for them: a list nobody shows is a list
+  // nobody reads.
+  const prefpages = fs.readFileSync(
+    path.join(repo, 'design', 'renderer', 'ui', 'dialogs', 'prefpages.js'), 'utf8');
+  assert.match(prefpages, /if \(isPending\(control\.key\)\) \{/,
+    'the pending note is no longer rendered on the row');
+  assert.match(prefpages, /nothing in this build acts on it yet/);
+});

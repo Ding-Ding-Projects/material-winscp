@@ -1301,13 +1301,29 @@ export function createSiteTree(opts = {}) {
     }
   }
 
+  /**
+   * Roving focus: exactly one row is tabbable and the tree itself is not, so
+   * the whole widget is a single tab stop. With `tabindex` on both the tree and
+   * a row, Tab stopped twice — once on a container that announces "tree" with
+   * no current item, then again on the row — which is the double stop
+   * `rovingFocus()` exists to avoid.
+   */
   function syncSelection() {
+    let tabbable = null;
     for (const [id, row] of rowsById) {
       const on = id === state.selectedId;
       row.classList.toggle('is-selected', on);
       row.setAttribute('aria-selected', String(on));
       row.tabIndex = on ? 0 : -1;
+      if (on) tabbable = row;
     }
+    // A filter can hide the selected row entirely; without this the tree would
+    // have no tab stop at all and become unreachable from the keyboard.
+    if (!tabbable) {
+      const first = rowsById.values().next().value;
+      if (first) first.tabIndex = 0;
+    }
+    listEl.tabIndex = rowsById.size ? -1 : 0;
   }
 
   function paintIncremental() {
@@ -1438,7 +1454,12 @@ export function createSiteTree(opts = {}) {
     paintIncremental();
   }
 
-  listEl.addEventListener('blur', resetIncrementalSearch);
+  // `focusout`, not `blur`: focus lives on a row rather than on the tree, and
+  // blur does not bubble, so the type-to-find buffer never cleared when the
+  // user tabbed away from a row.
+  listEl.addEventListener('focusout', (e) => {
+    if (!listEl.contains(e.relatedTarget)) resetIncrementalSearch();
+  });
 
   /* ---------------- drag and drop ---------------- */
 

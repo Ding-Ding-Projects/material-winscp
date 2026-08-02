@@ -57,8 +57,12 @@ const STRINGS = {
     '{0} 個項目排好隊去 {1}，一個跟一個，唔准打尖！']],
   rtFailed: ['Nothing was queued: {0}', '一單都排唔到隊：{0}'],
   rtUnsupported: [
-    '{0} cannot duplicate on the server, so the copy goes through this computer.',
-    '{0} 唔可以喺伺服器自己複製，所以要經你部機行一轉。'],
+    '{0} cannot duplicate on the server, and this build has no route that copies through this computer instead, so there is nothing to queue.',
+    '{0} 喺伺服器度自己複製唔到，而呢個版本亦都冇經你部機行一轉嘅路，所以冇嘢可以排隊。'],
+  rtCrossSession: [
+    'Only the source session can be a target. Copying between two servers would have to travel through this computer, and the transfer engine in this build has no path for it — picking another session here would send these paths to the WRONG server.',
+    '目標淨係可以揀返來源嗰個工作階段。 兩部伺服器之間複製要經你部機行一轉，但係呢個版本嘅傳輸引擎冇呢條路——揀第二個工作階段會將呢啲路徑send去錯嘅伺服器。'],
+  rtOtherSession: ['{0} — not available as a target', '{0} — 唔可以做目標'],
 };
 
 const tx = makeTranslator(STRINGS);
@@ -94,8 +98,8 @@ registerDialog('remotetransfer', ({ props, close }) => {
   const move = !!props.move;
   const sourceId = props.sessionId || '';
   let sessions = Array.isArray(props.sessions) ? props.sessions.slice() : [];
+  // The target session is always the source session — see paintSessions().
   let targetId = sourceId;
-  let directCopy = props.directCopy !== false;
 
   const pathId = uid('rtpath');
   const sessionId = uid('rtsession');
@@ -127,10 +131,7 @@ registerDialog('remotetransfer', ({ props, close }) => {
   const startDir = props.directory || '';
   pathInput.value = `${startDir.endsWith('/') ? startDir : `${startDir}/`}*.*`;
 
-  const notDirect = checkRow(txLabel(tx, 'rtNotDirect'), false, (checked) => {
-    if (targetId === sourceId) directCopy = !checked;
-    update();
-  });
+  const notDirect = checkRow(txLabel(tx, 'rtNotDirect'), false, () => update());
 
   const sessionLabel = h('label', { class: 'field-label', for: sessionId, style: { width: 'calc(16ch * var(--uiscale))' } });
   const pathLabel = h('label', { class: 'field-label', for: pathId, style: { width: 'calc(16ch * var(--uiscale))' } });
@@ -167,38 +168,70 @@ registerDialog('remotetransfer', ({ props, close }) => {
   let okButton = null;
 
   function paintSessions() {
+    // Only the source session may be a target. design/main/ipc.js's remote-copy
+    // builds BOTH paths from the one session it is handed and its own comment
+    // says "both ends are the same server"; `viaLocalTemporary` and
+    // `sourceSessionId` are read by nothing. Offering another session would
+    // therefore ask the TARGET server to copy the SOURCE server's paths — a
+    // silently wrong copy of the wrong file whenever that path happens to
+    // exist. So the other sessions stay listed (the user can see they exist)
+    // and are disabled with the reason, rather than removed or offered.
     sessionSelect.replaceChildren(...sessions.map((s) => {
-      const option = h('option', { value: s.id }, s.name || s.id);
+      const usable = s.id === sourceId;
+      const option = h('option', {
+        value: s.id,
+        disabled: usable ? undefined : 'disabled',
+        title: usable ? undefined : tx('rtCrossSession'),
+      }, usable ? (s.name || s.id) : tx('rtOtherSession', s.name || s.id));
       return option;
     }));
-    if (sessions.some((s) => s.id === targetId)) sessionSelect.value = targetId;
-    else if (sessions.length) { targetId = sessions[0].id; sessionSelect.value = targetId; }
+    targetId = sourceId;
+    if (sessions.some((s) => s.id === sourceId)) sessionSelect.value = sourceId;
     sessionSelect.disabled = sessions.length <= 1;
+    if (sessions.length > 1) sessionSelect.title = tx('rtCrossSession');
     updateNotDirect();
   }
 
   /** UpdateNotDirectCopyCheck: another session forces the local round trip. */
+  function sourceSession() {
+    return sessions.find((s) => s.id === sourceId) || { caps: props.caps, protocol: props.protocolName };
+  }
+
+  /** True when the server can perform the copy itself — the only route there is. */
+  function canServerCopy() {
+    const caps = sourceSession().caps || props.caps || {};
+    return !!(caps.copyRemote || caps.exec);
+  }
+
+  /**
+   * UpdateNotDirectCopyCheck, corrected for what this build can actually do.
+   * WinSCP offers a local round trip; nothing in this port implements one, so
+   * the box is shown unchecked and disabled with that stated, and OK is
+   * refused rather than sending a request main will throw on.
+   */
   function updateNotDirect() {
-    const sameSession = targetId === sourceId;
-    const source = sessions.find((s) => s.id === sourceId)
-      || { caps: props.caps, protocol: props.protocolName };
-    const canDirect = sameSession && !!(source.caps && (source.caps.copyRemote || source.caps.exec));
-    notDirect.input.checked = sameSession ? !directCopy : true;
-    notDirect.input.disabled = !canDirect;
-    notDirect.element.title = sameSession
-      ? (canDirect ? tx('rtNotDirectHint') : tx('rtUnsupported', source.protocol || 'This protocol'))
-      : tx('rtNotDirectForced');
+    const direct = canServerCopy();
+    notDirect.input.checked = false;
+    notDirect.input.disabled = true;
+    notDirect.element.title = direct
+      ? tx('rtNotDirectHint')
+      : tx('rtUnsupported', sourceSession().protocol || props.protocolName || 'This protocol');
   }
 
   function update() {
     const { directory, mask } = splitTarget(pathInput.value);
-    const problem = !pathInput.value.trim()
-      ? tx('rtNoTarget')
-      : (!sessions.length ? tx('rtNoSession')
-        : (files.length > 1 && !isFileNameMask(mask) ? tx('rtMultiToOne', files.length, mask) : ''));
+    const blocked = !canServerCopy()
+      ? tx('rtUnsupported', sourceSession().protocol || props.protocolName || 'This protocol')
+      : '';
+    const problem = blocked
+      || (!pathInput.value.trim() ? tx('rtNoTarget')
+        : (!sessions.length ? tx('rtNoSession')
+          : (files.length > 1 && !isFileNameMask(mask) ? tx('rtMultiToOne', files.length, mask) : '')));
     warning.textContent = problem;
     warning.hidden = !problem;
-    if (okButton) okButton.disabled = !pathInput.value.trim() || !sessions.length;
+    // OK is refused for the two problems that make the request impossible, not
+    // merely awkward: a protocol that cannot copy on the server, and no target.
+    if (okButton) okButton.disabled = !!blocked || !pathInput.value.trim() || !sessions.length;
     return { directory, mask };
   }
 
@@ -206,23 +239,19 @@ registerDialog('remotetransfer', ({ props, close }) => {
     const { directory, mask } = splitTarget(pathInput.value);
     const sources = files.map((f) => f.path || joinPath(props.directory || '', f.name)).filter(Boolean);
     if (!sources.length) return;
-    const sameSession = targetId === sourceId;
     try {
       const target = directory || '/';
-      // Same session with a server-side copy: one remote-copy job. Another
-      // session: download then upload, which the queue expresses as a download
-      // to a temporary directory followed by an upload — the queue owns that
-      // pairing, so the request names the target session and the intent.
+      // One session, one server-side copy. The request carries only fields
+      // design/main/ipc.js and design/main/queue.js actually read — a field
+      // nobody reads is a promise the engine never made.
       const request = {
-        sessionId: sameSession ? sourceId : targetId,
+        sessionId: sourceId,
         direction: 'remote-copy',
         files: sources,
         target,
         copyParam: {
           fileMask: mask && mask !== '*.*' ? mask : '',
           move,
-          viaLocalTemporary: notDirect.input.checked,
-          sourceSessionId: sourceId,
         },
       };
       const added = await ops.queue.add(request);

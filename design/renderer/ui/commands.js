@@ -33,10 +33,60 @@
 // row without selecting it.
 
 import { ACTIONS, ACTIONS_BY_NAME } from '../actions.js';
-import { t } from '../i18n.js';
+import { t, defineStrings } from '../i18n.js';
 import { bus, api, session as appSession, store } from '../state.js';
 import { h, icon, openModal, copyText, announce, oneLine, downloadText } from '../dom.js';
 import { notify } from './notifications.js';
+
+/* ================================================================== */
+/* strings this module owns                                            */
+/* ================================================================== */
+
+// design/winscp-i18n.js carries the shared dictionary; the sentences below are
+// this module's own, so they get all three language modes rather than staying
+// English wherever the user set the language. Keys carry a `cm` prefix so two
+// modules cannot collide, and every fact in them is a parameter — a path, a
+// count, a protocol name — so no level of either slider can move it.
+defineStrings({
+  cmNoTarget: [
+    'There is no target directory for this transfer. Open the other panel on the directory you want first.',
+    '呢個傳輸冇目標目錄。 先喺另一邊面板揀定你要嘅目錄。',
+  ],
+  cmNeedSession: [
+    'A transfer needs a connected session. Open a site first.',
+    '要傳輸就要有連住嘅工作階段。 先開個站台啦。',
+  ],
+  cmQueued: ['{0} item(s) → {1}', '{0} 個項目 → {1}'],
+  cmSelectedCount: ['{0} item(s) selected.', '揀咗 {0} 個項目。'],
+  cmUnselectedCount: ['{0} item(s) unselected.', '取消揀咗 {0} 個項目。'],
+  cmLocalCalc: [
+    'Local directory sizes are calculated by the panel as it walks the tree.',
+    '本機目錄大細係面板行完成棵樹先計得出。',
+  ],
+  cmDirCount: ['{0} directory/directories', '{0} 個目錄'],
+  cmNameCount: ['{0} name(s)', '{0} 個名'],
+  cmClipboardRefused: ['The clipboard refused the write.', '剪貼簿唔畀寫入。'],
+  cmNoCommandLine: [
+    'The command line is not shown. Turn it on from View → Command Line first.',
+    '而家冇顯示指令列。 先由「檢視 → 指令列」開返佢。',
+  ],
+  cmClipboardEmpty: ['The clipboard has no text to paste.', '剪貼簿冇文字可以貼。'],
+  cmClipboardNoFiles: ['The clipboard has no file list.', '剪貼簿冇檔案清單。'],
+  cmNotAPublicKey: [
+    'That file does not look like an OpenSSH public key (it must start with ssh-rsa, ssh-ed25519 or similar).',
+    '嗰個檔案唔似 OpenSSH 公鑰（要以 ssh-rsa、ssh-ed25519 之類開頭）。',
+  ],
+  cmKeyAlreadyThere: ['That key is already installed.', '嗰條鎖匙已經裝咗。'],
+  cmNoQueuePanel: [
+    'The queue panel is not shown. Turn it on from View → Queue.',
+    '而家冇顯示佇列面板。 由「檢視 → 佇列」開返佢。',
+  ],
+  cmNoPanelYet: ['There is no file panel in this tab yet.', '呢個分頁重未有檔案面板。'],
+  cmNotApplicable: ['This command does not apply here right now.', '呢個指令而家喺呢度用唔到。'],
+  cmNoRights: ['{0} does not expose file permissions.', '{0} 冇提供檔案權限。'],
+  cmNoOwner: ['{0} does not expose file ownership.', '{0} 冇提供檔案擁有者。'],
+  cmNoSymlink: ['{0} does not support links.', '{0} 唔支援連結。'],
+});
 
 /* ================================================================== */
 /* services                                                            */
@@ -388,29 +438,50 @@ function transferTarget(ctx) {
  * (remote -> local) or remote-copy (server side). `move` deletes each source
  * once its item has genuinely finished — WinSCP's "and Delete" commands.
  */
-async function queueTransfer(ctx, { direction, move = false, background = false, target, copyParam, files }) {
+export async function queueTransfer(ctx, { direction, move = false, background = false, target, copyParam, files }) {
   const list = files || selPaths(ctx);
   if (!list.length) { notify.warning(t('nothingSelected'), t('selectFiles')); return null; }
   const dest = target || transferTarget(ctx);
   if (!dest) {
-    notify.error(t('transferSettingsShort'), 'There is no target directory for this transfer. Open the other panel on the directory you want first.');
+    notify.error(t('transferSettingsShort'), t('cmNoTarget'));
     return null;
   }
   const sessionId = ctx.sessionId;
   if (!sessionId) {
-    notify.error(t('notConnected'), 'A transfer needs a connected session. Open a site first.');
+    notify.error(t('notConnected'), t('cmNeedSession'));
     return null;
   }
+  // The named transfer preset the panel's dropdown writes is applied here, so
+  // choosing one genuinely changes what is transferred rather than only being
+  // remembered. The dialog's own fields still win — they are what the user just
+  // typed — and anything neither of them sets falls through to main's defaults.
+  const effective = { ...currentCopyParam(), ...(copyParam || {}) };
   try {
     const added = await backend.queue('add', {
-      sessionId, direction, files: list, target: dest, copyParam: copyParam || undefined,
+      sessionId, direction, files: list, target: dest,
+      copyParam: Object.keys(effective).length ? effective : undefined,
     });
     if (!background) await backend.queue('setEnabled', true).catch(() => {});
-    notify.info(t('queueTitle'), `${added.length} ${added.length === 1 ? 'item' : 'items'} → ${oneLine(dest, 60)}`);
+    notify.info(t('queueTitle'), t('cmQueued', added.length, oneLine(dest, 60)));
     if (move) watchAndDelete(ctx, added, direction);
     afterWrite(ctx, true);
     return added;
   } catch (err) { return fail(err, t('transferSettingsShort')); }
+}
+
+/**
+ * The transfer options a transfer starts from: whatever was last saved, with
+ * the preset named by `copyParamCurrent` layered over it. WinSCP's preset
+ * dropdown works exactly this way — picking a preset does not merely record a
+ * name, it changes the options the next copy runs with.
+ */
+function currentCopyParam() {
+  const stored = readPref('copyParam', null) || {};
+  const name = readPref('copyParamCurrent', '');
+  if (!name) return { ...stored };
+  const list = readPref('copyParamList', null) || [];
+  const preset = list.find((p) => p && p.name === name);
+  return preset ? { ...stored, ...(preset.copyParam || {}) } : { ...stored };
 }
 
 /**
@@ -498,6 +569,8 @@ export async function performRename(ctx, entry, nextName) {
 }
 
 async function createDirectory(ctx) {
+  const override = dialogOverrides.get(ctx.name);
+  if (override) return override(ctx);
   const name = await promptText({ title: t('createDirTitle'), label: t('dirName'), value: '' });
   if (!name || !name.trim()) return;
   const target = joinPath(ctx, ctx.panel.path(), name.trim());
@@ -531,8 +604,10 @@ async function createFile(ctx) {
 }
 
 async function createLink(ctx) {
+  const override = dialogOverrides.get(ctx.name);
+  if (override) return override(ctx);
   if (!ctx.caps || !ctx.caps.symlink) {
-    notify.warning(t('newLink'), `${ctx.isLocal ? 'This platform' : (ctx.sessionInfo?.protocol || 'This protocol').toUpperCase()} does not support links.`);
+    notify.warning(t('newLink'), t('cmNoSymlink', ctx.isLocal ? 'This platform' : (ctx.sessionInfo?.protocol || 'This protocol').toUpperCase()));
     return;
   }
   const focused = ctx.focused || ctx.selection[0];
@@ -568,7 +643,7 @@ async function calculateSizes(ctx) {
   const dirs = ctx.selection.filter((e) => e.type === 'dir' && e.name !== '..');
   if (!dirs.length) { notify.info(t('calcSize'), t('nothingSelected')); return; }
   if (ctx.isLocal) {
-    notify.info(t('calcSize'), 'Local directory sizes are calculated by the panel as it walks the tree.');
+    notify.info(t('calcSize'), t('cmLocalCalc'));
     ctx.panel.calculateSizes(dirs);
     return;
   }
@@ -576,7 +651,7 @@ async function calculateSizes(ctx) {
     const paths = dirs.map((e) => ctx.panel.pathOf(e));
     const res = await backend.fs('calculateSize', ctx.sessionId, paths, `calc-${Date.now().toString(36)}`);
     ctx.panel.applySizes(res);
-    notify.success(t('calcSize'), `${dirs.length} ${dirs.length === 1 ? 'directory' : 'directories'}`);
+    notify.success(t('calcSize'), t('cmDirCount', dirs.length));
   } catch (err) { fail(err, t('calcSize')); }
 }
 
@@ -585,8 +660,8 @@ async function copyList(ctx, withPaths) {
   const list = withPaths ? selPaths(ctx) : selNames(ctx);
   if (!list.length) { notify.warning(t('nothingSelected'), ''); return; }
   const text = list.join('\r\n');
-  if (await copyText(text)) notify.success(t('copiedClip'), `${list.length} ${list.length === 1 ? 'name' : 'names'}`);
-  else notify.error(t('copiedClip'), 'The clipboard refused the write.');
+  if (await copyText(text)) notify.success(t('copiedClip'), t('cmNameCount', list.length));
+  else notify.error(t('copiedClip'), t('cmClipboardRefused'));
 }
 
 /** Read the clipboard through main, so it works with no document focus. */
@@ -796,6 +871,8 @@ def('SelectOneAction', {
 });
 
 async function maskSelect(ctx, select) {
+  const override = dialogOverrides.get(ctx.name);
+  if (override) return override(ctx, { select });
   const title = select ? t('selectFiles') : t('unselectFiles');
   const dirBox = h('input', { type: 'checkbox', class: 'check' });
   dirBox.checked = true;
@@ -809,7 +886,7 @@ async function maskSelect(ctx, select) {
   if (mask === null || !mask.trim()) return;
   ctx.panel.lastSelectMask = mask.trim();
   const n = await ctx.panel.selectByMask(mask.trim(), select, { includeDirs: dirBox.checked });
-  announce(`${n} ${n === 1 ? 'item' : 'items'} ${select ? 'selected' : 'unselected'}.`);
+  announce(t(select ? 'cmSelectedCount' : 'cmUnselectedCount', n));
 }
 
 defEach(['SelectAction', 'LocalSelectAction2', 'RemoteSelectAction2'], (name) => ({
@@ -892,6 +969,8 @@ defEach(['LocalOpenDirAction', 'RemoteOpenDirAction'], (name) => ({
 }));
 
 async function openDirectoryDialog(ctx) {
+  const override = dialogOverrides.get(ctx.name);
+  if (override) return override(ctx);
   const key = ctx.isLocal ? 'local' : 'remote';
   let bookmarks = [];
   try { bookmarks = (await backend.config('bookmarks', 'default'))?.[key] || []; } catch { /* none yet */ }
@@ -1019,6 +1098,8 @@ def('RemoteFindFilesAction2', {
 
 /** A real recursive search over fs:find, streamed through event:progress. */
 async function runFindFiles(ctx) {
+  const override = dialogOverrides.get(ctx.name);
+  if (override) return override(ctx);
   const maskField = h('input', { type: 'text', class: 'field-input', value: '*.*', spellcheck: 'false' });
   const textField = h('input', { type: 'text', class: 'field-input', spellcheck: 'false' });
   const whereField = h('input', { type: 'text', class: 'field-input', value: ctx.panel.path(), spellcheck: 'false' });
@@ -1179,11 +1260,17 @@ async function transferWithOptions(ctx, opts) {
   });
   if (!go) return null;
 
+  // WinSCP has one mask with an include clause and, after '|', an exclude
+  // clause — there is no separate "exclude" field in TCopyParamType, and
+  // main/queue.js only ever reads includeFileMask. Writing the exclusion
+  // anywhere else would leave the field looking wired while transferring
+  // everything the user asked to skip.
+  const exclude = excludeField.value.trim();
   const copyParam = {
     transferMode: modeSel.value,
     preserveTime: preserveBox.checked,
     newerOnly: newerBox.checked,
-    excludeFileMask: excludeField.value || '',
+    includeFileMask: exclude ? `| ${exclude}` : '',
     cpsLimit: Number(speedField.value) || 0,
   };
   return queueTransfer(ctx, {
@@ -1226,6 +1313,8 @@ function capOrLocal(c, name) {
  * on the remote side is a server-side copy queued through the queue.
  */
 async function sameSideOperation(ctx, mode) {
+  const override = dialogOverrides.get(ctx.name);
+  if (override) return override(ctx, { mode });
   const entries = ctx.selection.filter((e) => e.name !== '..');
   if (!entries.length) return null;
   const suggestion = entries.length === 1
@@ -1502,7 +1591,7 @@ def('FileListToCommandLineAction', {
   run: (c) => {
     const text = selNames(c).map((n) => (/\s/.test(n) ? `"${n}"` : n)).join(' ');
     if (services.workspace?.insertIntoCommandLine) { services.workspace.insertIntoCommandLine(text); return true; }
-    notify.warning(t('insertToCmdLine'), 'The command line is not shown. Turn it on from View → Command Line first.');
+    notify.warning(t('insertToCmdLine'), t('cmNoCommandLine'));
     return false;
   },
 });
@@ -1510,7 +1599,7 @@ def('PasteAction3', {
   enabled: (c) => !!c.panel && online(c),
   run: async (c) => {
     const text = await readClipboard();
-    if (!text.trim()) { notify.info(t('pasteClip'), 'The clipboard has no text to paste.'); return; }
+    if (!text.trim()) { notify.info(t('pasteClip'), t('cmClipboardEmpty')); return; }
     const lines = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
     // A single path that names a directory is a navigation; a list of paths is
     // a transfer request — exactly WinSCP's Paste behaviour.
@@ -1529,7 +1618,7 @@ def('FileListFromClipboardAction', {
   run: async (c) => {
     const text = await readClipboard();
     const lines = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-    if (!lines.length) { notify.info(t('transferClip'), 'The clipboard has no file list.'); return; }
+    if (!lines.length) { notify.info(t('transferClip'), t('cmClipboardNoFiles')); return; }
     await queueTransfer(c, {
       direction: c.isLocal ? 'download' : 'upload',
       files: lines, target: c.panel.path(),
@@ -1597,6 +1686,8 @@ def('SynchronizeAction', {
 });
 
 async function keepUpToDate(ctx) {
+  const override = dialogOverrides.get(ctx.name);
+  if (override) return override(ctx);
   const localPath = ctx.isLocal ? ctx.panel.path() : ctx.other?.path();
   const remotePath = ctx.isLocal ? ctx.other?.path() : ctx.panel.path();
   const deleteBox = h('input', { type: 'checkbox', class: 'check' });
@@ -1735,6 +1826,8 @@ def('ConsoleAction', {
 
 /** A real remote console: every line is executed through session:exec. */
 async function openConsole(ctx) {
+  const override = dialogOverrides.get(ctx.name);
+  if (override) return override(ctx);
   const out = h('pre', {
     class: 'mono', tabindex: '0', 'aria-label': t('consoleTitle'),
     style: { maxHeight: '320px', overflow: 'auto', margin: 0, whiteSpace: 'pre-wrap' },
@@ -1817,7 +1910,11 @@ function flatten(obj, prefix = '', out = {}) {
 
 def('CloseApplicationAction2', {
   run: async () => {
-    if (readPref('confirmExit', true) !== false) {
+    // WinSCP gates this on ConfirmClosingSession — "Closing sessions when
+    // exiting the application" in Preferences. There is no `confirmExit` key
+    // in defaults.js, so reading one meant the checkbox could never turn the
+    // prompt off.
+    if (readPref('confirmClosingSession', true) !== false) {
       const ok = await confirm({ title: t('quitTitle'), body: t('quitBody'), confirmLabel: t('quit'), danger: true });
       if (!ok) return;
     }
@@ -1951,11 +2048,18 @@ function openPreferencesPage(page) {
 
 /* ---------------- session ---------------- */
 
-def('SiteManagerAction', { run: () => openSiteList(t('siteManager')) });
+def('SiteManagerAction', { run: (c) => siteList(c, t('siteManager')) });
 def('SavedSessionsAction2', {
   submenu: () => sitesSubmenu(),
-  run: () => openSiteList(t('sites')),
+  run: (c) => siteList(c, t('sites')),
 });
+
+/** ui/dialogs/login.js takes both of these over with the real Login.dfm. */
+function siteList(ctx, title) {
+  const override = dialogOverrides.get(ctx.name);
+  if (override) return override(ctx);
+  return openSiteList(title);
+}
 
 async function loadSites() {
   try { return await backend.config('sites') || []; }
@@ -2044,6 +2148,8 @@ function siteFromInfo(info) {
 def('SessionGenerateUrlAction2', {
   enabled: (c) => !!c.sessionId,
   run: async (c) => {
+    const override = dialogOverrides.get(c.name);
+    if (override) return override(c);
     const includeBox = h('input', { type: 'checkbox', class: 'check' });
     const area = h('textarea', { class: 'field-input mono', rows: '6', readonly: true, style: { width: '100%' } });
     const kindSel = h('select', { class: 'field-input' },
@@ -2123,7 +2229,7 @@ def('PrivateKeyUploadAction', {
       await backend.editor('close', opened.id, { discard: true });
     } catch (err) { return fail(err, t('installKeyTitle')); }
     if (!/^(ssh-|ecdsa-|sk-)/.test(keyText)) {
-      notify.error(t('installKeyTitle'), 'That file does not look like an OpenSSH public key (it must start with ssh-rsa, ssh-ed25519 or similar).');
+      notify.error(t('installKeyTitle'), t('cmNotAPublicKey'));
       return null;
     }
     const ok = await confirm({
@@ -2139,7 +2245,7 @@ def('PrivateKeyUploadAction', {
         const cur = await backend.fs('readFile', c.sessionId, target, {});
         existing = decodeBase64(cur && (cur.base64 || cur));
       } catch { /* the file may not exist yet, which is fine */ }
-      if (existing.includes(keyText)) { notify.info(t('installKeyTitle'), 'That key is already installed.'); return null; }
+      if (existing.includes(keyText)) { notify.info(t('installKeyTitle'), t('cmKeyAlreadyThere')); return null; }
       const next = `${existing.replace(/\s*$/, '')}\n${keyText}\n`.replace(/^\n/, '');
       try { await backend.fs('mkdir', c.sessionId, `${String(home).replace(/\/+$/, '')}/.ssh`); } catch { /* exists */ }
       await backend.fs('writeFile', c.sessionId, target, encodeBase64(next));
@@ -2349,7 +2455,7 @@ def('QueueItemSpeedAction', {
   },
 });
 def('QueueGoToAction', {
-  run: () => { bus.emit('queue:focus', {}); return services.queuePanel ? services.queuePanel.focus() : notify.info(t('queueTitle'), 'The queue panel is not shown. Turn it on from View → Queue.'); },
+  run: () => { bus.emit('queue:focus', {}); return services.queuePanel ? services.queuePanel.focus() : notify.info(t('queueTitle'), t('cmNoQueuePanel')); },
 });
 def('QueuePauseAllAction', { run: () => backend.queue('pause').catch((e) => fail(e, t('suspendAll'))) });
 def('QueueResumeAllAction', { run: () => backend.queue('resume').catch((e) => fail(e, t('resumeAll'))) });
@@ -2410,8 +2516,15 @@ def('QueueFileListAction', {
   checked: () => readPref('queue.fileList', false) === true,
   run: () => togglePref('queue.fileList', 'Changed the queue file list'),
 });
+// WinSCP's queue is a column list view, so it has a column layout to reset.
+// This port's queue (ui/queue.js) renders each transfer as a card with no
+// resizable columns at all, so there is no layout for this command to restore.
+// It stays registered and says so, rather than raising a success toast for
+// work that never happened.
 def('QueueResetLayoutColumnsAction', {
-  run: () => { bus.emit('queue:resetColumns', {}); notify.success(t('reset'), t('queueTitle')); return true; },
+  unavailable: 'The queue in this port shows each transfer as a card rather than '
+    + 'a column list, so it has no column widths or order to reset. Column layout '
+    + 'for the file panels is under Reset Columns on each panel header.',
 });
 
 const ONCE_EMPTY = [
@@ -2932,17 +3045,17 @@ export function runAction(name, over = {}) {
 
 /** Why a command is greyed out, in words the user can act on. */
 function disabledExplanation(cmd, ctx) {
-  if (!ctx.panel) return 'There is no file panel in this tab yet.';
+  if (!ctx.panel) return t('cmNoPanelYet');
   if (!ctx.isLocal && !ctx.connected) return t('notConnected');
   if (cmd.focused && !ctx.focused) return t('nothingSelected');
   if (!ctx.selection.length && /Selected Operation|Selection/.test(cmd.category)) return t('nothingSelected');
   if (ctx.caps) {
     const protocol = (ctx.sessionInfo && ctx.sessionInfo.protocol) || 'this filesystem';
-    if (/Rights|Permission/.test(cmd.name) && !ctx.caps.rights) return `${protocol.toUpperCase()} does not expose file permissions.`;
-    if (/Owner|Group/.test(cmd.name) && !ctx.caps.owner) return `${protocol.toUpperCase()} does not expose file ownership.`;
-    if (/Link/.test(cmd.name) && !ctx.caps.symlink) return `${protocol.toUpperCase()} does not support links.`;
+    if (/Rights|Permission/.test(cmd.name) && !ctx.caps.rights) return t('cmNoRights', protocol.toUpperCase());
+    if (/Owner|Group/.test(cmd.name) && !ctx.caps.owner) return t('cmNoOwner', protocol.toUpperCase());
+    if (/Link/.test(cmd.name) && !ctx.caps.symlink) return t('cmNoSymlink', protocol.toUpperCase());
   }
-  return 'This command does not apply here right now.';
+  return t('cmNotApplicable');
 }
 
 /* ================================================================== */

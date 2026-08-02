@@ -85,7 +85,14 @@ export function cmykToRgb(c, m, y, k) {
 
 const num = (s) => { const v = parseFloat(s); return Number.isFinite(v) ? v : 0; };
 function args(str) {
-  const inside = str.slice(str.indexOf('(') + 1, str.lastIndexOf(')'));
+  // A truncated notation ('rgb(', 'rgba(1,2') has no closing paren, so
+  // lastIndexOf returns -1 and the slice silently produces garbage that
+  // clamp255 then passes through as NaN — because every NaN comparison is
+  // false. A colour of NaN is worse than no colour: the picker would write it
+  // into a style value. Refuse it here instead.
+  const close = str.lastIndexOf(')');
+  if (str.indexOf('(') < 0 || close < 0) return null;
+  const inside = str.slice(str.indexOf('(') + 1, close);
   const [main, alphaPart] = inside.split('/');
   const parts = main.trim().split(/[\s,]+/).filter(Boolean).map((v) => num(v.replace('%', '')));
   let alpha = 1;
@@ -95,6 +102,7 @@ function args(str) {
   } else if (parts.length > 3 && !/^(lab|lch|oklab|oklch|cmyk)\(/.test(str)) {
     alpha = parts[3] > 1 ? parts[3] / 100 : parts[3];
   }
+  if (!parts.length || parts.some((v) => !Number.isFinite(v))) return null;
   return { parts, alpha: clamp(alpha, 0, 1) };
 }
 
@@ -103,20 +111,29 @@ function args(str) {
  * it came from and whether it needed gamut clipping.
  * Returns { r,g,b,a, space, inGamut } or null.
  */
+/**
+ * The notations that cannot express transparency at all. Copying one of these
+ * while alpha is below 1 loses it; the translator says so rather than handing
+ * the user a value that quietly differs from the colour on screen.
+ */
+export const ALPHA_FREE_NOTATIONS = new Set(['Named', 'HEX', 'HSV/HSB', 'CMYK']);
+
+function alphaLossNote() { return 'this notation cannot carry transparency, so the alpha channel is dropped'; }
+
 export function parseAnyColor(input) {
   const s = String(input || '').trim().toLowerCase();
   if (!s) return null;
   if (NAMED_COLORS[s]) { const c = hexToRgb(NAMED_COLORS[s]); return { ...c, a: 1, space: 'Named', inGamut: true }; }
   if (s.startsWith('#')) { const c = hexToRgb(s); return c ? { ...c, space: s.replace('#', '').length > 6 ? 'HEX8' : 'HEX', inGamut: true } : null; }
-  if (/^rgba?\(/.test(s)) { const { parts, alpha } = args(s); return { r: clamp255(parts[0]), g: clamp255(parts[1]), b: clamp255(parts[2]), a: alpha, space: 'RGB', inGamut: true }; }
-  if (/^hsla?\(/.test(s)) { const { parts, alpha } = args(s); const c = hslToRgb(parts[0], parts[1], parts[2]); return { r: clamp255(c.r), g: clamp255(c.g), b: clamp255(c.b), a: alpha, space: 'HSL', inGamut: true }; }
-  if (/^hs[vb]\(/.test(s)) { const { parts, alpha } = args(s); const c = hsvToRgb(parts[0], parts[1], parts[2]); return { r: clamp255(c.r), g: clamp255(c.g), b: clamp255(c.b), a: alpha, space: 'HSV/HSB', inGamut: true }; }
-  if (/^hwb\(/.test(s)) { const { parts, alpha } = args(s); const c = hwbToRgb(parts[0], parts[1], parts[2]); return { ...c, a: alpha, space: 'HWB' }; }
-  if (/^lab\(/.test(s)) { const { parts, alpha } = args(s); const xyz = labToXyz(parts[0], parts[1], parts[2]); const c = xyzToRgb(xyz.x, xyz.y, xyz.z); return { ...c, a: alpha, space: 'CIELAB' }; }
-  if (/^lch\(/.test(s)) { const { parts, alpha } = args(s); const lab = lchToLab(parts[0], parts[1], parts[2]); const xyz = labToXyz(lab.L, lab.a, lab.b); const c = xyzToRgb(xyz.x, xyz.y, xyz.z); return { ...c, a: alpha, space: 'LCH' }; }
-  if (/^oklab\(/.test(s)) { const { parts, alpha } = args(s); const c = oklabToRgb(parts[0], parts[1], parts[2]); return { ...c, a: alpha, space: 'OKLab' }; }
-  if (/^oklch\(/.test(s)) { const { parts, alpha } = args(s); const lab = lchToLab(parts[0], parts[1], parts[2]); const c = oklabToRgb(lab.L, lab.a, lab.b); return { ...c, a: alpha, space: 'OKLCH' }; }
-  if (/^cmyk\(/.test(s)) { const { parts } = args(s); const c = cmykToRgb(parts[0], parts[1], parts[2], parts[3]); return { ...c, a: 1, space: 'CMYK' }; }
+  if (/^rgba?\(/.test(s)) { const a_ = args(s); if (!a_) return null; const { parts, alpha } = a_; return { r: clamp255(parts[0]), g: clamp255(parts[1]), b: clamp255(parts[2]), a: alpha, space: 'RGB', inGamut: true }; }
+  if (/^hsla?\(/.test(s)) { const a_ = args(s); if (!a_) return null; const { parts, alpha } = a_; const c = hslToRgb(parts[0], parts[1], parts[2]); return { r: clamp255(c.r), g: clamp255(c.g), b: clamp255(c.b), a: alpha, space: 'HSL', inGamut: true }; }
+  if (/^hs[vb]\(/.test(s)) { const a_ = args(s); if (!a_) return null; const { parts, alpha } = a_; const c = hsvToRgb(parts[0], parts[1], parts[2]); return { r: clamp255(c.r), g: clamp255(c.g), b: clamp255(c.b), a: alpha, space: 'HSV/HSB', inGamut: true }; }
+  if (/^hwb\(/.test(s)) { const a_ = args(s); if (!a_) return null; const { parts, alpha } = a_; const c = hwbToRgb(parts[0], parts[1], parts[2]); return { ...c, a: alpha, space: 'HWB' }; }
+  if (/^lab\(/.test(s)) { const a_ = args(s); if (!a_) return null; const { parts, alpha } = a_; const xyz = labToXyz(parts[0], parts[1], parts[2]); const c = xyzToRgb(xyz.x, xyz.y, xyz.z); return { ...c, a: alpha, space: 'CIELAB' }; }
+  if (/^lch\(/.test(s)) { const a_ = args(s); if (!a_) return null; const { parts, alpha } = a_; const lab = lchToLab(parts[0], parts[1], parts[2]); const xyz = labToXyz(lab.L, lab.a, lab.b); const c = xyzToRgb(xyz.x, xyz.y, xyz.z); return { ...c, a: alpha, space: 'LCH' }; }
+  if (/^oklab\(/.test(s)) { const a_ = args(s); if (!a_) return null; const { parts, alpha } = a_; const c = oklabToRgb(parts[0], parts[1], parts[2]); return { ...c, a: alpha, space: 'OKLab' }; }
+  if (/^oklch\(/.test(s)) { const a_ = args(s); if (!a_) return null; const { parts, alpha } = a_; const lab = lchToLab(parts[0], parts[1], parts[2]); const c = oklabToRgb(lab.L, lab.a, lab.b); return { ...c, a: alpha, space: 'OKLCH' }; }
+  if (/^cmyk\(/.test(s)) { const a_ = args(s); if (!a_) return null; const { parts } = a_; const c = cmykToRgb(parts[0], parts[1], parts[2], parts[3]); return { ...c, a: 1, space: 'CMYK' }; }
   const legacy = parseColor(s);
   return legacy ? { ...legacy, a: legacy.a ?? 1, space: 'CSS', inGamut: true } : null;
 }
@@ -291,22 +308,41 @@ export function createColorPicker(opts = {}) {
   function renderTranslator() {
     const c = rgb();
     const rows = translateColor(c.r, c.g, c.b, alpha);
+    const losesAlpha = alpha < 1;
     translatorEl.textContent = '';
     for (const row of rows) {
+      // Four notations have no way to carry transparency. Copying one of them
+      // while alpha is below 1 loses it, and losing it silently is exactly what
+      // a customization surface must never do — so the row says so, in its
+      // label, its title and its accessible name, and the copy button repeats
+      // it. The value itself is left alone: it is the correct opaque colour.
+      const drops = losesAlpha && ALPHA_FREE_NOTATIONS.has(row.k);
+      const note = drops ? ` — ${alphaLossNote()}` : '';
       const inp = h('input', {
-        type: 'text', class: 'cp-tr-val mono', spellcheck: 'false',
-        'aria-label': `${row.k} value`, value: row.v,
+        type: 'text', class: `cp-tr-val mono${drops ? ' is-lossy' : ''}`, spellcheck: 'false',
+        'aria-label': `${row.k} value${note}`, title: drops ? alphaLossNote() : undefined, value: row.v,
       });
       inp.value = row.v;
       inp.addEventListener('change', () => applyTyped(inp.value, row.k, inp));
       inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); applyTyped(inp.value, row.k, inp); } });
-      translatorEl.appendChild(h('div', { class: 'cp-tr-row' },
-        h('span', { class: 'cp-tr-key' }, row.k),
+      translatorEl.appendChild(h('div', { class: `cp-tr-row${drops ? ' is-lossy' : ''}` },
+        h('span', { class: 'cp-tr-key' }, row.k,
+          drops ? h('span', { class: 'cp-tr-lossy', title: alphaLossNote() }, icon('warning', 12)) : null),
         inp,
         h('button', {
-          type: 'button', class: 'icon-btn cp-tr-copy', title: `Copy ${row.k}`, 'aria-label': `Copy ${row.k} value`,
-          onclick: async () => { const ok = await copyText(inp.value); announce(ok ? `${row.k} copied.` : 'Copy failed.'); },
+          type: 'button', class: 'icon-btn cp-tr-copy',
+          title: drops ? `Copy ${row.k} — ${alphaLossNote()}` : `Copy ${row.k}`,
+          'aria-label': `Copy ${row.k} value${note}`,
+          onclick: async () => {
+            const ok = await copyText(inp.value);
+            if (!ok) { announce('Copy failed.'); return; }
+            announce(drops ? `${row.k} copied — ${alphaLossNote()}` : `${row.k} copied.`);
+          },
         }, icon('content_copy', 14))));
+    }
+    if (losesAlpha) {
+      translatorEl.appendChild(h('p', { class: 'cp-tr-foot', role: 'note' },
+        `${alphaLossNote()} (${Array.from(ALPHA_FREE_NOTATIONS).join(', ')})`));
     }
   }
 

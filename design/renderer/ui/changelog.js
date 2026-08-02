@@ -709,6 +709,11 @@ function ensureStyles() {
 .dp-head select { min-height: calc(32px * var(--den)); border: 1px solid var(--outline);
   border-radius: var(--shape-xs); background: var(--c-lowest); color: var(--onsfc); padding: 0 4px; }
 .dp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+/* The rows exist for the accessibility tree: role="grid" may only contain
+   role="row", and a row may only contain header/gridcell. display:contents
+   keeps the ARIA structure without adding a box, so the seven-column grid
+   above lays the cells out exactly as it did before. */
+.dp-row { display: contents; }
 .dp-wd { text-align: center; font-size: var(--type-label-sm); color: var(--onsv); padding: 2px 0; }
 .dp-day { min-height: calc(32px * var(--den)); min-width: calc(32px * var(--den));
   border-radius: var(--shape-sm); font-size: var(--type-label-md); color: var(--onsfc);
@@ -895,16 +900,20 @@ function openCalendar(opts) {
     clear(grid);
     const fdow = firstDayOfWeek(locale);
     const names = weekdayNames(locale);
+    const headRow = h('div', { class: 'dp-row', role: 'row' });
     for (let i = 0; i < 7; i += 1) {
-      grid.appendChild(h('div', { class: 'dp-wd', role: 'columnheader' }, names[(fdow + i) % 7]));
+      headRow.appendChild(h('div', { class: 'dp-wd', role: 'columnheader' }, names[(fdow + i) % 7]));
     }
+    grid.appendChild(headRow);
     const first = new Date(view.getFullYear(), view.getMonth(), 1);
     const lead = (first.getDay() - fdow + 7) % 7;
     const start = new Date(view.getFullYear(), view.getMonth(), 1 - lead);
     const todayMs = startOfDay(Date.now());
     const fmtFull = new Intl.DateTimeFormat(locale || undefined, { dateStyle: 'full' });
 
+    let weekRow = null;
     for (let i = 0; i < 42; i += 1) {
+      if (i % 7 === 0) { weekRow = h('div', { class: 'dp-row', role: 'row' }); grid.appendChild(weekRow); }
       const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
       const ms = startOfDay(d);
       const out = d.getMonth() !== view.getMonth();
@@ -924,7 +933,7 @@ function openCalendar(opts) {
         'data-ms': String(ms),
         onclick: () => pick(ms),
       }, String(d.getDate()));
-      grid.appendChild(cell);
+      weekRow.appendChild(cell);
     }
     for (const b of presetsRow.children) b.classList.toggle('is-on', b.dataset.preset === range.presetId);
     if (!grid.querySelector('[tabindex="0"]')) {

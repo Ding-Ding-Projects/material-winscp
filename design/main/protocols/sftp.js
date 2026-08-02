@@ -790,6 +790,30 @@ function ownerFromLongname(longname) {
 
 function shellQuote(s) { return `'${String(s).replace(/'/g, `'\\''`)}'`; }
 
+/**
+ * Normalize the two shapes a caller can hand `setTimes()`.
+ *
+ * The IPC layer calls it positionally — `setTimes(path, mtime, atime)` — while
+ * the transfer queue and the synchronizer call it with an object, because that
+ * is what "preserve timestamps" needs to pass around. An adapter that
+ * understands only one of them does not fail loudly: `Number({mtime})` is NaN,
+ * so every transferred file quietly gets a broken date, and a synchronized
+ * tree never converges because the timestamps never match.
+ *
+ * Returns epoch milliseconds; the caller converts to whatever its wire wants.
+ */
+function normalizeTimes(mtime, atime) {
+  const ms = (v) => (v instanceof Date ? v.getTime() : Number(v));
+  const isObject = mtime !== null && typeof mtime === 'object' && !(mtime instanceof Date);
+  const m = ms(isObject ? mtime.mtime : mtime);
+  const rawA = isObject ? mtime.atime : atime;
+  const a = rawA === undefined || rawA === null ? m : ms(rawA);
+  if (!Number.isFinite(m)) {
+    throw new Error('setTimes() needs a modification time in epoch milliseconds');
+  }
+  return { mtime: m, atime: Number.isFinite(a) ? a : m };
+}
+
 class SftpAdapter extends Adapter {
   /**
    * @param session  resolved session data
@@ -1048,11 +1072,12 @@ class SftpAdapter extends Adapter {
     await this._call('chown', this.normalize(p), Number(uid), Number(gid));
   }
 
-  /** Epoch milliseconds in, POSIX seconds on the wire. */
+  /** Epoch milliseconds in, POSIX seconds on the wire. Both call shapes are
+   *  accepted — see normalizeTimes(). */
   async setTimes(p, mtime, atime) {
-    const m = Math.floor(Number(mtime) / 1000);
-    const a = atime === undefined || atime === null ? m : Math.floor(Number(atime) / 1000);
-    await this._call('utimes', this.normalize(p), a, m);
+    const t = normalizeTimes(mtime, atime);
+    await this._call('utimes', this.normalize(p),
+      Math.floor(t.atime / 1000), Math.floor(t.mtime / 1000));
   }
 
   /**
@@ -1085,7 +1110,23 @@ class SftpAdapter extends Adapter {
     if (hwm > 0) options.highWaterMark = hwm;
     this._warnQueueDepth();
     this._log('debug', `download ${target}${options.start ? ' from offset ' + options.start : ''}`);
-    return this.sftp.createReadStream(target, options);
+    return this._adopt(this.sftp.createReadStream(target, options), `download ${target}`);
+  }
+
+  /**
+   * Give every stream we hand out an owner-side 'error' listener.
+   *
+   * The channel can fail after the consumer has finished with the stream — the
+   * classic case is the CLOSE request still in flight when the session is torn
+   * down, which comes back as "No response from server". With no listener that
+   * is an unhandled 'error' event, i.e. the whole main process goes down
+   * because a file was read and then the user pressed Disconnect. Adding a
+   * listener here does not hide anything: a consumer that attaches its own
+   * still receives the event.
+   */
+  _adopt(stream, what) {
+    stream.on('error', (e) => this._log('debug', `${what}: stream error after handover: ${e.message}`));
+    return stream;
   }
 
   /** `start > 0` reopens the file for update so a partial upload continues
@@ -1102,7 +1143,7 @@ class SftpAdapter extends Adapter {
     if (hwm > 0) options.highWaterMark = hwm;
     this._warnQueueDepth();
     this._log('debug', `upload ${target}${start ? ' from offset ' + start : ''}`);
-    return this.sftp.createWriteStream(target, options);
+    return this._adopt(this.sftp.createWriteStream(target, options), `upload ${target}`);
   }
 
   // ---- optional --------------------------------------------------------
@@ -1157,6 +1198,7 @@ module.exports = {
   rightsFromMode,
   parseRights,
   shellQuote,
+  normalizeTimes,
   openSocket,
   agentPath,
   CIPHERS,

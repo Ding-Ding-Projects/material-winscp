@@ -342,12 +342,17 @@ export function openProgressDialog({ id } = {}) {
     clearInterval(ticker);
     unsubscribe();
     root.remove();
-    openWindows.delete(itemId);
+    // The key the window was REGISTERED under, not whatever item it drifted to
+    // while following the queue — deleting the wrong one leaves the original id
+    // mapped to a destroyed handle, and openProgressDialog() for that item then
+    // focuses a detached element and appears to do nothing at all.
+    openWindows.delete(registeredId);
     restoreFocus();
   }
 
   const handle = { element: root, close, focus: () => root.focus(), get itemId() { return itemId; } };
-  openWindows.set(itemId, handle);
+  const registeredId = itemId;
+  openWindows.set(registeredId, handle);
   paint();
   requestAnimationFrame(() => root.focus());
   return handle;

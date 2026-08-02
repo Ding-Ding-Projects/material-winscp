@@ -9,189 +9,632 @@
     "  note    - short, factual",
     "Never mark a unit done to move on. See docs/porting-mandate.md."
   ],
-
   "units": {
     "core/Configuration": {
       "status": "partial",
       "progress": 0.6,
-      "targets": ["design/main/config.js", "design/main/defaults.js", "design/main/paths.js"],
+      "targets": [
+        "design/main/config.js",
+        "design/main/defaults.js",
+        "design/main/paths.js"
+      ],
       "note": "Store, atomic writes, defaults. INI import/export still to do."
     },
     "core/SessionData": {
       "status": "partial",
       "progress": 0.5,
-      "targets": ["design/main/defaults.js", "design/main/config.js"],
+      "targets": [
+        "design/main/defaults.js",
+        "design/main/config.js"
+      ],
       "note": "Full option set declared; URL parsing and raw-settings editing pending."
     },
     "core/Security": {
       "status": "partial",
       "progress": 0.6,
-      "targets": ["design/main/crypto.js"],
+      "targets": [
+        "design/main/crypto.js"
+      ],
       "note": "Credential protection and master password. WinSCP password obfuscation compat pending."
     },
     "core/Cryptography": {
       "status": "partial",
       "progress": 0.4,
-      "targets": ["design/main/crypto.js"],
+      "targets": [
+        "design/main/crypto.js"
+      ],
       "note": "AES-GCM + scrypt in place; file-encryption feature pending."
     },
     "core/HierarchicalStorage": {
       "status": "partial",
       "progress": 0.5,
-      "targets": ["design/main/config.js"],
+      "targets": [
+        "design/main/config.js"
+      ],
       "note": "JSON store replaces INI/registry hierarchy; INI compatibility layer pending."
     },
     "forms/NonVisual": {
       "status": "partial",
-      "progress": 0.5,
-      "targets": ["tools/extract-actions.js", "design/renderer/actions.js"],
-      "note": "All 301 actions extracted from the original with captions, hints and shortcuts; handlers pending."
+      "progress": 0.85,
+      "targets": [
+        "tools/extract-actions.js",
+        "design/renderer/actions.js",
+        "design/renderer/ui/commands.js",
+        "design/renderer/ui/wiring.js"
+      ],
+      "note": "All 301 actions are registered and reachable from the running app: 296 have a working handler, 5 are declared unavailable with a reason the UI shows. 79 shortcut-carrying actions over 52 combinations, one conflict WinSCP itself has."
     },
-
     "core/SftpFileSystem": {
       "status": "partial",
       "progress": 0.45,
-      "targets": ["design/main/protocols/sftp.js"],
+      "targets": [
+        "design/main/protocols/sftp.js"
+      ],
       "note": "SFTP over ssh2: auth, tunnels, proxies, listing, transfers with resume. Bug-workaround matrix still to verify against a real server."
     },
     "core/ScpFileSystem": {
       "status": "partial",
       "progress": 0.4,
-      "targets": ["design/main/protocols/scp.js"],
+      "targets": [
+        "design/main/protocols/scp.js"
+      ],
       "note": "SCP over the shared SSH transport, with listing-command parsing."
     },
     "core/SecureShell": {
       "status": "partial",
       "progress": 0.4,
-      "targets": ["design/main/protocols/sftp.js"],
+      "targets": [
+        "design/main/protocols/sftp.js"
+      ],
       "note": "Transport, host-key verification and keepalives live with the SSH adapter."
     },
     "core/FtpFileSystem": {
       "status": "partial",
       "progress": 0.4,
-      "targets": ["design/main/protocols/ftp.js"],
+      "targets": [
+        "design/main/protocols/ftp.js"
+      ],
       "note": "FTP/FTPS over basic-ftp; MLSD and multi-dialect LIST parsing covered by tests."
     },
     "core/WebDAVFileSystem": {
       "status": "partial",
       "progress": 0.45,
-      "targets": ["design/main/protocols/webdav.js"],
+      "targets": [
+        "design/main/protocols/webdav.js"
+      ],
       "note": "Hand-written client; PROPFIND parsing and RFC 7616 Digest auth covered by tests."
     },
     "core/S3FileSystem": {
       "status": "partial",
       "progress": 0.5,
-      "targets": ["design/main/protocols/s3.js"],
+      "targets": [
+        "design/main/protocols/s3.js"
+      ],
       "note": "Hand-written SigV4 verified against published AWS vectors; multipart, paging, AssumeRole. No live endpoint tested yet."
     },
     "core/NeonIntf": {
       "status": "replaced",
-      "targets": ["design/main/protocols/webdav.js"],
+      "targets": [
+        "design/main/protocols/webdav.js"
+      ],
       "note": "neon (the C WebDAV/HTTP library WinSCP links) is replaced by a hand-written client on node:http/https."
     },
     "core/Http": {
       "status": "partial",
       "progress": 0.5,
-      "targets": ["design/main/protocols/webdav.js", "design/main/protocols/s3.js"],
+      "targets": [
+        "design/main/protocols/webdav.js",
+        "design/main/protocols/s3.js"
+      ],
       "note": "HTTP plumbing lives with the two protocols that need it."
     },
     "core/FileMasks": {
       "status": "partial",
       "progress": 0.7,
-      "targets": ["design/main/masks.js"],
+      "targets": [
+        "design/main/masks.js"
+      ],
       "note": "WinSCP mask syntax including size and time masks, with a test table."
     },
     "core/Queue": {
       "status": "partial",
       "progress": 0.4,
-      "targets": ["design/main/queue.js"],
+      "targets": [
+        "design/main/queue.js"
+      ],
       "note": "Parallel transfers, pause/resume, throttling, overwrite queries."
     },
     "core/CopyParam": {
       "status": "partial",
       "progress": 0.5,
-      "targets": ["design/main/queue.js", "design/main/defaults.js"],
+      "targets": [
+        "design/main/queue.js",
+        "design/main/defaults.js"
+      ],
       "note": "Transfer parameters declared and applied by the queue."
     },
     "core/FileOperationProgress": {
       "status": "partial",
       "progress": 0.4,
-      "targets": ["design/main/queue.js"],
+      "targets": [
+        "design/main/queue.js"
+      ],
       "note": "Byte/file counters, throughput and ETA reporting."
     },
     "forms/FileFind": {
       "status": "partial",
-      "progress": 0.4,
-      "targets": ["design/main/find.js"],
-      "note": "Streaming recursive search with mask + content grep. 17 tests. The dialog itself is not built yet."
+      "progress": 0.7,
+      "targets": [
+        "design/main/find.js",
+        "design/renderer/ui/dialogs/filefind.js"
+      ],
+      "note": "The non-modal Find window streams results over fs:find and reveals a hit in the panel. ipc.js drops grep/maxDepth/limit, so the renderer re-filters and says which results it could not verify."
     },
     "windows/SynchronizeController": {
       "status": "partial",
       "progress": 0.5,
-      "targets": ["design/main/sync.js"],
+      "targets": [
+        "design/main/sync.js"
+      ],
       "note": "Comparison checklist across all direction/mode/criteria combinations, DST handling, keep-up-to-date watching."
     },
     "core/Terminal": {
       "status": "partial",
       "progress": 0.15,
-      "targets": ["design/main/session.js", "design/main/sync.js"],
+      "targets": [
+        "design/main/session.js",
+        "design/main/sync.js"
+      ],
       "note": "Session lifecycle and the synchronization engine. Terminal is 7,000+ lines; most of it is still ahead."
     },
     "windows/TerminalManager": {
       "status": "partial",
       "progress": 0.35,
-      "targets": ["design/main/session.js"],
+      "targets": [
+        "design/main/session.js"
+      ],
       "note": "Multiple sessions, reconnect policy, verification callbacks."
     },
     "windows/EditorManager": {
       "status": "partial",
       "progress": 0.4,
-      "targets": ["design/main/editors.js"],
+      "targets": [
+        "design/main/editors.js"
+      ],
       "note": "Internal and external editor lifecycle with upload-on-save."
     },
-
     "forms/Glyphs": {
       "status": "replaced",
-      "targets": ["design/renderer/ui/commands.js"],
+      "targets": [
+        "design/renderer/ui/commands.js"
+      ],
       "note": "Embedded PNG bitmap sheet (7,981 lines, ~90% pure hex; the .cpp behind it is 14 lines). Material Symbols replace it — the action-to-icon mapping is iconFor() in commands.js."
     },
     "forms/Glyphs120": {
       "status": "replaced",
-      "targets": ["design/renderer/ui/commands.js"],
+      "targets": [
+        "design/renderer/ui/commands.js"
+      ],
       "note": "120 DPI variant of the same bitmap sheet. A vector icon set has no DPI variants, so the four sheets collapse into one mapping."
     },
     "forms/Glyphs144": {
       "status": "replaced",
-      "targets": ["design/renderer/ui/commands.js"],
+      "targets": [
+        "design/renderer/ui/commands.js"
+      ],
       "note": "144 DPI variant of the same bitmap sheet."
     },
     "forms/Glyphs192": {
       "status": "replaced",
-      "targets": ["design/renderer/ui/commands.js"],
+      "targets": [
+        "design/renderer/ui/commands.js"
+      ],
       "note": "192 DPI variant of the same bitmap sheet (9,123 of 9,916 lines are pure hex)."
     },
     "forms/Animations96": {
       "status": "replaced",
-      "targets": ["design/renderer/styles/components.css"],
+      "targets": [
+        "design/renderer/styles/components.css"
+      ],
       "note": "Embedded animation frame bitmaps. M3 motion is expressed in CSS, so frame sheets are not transcribed."
     },
     "forms/Animations120": {
       "status": "replaced",
-      "targets": ["design/renderer/styles/components.css"],
+      "targets": [
+        "design/renderer/styles/components.css"
+      ],
       "note": "120 DPI animation frame bitmaps."
     },
     "forms/Animations144": {
       "status": "replaced",
-      "targets": ["design/renderer/styles/components.css"],
+      "targets": [
+        "design/renderer/styles/components.css"
+      ],
       "note": "144 DPI animation frame bitmaps (15,747 of 18,155 lines are pure hex)."
     },
     "forms/Animations192": {
       "status": "replaced",
-      "targets": ["design/renderer/styles/components.css"],
+      "targets": [
+        "design/renderer/styles/components.css"
+      ],
       "note": "192 DPI animation frame bitmaps."
     },
-
-    "putty/putty": { "status": "na", "note": "Directory-level replacement is recorded separately, not per unit." },
-    "filezilla/filezilla": { "status": "na", "note": "Directory-level replacement is recorded separately, not per unit." }
+    "windows/Setup": {
+      "status": "partial",
+      "progress": 0.55,
+      "targets": [
+        "design/main/setup.js",
+        "test/shellintegration.test.js"
+      ],
+      "note": "Search path, URL-protocol registration, Default Programs capabilities, shortcuts, Send To hook, jump list, temporary-folder cleanup, /UninstallCleanup and the maintenance switches. HKCU only (no elevation) and no COM registration inspection - see docs/protocol-gaps.md. The update-download half lives in updates.js/autoupdate.js; the tips and donation surfaces are deliberately not ported (issue #22)."
+    },
+    "windows/Tools": {
+      "status": "partial",
+      "progress": 0.3,
+      "targets": [
+        "design/main/setup.js",
+        "design/main/guitools.js"
+      ],
+      "note": "Shortcut creation (CreateDesktopShortCut / CreateAppDesktopShortCut / CreateDesktopSessionShortCut), the info tips, ValidLocalFileName and the shell-open helpers. The VCL dialog helpers that make up the rest of the file have no meaning outside VCL."
+    },
+    "windows/WinMain": {
+      "status": "partial",
+      "progress": 0.35,
+      "targets": [
+        "design/main/setup.js",
+        "design/main/main.js"
+      ],
+      "note": "Maintenance-switch dispatch with CheckSafe, the send-to-another-instance decision, the launch usage counters and the startup sequence recorder. main.js owns the Electron lifecycle; the console/scripting modes belong to consolerunner.js."
+    },
+    "dragext/DragExt": {
+      "status": "partial",
+      "progress": 0.5,
+      "targets": [
+        "design/main/shellintegration.js",
+        "test/shellintegration.test.js"
+      ],
+      "note": "The INTENT is ported: dragging out stages real files and uses webContents.startDrag, which is WinSCP's own temporary-folder branch. The COM ICopyHook itself cannot exist in Electron - see docs/protocol-gaps.md for what it did that this does not."
+    },
+    "putty/putty": {
+      "status": "na",
+      "note": "Directory-level replacement is recorded separately, not per unit."
+    },
+    "filezilla/filezilla": {
+      "status": "na",
+      "note": "Directory-level replacement is recorded separately, not per unit."
+    },
+    "forms/About": {
+      "status": "partial",
+      "progress": 0.85,
+      "targets": [
+        "design/renderer/ui/dialogs/about.js",
+        "design/renderer/ui/changelog.js",
+        "design/renderer/ui/historypanel.js"
+      ],
+      "note": "About.dfm rendered with the release code name and its bundled photo; reachable from F1 and the title bar. The registration box is absent by design (this build has none) and the Help button has no target yet."
+    },
+    "forms/Authenticate": {
+      "status": "partial",
+      "progress": 0.6,
+      "targets": [
+        "design/renderer/ui/dialogs/authenticate.js"
+      ],
+      "note": "Password, passphrase, account, keyboard-interactive, 2FA, host-key and TLS verification, with a changed host key given its own refusal path. LogView and the per-session remember checkbox are not built."
+    },
+    "forms/Cleanup": {
+      "status": "partial",
+      "progress": 0.85,
+      "targets": [
+        "design/renderer/ui/dialogs/cleanup.js"
+      ],
+      "note": "Cleanup.dfm checked list with a real count per row and real removals. The Login dialog still carries its own smaller Clean Up."
+    },
+    "forms/Console": {
+      "status": "partial",
+      "progress": 0.5,
+      "targets": [
+        "design/renderer/ui/dialogs/console.js"
+      ],
+      "note": "Modeless console over session:exec with capability gating, scrollback, history and search. No interrupt channel exists, and event:console carries no session id so two open consoles cannot be told apart - both are main-process gaps."
+    },
+    "forms/Copy": {
+      "status": "partial",
+      "progress": 0.8,
+      "targets": [
+        "design/renderer/ui/dialogs/copyparams.js",
+        "design/renderer/ui/wiring.js",
+        "design/renderer/ui/commands.js"
+      ],
+      "note": "The copy dialog is what every transfer action now opens, and its result is queued through one path. Confirm transfers is honoured; the named preset reaches queue:add."
+    },
+    "forms/CopyLocal": {
+      "status": "partial",
+      "progress": 0.4,
+      "targets": [
+        "design/renderer/ui/commands.js"
+      ],
+      "note": "Same-side copy/move is a target-path prompt in the command layer, not CopyLocal.dfm own form."
+    },
+    "forms/CopyParamCustom": {
+      "status": "partial",
+      "progress": 0.8,
+      "targets": [
+        "design/renderer/ui/dialogs/copyparams.js"
+      ],
+      "note": "The transfer-settings frame, rendered from the shared descriptor table."
+    },
+    "forms/CopyParamPreset": {
+      "status": "partial",
+      "progress": 0.8,
+      "targets": [
+        "design/renderer/ui/dialogs/copyparams.js"
+      ],
+      "note": "Preset list, preset editor and the four-mask autoselection rule."
+    },
+    "forms/CopyParams": {
+      "status": "partial",
+      "progress": 0.85,
+      "targets": [
+        "design/renderer/ui/dialogs/copyparams.js",
+        "design/renderer/ui/dialogs/prefpages.js"
+      ],
+      "note": "All 30 TCopyParamType keys have a control, asserted exhaustively by test/preferences.test.js."
+    },
+    "forms/CreateDirectory": {
+      "status": "partial",
+      "progress": 0.85,
+      "targets": [
+        "design/renderer/ui/dialogs/createdirectory.js",
+        "design/renderer/ui/dialogs/rights.js"
+      ],
+      "note": "Name, attributes with the rights frame, use-same-settings-next-time, and a real mkdir plus chmod. Help button absent."
+    },
+    "forms/Custom": {
+      "status": "replaced",
+      "targets": [
+        "design/renderer/dom.js"
+      ],
+      "note": "replaced: openModal() is the one modal primitive the shell offers."
+    },
+    "forms/CustomCommand": {
+      "status": "partial",
+      "progress": 0.8,
+      "targets": [
+        "design/renderer/ui/dialogs/customcommand.js"
+      ],
+      "note": "The command editor with the full pattern reference, a live preview from main own expansion, and a validator faithful to ValidatePattern. It still reports the shipped interactive commands as valid where main rejects them, because ipc.js validates before resolving the interactive pass."
+    },
+    "forms/CustomScpExplorer": {
+      "status": "partial",
+      "progress": 0.5,
+      "targets": [
+        "design/renderer/ui/panels.js",
+        "design/renderer/ui/commands.js",
+        "design/renderer/ui/menus.js",
+        "design/renderer/ui/toolbars.js",
+        "design/renderer/ui/statusbar.js"
+      ],
+      "note": "The shared explorer behaviour: panels, selection, the command layer over all 301 actions, both menu bars, the bands and the status bars."
+    },
+    "forms/EditMask": {
+      "status": "partial",
+      "progress": 0.85,
+      "targets": [
+        "design/renderer/ui/dialogs/editmask.js"
+      ],
+      "note": "The four memos, the recursion shortcut, the live composed mask and a validation-only port of the grammar cross-checked against design/main/masks.js."
+    },
+    "forms/Editor": {
+      "status": "partial",
+      "progress": 0.55,
+      "targets": [
+        "design/renderer/ui/dialogs/editor.js"
+      ],
+      "note": "Modeless editor with find/replace from one RegExp, six encodings, word wrap, go-to-line and a working conflict path. No undo/redo toolbar buttons (execCommand is deprecated) and the remote-changed path is unverified against a live server."
+    },
+    "forms/EditorPreferences": {
+      "status": "partial",
+      "progress": 0.85,
+      "targets": [
+        "design/renderer/ui/dialogs/editorpreferences.js"
+      ],
+      "note": "The ordered editor list with add/edit/remove/reorder and a live first-match-wins probe."
+    },
+    "forms/FileSystemInfo": {
+      "status": "partial",
+      "progress": 0.8,
+      "targets": [
+        "design/renderer/ui/dialogs/fileysteminfo.js"
+      ],
+      "note": "Protocol, capabilities and space, rendered from session:fsInfo so the greyed-out commands and this list are one object read twice. Full certificate is not built."
+    },
+    "forms/FullSynchronize": {
+      "status": "partial",
+      "progress": 0.7,
+      "targets": [
+        "design/renderer/ui/dialogs/synchronize.js",
+        "design/renderer/ui/dialogs/checklist.js"
+      ],
+      "note": "Direction, mode, criteria, masks and transfer settings, with forbidden combinations refused in words before the call. Timestamp options are greyed from caps. The OK split menu and the transfer-settings button are not built."
+    },
+    "forms/GenerateUrl": {
+      "status": "partial",
+      "progress": 0.85,
+      "targets": [
+        "design/renderer/ui/dialogs/generateurl.js"
+      ],
+      "note": "Every scheme, four script formats and three .NET languages; the password is never emitted."
+    },
+    "forms/ImportSessions": {
+      "status": "partial",
+      "progress": 0.85,
+      "targets": [
+        "design/renderer/ui/dialogs/importsessions.js"
+      ],
+      "note": "Six real parsers: PuTTY/KiTTY .reg, FileZilla XML, OpenSSH config, WinSCP INI and known_hosts."
+    },
+    "forms/InputDlg": {
+      "status": "replaced",
+      "targets": [
+        "design/renderer/ui/commands.js"
+      ],
+      "note": "replaced: promptText() and confirm() in the command layer are the shell input prompts."
+    },
+    "forms/License": {
+      "status": "partial",
+      "progress": 0.85,
+      "targets": [
+        "design/renderer/ui/dialogs/license.js"
+      ],
+      "note": "The repository LICENSE rendered byte-identically with search, match navigation and export. No test guards the embedded copy against drift yet."
+    },
+    "forms/LocationProfiles": {
+      "status": "partial",
+      "progress": 0.8,
+      "targets": [
+        "design/renderer/ui/dialogs/locationprofiles.js",
+        "design/renderer/ui/wiring.js"
+      ],
+      "note": "Shared and per-site profiles with folders, reordering and keyboard shortcuts that ui/wiring.js now actually binds."
+    },
+    "forms/Login": {
+      "status": "partial",
+      "progress": 0.7,
+      "targets": [
+        "design/renderer/ui/dialogs/login.js",
+        "design/renderer/ui/dialogs/sitetree.js"
+      ],
+      "note": "The whole dialog: tree, three search modes, per-protocol visibility, all 33 ActionList entries wired, real session:open and configuration import/export. Four actions delegate and say so; the roughly 250 dfm captions are English only."
+    },
+    "forms/MessageDlg": {
+      "status": "partial",
+      "progress": 0.75,
+      "targets": [
+        "design/renderer/ui/dialogs/messagedlg.js"
+      ],
+      "note": "Button sets, expandable copyable detail and a never-ask-again bound to a real preference. The route back is only on the registered-dialog path."
+    },
+    "forms/OpenDirectory": {
+      "status": "partial",
+      "progress": 0.85,
+      "targets": [
+        "design/renderer/ui/dialogs/opendirectory.js"
+      ],
+      "note": "Path box with history and both bookmark sheets, each with its own search bar and regex builder. The shortcuts are bound by ui/wiring.js."
+    },
+    "forms/Preferences": {
+      "status": "partial",
+      "progress": 0.55,
+      "targets": [
+        "design/renderer/ui/dialogs/preferences.js",
+        "design/renderer/ui/dialogs/prefpages.js"
+      ],
+      "note": "28 pages, 207 controls over 207 real keys, live writes through config:setPref one key at a time. 45 of those options are stored and not yet honoured - each says so on its own row, and test/preferences.test.js holds the list to the real consumer scan."
+    },
+    "forms/Progress": {
+      "status": "partial",
+      "progress": 0.7,
+      "targets": [
+        "design/renderer/ui/dialogs/progress.js"
+      ],
+      "note": "Non-modal progress window with per-file and total bars, a live throughput graph and the speed-limit and once-finished menus."
+    },
+    "forms/Properties": {
+      "status": "partial",
+      "progress": 0.8,
+      "targets": [
+        "design/renderer/ui/dialogs/properties.js",
+        "design/renderer/ui/dialogs/rights.js"
+      ],
+      "note": "Three sheets, the multi-selection aggregate, streamed size calculation that can now be stopped, permissions/owner/group with recursion and per-file checksums. The S3 tag sheet stays hidden because no adapter exposes tagging."
+    },
+    "forms/RemoteTransfer": {
+      "status": "partial",
+      "progress": 0.55,
+      "targets": [
+        "design/renderer/ui/dialogs/remotetransfer.js"
+      ],
+      "note": "Duplicate/Move on ONE session, queued as a server-side copy. Another session is listed and refused with the reason: main remote-copy builds both ends from a single session, so a cross-session target would copy the wrong file."
+    },
+    "forms/Rights": {
+      "status": "partial",
+      "progress": 0.9,
+      "targets": [
+        "design/renderer/ui/dialogs/rights.js"
+      ],
+      "note": "A faithful TRights port - set/unset masks, octal and text round-tripping over all 4096 modes, cycling group buttons and the full right-click menu."
+    },
+    "forms/ScpCommander": {
+      "status": "partial",
+      "progress": 0.55,
+      "targets": [
+        "design/renderer/ui/panels.js",
+        "design/renderer/ui/toolbars.js",
+        "design/renderer/ui/menus.js",
+        "design/renderer/ui/statusbar.js",
+        "design/renderer/ui/panelcolumns.js",
+        "design/renderer/ui/driveview.js"
+      ],
+      "note": "Two-pane Commander with the real filesystem, both menu bars complete (194 of 194 dfm actions), the column sets, the drive tree and the status bars. 33 band buttons and the DropdownCombo split buttons are still missing from the toolbars."
+    },
+    "forms/ScpExplorer": {
+      "status": "partial",
+      "progress": 0.5,
+      "targets": [
+        "design/renderer/ui/panels.js",
+        "design/renderer/ui/toolbars.js",
+        "design/renderer/ui/menus.js"
+      ],
+      "note": "The single-pane Explorer interface with its own bands and menu bar (146 of 146 dfm actions). The same toolbar gaps as Commander."
+    },
+    "forms/SelectMask": {
+      "status": "partial",
+      "progress": 0.85,
+      "targets": [
+        "design/renderer/ui/dialogs/selectmask.js"
+      ],
+      "note": "All four modes with the live which-names-would-this-pick-up preview and the infinite colour picker."
+    },
+    "forms/SiteAdvanced": {
+      "status": "partial",
+      "progress": 0.55,
+      "targets": [
+        "design/renderer/ui/dialogs/siteadvanced.js"
+      ],
+      "note": "All 18 sheets and 134 control descriptors bound to SESSION_DEFAULTS. About 20 of them reach no engine code yet, and the captions are English only."
+    },
+    "forms/Symlink": {
+      "status": "partial",
+      "progress": 0.85,
+      "targets": [
+        "design/renderer/ui/dialogs/symlink.js"
+      ],
+      "note": "Create and edit, hard links gated on caps, and edit really performing remove-then-create with that stated before OK."
+    },
+    "forms/Synchronize": {
+      "status": "partial",
+      "progress": 0.6,
+      "targets": [
+        "design/renderer/ui/dialogs/synchronize.js"
+      ],
+      "note": "Keep remote directory up to date as a non-modal watcher with an activity log. main Watcher emits changes/tick while ipc.js forwards change/synchronized, so the change events never arrive."
+    },
+    "forms/SynchronizeChecklist": {
+      "status": "partial",
+      "progress": 0.6,
+      "targets": [
+        "design/renderer/ui/dialogs/checklist.js"
+      ],
+      "note": "The checklist arranged around one question, with per-row overrides only where legal and deletions needing a second explicit yes. Check/uncheck-all, Move and the Calculate and Commands menus are not built."
+    },
+    "forms/SynchronizeProgress": {
+      "status": "partial",
+      "progress": 0.55,
+      "targets": [
+        "design/renderer/ui/dialogs/progress.js",
+        "design/renderer/ui/dialogs/synchronize.js"
+      ],
+      "note": "The comparison progress is reported through the same progress surface rather than its own form."
+    }
   }
 }

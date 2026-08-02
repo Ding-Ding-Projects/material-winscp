@@ -81,8 +81,18 @@ export function createLoginPanel(opts = {}) {
     touchedSecrets: new Set(),
     editing: false,
     dirty: false,
+    /** True once the user has operated the Save-password box themselves. */
+    savePasswordExplicit: false,
     prefs: opts.prefs || {},
   };
+
+  /** The live Save-password checkbox, so the password field can keep it true. */
+  let savePasswordBox = null;
+  function syncSavePasswordBox() {
+    if (savePasswordBox && savePasswordBox.isConnected) {
+      savePasswordBox.checked = !!state.site.savePassword;
+    }
+  }
 
   /* ---------------- the tree ---------------- */
 
@@ -176,6 +186,9 @@ export function createLoginPanel(opts = {}) {
   function loadNode(node) {
     forgetSecrets();
     state.dirty = false;
+    // A different site's Save-password state is its own; the previous site's
+    // explicit choice must not carry over and suppress the offer here.
+    state.savePasswordExplicit = false;
     if (!node || node.kind === 'newSite') {
       state.site = newSiteData(defaultSessionTemplate());
       state.sourceId = null;
@@ -211,6 +224,7 @@ export function createLoginPanel(opts = {}) {
 
   function renderForm() {
     const node = tree.selected;
+    savePasswordBox = null;
     clear(formEl);
     clear(buttonsEl);
 
@@ -362,7 +376,14 @@ export function createLoginPanel(opts = {}) {
       oninput: () => {
         state.touchedSecrets.add('password');
         state.site.password = passInput.value;
-        state.site.savePassword = state.site.savePassword || !!passInput.value;
+        // Typing a password offers to keep it — but only while the user has not
+        // said otherwise. Re-enabling it silently after they unticked the box
+        // would store a password the interface is still showing as not stored,
+        // which is the one disagreement a credential control must never have.
+        if (!state.savePasswordExplicit && passInput.value && !state.site.savePassword) {
+          state.site.savePassword = true;
+          syncSavePasswordBox();
+        }
         state.dirty = true;
       },
     });
@@ -518,6 +539,8 @@ export function createLoginPanel(opts = {}) {
     const saveBox = h('input', {
       type: 'checkbox', id: saveId,
       onchange: () => {
+        // From here on the choice is the user's, not the form's.
+        state.savePasswordExplicit = true;
         state.site.savePassword = saveBox.checked;
         // Turning it off is a real deletion, so say so rather than leaving the
         // user to discover it at the next login.
@@ -529,6 +552,9 @@ export function createLoginPanel(opts = {}) {
       },
     });
     saveBox.checked = !!state.site.savePassword;
+    // The password field lives in a different fieldset and does not re-render
+    // on every keystroke, so it needs a way to keep this box honest.
+    savePasswordBox = saveBox;
 
     const swatch = colorSwatchButton({
       value: state.site.color || '#0B57D0',

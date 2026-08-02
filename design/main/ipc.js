@@ -190,12 +190,33 @@ class Ipc {
     this.getWindow = d.getWindow || (() => BrowserWindow.getAllWindows()[0] || null);
     this.version = d.version || app.getVersion();
 
-    /** Everything the main process pushes goes through here, and only to the
-     *  window that is actually alive. */
+    /**
+     * Everything the main process pushes goes through here, and only to the
+     * window that is actually alive.
+     *
+     * `webContents.send` structure-clones its payload, and THROWS when it
+     * cannot — on a function, a socket, an EventEmitter, a live adapter. That
+     * throw propagates back into whatever emitted the event, which for a
+     * background watcher or a queue pump means an unhandled exception that
+     * takes the whole main process down. A push is a notification; it must
+     * never be able to kill the app. So a payload that will not travel is
+     * reported as a log line, which always will.
+     */
     this.emit = (channel, payload) => {
       const w = this.getWindow();
-      if (w && !w.isDestroyed() && w.webContents && !w.webContents.isDestroyed()) {
+      if (!w || w.isDestroyed() || !w.webContents || w.webContents.isDestroyed()) return;
+      try {
         w.webContents.send(channel, payload);
+      } catch (e) {
+        if (process.env.WINSCP_MATERIAL_DEBUG) console.error(`[ipc] ${channel} payload could not be sent:`, e);
+        // Never recurse: this second send carries strings only.
+        try {
+          w.webContents.send('event:log', {
+            source: 'ipc',
+            kind: 'error',
+            text: `An internal ${channel} notification could not be delivered to the window: ${e && e.message ? e.message : String(e)}`,
+          });
+        } catch { /* the window is going away; there is nowhere left to report */ }
       }
     };
 
@@ -218,6 +239,18 @@ class Ipc {
       onOutput: (o) => this.emit('event:console', o),
     });
     this.commands.on('finished', (o) => this.emit('event:console', { ...o, done: true }));
+
+    // The transfer queue copies its settings out of the preferences ONCE, when
+    // it is built — and it is built the first time anything asks for the queue
+    // list, which the renderer does while it is still starting up. Every later
+    // change to "Transfers limit", "Confirm overwrites", "Keep done items for"
+    // and the rest therefore landed in the store and nowhere else: the setting
+    // moved, the behaviour did not, until the app was restarted. Re-apply them
+    // whenever the store changes, on every path that can change it.
+    if (this.config && typeof this.config.on === 'function') {
+      this.config.on('pref-changed', () => this.refreshQueuePrefs());
+      this.config.on('changed', () => this.refreshQueuePrefs());
+    }
 
     if (this.config && typeof this.config.attachHistory === 'function') {
       this.config.attachHistory({
@@ -263,17 +296,61 @@ class Ipc {
 
     // Every queue event becomes one renderer event, with the internals left
     // behind: `view()` is the only shape that crosses the bridge.
-    for (const ev of ['item-added', 'item-removed', 'item-state', 'item-error', 'item-done', 'idle', 'once-done', 'reconnect']) {
+    //
+    // This list has to be the events design/main/queue.js ACTUALLY emits.
+    // `item-removed`, `item-state` and `once-done` were never emitted by
+    // anything, and `item-updated` — which is every state change, every
+    // pause, every resume and every removal — was not forwarded at all, so a
+    // queue panel driven by these events could only ever see an item appear
+    // and then, much later, finish.
+    for (const ev of ['item-added', 'item-updated', 'item-done', 'item-error', 'queue-updated', 'idle', 'reconnect']) {
       q.on(ev, (payload, extra) => this.emit('event:queue', { type: ev, item: payload, extra }));
     }
     q.on('progress', (item) => this.emit('event:progress', { kind: 'transfer', item }));
+
     // A query or a prompt from inside a transfer is a decision the user must
     // make; it goes out on the prompt channel like every other one.
-    q.on('query', (id, query) => this.emit('event:prompt', { promptId: id, kind: 'custom', payload: { source: 'queue', query } }));
-    q.on('prompt', (id, prompt) => this.emit('event:prompt', { promptId: id, kind: 'password', payload: { source: 'queue', prompt } }));
+    //
+    // queue.js emits ONE object — `{ item, query, respond }` — and `respond` is
+    // a live function. Forwarding that object as the correlation id put a
+    // function into a structured clone, so the event never reached the window:
+    // the transfer sat in `query` forever with nobody able to answer it. The id
+    // the renderer hands back to queue:answerQuery is the ITEM's id, so that is
+    // what crosses as `promptId`, and only cloneable data goes with it.
+    q.on('query', (e) => this.emit('event:prompt', {
+      promptId: e && e.item ? e.item.id : '',
+      kind: 'custom',
+      payload: { source: 'queue', item: e && e.item, query: e && e.query },
+    }));
+    q.on('prompt', (e) => this.emit('event:prompt', {
+      promptId: e && e.item ? e.item.id : '',
+      kind: 'password',
+      payload: { source: 'queue', item: e && e.item, prompt: e && e.prompt },
+    }));
 
     this._queue = q;
     return q;
+  }
+
+  /**
+   * Push the current preferences into a queue that is already running.
+   *
+   * Only the settings the queue reads out of `queuePrefs` are replaced; the
+   * things that are RUNTIME state rather than preference — whether the queue is
+   * enabled, whether it is paused, what is in it — are left exactly as the user
+   * left them. A preference change must not restart a paused transfer.
+   */
+  refreshQueuePrefs() {
+    const q = this._queue;
+    if (!q || !this.config) return false;
+    const prefs = this.config.prefs;
+    q.prefs = prefs;
+    q.queuePrefs = { ...q.queuePrefs, ...(prefs.queue || {}) };
+    const limit = Number(prefs.queue && prefs.queue.transfersLimit);
+    if (Number.isFinite(limit) && limit >= 1 && limit <= 32 && typeof q.setTransfersLimit === 'function') {
+      try { q.setTransfersLimit(limit); } catch { /* the queue keeps the limit it was running with */ }
+    }
+    return true;
   }
 
   /** sync.js is a module of functions rather than a class; use it as one. */
@@ -650,7 +727,10 @@ class Ipc {
     this.handle('session:info', (id) => this.session(id).info());
     this.handle('session:close', (id) => this.sessions.close(str(id, 'sessionId', 128)));
     this.handle('session:reconnect', async (id) => (await this.session(id).reconnect()));
-    this.handle('session:disconnect', async (id) => { await this.session(id).disconnect(); return true; });
+    // Disconnect is not Close. WinSCP's "Disconnect Session" leaves the tab
+    // sitting there so "Reconnect Session" has something to reconnect; retiring
+    // the session here made the very next command answer "No such session".
+    this.handle('session:disconnect', async (id) => { await this.session(id).disconnect({ keepOpen: true }); return true; });
 
     this.handle('session:answerPrompt', (sessionId, promptId, answer) => {
       const s = this.session(sessionId);
@@ -1179,11 +1259,24 @@ class Ipc {
       this._watchers = this._watchers || new Map();
       this._watchers.set(id, watcher);
       if (watcher && typeof watcher.on === 'function') {
-        for (const ev of ['change', 'error', 'synchronized', 'stopped']) {
-          watcher.on(ev, (payload) => this.emit('event:sync', { type: ev, id, payload }));
+        // design/main/sync.js's watcher emits `started`, `changes`, `tick`,
+        // `error` and `stopped`. `change` and `synchronized` were never emitted
+        // by it, so "Keep remote directory up to date" ran and reported
+        // absolutely nothing back to the window that started it.
+        for (const ev of ['started', 'changes', 'tick', 'error', 'stopped']) {
+          watcher.on(ev, (payload) => this.emit('event:sync', { type: ev, id, payload: syncPayload(ev, payload, this) }));
         }
       }
-      return { id };
+
+      // `startWatch()` starts the watcher, so its own `started` fires before
+      // this handler has a listener attached — and before the renderer even has
+      // the id to correlate it with. Announce it here, where both exist, so the
+      // event stream a window subscribes to actually begins at the beginning.
+      const native = !!(watcher && watcher._native);
+      this.emit('event:sync', { type: 'started', id, payload: { native } });
+      // And in the reply too, so a caller that never subscribes still learns
+      // whether this is a real file-system watch or a polling timer.
+      return { id, native };
     });
 
     this.handle('sync:stop', (id) => {
@@ -1316,6 +1409,35 @@ class Ipc {
 }
 
 // ---------------------------------------------------------------- helpers
+
+/**
+ * A keep-up-to-date event, reduced to what can actually cross the bridge.
+ *
+ * `sync.apply()` hands the watcher the queue's INTERNAL items (each holding a
+ * gate, a promise and two live adapters) and its deletion records (each holding
+ * an adapter). None of that survives a structured clone, and the attempt to
+ * clone it threw inside the watcher's own emit — which is to say, watching a
+ * directory took the application down. `view()` is the only queue shape allowed
+ * across, exactly as it is for `event:queue`.
+ */
+function syncPayload(type, payload, ipc) {
+  if (!payload || typeof payload !== 'object') return payload === undefined ? null : payload;
+  if (type === 'error') {
+    return { message: payload.message || String(payload), code: payload.code || 'SYNC_ERROR' };
+  }
+  if (type !== 'changes') return { ...payload };
+  const view = (it) => {
+    try { return ipc.queue().view(it); } catch { return { id: it && it.id, source: it && it.source, target: it && it.target }; }
+  };
+  return {
+    items: (payload.items || []).map(view),
+    deletions: (payload.deletions || []).map((d) => ({
+      path: d && d.path,
+      action: d && d.item ? d.item.action : '',
+      isDirectory: !!(d && d.item && d.item.isDirectory),
+    })),
+  };
+}
 
 /** A site as the renderer may see it: no secret ever leaves the main process. */
 function publicSite(s) {

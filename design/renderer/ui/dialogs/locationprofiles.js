@@ -77,7 +77,7 @@ function normalizeProfile(p) {
   };
 }
 
-async function readProfiles(sessionKey) {
+export async function readProfiles(sessionKey) {
   const shared = await readPref(SHARED_PATH, []);
   const bySite = (await readPref(SITE_PATH, {})) || {};
   const site = sessionKey && Array.isArray(bySite[sessionKey]) ? bySite[sessionKey] : [];

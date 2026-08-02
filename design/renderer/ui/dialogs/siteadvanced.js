@@ -923,7 +923,13 @@ export function createSiteAdvancedPanel(site, opts = {}) {
   };
 
   const navEl = h('div', { class: 'sa-nav', role: 'tablist', 'aria-orientation': 'vertical', 'aria-label': t('advancedBtn') });
-  const pageEl = h('div', { class: 'sa-page' });
+  // One panel serves every tab, so every tab's aria-controls points at it and
+  // its aria-labelledby follows the selection. A role="tab" whose aria-controls
+  // named a page that is not in the document would be worse than none: a screen
+  // reader announces a broken reference instead of the page's name.
+  const pageId = uid('sa-panel');
+  const tabIds = new Map(SITE_ADVANCED_PAGES.map((p) => [p.id, uid(`sa-tab-${p.id}`)]));
+  const pageEl = h('div', { class: 'sa-page', id: pageId, role: 'tabpanel', tabindex: '0' });
   const root = h('div', { class: 'sd-split sd-wide sd-wide-lg', style: { minHeight: 'calc(420px * var(--uiscale))' } }, navEl, pageEl);
   appearanceTarget(navEl, 'site-advanced-nav', 'Advanced settings navigation');
   appearanceTarget(pageEl, 'site-advanced-page', 'Advanced settings page');
@@ -971,6 +977,8 @@ export function createSiteAdvancedPanel(site, opts = {}) {
       const hits = matchCountFor(page);
       const btn = h('button', {
         type: 'button', class: `sa-nav-item${usable ? '' : ' is-off'}`, role: 'tab',
+        id: tabIds.get(page.id),
+        'aria-controls': pageId,
         'aria-selected': String(on), tabindex: on ? '0' : '-1',
         'data-page': page.id,
         style: { paddingLeft: `calc(${8 + (page.level === 2 ? 18 : 0)}px * var(--den))` },
@@ -1032,12 +1040,56 @@ export function createSiteAdvancedPanel(site, opts = {}) {
 
   /* ---------------- page rendering ---------------- */
 
+  /**
+   * A commit re-renders the whole page, because one setting routinely enables
+   * or disables another. That would drop the keyboard user's place: the element
+   * they just operated is destroyed and focus falls to <body>, so tabbing
+   * restarts from the top of the dialog after every checkbox. These two
+   * functions remember where focus was and put it back on the element that
+   * replaced it — matched by the control it belongs to and its position within
+   * that control, which survives a rebuild in a way an element identity cannot.
+   */
+  function captureFocus() {
+    const active = document.activeElement;
+    if (!active || !pageEl.contains(active)) return null;
+    // The search bar is the same node every render, so it is restored by
+    // identity — and with its caret, or typing a query would jump to the end
+    // of the field after each keystroke.
+    const caret = 'selectionStart' in active ? active.selectionStart : null;
+    const wrap = active.closest('[data-control]');
+    if (!wrap) return { node: active, caret };
+    const peers = Array.from(wrap.querySelectorAll('input, select, textarea, button'));
+    return { control: wrap.getAttribute('data-control'), index: Math.max(0, peers.indexOf(active)), caret };
+  }
+
+  function restoreFocus(mark) {
+    if (!mark) return;
+    let target = null;
+    if (mark.node) {
+      if (!pageEl.contains(mark.node)) return;
+      target = mark.node;
+    } else {
+      const wrap = pageEl.querySelector(`[data-control="${CSS.escape(mark.control)}"]`);
+      if (!wrap) return;
+      const peers = Array.from(wrap.querySelectorAll('input, select, textarea, button'))
+        .filter((el) => !el.disabled);
+      target = peers[mark.index] || peers[0];
+    }
+    if (!target) return;
+    target.focus();
+    if (mark.caret !== null && mark.caret !== undefined && 'setSelectionRange' in target) {
+      try { target.setSelectionRange(mark.caret, mark.caret); } catch { /* not a text field */ }
+    }
+  }
+
   function renderPage() {
     const page = SITE_ADVANCED_PAGES.find((p) => p.id === state.pageId);
     const c = ctx();
     const usable = pageEnabled(page);
     const bar = barFor(page);
+    const focusMark = captureFocus();
 
+    pageEl.setAttribute('aria-labelledby', tabIds.get(page.id));
     clear(pageEl);
     pageEl.appendChild(h('div', { class: 'sa-page-head' },
       h('h3', { class: 'sa-page-title' }, page.caption),
@@ -1064,6 +1116,7 @@ export function createSiteAdvancedPanel(site, opts = {}) {
     }
 
     if (bar.isActive) renderCrossPageHits(page, bar);
+    restoreFocus(focusMark);
   }
 
   function visibleControls(group, c, bar) {
@@ -1396,21 +1449,29 @@ export function createSiteAdvancedPanel(site, opts = {}) {
     return labelled(control, id, h('div', { class: 'sd-row is-tight' }, input, browse), enabled);
   }
 
+  /**
+   * TimeDifferenceEdit + TimeDifferenceMinutesEdit as one fractional-hours key.
+   *
+   * BOTH boxes carry the sign, exactly as SiteAdvanced.cpp splits the stored
+   * value (`TimeDifferenceMin / 60` and `TimeDifferenceMin % 60`, which in C++
+   * and in JavaScript alike keep the sign of the dividend). Forcing minutes
+   * positive and taking the sign from hours alone loses it entirely for an
+   * offset inside the first hour: −30 minutes would be shown as 0h 30m and
+   * written back as +30, silently flipping a clock correction.
+   */
   function buildTimezone(control, id, enabled, commit) {
-    const total = Number(getKey(state.site, control.key) || 0);
-    const sign = total < 0 ? -1 : 1;
-    const abs = Math.abs(total);
-    const hours = Math.trunc(abs);
-    const minutes = Math.round((abs - hours) * 60);
+    const totalMinutes = Math.round(Number(getKey(state.site, control.key) || 0) * 60);
+    const hours = Math.trunc(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
 
     const hoursInput = h('input', {
       type: 'number', id, class: 'sd-input sd-num', min: '-24', max: '24',
       'aria-label': `${control.label} hours`,
       onchange: () => write(),
     });
-    hoursInput.value = String(sign * hours);
+    hoursInput.value = String(hours);
     const minutesInput = h('input', {
-      type: 'number', class: 'sd-input sd-num', min: '0', max: '59',
+      type: 'number', class: 'sd-input sd-num', min: '-59', max: '59',
       'aria-label': `${control.label} minutes`,
       onchange: () => write(),
     });
@@ -1419,10 +1480,14 @@ export function createSiteAdvancedPanel(site, opts = {}) {
     minutesInput.disabled = !enabled;
 
     function write() {
-      const hh = Number(hoursInput.value) || 0;
-      const mm = Math.min(59, Math.max(0, Number(minutesInput.value) || 0));
+      const hh = Math.min(24, Math.max(-24, Math.trunc(Number(hoursInput.value) || 0)));
+      let mm = Math.min(59, Math.max(-59, Math.trunc(Number(minutesInput.value) || 0)));
+      // Once there is a whole hour it decides the sign, so a "−1 h 30 m" that
+      // the user meant as −1:30 is not read as −0:30.
+      if (hh !== 0 && Math.sign(mm) === -Math.sign(hh)) mm = -mm;
+      hoursInput.value = String(hh);
       minutesInput.value = String(mm);
-      commit((Math.abs(hh) + mm / 60) * (hh < 0 ? -1 : 1));
+      commit(hh + mm / 60);
     }
 
     return labelled(control, id, h('div', { class: 'sd-row is-tight' },

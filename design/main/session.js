@@ -226,7 +226,9 @@ class Session extends EventEmitter {
     const shown = key.fingerprintSHA256 || key.fingerprint || '';
 
     // A fingerprint pinned on the site itself (or supplied with /hostkey).
-    const pinned = String(this.data.hostKey || '').trim();
+    // `key.pinned` lets the caller name a different one — the tunnel leg is
+    // verified against `tunnelHostKey`, not the session's own.
+    const pinned = String(key.pinned === undefined ? (this.data.hostKey || '') : key.pinned).trim();
     if (pinned && fingerprintMatches(pinned, key)) {
       this.log.add('info', `Host key for ${hostPort} matches the fingerprint configured for this site.`);
       return true;
@@ -365,7 +367,13 @@ class Session extends EventEmitter {
     try {
       const mod = requireAdapterModule(this.protocol);
       const Cls = adapterClassOf(mod, this.protocol);
-      this.adapter = new Cls(this);
+      // The adapter contract (design/main/protocols/base.js) is
+      // `new Adapter(sessionData, callbacks)` — the RESOLVED site data, with
+      // its secrets already in clear, plus the callbacks that let the adapter
+      // ask a human a question. Handing it this Session object instead left
+      // every adapter reading `hostName` off the wrong shape and left every
+      // security question with nobody to ask.
+      this.adapter = new Cls(this.data, this._adapterCallbacks());
       this._wireAdapter(this.adapter);
 
       await this.adapter.connect(this.data);
@@ -392,8 +400,93 @@ class Session extends EventEmitter {
     }
   }
 
+  /**
+   * The callbacks every adapter is constructed with. This is the whole of the
+   * "ask a human" contract described at the top of this file, translated into
+   * the shapes design/main/protocols/*.js actually call:
+   *
+   *   log(level, message)
+   *   hostKeyVerifier(hostPort, sha256, algorithm, extra) -> Promise<boolean>
+   *   certVerifier(host, summary, problem)                -> Promise<boolean>
+   *   keyboardInteractive(request)                        -> Promise<string[]>
+   *
+   * Every one of them routes to a method above that prompts and waits. None of
+   * them has a default answer, because a verifier that says "yes" when it could
+   * not ask is not a verifier.
+   */
+  _adapterCallbacks() {
+    return {
+      log: (level, message) => this.log.add(level, message),
+
+      hostKeyVerifier: (hostPort, fingerprintSHA256, algorithm, extra) => {
+        const e = extra || {};
+        const at = splitHostPort(hostPort, this.data.hostName, this.data.portNumber);
+        return this.verifyHostKey({
+          host: at.host,
+          port: at.port,
+          algorithm,
+          keyType: algorithm,
+          fingerprintSHA256,
+          fingerprintMD5: e.md5 || '',
+          keyLength: e.key && e.key.length ? e.key.length * 8 : 0,
+          // The tunnel leg carries its own pinned fingerprint; without this the
+          // session's would be checked against the wrong server.
+          pinned: e.expected === undefined ? undefined : e.expected,
+        });
+      },
+
+      certVerifier: (host, summary, problem) => {
+        const s = summary || {};
+        const subject = s.subject && typeof s.subject === 'object'
+          ? Object.entries(s.subject).map(([k, v]) => `${k}=${v}`).join(', ')
+          : String(s.subject || '');
+        const issuer = s.issuer && typeof s.issuer === 'object'
+          ? Object.entries(s.issuer).map(([k, v]) => `${k}=${v}`).join(', ')
+          : String(s.issuer || '');
+        return this.verifyCertificate({
+          host,
+          port: this.data.portNumber,
+          subject,
+          issuer,
+          fingerprintSHA256: s.fingerprint256 || '',
+          fingerprintSHA1: s.fingerprint || '',
+          validFrom: s.valid_from || '',
+          validTo: s.valid_to || '',
+          trusted: s.authorized === true,
+          errors: problem ? [problem] : [],
+        });
+      },
+
+      keyboardInteractive: async (request) => {
+        const r = request || {};
+        // ssh2 calls its field `prompt`; promptCredential and the dialog both
+        // call it `text`.
+        const prompts = (r.prompts || []).map((p) => ({
+          text: p.text || p.prompt || 'Response:',
+          echo: !!p.echo,
+        }));
+        const answers = await this.promptCredential({
+          kind: 'keyboardInteractive',
+          name: r.name || this.name,
+          instructions: r.instructions || '',
+          prompts,
+        });
+        // null is a cancellation; ssh2 wants an array either way, and an empty
+        // one fails the attempt rather than answering it.
+        return Array.isArray(answers) ? answers : [];
+      },
+    };
+  }
+
   _wireAdapter(a) {
-    a.on('log', (kind, text) => this.log.add(kind, text));
+    // Every adapter emits ONE object: { level, message }. The two-argument form
+    // was never emitted by anything, so the whole protocol log used to arrive
+    // as an object where the line's kind belonged and `undefined` where its
+    // text belonged.
+    a.on('log', (e, maybeText) => {
+      if (e && typeof e === 'object') this.log.add(e.level || 'info', String(e.message === undefined ? '' : e.message));
+      else this.log.add(e || 'info', String(maybeText === undefined ? '' : maybeText));
+    });
     a.on('banner', (text) => this.banner(text));
     a.on('progress', (p) => this._send('event:progress', { sessionId: this.id, ...p }));
     a.on('close', (reason) => this._onAdapterClosed(reason));
@@ -466,9 +559,22 @@ class Session extends EventEmitter {
     return this.connect();
   }
 
+  /**
+   * Take the connection down.
+   *
+   * `keepOpen` keeps the SESSION alive — the tab stays, the log stays, and
+   * Reconnect works. That is what the "Disconnect Session" command does, and
+   * what reconnect() does between its two halves. Without it the session is
+   * retired from the manager for good.
+   *
+   * Either way this is a deliberate act, so it must never schedule an
+   * automatic reconnect: tearing the adapter down makes it emit `close`, which
+   * is indistinguishable from the network dropping unless we say so here.
+   * connect() clears the flag again.
+   */
   async disconnect(options) {
     const o = options || {};
-    this._closing = !o.keepOpen;
+    this._closing = true;
     if (this._reconnect.timer) { clearTimeout(this._reconnect.timer); this._reconnect.timer = null; }
     this._cancelPrompts('disconnected');
     if (this.adapter) {
@@ -727,6 +833,21 @@ class Session extends EventEmitter {
 
 // ------------------------------------------------------------- helpers
 
+/**
+ * `host:port` back into its parts. `lastIndexOf` rather than `split`, so a
+ * bracketed IPv6 literal does not lose its address to the first colon.
+ */
+function splitHostPort(hostPort, fallbackHost, fallbackPort) {
+  const s = String(hostPort || '');
+  const i = s.lastIndexOf(':');
+  if (i <= 0) return { host: s || fallbackHost, port: fallbackPort };
+  const port = Number(s.slice(i + 1));
+  return {
+    host: s.slice(0, i).replace(/^\[|\]$/g, '') || fallbackHost,
+    port: Number.isFinite(port) && port > 0 ? port : fallbackPort,
+  };
+}
+
 function fingerprintMatches(stored, key) {
   if (!stored) return false;
   const norm = (s) => String(s || '').trim().toLowerCase().replace(/^ssh-[a-z0-9-]+\s+/i, '').replace(/^sha256:/, '');
@@ -851,4 +972,4 @@ function isDir(p) {
   try { return fs.statSync(p).isDirectory(); } catch { return false; }
 }
 
-module.exports = { Session, SessionManager, safeLocalPath, isDir, DEFAULT_PORTS, ADAPTERS };
+module.exports = { Session, SessionManager, safeLocalPath, isDir, splitHostPort, DEFAULT_PORTS, ADAPTERS };

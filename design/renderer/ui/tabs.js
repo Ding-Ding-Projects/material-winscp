@@ -102,6 +102,42 @@ function savedGroupOrderFor(stripId) {
  *   openStripSearch() openGroupSearch(gid) openGroupNameSearch() openMasterSearch()
  *   bulkClose({ containing:bool })
  */
+/**
+ * Which tabs a bulk close would actually close — the ONE decision behind both
+ * "Close tabs containing text" and its inverse, and behind their preview.
+ *
+ * It lives out here, as a pure function over plain objects, for a reason the
+ * test suite makes obvious: a reference model written beside the tests only
+ * ever tests itself. Everything a bulk close can get wrong is decided here —
+ * which direction the predicate runs, whether pinned tabs are protected,
+ * whether an empty query or a broken pattern closes anything — so a mutation
+ * to any of it fails a test that drives this exact function.
+ *
+ *   pool         the tabs in scope, in strip order
+ *   predicate    a makePredicate() result ({ ok, test, error })
+ *   query        the raw query; empty means "close nothing"
+ *   containing   true for "containing", false for the inverse
+ *   includePinned  the user's explicit opt-in
+ *
+ * Returns { ok, reason, matches, victims, excludedPins, dirty } where `victims`
+ * is what would close and `matches` is what the query picked up before pinned
+ * tabs were protected — the preview shows the first and warns with the second.
+ */
+export function bulkCloseSelection({ pool = [], predicate, query = '', containing = true, includePinned = false } = {}) {
+  const empty = { matches: [], victims: [], excludedPins: 0, dirty: [] };
+  if (!String(query || '').length) return { ok: false, reason: 'empty', ...empty };
+  if (!predicate || !predicate.ok) {
+    return { ok: false, reason: 'invalid', error: predicate && predicate.error, ...empty };
+  }
+  // ONE predicate, negated once — the two directions cannot drift apart in
+  // flags, casing, Unicode handling or scope, and together they partition the
+  // pool exactly.
+  const matches = pool.filter((tb) => (containing ? predicate.test(tb.title) : !predicate.test(tb.title)));
+  const excludedPins = matches.filter((tb) => tb.pinned).length;
+  const victims = includePinned ? matches : matches.filter((tb) => !tb.pinned);
+  return { ok: true, reason: '', matches, victims, excludedPins, dirty: victims.filter((tb) => tb.dirty) };
+}
+
 export function createTabStrip(opts = {}) {
   const id = opts.id || 'main';
   const windowId = opts.windowId || 'Main window';
@@ -1146,11 +1182,11 @@ export function createTabStrip(opts = {}) {
         return;
       }
 
-      const pool = candidates();
-      // ONE predicate, negated once — the inverse action cannot drift.
-      const matches = pool.filter((tb) => (containing ? predicate.test(tb.title) : !predicate.test(tb.title)));
-      const excludedPins = matches.filter((tb) => tb.pinned).length;
-      victims = includePinned ? matches : matches.filter((tb) => !tb.pinned);
+      const decision = bulkCloseSelection({
+        pool: candidates(), predicate, query, containing, includePinned,
+      });
+      const { excludedPins } = decision;
+      victims = decision.victims;
 
       const modeLabel = st.mode === 'regex' ? `${t('regexMode')} ${predicate.describe}` : `${t('plainText')} "${query}"`;
       summary.textContent = `${t('matchMode')}: ${modeLabel} — ${t('matchesTabs', victims.length)}`;
