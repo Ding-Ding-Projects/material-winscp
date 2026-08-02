@@ -29,6 +29,11 @@ const { finished } = require('stream/promises');
 
 const { FileMask } = require('./masks');
 const { COPY_PARAM_DEFAULTS, PREF_DEFAULTS } = require('./defaults');
+// The overwrite decision (ConfirmFileOverwrite / EffectiveBatchOverwrite) and
+// the robust retry substrate live in transfer.js, the port of Terminal.cpp's
+// transfer half. The queue moves the bytes; that module decides what happens
+// to a file that is already there.
+const T = require('./transfer');
 
 const STATES = ['queued', 'active', 'paused', 'done', 'error', 'query', 'prompt'];
 
@@ -360,9 +365,16 @@ class TransferQueue extends EventEmitter {
       _reconnects: 0,
       _pendingQuery: null,
       _pendingPrompt: null,
-      _overwriteAll: false,
-      _skipAll: false,
-      _newerOnly: !!copyParam.newerOnly,
+      // "Yes to all" / "Skip all" / "only newer" now live in the transfer
+      // engine's progress object (TFileOperationProgressType::BatchOverwrite),
+      // built on first use by _overwriteEngine.
+      _overwriteEngine: null,
+      _overwriteProgress: null,
+      _pendingRename: '',
+      _pendingAppendOrResume: null,
+      _currentEntry: null,
+      _currentTargetPath: '',
+      _currentExisting: null,
       _cancelled: false,
       _cpsWindow: [],
       _lastProgressAt: 0,
@@ -880,50 +892,14 @@ class TransferQueue extends EventEmitter {
     let targetPath = entry.dstPath;
     let existing = await statOrNull(dst, targetPath);
 
-    // "Transfer only new/updated files" — a silent skip, no query.
-    if (item._newerOnly && existing && existing.type !== 'dir'
-        && entry.mtime && existing.mtime && entry.mtime <= existing.mtime + 1999) {
-      this._skip(item, entry, targetPath);
-      return;
-    }
-
     let mode = 'overwrite';                       // overwrite | resume | append
     if (existing && existing.type !== 'dir') {
-      if (item._skipAll) { this._skip(item, entry, targetPath); return; }
-      if (!item._overwriteAll && !this.queuePrefs.noConfirmations && this.prefs.confirmOverwriting !== false) {
-        const answer = await this._query(item, {
-          kind: 'overwrite',
-          file: targetPath,
-          source: { path: entry.srcPath, size: entry.size, mtime: entry.mtime },
-          target: { path: targetPath, size: existing.size, mtime: existing.mtime },
-          canResume: allowResume(cp, entry.size, dst.basename(targetPath)),
-          canAppend: true,
-        });
-        switch (answer.answer) {
-          case 'skip': this._skip(item, entry, targetPath); return;
-          case 'skip-all': item._skipAll = true; this._skip(item, entry, targetPath); return;
-          case 'overwrite-all': item._overwriteAll = true; mode = 'overwrite'; break;
-          case 'newer-only':
-            item._newerOnly = true;
-            if (entry.mtime <= (existing.mtime || 0) + 1999) { this._skip(item, entry, targetPath); return; }
-            mode = 'overwrite';
-            break;
-          case 'resume': mode = 'resume'; break;
-          case 'append': mode = 'append'; break;
-          case 'rename': {
-            const newName = answer.newName;
-            if (!newName) throw new Error('The "rename" answer needs a newName.');
-            targetPath = dst.join(dst.dirname(targetPath), newName);
-            existing = await statOrNull(dst, targetPath);
-            mode = 'overwrite';
-            break;
-          }
-          default: mode = 'overwrite'; break;
-        }
-      } else {
-        // No confirmation wanted: the configured overwrite mode decides.
-        mode = cp.overwriteMode === 'resume' || cp.overwriteMode === 'append'
-          ? cp.overwriteMode : 'overwrite';
+      const decision = await this._decideOverwrite(item, entry, targetPath, existing);
+      if (decision.skip) { this._skip(item, entry, targetPath); return; }
+      mode = decision.mode;
+      if (decision.targetPath !== targetPath) {
+        targetPath = decision.targetPath;
+        existing = await statOrNull(dst, targetPath);
       }
     }
 
@@ -947,6 +923,139 @@ class TransferQueue extends EventEmitter {
     item.progress.filesDone += 1;
     this._emitProgress(item, true);
     return written;
+  }
+
+  /**
+   * The overwrite decision, delegated to `transfer.js`.
+   *
+   * That module is the port of TTerminal::ConfirmFileOverwrite and
+   * EffectiveBatchOverwrite — batch mode versus the per-file question versus
+   * resume versus newer-only, in WinSCP's own order. The queue used to carry a
+   * simplified copy of those rules; it now asks the same code the session path
+   * asks, so the two can no longer drift apart on the one decision that
+   * destroys data when it is wrong.
+   *
+   * What stays here is the queue's own surface: the 'query' event, its answer
+   * vocabulary, and the fact that a cancelled query skips the file rather than
+   * killing the item.
+   */
+  async _decideOverwrite(item, entry, targetPath, existing) {
+    const dst = item.targetAdapter;
+    const cp = item.copyParam;
+    const engine = this._overwriteEngine(item);
+    const progress = item._overwriteProgress;
+    progress.asciiTransfer = false;   // resume/append validity is a byte question
+    progress.localSize = entry.size;
+    progress.transferSize = entry.size;
+    // The engine asks its host a question; the host builds the queue's own
+    // 'query' event from these, which is how the renderer keeps seeing the
+    // shape it already knows.
+    item._currentEntry = entry;
+    item._currentTargetPath = targetPath;
+    item._currentExisting = existing;
+
+    // cpNoConfirmation is how "confirmations are off for this queue" reaches
+    // the decision; the global preference is read by the engine itself.
+    let params = 0;
+    if (this.queuePrefs.noConfirmations) params |= T.COPY_FLAGS.noConfirmation;
+    if (cp.overwriteMode === 'append') params |= T.COPY_FLAGS.append;
+    if (cp.overwriteMode === 'resume') params |= T.COPY_FLAGS.resume;
+
+    const fileParams = new T.OverwriteFileParams({
+      sourceSize: entry.size,
+      sourceTimestamp: entry.mtime,
+      sourcePrecision: entry.modificationFmt,
+      destSize: existing.size,
+      destTimestamp: existing.mtime,
+      destPrecision: existing.modificationFmt,
+    });
+
+    item._pendingRename = '';
+    item._pendingAppendOrResume = null;
+    try {
+      const result = await engine.confirmOverwrite(
+        entry.srcPath, dst.basename(targetPath), cp, params, progress, fileParams, {
+          canAppend: true,
+          side: item.side === 'download' ? 'local' : 'remote',
+          resolveAppendOrResume: () => item._pendingAppendOrResume,
+        });
+      const name = result.targetFileName;
+      return {
+        skip: false,
+        mode: result.mode,
+        targetPath: name === dst.basename(targetPath)
+          ? targetPath : dst.join(dst.dirname(targetPath), name),
+      };
+    } catch (e) {
+      // ESkipFile — the user said no to this one file.
+      if (e && e.skipFile === true) return { skip: true, mode: 'overwrite', targetPath };
+      // EAbort — cancel, which for a queue item means stop the item.
+      if (e && e.aborted === true) { item._cancelled = true; return { skip: true, mode: 'overwrite', targetPath }; }
+      throw e;
+    }
+  }
+
+  /**
+   * The per-item bridge into `transfer.js`. It is per item, not per queue,
+   * because "Yes to all" belongs to one queued transfer — answering it for a
+   * folder upload must not silently answer it for an unrelated item queued
+   * behind it.
+   */
+  _overwriteEngine(item) {
+    if (item._overwriteEngine) return item._overwriteEngine;
+    const queue = this;
+    const host = new T.StandaloneHost({
+      adapter: item.targetAdapter,
+      prefs: this.prefs,
+      sessionData: (item.session && item.session.data) || {},
+      setPref: (key, value) => { queue.prefs[key] = value; },
+      logEvent: (text) => queue.emit('log', { id: item.id, text }),
+      promptName: async () => item._pendingRename,
+      queryUser: (q) => queue._askOverwrite(item, q),
+    });
+    item._overwriteProgress = new T.SimpleProgress(item.side === 'download' ? 'remote' : 'local');
+    item._overwriteEngine = new T.TransferEngine(host);
+    return item._overwriteEngine;
+  }
+
+  /**
+   * Translate between the engine's WinSCP vocabulary and the queue's own,
+   * which the renderer already speaks. The mapping is the one WinSCP's dialog
+   * uses: "Yes to newer" is `all`, "Rename" is `ignore`, "Append" is `retry`.
+   */
+  async _askOverwrite(item, query) {
+    const dst = item.targetAdapter;
+    const entry = item._currentEntry || {};
+    const reply = await this._query(item, {
+      kind: 'overwrite',
+      file: item._currentTargetPath || '',
+      message: query.message,
+      details: query.moreMessages || [],
+      source: { path: entry.srcPath, size: entry.size, mtime: entry.mtime },
+      target: {
+        path: item._currentTargetPath || '',
+        size: (item._currentExisting || {}).size,
+        mtime: (item._currentExisting || {}).mtime,
+      },
+      canResume: allowResume(item.copyParam, entry.size,
+        dst.basename(item._currentTargetPath || '')),
+      canAppend: true,
+    });
+    item._pendingAppendOrResume = null;
+    switch (reply.answer) {
+      case 'overwrite': return 'yes';
+      case 'skip': return 'no';
+      case 'overwrite-all': return 'yesToAll';
+      case 'skip-all': return 'noToAll';
+      case 'newer-only': return 'all';
+      case 'rename':
+        if (!reply.newName) throw new Error('The "rename" answer needs a newName.');
+        item._pendingRename = reply.newName;
+        return 'ignore';
+      case 'resume': item._pendingAppendOrResume = 'resume'; return 'retry';
+      case 'append': item._pendingAppendOrResume = 'append'; return 'retry';
+      default: return 'cancel';
+    }
   }
 
   _skip(item, entry, targetPath) {

@@ -2795,6 +2795,36 @@ class Terminal extends EventEmitter {
     } while (loop.retry());
   }
 
+  // ------------------------------------------------------------- transfers
+  //
+  // The transfer half of Terminal.cpp lives in `transfer.js` — CopyToRemote,
+  // CopyToLocal, Source/Sink, the robust loops and the overwrite decision.
+  // These three methods are the seam between the two halves; everything they
+  // reach is implemented there.
+
+  /**
+   * The session's one TransferEngine. It is shared on purpose: "Yes to all"
+   * and "Skip all" belong to the operation, and two engines on one session
+   * would each ask the user the question the other already answered.
+   *
+   * The require is lazy because `transfer.js` imports THIS module at load
+   * time; a top-level require here would be a cycle that hands one of the two
+   * files a half-built copy of the other.
+   */
+  transferEngine(options) {
+    return require('./transfer').transferEngineFor(this, options);
+  }
+
+  /** TTerminal::CopyToRemote. */
+  copyToRemote(filesToCopy, targetDir, copyParam, params, parallelOperation) {
+    return this.transferEngine().copyToRemote(filesToCopy, targetDir, copyParam, params, parallelOperation);
+  }
+
+  /** TTerminal::CopyToLocal. */
+  copyToLocal(filesToCopy, targetDir, copyParam, params, parallelOperation) {
+    return this.transferEngine().copyToLocal(filesToCopy, targetDir, copyParam, params, parallelOperation);
+  }
+
   lockFiles(fileList) {
     return this.withTransaction(() => this.processFiles(fileList, OPERATIONS.lock,
       (name, file) => this.lockFile(name, file)));

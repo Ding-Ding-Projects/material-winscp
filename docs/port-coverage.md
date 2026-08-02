@@ -8,9 +8,9 @@ not started; a mapping pointing at a file that does not exist is reported as a
 problem. The percentage is weighted by source lines, so a large subsystem
 cannot be made to look finished by porting a handful of small files.
 
-**Logic coverage: 52.3%** of 209,889 lines that are actually code.
+**Logic coverage: 53.2%** of 209,889 lines that are actually code.
 
-Raw line coverage is 65.9% of 318,002 lines across 125 units, but that figure is
+Raw line coverage is 66.5% of 318,002 lines across 125 units, but that figure is
 distorted: 108,113 of those lines (34%) are binary resources embedded as hex in
 `.dfm` files — icon sheets and animation frames, at four DPI variants each.
 Classifying those eight units as replaced moved the raw number from 9.1% to
@@ -49,7 +49,7 @@ counted as replaced rather than transcribed.
 | 🚧 In progress | `forms/CustomScpExplorer` | forms | 14,045 | `design/renderer/ui/panels.js`<br>`design/renderer/ui/commands.js`<br>`design/renderer/ui/menus.js`<br>`design/renderer/ui/toolbars.js`<br>`design/renderer/ui/statusbar.js` | The shared explorer behaviour: panels, selection, the command layer over all 301 actions, both menu bars, the bands and the status bars. |
 | 🔁 Replaced by an equivalent | `forms/Animations120` | forms | 13,492 | `design/renderer/styles/components.css` | 120 DPI animation frame bitmaps. |
 | 🔁 Replaced by an equivalent | `forms/Animations96` | forms | 11,335 | `design/renderer/styles/components.css` | Embedded animation frame bitmaps. M3 motion is expressed in CSS, so frame sheets are not transcribed. |
-| 🚧 In progress | `core/Terminal` | core | 10,449 | `design/main/terminal.js`<br>`design/main/session.js`<br>`design/main/sync.js` | Operation lifecycle, delete/rename/move with their real confirmations and refusals, retry/skip/abort, directory cache, recursive properties, size calculation. The TRANSFER machinery (CopyToRemote/CopyToLocal/Source/Sink, TParallelOperation, the overwrite decision) is NOT ported here — queue.js owns transfers today. |
+| 🚧 In progress | `core/Terminal` | core | 10,449 | `design/main/terminal.js`<br>`design/main/session.js`<br>`design/main/sync.js`<br>`design/main/transfer.js` | Operation lifecycle, delete/rename/move with their real confirmations and refusals, retry/skip/abort, directory cache, recursive properties, size calculation. The transfer half is now transfer.js: CopyToRemote/CopyToLocal, Source/Sink and their robust reconnect loops, DirectorySource/SinkFile, CreateTargetDirectory, UpdateSource/UpdateTargetAttrs/UpdateTargetTime, TCollectedFileList, TParallelOperation and the full overwrite decision (EffectiveBatchOverwrite/ConfirmFileOverwrite/CheckRemoteFile), which queue.js now calls instead of its own simplified copy. transfer.js moves no bytes itself — queue.js supplies the byte mover — so there is one decision maker and one transfer engine. |
 | 🔁 Replaced by an equivalent | `forms/Glyphs192` | forms | 9,952 | `design/renderer/ui/commands.js` | 192 DPI variant of the same bitmap sheet (9,123 of 9,916 lines are pure hex). |
 | 🔁 Replaced by an equivalent | `forms/Glyphs144` | forms | 9,177 | `design/renderer/ui/commands.js` | 144 DPI variant of the same bitmap sheet. |
 | 🚧 In progress | `forms/Login` | forms | 8,977 | `design/renderer/ui/dialogs/login.js`<br>`design/renderer/ui/dialogs/sitetree.js` | The whole dialog: tree, three search modes, per-protocol visibility, all 33 ActionList entries wired, real session:open and configuration import/export. Four actions delegate and say so; the roughly 250 dfm captions are English only. |

@@ -187,6 +187,25 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "4b9022f", kind: 'commit', ref: "4b9022f", oid: "4b9022fe4665dda5264d8e8ad7a5636038efa9e8", date: "2026-08-02",
+    title: "Prove the installer end to end, and generate the changelog from real commits",
+    refs: ["#21", "#22", "#14"],
+    changes: [
+      { category: "removed", text: "The installer is no longer a claim. Built (126 MB Setup.exe), RUN, and the result verified: %LOCALAPPDATA%\\winscp_material with Update.exe, app-0.1.0 and the packages folder Squirrel keeps its .nupkg in. Then the INSTALLED binary was launched and captured — design/screenshots/installed-app-01.png shows the same working Commander as a dev run. Build -> install -> run, all three observed rather than inferred." },
+      { category: "changed", text: "The changelog is now generated from `git log` by tools/changelog.js, because a hand-maintained one had already drifted seven commits behind inside a day, and the shared instructions require it current in every project-changing task. Every entry carries the FULL object name, verified with `git cat-file` before it is written — a wrong sha is worse than none, since it sends a reader somewhere confidently irrelevant. Bilingual commit bodies are split so the Cantonese half is real copy from the commit rather than a machine translation: 14 of 17 entries carry it." },
+      { category: "changed", text: "Two of my own tests were wrong, in opposite directions." },
+      { category: "fixed", text: "The generator invented a bullet reading \"No detail was recorded in the commit message\" — which broke the test proving the viewer renders \"No recorded changes\", because no entry was empty any more. Two components explaining the same absence is how they eventually disagree, so the generator now emits an empty list and the viewer keeps the sentence." },
+      { category: "removed", text: "Then no-nags.test.js failed on design/renderer/ui/changelog.js:277 — the changelog entry describing no-nags.test.js. The word \"donation\" near the word \"startup\", in a bullet quoting the commit that REMOVED the donation prompt. Perfectly circular: the test caught the project being honest about the thing the test exists to enforce. The prose heuristics now skip the historical record, and a dedicated check strips every string literal from changelog.js and asserts its CODE contains no promotional identifier — history may say \"donation\", the module may not do anything about it." },
+    ],
+    changesYue: [
+      { category: "changed", text: "安裝檔唔再係「我話佢得」:真係 build 咗、真係行過、真係裝到,連裝完之後個 exe 都開返出嚟影咗相。build → 裝 → 行,三步都親眼睇過。" },
+      { category: "changed", text: "更新日誌而家由 git log 生成,因為人手維護嗰個一日之內已經落後咗七個 commit。 每個 sha 寫入之前都用 git cat-file 驗過:錯嘅 sha 衰過冇,因為佢會好自信咁 send 個讀者去一個完全唔關事嘅地方。" },
+      { category: "changed", text: "我自己兩個測試都寫錯咗,仲要係相反方向。其中一個仲要幾好笑:no-nags 測試 捉到咗嗰句 changelog,而嗰句 changelog 講嘅正正就係 no-nags 測試本身。" },
+      { category: "changed", text: "1,830 tests, 1,829 pass, 0 fail." },
+      { category: "changed", text: "Refs #21 #22 #14" },
+    ],
+  },
+  {
     id: "7756e63", kind: 'commit', ref: "7756e63", oid: "7756e633dcd22d947f81494a149932533c84f731", date: "2026-08-02",
     title: "Reconcile 24,361 lines the ledger was counting as never written",
     changes: [

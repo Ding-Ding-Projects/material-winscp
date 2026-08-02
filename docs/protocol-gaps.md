@@ -16,8 +16,7 @@ Last reviewed against `ssh2` 1.17.0 and `basic-ftp` 5.3.1.
 | Gap | WinSCP option affected | Status | Consequence today |
 |---|---|---|---|
 | **GSSAPI / Kerberos** authentication and key exchange | `authGSSAPI`, `authGSSAPIKEX`, `gssapiFwdTGT`, `gssLibList` | ⬜ Not available | `ssh2` implements no GSSAPI mechanism. The flags are accepted, a warning is logged, and the remaining authentication methods are tried. Single-sign-on against a Kerberos realm does not work. |
-| **SFTP protocol versions 4–6** | `sftpMaxVersion`, `sftpBugs.*` | ⬜ Not available | `ssh2`'s client hard-codes SFTP version 3. The version selector and the v4+ bug workarounds have no effect. Version 3 is what the overwhelming majority of servers negotiate anyway, but this is a genuine capability difference. |
-| **SFTP hash extensions** (`check-file`, `md5-hash@openssh.com`) | checksum calculation | 🔁 Worked around | `ssh2` exposes no generic extended-request API. `checksum()` falls back to `sha256sum` / `md5sum` over `exec`, so the feature works — but it needs shell access, which SFTP-only accounts may not have. |
+| **SFTP protocol versions 4–6** | `sftpMaxVersion` | ⬜ Not available | `ssh2`'s client hard-codes `SSH_FXP_INIT` at version 3 and parses only the version 3 attribute block, so raising the number would make it misread every reply. `sftpMaxVersion` therefore selects nothing. What *is* ported (`design/main/protocols/sftp-extensions.js`) is everything that decision feeds: the version ceiling WinSCP would ask for per server, the `supported`/`supported2` capability structures, the version-dependent capability answers, and the version-dependent workarounds. They are exercised by tests but a real server will never drive them, because it will never be offered a version above 3. The user's practical loss is SFTP 6's `SSH_FXP_LINK` (hard links without the OpenSSH extension), the `SSH_FXP_RENAME` overwrite flag, and named owner/group attributes. |
 | **Request pipelining depth** | `sftpDownloadQueue`, `sftpUploadQueue` | ⬜ Not available | `ssh2` pipelines only inside `fastGet`/`fastPut`, which cannot resume or report progress. The streaming path issues one request at a time. Throughput on high-latency links is lower than WinSCP's. A warning is logged rather than pretending the setting applies. |
 | **`ed448` host keys**, **RSA key exchange** | `hostKeyList`, `kexList` | ⬜ Not offered | Not in `ssh2`'s supported algorithm lists. Logged as not offered rather than silently dropped from the preference order. |
 | **`des`, `blowfish`, `arcfour` ciphers** | `cipherList` | ➖ Deliberate | Unsupported by `ssh2`, and all three sit below the `WARN` marker in WinSCP's own defaults. Not a gap worth closing. |
@@ -27,6 +26,20 @@ Last reviewed against `ssh2` 1.17.0 and `basic-ftp` 5.3.1.
 high-water mark, which genuinely is the SFTP read packet size in this library;
 `rekeyTime` and `rekeyData` are enforced by driving `Protocol.rekey()` on a
 timer and on socket byte volume, because `ssh2` exposes no rekey configuration.
+When the site leaves `sftpMaxPacketSize` at zero the server's own ceiling is
+used instead — `limits@openssh.com` when offered, otherwise OpenSSH's 256 kB
+sftp-server limit or Momentum's 32 kB — because a packet above it is dropped and
+the transfer then stalls with nothing in the log to explain it. SFTP 3
+timestamps are read **signed**, so a file dated before 1970 reports its real
+date instead of a day in 2106.
+The host-key preference order is PuTTY's, not a flat list: certificates first
+when a CA is configured, then algorithms we already hold a key for, then
+everything else — so a server offering several key types does not make the user
+verify a second fingerprint for a host they already trust. `sftpBugs.symlink`
+and `sftpBugs.signedTS` are honoured, and the symlink argument order is decided
+from WinSCP's server list rather than `ssh2`'s narrower one (`ssh2` reverses for
+OpenSSH and dropbear; WinSCP also reverses for Sun SSH and ProFTPD, and stops
+reversing for ProFTPD 1.x at SFTP 6).
 
 **What the end-to-end run could not reach, and why.**
 `test/e2e-sftp.test.js` drives both adapters against a real `ssh2` server over a
@@ -35,14 +48,45 @@ rather than asserted: the server records every READ offset, and a streamed
 download produces one contiguous, strictly increasing sequence — exactly the
 shape a one-request-at-a-time client makes.
 
-Three client capabilities remain **unverified by any test**, and that is a
-limitation of the test harness rather than a limitation the user meets:
+**Closed: the SFTP extension layer.** Three rows used to sit here saying that
+`statvfs@openssh.com`, `hardlink@openssh.com` and `posix-rename@openssh.com`
+could not be *tested*, because `ssh2`'s server-mode SFTP hard-codes its VERSION
+reply (`SERVER_VERSION_BUFFER` in `lib/protocol/SFTP.js`) with no extension
+pairs, and a fourth said the hash extensions could not be *implemented*, because
+`ssh2` exposes no generic extended-request API.
 
-| Untested path | Why the harness cannot reach it |
+Both are now false. `design/main/protocols/sftp-extensions.js` builds
+`SSH_FXP_EXTENDED` packets itself and writes them through the SFTP channel with
+the same SSH window accounting `ssh2` performs, and observes the raw
+`SSH_FXP_EXTENDED_REPLY` bodies that `ssh2` parses only for the three replies it
+knows and discards for everything else. `test/sftp-extensions.test.js` drives
+all of it against a **real SFTP server over a real socket** — one written by
+hand, because a server that can advertise an extension is exactly what `ssh2`'s
+server mode cannot be. Working end to end: `statvfs@openssh.com`,
+`space-available` (including ProFTPD's 16-bit allocation-unit field and the
+field being absent entirely), `hardlink@openssh.com`, `posix-rename@openssh.com`,
+`fsync@openssh.com`, `limits@openssh.com`, `copy-file`, `copy-data`,
+`check-file` / `check-file-name` (whole-file and blocked), `md5-hash`,
+`owner-group-query@generic-extensions`, and `vendor-id`.
+
+`checksum()` therefore no longer needs shell access when the server offers a
+hash extension: `check-file` is tried first, then `md5-hash`, and only then
+`sha256sum` over `exec`. An SFTP-only account on a server offering neither now
+gets a refusal that names the reason instead of a shell error.
+
+The raw path is **guarded, not assumed**: it reaches into `ssh2` internals
+(`SFTP.prototype.push`, the channel's outgoing window, the request table). If
+any of those move in a future `ssh2`, `SftpExtensions.available` becomes false,
+every raw request refuses with a plain message, and the typed `ext_openssh_*`
+methods `ssh2` does expose keep working. It fails closed rather than corrupting
+the channel.
+
+| Still unverified against a real server | Why |
 |---|---|
-| `spaceInfo()` via `statvfs@openssh.com` | `ssh2`'s server-mode SFTP hard-codes its VERSION reply (`SERVER_VERSION_BUFFER` in `lib/protocol/SFTP.js`) with **no extension pairs**, so a test server physically cannot advertise an extension. The client refuses the request unless the server advertised it, so the code path cannot be entered against this server. The adapter reports `caps.spaceInfo === false` and `spaceInfo()` returns `null` — both asserted — but the branch that runs against a real OpenSSH server is exercised by nothing. |
-| `hardlink()` via `hardlink@openssh.com` | Same cause. The refusal path is asserted; the success path is not. |
-| `posix-rename@openssh.com` | Same cause. `serverInfo.posixRename` is always `false` here. |
+| `expand-path@openssh.com`, `home-directory` | Implemented, and refused correctly when the server did not announce them, but no test drives their success path — they have no consumer in the adapter yet, so a test would assert only the module. |
+| `lsetstat@openssh.com` reaching a user | The request is implemented and covered end to end, but `setTimes()` and `setRights()` still use plain `SETSTAT`, which **follows a symbolic link**. Preserving a link's own timestamp therefore rewrites its target's instead. Routing those two through `lsetstat` when the path is a link, and only then, is adapter work that has to land with a test for the follow-vs-not-follow difference. |
+| `copyRemote()` reaching a user | The adapter method is implemented and covered, but `queue.js` still performs a remote copy by streaming the file down and back up; nothing calls `copyRemote()`. Until `queue.js` routes `side === 'remote-copy'` through it, `caps.copyRemote` only gates the command rather than changing how it runs. |
+| `security.tryFtpWhenSshFails` | `shouldSuggestFtp()` honours it and `SshTransport.ftpSuggestion()` passes the adapter's option bag, but `session.js` does not yet put the preference into that bag, so the option currently always reads as its default. |
 
 Also outside the run: proxies (HTTP / SOCKS4 / SOCKS5 / telnet / local command),
 SSH tunnelling, the SSH agent path (deliberately disabled so the suite never
@@ -113,6 +157,17 @@ verifies the SigV4 signature of every request (`test/e2e-s3.test.js`).
 |---|---|---|
 | **Hidden / system attributes** | 🔁 Worked around | No Node API exposes `FILE_ATTRIBUTE_HIDDEN`. Attributes come from one `attrib /D` invocation per directory, degrading to `fs.Stats` if that fails. |
 | **Recycle bin outside Electron** | ➖ By design | `shell.trashItem` needs the Electron runtime. Outside it, a recycle-bin delete **throws rather than deleting permanently** unless the caller explicitly opts into a permanent fallback — silently bypassing the recycle bin is how people lose files. |
+| **Clearing the archive attribute after an upload** | ⬜ Not available | WinSCP's "set archive bit / clear the archive attribute" (`TCopyParamType::ClearArchive`) calls `FileSetAttr` on the uploaded local file so an incremental-backup workflow can tell what has already been sent. No Node API writes `FILE_ATTRIBUTE_ARCHIVE`, and the local adapter's `setRights` only models the POSIX bits. The option is accepted, the transfer is unaffected, and `design/main/transfer.js` **logs that it could not clear the attribute** for each file rather than silently pretending it did. The user's consequence: a backup script keyed on the archive bit will keep re-selecting files this application has already uploaded. |
+
+**A note on the transfer engine.** `design/main/transfer.js` is the port of
+Terminal.cpp's transfer half — CopyToRemote/CopyToLocal, Source/Sink, the
+robust reconnect loops, TParallelOperation and the overwrite decision. It
+deliberately moves no bytes: `queue.js` owns the streams, the throttle and the
+text conversion, and supplies the byte mover the engine hands its resolved plan
+to. Anything on this page about a protocol's resume, ranged-read or positioned-
+write support therefore constrains the engine too — `caps.resume` is what
+decides whether a `.filepart` upload, an Append button or a split-one-file
+transfer is offered at all.
 
 ## Windows shell integration (`dragext/`, `windows/Setup.cpp`)
 

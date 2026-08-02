@@ -20,6 +20,7 @@ const { EventEmitter } = require('events');
 
 const { Client } = require('ssh2');
 const { Adapter, entry } = require('./base');
+const ext = require('./sftp-extensions');
 
 // ssh2 validates every algorithm name against its own supported list and throws
 // on anything it does not know, so WinSCP's families are filtered against it.
@@ -374,9 +375,63 @@ class SshTransport extends EventEmitter {
     this.connected = false;
     this._rekeyTimer = null;
     this._rekeyBytes = 0;
+    this._closing = false;
+    this._storedCredentialsTried = false;
+    this._authenticating = false;
+    this._authenticationCancelled = false;
+    this._authenticationLog = [];
+    this.banners = [];
+    this.hostKeyAlgorithm = null;
+    this.lastError = null;
   }
 
   log(level, message) { this.emit('log', { level, message }); }
+
+  /**
+   * The server's identification, minus the `SSH-2.0-` prefix — the same string
+   * WinSCP calls `SshImplementation` and keys every workaround on.
+   */
+  get sshImplementation() {
+    const proto = this.client && this.client._protocol;
+    const raw = proto && proto._remoteIdentRaw;
+    if (!raw) return '';
+    const text = Buffer.isBuffer(raw) ? raw.toString('latin1') : String(raw);
+    return text.replace(/^SSH-\d+\.\d+-/, '');
+  }
+
+  /** Which known-broken server this is, for the workaround matrix. */
+  get implementation() { return ext.detectSshImplementation(this.sshImplementation); }
+
+  /**
+   * Classify a failure the way `TSecureShell` does, and remember it. Callers
+   * decide whether to reconnect from `retriable` and whether to stop asking for
+   * credentials from `authenticationHopeless` — a distinction that matters,
+   * because a server counting failed attempts will lock the account out if we
+   * treat "wrong password" as "try again".
+   */
+  classify(error) {
+    const info = ext.classifySshError(error, {
+      hostName: this.session.hostName,
+      storedCredentialsTried: this._storedCredentialsTried,
+      cancelled: this._authenticationCancelled,
+      closing: this._closing,
+    });
+    if (this._authenticating && info.kind === 'unknown' && this._authenticationLog.length) {
+      // WinSCP's Init(): an unexplained failure during authentication is
+      // reported with the authentication log attached, because the log is the
+      // only thing that says which method the server actually refused.
+      info.kind = 'authentication';
+      info.message = `Authentication log (see session log for details):\n${this._authenticationLog.join('\n')}\n`;
+      info.authenticationHopeless = false;
+    }
+    this.lastError = info;
+    return info;
+  }
+
+  /** Whether this failure justifies probing port 21 (`TSecureShell::TryFtp`). */
+  ftpSuggestion(classification) {
+    return ext.shouldSuggestFtp(this.session, classification || this.lastError || {}, this.options);
+  }
 
   get timeoutMs() { return Math.max(1, Number(this.session.timeout) || 15) * 1000; }
 
@@ -386,26 +441,44 @@ class SshTransport extends EventEmitter {
     const port = Number(s.portNumber) || 22;
     if (!host) throw new Error('The session has no host name');
 
-    let sock;
-    if (s.tunnel) {
-      sock = await this._openTunnel(host, port);
-    } else {
-      sock = await openSocket(s, host, port, this.timeoutMs, (l, m) => this.log(l, m));
-    }
-    this.socket = sock;
+    // Everything from opening the socket to being authenticated is classified,
+    // because the two failures a user hits most — "nothing is listening" and
+    // "your password is wrong" — arrive from opposite ends of that range and
+    // need opposite answers from the reconnect logic.
+    try {
+      let sock;
+      if (s.tunnel) {
+        sock = await this._openTunnel(host, port);
+      } else {
+        sock = await openSocket(s, host, port, this.timeoutMs, (l, m) => this.log(l, m));
+      }
+      this.socket = sock;
 
-    this.client = await this._authenticate({
-      label: 'session',
-      host,
-      port,
-      username: s.userName,
-      password: s.password,
-      publicKeyFile: s.publicKeyFile,
-      passphrase: s.passphrase,
-      knownHostKey: s.hostKey,
-    }, sock);
+      this.client = await this._authenticate({
+        label: 'session',
+        host,
+        port,
+        username: s.userName,
+        password: s.password,
+        publicKeyFile: s.publicKeyFile,
+        passphrase: s.passphrase,
+        knownHostKey: s.hostKey,
+      }, sock);
+    } catch (e) {
+      // `error.ssh` is what the session layer reads to decide whether
+      // reconnecting could help and whether asking for the password again is
+      // worth anything at all.
+      const info = this.classify(e);
+      e.ssh = info;
+      e.ftpSuggestion = this.ftpSuggestion(info);
+      if (info.message && info.message !== e.message) {
+        this.log('error', info.message);
+      }
+      throw e;
+    }
 
     this.connected = true;
+    this._authenticating = false;
     this._startRekeyPolicy();
     return this;
   }
@@ -512,11 +585,22 @@ class SshTransport extends EventEmitter {
     const algorithms = {};
     const cipher = algorithmList(s.cipherList, CIPHERS, SUPPORTED && SUPPORTED.cipher);
     const kex = algorithmList(s.kexList, KEXES, SUPPORTED && SUPPORTED.kex);
-    const hostKey = algorithmList(s.hostKeyList, HOSTKEYS, SUPPORTED && SUPPORTED.serverHostKey);
     if (cipher && cipher.list.length) algorithms.cipher = cipher.list;
     if (kex && kex.list.length) algorithms.kex = kex.list;
-    if (hostKey && hostKey.list.length) algorithms.serverHostKey = hostKey.list;
-    for (const [what, res] of [['cipher', cipher], ['key exchange', kex], ['host key', hostKey]]) {
+
+    // Host keys get PuTTY's three-pass ordering rather than a flat expansion:
+    // an algorithm we already hold a key for is offered ahead of one we do not,
+    // so a server with several key types does not make the user verify a second
+    // fingerprint for a host they have already trusted.
+    const hostKey = this._hostKeyOrder(profile);
+    if (hostKey.list.length) algorithms.serverHostKey = hostKey.list;
+    if (hostKey.belowWarnThreshold.length) {
+      this.log('debug', `Not offering host key ${hostKey.belowWarnThreshold.join(', ')} — below the warning threshold`);
+    }
+    if (hostKey.dropped.length) {
+      this.log('debug', `Not offering host key ${hostKey.dropped.join(', ')} — this build's SSH library does not implement it`);
+    }
+    for (const [what, res] of [['cipher', cipher], ['key exchange', kex]]) {
       if (res && res.dropped.length) {
         this.log('debug', `Not offering ${what} ${res.dropped.join(', ')} — unsupported or below the warning threshold`);
       }
@@ -534,14 +618,22 @@ class SshTransport extends EventEmitter {
     }
 
     const auths = this._authOrder(profile);
+    this._authenticating = true;
     cfg.authHandler = (methodsLeft, partialSuccess, callback) => {
       while (auths.length) {
         const next = auths.shift();
         if (methodsLeft && !methodsLeft.includes(next.type === 'agent' ? 'publickey' : next.type)) continue;
         this.log('debug', `${profile.label} authentication: trying ${next.label}`);
+        this._authenticationLog.push(`Trying ${next.label}`);
+        // Remembering that a *stored* credential was offered is what lets the
+        // failure be reported as "authentication failed" rather than
+        // "credentials were not specified" — the difference between telling the
+        // user their password is wrong and telling them to type one.
+        if (next.type === 'password' || next.type === 'publickey') this._storedCredentialsTried = true;
         return callback(next.auth);
       }
       this.log('error', `${profile.label} authentication: no methods left`);
+      this._authenticationLog.push('No authentication methods left');
       return callback(false);
     };
 
@@ -549,6 +641,7 @@ class SshTransport extends EventEmitter {
       const onError = (e) => { cleanup(); reject(e); };
       const onReady = () => {
         cleanup();
+        this._authenticating = false;
         this.log('info', `${profile.label} authenticated as ${cfg.username}@${hostPort}`);
         resolve(client);
       };
@@ -558,12 +651,89 @@ class SshTransport extends EventEmitter {
       };
       client.on('error', onError);
       client.on('ready', onReady);
-      client.on('banner', (msg) => this.log('info', `Server banner: ${String(msg).trim()}`));
+      client.on('banner', (msg) => this._banner(profile, msg));
+      client.on('handshake', (info) => {
+        if (profile.label === 'session' && info && info.serverHostKey) {
+          this.hostKeyAlgorithm = info.serverHostKey;
+          this.log('debug', `Negotiated host key algorithm ${info.serverHostKey}`);
+          const better = ext.betterHostKeyAlgorithms(
+            this._lastHostKeyOrder || [], info.serverHostKey, this._hasCachedHostKey(profile));
+          if (better.length) {
+            // PuTTY's cross-certification hint: the user prefers these more,
+            // but has no key for them, so the next connection may well pick a
+            // different type and ask about a fingerprint all over again.
+            this.log('info', `No host key is known for the preferred algorithm(s) ${better.join(', ')}; the server chose ${info.serverHostKey}`);
+          }
+        }
+      });
       client.on('close', () => {
         if (profile.label === 'session') { this.connected = false; this.emit('close'); }
       });
       client.connect(cfg);
     });
+  }
+
+  /**
+   * PuTTY's host-key preference resolution, driven by the site's own list and
+   * by whichever key types we already trust for this host.
+   */
+  _hostKeyOrder(profile) {
+    const s = this.session;
+    const supported = (SUPPORTED && SUPPORTED.serverHostKey) || null;
+    const resolved = ext.resolveHostKeyOrder(s.hostKeyList, {
+      supported,
+      preferKnown: s.preferKnownHostKeys !== false,
+      acceptCertificates: !!s.acceptHostKeyCertificates,
+      hasCachedKey: this._hasCachedHostKey(profile),
+    });
+    this._lastHostKeyOrder = resolved.order;
+    return resolved;
+  }
+
+  /**
+   * "Do we already trust a key of this type for this host?" — from the site's
+   * configured fingerprint and from whatever known-hosts store the caller
+   * injected. Answering `false` is always safe; it only costs an extra prompt.
+   */
+  _hasCachedHostKey(profile) {
+    const configured = String(profile.knownHostKey || '').split(/[;,]/).map((v) => v.trim()).filter(Boolean);
+    const types = new Set();
+    for (const fp of configured) {
+      const type = ext.keyTypeFromFingerprint(fp);
+      if (type) types.add(type);
+    }
+    const lookup = this.options.knownHostKeyTypes;
+    if (typeof lookup === 'function') {
+      let extra = [];
+      try { extra = lookup(`${profile.host}:${profile.port}`) || []; } catch { extra = []; }
+      for (const t of extra) types.add(t);
+    }
+    return (algorithm) => types.has(algorithm);
+  }
+
+  /**
+   * `TSecureShell::DisplayBanner`. A banner that is only whitespace is dropped —
+   * PuTTY calls back with a bare CRLF when the real banner had none, and
+   * showing the user an empty dialog is worse than showing nothing.
+   */
+  _banner(profile, message) {
+    const text = String(message == null ? '' : message);
+    if (!text.trim()) return;
+    this.banners.push({ leg: profile.label, text });
+    this.log('info', `Server banner: ${text.trim()}`);
+    const policy = this.options.bannerPolicy;
+    const sessionKey = this.options.sessionKey || `${profile.host}:${profile.port}`;
+    let show = true;
+    if (policy && typeof policy.shouldShow === 'function') {
+      try { show = policy.shouldShow(sessionKey, text); } catch { show = true; }
+    }
+    // The established `banner` contract across this app is the banner TEXT:
+    // session.js forwards the first argument straight to the renderer, which
+    // puts it in a notification and a <pre>. Emitting the decision object as
+    // the first argument would put "[object Object]" in front of the user, so
+    // the text leads and the decision rides along as a second argument for a
+    // listener that wants it.
+    this.emit('banner', text, { leg: profile.label, sessionKey, show, hash: ext.bannerHash(text) });
   }
 
   /** WinSCP's order: none, agent keys, a key file, keyboard-interactive, password. */
@@ -623,16 +793,31 @@ class SshTransport extends EventEmitter {
     const list = prompts || [];
     if (s.authKIPassword && profile.password && list.length === 1 && list[0].echo === false) {
       this.log('debug', 'Answering the keyboard-interactive password prompt from the stored password');
+      this._storedCredentialsTried = true;
       return finish([profile.password]);
+    }
+    // WinSCP ignores a request with no instructions and no prompts outright,
+    // rather than putting an empty dialog in front of the user.
+    if (!list.length && !String(instructions || '').trim()) {
+      this.log('debug', 'Ignoring empty SSH server authentication request');
+      return finish([]);
     }
     const handler = this.options.keyboardInteractive;
     if (typeof handler !== 'function') {
       this.log('error', 'The server asked an interactive question and no prompt handler is available');
+      this._authenticationCancelled = true;
       return finish([]);
     }
     Promise.resolve(handler({ name, instructions, lang, prompts: list, host: profile.host, port: profile.port }))
-      .then((answers) => finish(Array.isArray(answers) ? answers : []))
-      .catch((e) => { this.log('error', `The interactive prompt failed: ${e.message}`); finish([]); });
+      .then((answers) => {
+        if (!Array.isArray(answers)) this._authenticationCancelled = true;
+        finish(Array.isArray(answers) ? answers : []);
+      })
+      .catch((e) => {
+        this.log('error', `The interactive prompt failed: ${e.message}`);
+        this._authenticationCancelled = true;
+        finish([]);
+      });
   }
 
   /**
@@ -726,6 +911,9 @@ class SshTransport extends EventEmitter {
   }
 
   async disconnect() {
+    // From here an error from the server is noise about something the user has
+    // already finished with — WinSCP's PuttyFatalError logs and drops it.
+    this._closing = true;
     if (this._rekeyTimer) { clearInterval(this._rekeyTimer); this._rekeyTimer = null; }
     if (this._rekeyDataTimer) { clearInterval(this._rekeyDataTimer); this._rekeyDataTimer = null; }
     this.connected = false;
@@ -791,6 +979,23 @@ function ownerFromLongname(longname) {
 function shellQuote(s) { return `'${String(s).replace(/'/g, `'\\''`)}'`; }
 
 /**
+ * SFTP 3 declares its timestamps unsigned, and almost every server writes them
+ * signed — which is how OpenSSH stores a date before 1970. Read unsigned, such
+ * a file's modification time comes back as some day in 2106 instead, and the
+ * synchronizer then copies it in the wrong direction forever.
+ *
+ * WinSCP enables this reading for every SFTP 3 server (`sbSignedTS`, on by
+ * default) because the failure only shows up on the rare file that has such a
+ * date, and reading a *legitimate* post-2038 timestamp as negative is the same
+ * mistake in the other direction — one WinSCP accepts, since no SFTP 3 server
+ * can express such a date anyway.
+ */
+function signedSeconds(value) {
+  const n = Number(value) || 0;
+  return n >= 2147483648 && n <= 4294967295 ? n - 4294967296 : n;
+}
+
+/**
  * Normalize the two shapes a caller can hand `setTimes()`.
  *
  * The IPC layer calls it positionally — `setTimes(path, mtime, atime)` — while
@@ -851,6 +1056,23 @@ class SftpAdapter extends Adapter {
 
   _log(level, message) { this.emit('log', { level, message }); }
 
+  /** A wire timestamp in seconds, read the way this server writes them. */
+  _seconds(value) {
+    if (this.bugs && this.bugs.signedTimestamps) return signedSeconds(value);
+    return Number(value) || 0;
+  }
+
+  /**
+   * The read/write packet size for the streaming path. The site's own setting
+   * wins; otherwise the server's own ceiling applies, because a packet above it
+   * is dropped and the transfer then stalls with nothing in the log to say why.
+   */
+  _packetSize() {
+    const configured = Number(this.session.sftpMaxPacketSize) || 0;
+    if (configured > 0) return configured;
+    return (this.maxPacketSize && this.maxPacketSize.size) || 0;
+  }
+
   // ---- lifecycle -------------------------------------------------------
   async connect() {
     if (!this.transport) {
@@ -858,29 +1080,125 @@ class SftpAdapter extends Adapter {
       this._ownsTransport = true;
     }
     this.transport.on('log', (e) => this.emit('log', e));
+    this.transport.on('banner', (text, info) => this.emit('banner', text, info));
     this.transport.on('close', () => { this.connected = false; this.emit('close'); });
+    // The SSH_FXP_VERSION reply arrives before any caller can reach the SFTP
+    // channel, so the observer that captures its raw extension bytes has to be
+    // in place before the channel is opened.
+    ext.installTapSupport();
     if (!this.transport.connected) await this.transport.connect();
 
     this.sftp = await this.transport.sftp();
     this.sftp.on('error', (e) => this._log('error', `SFTP channel error: ${e.message}`));
     this.extensions = this.sftp._extensions || {};
 
-    const names = Object.keys(this.extensions);
-    if (names.length) this._log('debug', `Server SFTP extensions: ${names.join(', ')}`);
+    const ident = this.transport.sshImplementation;
+    const implementation = ext.detectSshImplementation(ident);
+    const vendor = ext.detectServerVendor(ident);
+    const version = Number.isFinite(this.sftp._version) ? this.sftp._version : 3;
+    this.sftpVersion = ext.checkNegotiatedVersion(version);
+    this.sshImplementation = ident;
+    this.implementation = implementation;
 
-    this.caps.spaceInfo = !!this.extensions['statvfs@openssh.com'];
-    this.caps.hardlink = !!this.extensions['hardlink@openssh.com'];
-    this.caps.copyRemote = !!this.extensions['copy-data'];
+    const requested = ext.resolveMaxSftpVersion(this.session.sftpMaxVersion, implementation);
+    if (version > requested) {
+      // ProFTPD issue 1200 answers with a higher version than it was asked for.
+      this._log('debug', 'Got higher version than asked for.');
+    }
+
+    // The raw VERSION bytes when the observer is in place, ssh2's UTF-8-decoded
+    // copy otherwise. The second is lossy for binary values, which is why the
+    // parser is told which one it received.
+    const raw = ext.rawVersionExtensions(this.sftp);
+    this.serverCaps = ext.parseServerExtensions(raw || this.extensions, {
+      version: this.sftpVersion,
+      log: (level, message) => this._log(level, message),
+    });
+
+    this.ext = new ext.SftpExtensions(this.sftp, {
+      caps: this.serverCaps,
+      implementation,
+      log: (level, message) => this._log(level, message),
+    });
+
+    this.bugs = ext.resolveSftpBugs({
+      implementation,
+      ident,
+      version: this.sftpVersion,
+      bugs: this.session.sftpBugs || {},
+      notUtf: this.session.notUtf,
+      supportLoaded: this.serverCaps.support.loaded,
+    });
+    this.serverAbilities = ext.resolveCapabilities({
+      caps: this.serverCaps,
+      implementation,
+      version: this.sftpVersion,
+      encrypting: !!this.session.encryptFiles,
+    });
+
+    const names = this.serverCaps.names;
+    if (names.length) this._log('debug', `Server SFTP extensions: ${names.join(', ')}`);
+    if (implementation !== 'unknown' || vendor !== 'unknown') {
+      this._log('debug', `Server identified as ${ident} (${vendor})`);
+    }
+    for (const bug of this.bugs.active) {
+      this._log('debug', `Applying workaround for ${bug.server}: ${bug.workaround}`);
+    }
+
+    // The packet ceiling comes from the server's own limits@openssh.com when it
+    // offers one — a packet above it is dropped, and the transfer then stalls
+    // with nothing in the log to say why.
+    this.serverLimits = null;
+    if (this.serverCaps.limitsV1 || implementation === 'bitvise') {
+      try { this.serverLimits = await this.ext.limits({ timeoutMs: this.transport.timeoutMs }); }
+      catch (e) { this._log('debug', `limits@openssh.com refused: ${e.message}`); }
+    }
+    this.maxPacketSize = ext.resolveMaxPacketSize({
+      configured: this.session.sftpMaxPacketSize,
+      limits: this.serverLimits,
+      implementation,
+      version: this.sftpVersion,
+      supportLoaded: this.serverCaps.support.loaded,
+      ident,
+    });
+    if (this.maxPacketSize.size > 0) {
+      this._log('debug', `Limiting packet size to ${this.maxPacketSize.size} bytes — ${this.maxPacketSize.reason}`);
+    }
+
+    this.caps.spaceInfo = this.serverAbilities.checkingSpaceAvailable;
+    this.caps.hardlink = this.serverAbilities.hardLink;
+    this.caps.copyRemote = this.serverAbilities.remoteCopy;
+    this.caps.owner = this.serverAbilities.ownerChanging;
+    this.caps.rights = this.serverAbilities.modeChanging;
+    this.caps.symlink = this.serverAbilities.symbolicLink;
+    // `checksum()` still falls back to a shell hash, so the capability stays
+    // true when the server offers no hash extension but does offer a shell.
+    this.caps.checksum = this.serverAbilities.calculatingChecksum || this.caps.exec;
 
     this.home = await this.realpath('.');
+    // WinSCP's guard against a server that answers realpath with nothing:
+    // without it the empty home is fed back into the next canonicalisation.
+    if (!this.home) this.home = '/';
     this.connected = true;
     this.serverInfo = {
       protocol: 'SFTP',
+      sftpVersion: this.sftpVersion,
       extensions: names,
       home: this.home,
-      posixRename: !!this.extensions['posix-rename@openssh.com'],
+      posixRename: this.serverAbilities.posixRename,
+      implementation,
+      vendor,
+      sshImplementation: ident,
+      software: this.serverCaps.vendor,
+      eol: this.serverCaps.eol,
+      fixedPaths: this.serverCaps.fixedPaths,
+      limits: this.serverLimits,
+      maxPacketSize: this.maxPacketSize.size,
+      abilities: this.serverAbilities,
+      workarounds: this.bugs.active,
+      extendedRequests: this.ext.available,
     };
-    this._log('info', `SFTP session ready; home directory ${this.home}`);
+    this._log('info', `SFTP version ${this.sftpVersion} session ready; home directory ${this.home}`);
     return this.serverInfo;
   }
 
@@ -939,7 +1257,7 @@ class SftpAdapter extends Adapter {
         name: row.filename,
         type,
         size: Number(a.size) || 0,
-        mtime: (Number(a.mtime) || 0) * 1000,
+        mtime: this._seconds(a.mtime) * 1000,
         rights: rightsFromMode(mode),
         owner: (names && names.owner) || (a.uid === undefined ? '' : String(a.uid)),
         group: (names && names.group) || (a.gid === undefined ? '' : String(a.gid)),
@@ -947,7 +1265,7 @@ class SftpAdapter extends Adapter {
         isSymlink,
         hidden: row.filename.startsWith('.'),
         readOnly: !(mode & 0o200),
-        raw: { mode, uid: a.uid, gid: a.gid, atime: (Number(a.atime) || 0) * 1000, longname: row.longname },
+        raw: { mode, uid: a.uid, gid: a.gid, atime: this._seconds(a.atime) * 1000, longname: row.longname },
       });
     }));
     return out;
@@ -973,7 +1291,7 @@ class SftpAdapter extends Adapter {
       name: this.basename(target),
       type,
       size,
-      mtime: (Number(lst.mtime) || 0) * 1000,
+      mtime: this._seconds(lst.mtime) * 1000,
       rights: rightsFromMode(mode),
       owner: lst.uid === undefined ? '' : String(lst.uid),
       group: lst.gid === undefined ? '' : String(lst.gid),
@@ -981,7 +1299,7 @@ class SftpAdapter extends Adapter {
       isSymlink,
       hidden: this.basename(target).startsWith('.'),
       readOnly: !(mode & 0o200),
-      raw: { path: target, mode, uid: lst.uid, gid: lst.gid, atime: (Number(lst.atime) || 0) * 1000 },
+      raw: { path: target, mode, uid: lst.uid, gid: lst.gid, atime: this._seconds(lst.atime) * 1000 },
     });
   }
 
@@ -1045,21 +1363,121 @@ class SftpAdapter extends Adapter {
     const dst = this.normalize(to);
     // POSIX rename replaces the target atomically; the plain SFTP one fails if
     // the target exists, which is why WinSCP offers the choice.
-    if (this.session.usePosixRename && this.extensions['posix-rename@openssh.com']) {
-      await this._call('ext_openssh_rename', src, dst);
+    if (this.session.usePosixRename && this.ext && this.ext.supports(ext.EXT.POSIX_RENAME)) {
+      await this.ext.posixRename(src, dst);
       return dst;
     }
     await this._call('rename', src, dst);
     return dst;
   }
 
+  /**
+   * Create a symbolic link.
+   *
+   * The argument order is the whole subtlety here: OpenSSH implemented
+   * SSH_FXP_SYMLINK with its two paths swapped relative to the specification,
+   * ProFTPD copied that deliberately, and every other server got it right. Send
+   * them the wrong way round to a correct server and the link is created *at*
+   * the target path pointing at the link name — silently, with no error, which
+   * is why it has to be decided from the server's identification rather than
+   * discovered from a failure.
+   */
   async symlink(target, linkPath) {
-    await this._call('symlink', target, this.normalize(linkPath));
+    const link = this.normalize(linkPath);
+    // ssh2 makes the same decision, but from a different test: it reverses for
+    // anything identifying as OpenSSH *or dropbear*. WinSCP reverses for
+    // OpenSSH, Sun SSH (an OpenSSH fork) and ProFTPD/mod_sftp, which followed
+    // the bug on purpose — but it has never heard of dropbear, whose SFTP
+    // subsystem is in practice OpenSSH's own sftp-server and therefore wants
+    // the reversed order too.
+    //
+    // The two lists are therefore UNIONED rather than one replacing the other:
+    // taking WinSCP's answer alone would send the specification order to a
+    // dropbear host, and SSH_FXP_SYMLINK with its arguments the wrong way round
+    // does not fail — it creates the link at the target's path, silently. Only
+    // an explicit `off` on the site's own bug switch overrides the union, which
+    // is exactly what WinSCP's asOff means.
+    const forced = String((this.session.sftpBugs || {}).symlink || 'auto').toLowerCase();
+    const libraryReverses = !!(this.sftp && this.sftp._isOpenSSH);
+    const winscpReverses = this.bugs ? this.bugs.symlinkArgumentOrderReversed : false;
+    const reversed = forced === 'off' ? false
+      : forced === 'on' ? true
+        : (winscpReverses || libraryReverses);
+    if (reversed !== libraryReverses) {
+      this._log('debug', reversed
+        ? 'We believe the server has the SFTP symlink bug; sending the target first'
+        : 'The server follows the specification for SSH_FXP_SYMLINK; sending the link name first');
+    }
+    if (reversed === libraryReverses) await this._call('symlink', target, link);
+    else await this._call('symlink', link, target);
   }
 
+  /**
+   * `hardlink@openssh.com`. The extension is *defined* with the reversed
+   * argument order — deliberately, to mirror the symlink bug — so there is no
+   * conforming spelling to fall back to.
+   */
   async hardlink(existing, linkPath) {
-    if (!this.extensions['hardlink@openssh.com']) throw new Error('The server does not offer hard links');
-    await this._call('ext_openssh_hardlink', this.normalize(existing), this.normalize(linkPath));
+    if (!this.ext) throw new Error('Not connected');
+    if (!this.caps.hardlink) throw new Error('The server does not offer hard links');
+    await this.ext.hardlink(this.normalize(existing), this.normalize(linkPath), {
+      force: this.implementation === 'bitvise',
+    });
+  }
+
+  /** Flush an open remote handle to the server's disk (`fsync@openssh.com`). */
+  async fsync(handle) {
+    if (!this.ext) throw new Error('Not connected');
+    return this.ext.fsync(handle);
+  }
+
+  /**
+   * Server-side copy, so a duplicate never travels to the client and back.
+   *
+   * `copy-file` is one request; `copy-data` needs both files open, which is why
+   * the handles are taken here. Both refuse an existing target: `copy-file`
+   * because ProFTPD and Bitvise implement it that way, and `copy-data` because
+   * the destination is opened with SSH_FXF_EXCL to match — a remote copy that
+   * silently overwrote on one server and refused on another would be the worst
+   * of both.
+   */
+  async copyRemote(from, to, opts = {}) {
+    if (!this.ext) throw new Error('Not connected');
+    if (!this.caps.copyRemote) throw new Error('The server cannot copy files on the server side');
+    const src = this.normalize(from);
+    const dst = this.normalize(to);
+    const force = this.implementation === 'bitvise';
+
+    if (this.ext.supports(ext.EXT.COPY_FILE) || force) {
+      await this.ext.copyFile(src, dst, { overwrite: !!opts.overwrite, force });
+      return dst;
+    }
+
+    let readHandle = null;
+    let writeHandle = null;
+    try {
+      readHandle = await this._call('open', src, 'r');
+      writeHandle = await this._call('open', dst, 'wx');
+      await this.ext.copyData(readHandle, writeHandle, { length: 0 });
+    } finally {
+      for (const h of [readHandle, writeHandle]) {
+        if (h) { try { await this._call('close', h); } catch { /* the session may already be gone */ } }
+      }
+    }
+    // WinSCP copies the source's permissions and modification time across,
+    // because copy-data moves bytes and nothing else.
+    if (opts.attrs !== false) {
+      try {
+        const st = await this._call('stat', src);
+        if (st && st.mode !== undefined) await this._call('chmod', dst, st.mode & 0o7777);
+        if (st && st.mtime !== undefined) {
+          await this._call('utimes', dst, Number(st.atime) || Number(st.mtime), Number(st.mtime));
+        }
+      } catch (e) {
+        this._log('debug', `Could not copy attributes to ${dst}: ${e.message}`);
+      }
+    }
+    return dst;
   }
 
   async setRights(p, rights) {
@@ -1106,7 +1524,7 @@ class SftpAdapter extends Adapter {
     if (Number.isFinite(opts.end)) options.end = Number(opts.end);
     // The stream's high-water mark *is* the SFTP read packet size in this
     // library, so the site's maximum packet size lands here.
-    const hwm = opts.highWaterMark || Number(this.session.sftpMaxPacketSize) || 0;
+    const hwm = opts.highWaterMark || this._packetSize();
     if (hwm > 0) options.highWaterMark = hwm;
     this._warnQueueDepth();
     this._log('debug', `download ${target}${options.start ? ' from offset ' + options.start : ''}`);
@@ -1139,7 +1557,7 @@ class SftpAdapter extends Adapter {
     if (start > 0) { options.flags = 'r+'; options.start = start; }
     else options.flags = opts.append ? 'a' : 'w';
     if (opts.mode !== undefined) options.mode = opts.mode;
-    const hwm = opts.highWaterMark || Number(this.session.sftpMaxPacketSize) || 0;
+    const hwm = opts.highWaterMark || this._packetSize();
     if (hwm > 0) options.highWaterMark = hwm;
     this._warnQueueDepth();
     this._log('debug', `upload ${target}${start ? ' from offset ' + start : ''}`);
@@ -1153,45 +1571,147 @@ class SftpAdapter extends Adapter {
   }
 
   /**
-   * SFTP v6 and OpenSSH both define file-hash extended requests, but the SSH
-   * library here exposes no way to send an arbitrary extended request, so the
-   * offer is logged and the hash is taken over the shell instead.
+   * A file's hash, computed by the server.
+   *
+   * Three routes, in WinSCP's order of preference: `check-file` (the SFTP
+   * extension, which negotiates the algorithm and works for an SFTP-only
+   * account), `md5-hash` (OpenSSH's older single-algorithm request), and only
+   * then a shell hash — which needs shell access the account may not have.
+   *
+   * A server that answers SSH_FX_OP_UNSUPPORTED has told us the extension is
+   * not really there despite the advertisement, so the next route is tried.
+   * Any other error is the server's answer and is reported, not swallowed.
    */
   async checksum(p, algorithm = 'sha256') {
-    const alg = String(algorithm).toLowerCase().replace(/-/g, '');
-    const offered = Object.keys(this.extensions).filter((k) => /hash|check-file/i.test(k));
-    if (offered.length) {
-      this._log('debug', `Server offers ${offered.join(', ')}, but this client can only invoke a shell hash`);
+    const target = this.normalize(p);
+    const wire = ext.checksumAlgToWire(algorithm);
+    const alg = wire.replace(/-/g, '');
+
+    if (this.ext && this.serverAbilities && this.serverAbilities.calculatingChecksum) {
+      try {
+        const res = await this.ext.checkFile(target, {
+          algorithms: [wire],
+          force: this.implementation === 'bitvise',
+        });
+        if (res.hex) {
+          if (res.algorithm && ext.checksumAlgToWire(res.algorithm) !== wire) {
+            // The extension lets the server pick from the offered list; saying
+            // which one it picked is the difference between a checksum the user
+            // can compare and one they cannot.
+            this._log('info', `The server computed ${res.algorithm} rather than ${wire}`);
+          }
+          return res.hex;
+        }
+      } catch (e) {
+        if (!ext.isOperationUnsupported(e)) throw e;
+        this._log('debug', `check-file refused: ${e.message}`);
+      }
+    }
+
+    if (this.ext && alg === 'md5' && this.ext.supports(ext.EXT.MD5_HASH)) {
+      try {
+        const res = await this.ext.md5Hash(target);
+        if (res.hex) return res.hex;
+      } catch (e) {
+        if (!ext.isOperationUnsupported(e)) throw e;
+        this._log('debug', `md5-hash refused: ${e.message}`);
+      }
+    }
+
+    if (!this.caps.exec) {
+      throw new Error('The server offers no checksum extension and this account has no shell access');
     }
     const tool = alg === 'md5' ? 'md5sum' : alg === 'sha1' ? 'sha1sum' : alg === 'sha512' ? 'sha512sum' : 'sha256sum';
-    const res = await this.transport.exec(`${tool} -- ${shellQuote(this.normalize(p))}`);
+    const res = await this.transport.exec(`${tool} -- ${shellQuote(target)}`);
     if (res.code !== 0) throw new Error(`${tool} failed: ${(res.stderr || '').trim() || 'exit code ' + res.code}`);
     const hex = /^([0-9a-f]+)\s/i.exec(res.stdout.trim());
     if (!hex) throw new Error(`${tool} produced no usable output`);
     return hex[1].toLowerCase();
   }
 
+  /**
+   * Free space, from whichever extension the server offers.
+   *
+   * `space-available` is the standard one and is preferred, exactly as WinSCP
+   * prefers it; `statvfs@openssh.com` is the fallback and carries a different
+   * set of figures — notably no per-user quota, which is why
+   * `availableToUser` is zero there rather than a guess.
+   */
   async spaceInfo(p) {
-    if (!this.extensions['statvfs@openssh.com']) return null;
-    const st = await this._call('ext_openssh_statvfs', this.normalize(p || this.home || '/'));
-    const frag = Number(st.f_frsize) || Number(st.f_bsize) || 0;
-    const total = Number(st.f_blocks) * frag;
-    const free = Number(st.f_bavail) * frag;
+    if (!this.ext || !this.caps.spaceInfo) return null;
+    const target = this.normalize(p || this.home || '/');
+    const force = this.implementation === 'bitvise';
+
+    if (this.ext.supports(ext.EXT.SPACE_AVAILABLE) || force) {
+      try {
+        const s = await this.ext.spaceAvailable(target, { force });
+        return {
+          path: target,
+          total: s.bytesOnDevice,
+          free: s.unusedBytesAvailableToUser || s.unusedBytesOnDevice,
+          used: s.bytesOnDevice - s.unusedBytesOnDevice,
+          blockSize: s.bytesPerAllocationUnit,
+          files: 0,
+          filesFree: 0,
+          quotaTotal: s.bytesAvailableToUser,
+          quotaFree: s.unusedBytesAvailableToUser,
+          source: 'space-available',
+        };
+      } catch (e) {
+        if (!ext.isOperationUnsupported(e)) throw e;
+        this._log('debug', `space-available refused: ${e.message}`);
+      }
+    }
+
+    if (!this.serverCaps.statVfsV2 && !force) return null;
+    const st = await this.ext.statvfs(target, { force });
+    for (const line of [
+      `Block size: ${st.blockSize}`,
+      `Fundamental block size: ${st.fundamentalBlockSize}`,
+      `Total blocks: ${st.blocks}`,
+      `Free blocks: ${st.freeBlocks}`,
+      `Free blocks for non-root: ${st.availableBlocks}`,
+      `Total file inodes: ${st.fileInodes}`,
+      `Free file inodes: ${st.freeFileInodes}`,
+      `Free file inodes for non-root: ${st.availableFileInodes}`,
+      `Flags: ${st.flagNames.join(',')}`,
+      `Max name length: ${st.nameMax}`,
+    ]) this._log('debug', line);
+
     return {
-      path: this.normalize(p || this.home || '/'),
-      total,
-      free,
-      used: total - Number(st.f_bfree) * frag,
-      blockSize: frag,
-      files: Number(st.f_files) || 0,
-      filesFree: Number(st.f_ffree) || 0,
+      path: target,
+      total: st.total,
+      free: st.unusedAvailableToUser,
+      used: st.total - st.unused,
+      blockSize: st.bytesPerAllocationUnit,
+      files: st.fileInodes,
+      filesFree: st.freeFileInodes,
+      readOnly: st.readOnly,
+      nameMax: st.nameMax,
+      source: 'statvfs@openssh.com',
     };
+  }
+
+  /**
+   * The owner and group names the server will accept, when it offers the
+   * generic-extensions query. Without it the properties dialog can only take a
+   * numeric id, which is what SFTP 3 carries anyway.
+   */
+  async listUsersGroups() {
+    if (!this.ext || !this.serverAbilities || !this.serverAbilities.userGroupListing) return null;
+    const [owners, groups] = await Promise.all([
+      this.ext.ownerGroupQuery('owners').catch(() => null),
+      this.ext.ownerGroupQuery('groups').catch(() => null),
+    ]);
+    if (!owners && !groups) return null;
+    return { owners: owners || [], groups: groups || [] };
   }
 }
 
 module.exports = {
   SftpAdapter,
   SshTransport,
+  extensions: ext,
   fingerprints,
   algorithmList,
   parseDataSize,
@@ -1201,6 +1721,7 @@ module.exports = {
   normalizeTimes,
   openSocket,
   agentPath,
+  signedSeconds,
   CIPHERS,
   KEXES,
   HOSTKEYS,

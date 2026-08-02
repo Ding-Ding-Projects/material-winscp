@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "description": "A Material Design 3 remake of WinSCP - SFTP, SCP, FTP/FTPS, WebDAV and S3 file transfer for Windows.",
   "main": "design/main/main.js",
+  "bin": {
+    "winscp-com": "bin/winscp-com.js"
+  },
   "author": "Ding-Ding-Projects",
   "license": "GPL-3.0-or-later",
   "private": false,

@@ -183,13 +183,14 @@
     },
     "core/Terminal": {
       "status": "partial",
-      "progress": 0.45,
+      "progress": 0.62,
       "targets": [
         "design/main/terminal.js",
         "design/main/session.js",
-        "design/main/sync.js"
+        "design/main/sync.js",
+        "design/main/transfer.js"
       ],
-      "note": "Operation lifecycle, delete/rename/move with their real confirmations and refusals, retry/skip/abort, directory cache, recursive properties, size calculation. The TRANSFER machinery (CopyToRemote/CopyToLocal/Source/Sink, TParallelOperation, the overwrite decision) is NOT ported here — queue.js owns transfers today."
+      "note": "Operation lifecycle, delete/rename/move with their real confirmations and refusals, retry/skip/abort, directory cache, recursive properties, size calculation. The transfer half is now transfer.js: CopyToRemote/CopyToLocal, Source/Sink and their robust reconnect loops, DirectorySource/SinkFile, CreateTargetDirectory, UpdateSource/UpdateTargetAttrs/UpdateTargetTime, TCollectedFileList, TParallelOperation and the full overwrite decision (EffectiveBatchOverwrite/ConfirmFileOverwrite/CheckRemoteFile), which queue.js now calls instead of its own simplified copy. transfer.js moves no bytes itself — queue.js supplies the byte mover — so there is one decision maker and one transfer engine."
     },
     "windows/TerminalManager": {
       "status": "partial",
