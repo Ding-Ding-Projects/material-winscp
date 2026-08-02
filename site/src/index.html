@@ -74,7 +74,15 @@
 <!-- Dim sum surprise: non-blocking, auto-dismissing, never steals focus. -->
 <div id="dimsum-slot" aria-live="polite"></div>
 
+<!-- content.js is a classic script so it runs first and defines window.SITE_DATA.
+     app.js is a module: its relative imports resolve against its own URL, so
+     lib/ ships under whatever base prefix this deployment has without the build
+     substituting a placeholder into every import. -->
 <script src="{{BASE}}content.js"></script>
-<script src="{{BASE}}app.js"></script>
+<script type="module" src="{{BASE}}app.js"></script>
+<noscript>
+  <p class="noscript">This documentation site renders its articles in the browser, so it needs
+  JavaScript. Every article is also readable in the repository under <code>docs/</code>.</p>
+</noscript>
 </body>
 </html>

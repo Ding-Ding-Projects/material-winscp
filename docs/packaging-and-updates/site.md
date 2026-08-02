@@ -48,6 +48,8 @@ It reads the **emitted bytes**, never the configuration — a config that merely
 | `index.html` exists and references `app.css`, `app.js` and `content.js` **with the prefix** | Those three are the page. |
 | No root-absolute URL lacks the base prefix, in any emitted HTML, CSS or JS | The green-deploy-404. |
 | Every referenced local file exists in the output | A reference to a file that was never built. |
+| Every ES module `import` resolves to an emitted file, relative to its importer | A module import is a fetch that appears in no `src=`, `href=` or `url()`. One missing `lib/` file fails the whole module graph — a blank page, not a degraded one. |
+| No bare specifier (`node:fs`, a package name) and no cross-origin import | Works in Node, silently does not work in a browser. |
 | No `{{PLACEHOLDER}}` survived | A text file that reached the output down a path that does not substitute. |
 | Nothing fetches another host — `src`, `<link href>`, `url()`, `@import` | Bundle everything locally. |
 | `content.js` parses, and was generated for the same base as the markup | Half the links resolving is worse than none. |
@@ -61,21 +63,45 @@ died `ENOENT` a dozen lines before its own "referenced file is missing from the
 output" report — which is how a site with no client code survived in the tree
 while `--verify` looked like it was passing.
 
-## Current state — the client application is not written yet
+## The client application
 
-`site/src/` contains `index.html` and `favicon.svg`. **`app.js` and `app.css`
-have never existed**, so today a verify run says exactly that:
+`site/src/` now contains `app.js`, `app.css` and `lib/` — the Material 3 client
+that renders the generated articles. Its own article is
+[the site's client application](site-app.md); this one stays about the builder.
+
+A verify run today says:
 
 ```
-VERIFY FAILED
-  ✖ referenced file is missing from the output: /material-winscp/app.js (referenced by index.html)
-  ✖ referenced file is missing from the output: /material-winscp/app.css (referenced by index.html)
-
-2 problems across 11 emitted files.
+VERIFY OK
+  ✔ every fetched URL carries the base prefix /material-winscp/
+  ✔ every referenced local file exists in the output
+  ✔ no placeholder survived the build
+  ✔ no remote subresource is fetched at runtime
+  ✔ 12 categories, 58 articles, 6 bundled images, 27 files
 ```
 
-That is the verifier working, not failing. The deploy is gated on it, so the
-site cannot be published in this state.
+It did not always. Until the application was written, the same command reported
+`app.js` and `app.css` missing and exited 1 — and before the verifier stopped
+throwing, it died `ENOENT` without printing a report at all.
+
+## The installer download button
+
+The landing page carries a download button **only when the builder can prove
+what it points at**, and the proof is a manifest:
+
+| | |
+| --- | --- |
+| Where it comes from | `gh release view --json tagName,name,publishedAt,isDraft,assets`, run by `pages.yml` into `site/release.json` |
+| Where the builder looks | `--release <file>`, then `SITE_RELEASE`, then `site/release.json` |
+| Committed? | **No.** It is git-ignored. A checked-in copy is stale the moment the next release ships, and a stale download link 404s. |
+| Validation | Every asset URL must start with `<repository>/releases/download/<tag>/`. Anything else — a mutable `latest` link, another host, a draft — is dropped. |
+| No manifest | No `release` data in `content.js`, so the page shows **no button** and says it will not guess a URL. |
+
+The failure this design refuses is the tempting one: assembling
+`.../releases/latest/download/Setup.exe` out of the version number. That link
+builds green, deploys green, and 404s the first time an asset is named anything
+other than what was guessed — and a download button that does not download is
+worse than no button, because the reader concludes the project does not ship.
 
 ## Publishing
 
@@ -136,22 +162,31 @@ flowchart TD
 
 ## Verification
 
-Verified locally, with real output, at the time of writing:
+Verified locally, with real output, at the time of writing, on Node 26.5.1 and
+on Node 22.23.2 (the version CI pins):
 
-- `node site/build.js --verify` builds 12 categories and 56 articles, then
-  reports the two missing client files above and exits **1**. Before the
-  collecting rewrite the same command died with an `ENOENT` stack trace and
-  printed no report at all.
-- `node --test test/site-build.test.js` — **21 tests, 21 passing.** Against the
-  previous `site/build.js`, 20 of the 21 fail; the one that passes both ways is
-  the regression guard asserting the real emitted `index.html` carries the
-  prefix, and it is not evidence for the change.
+- `node site/build.js --verify` builds 12 categories and 58 articles and exits
+  **0** with `VERIFY OK`. Before the client application existed the same command
+  reported both missing files and exited 1; before the collecting rewrite it
+  died with an `ENOENT` stack trace and printed no report at all.
+- `node --test test/site-build.test.js` — **31 tests, 31 passing** (was 22).
+  Against the previous `site/build.js` the five release-manifest tests and the
+  two module-import tests fail; the rest of the suite is the earlier change's.
+- `node --test test/site-app.test.js` — **36 tests, 36 passing**, covering the
+  client application. With `site/src/lib/`, `app.js` and `app.css` moved aside,
+  0 pass and 36 fail.
+- The download button was exercised against a **real** manifest generated with
+  `gh release view`: it rendered
+  `https://github.com/Ding-Ding-Projects/material-winscp/releases/download/v0.1.464/WinSCP.Material.0.1.464.Setup.exe`,
+  labelled `Download for Windows · Version 0.1.464 · 125.9 MB`. The manifest was
+  then deleted, and the page fell back to no button.
 - The workflow itself is **unverified**: no run exists yet, and GitHub Pages is
   still not enabled on the repository. No claim is made here that the site is
   live. See [`HANDOFF.md`](../../HANDOFF.md).
 
 ## Suggested articles
 
+- [The site's client application](site-app.md) — what actually runs in the browser.
 - [Continuous integration](ci.md) — the other workflow, and the release loop this one avoids.
 - [Building](building.md) — building the application rather than the site.
 - [Search and regex](../search-and-regex/) — the builder every search bar on the site has to reach.

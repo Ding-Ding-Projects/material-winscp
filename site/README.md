@@ -19,14 +19,38 @@ step for the site, locally or in CI.
 | --- | --- |
 | `build.js` | The whole builder: markdown renderer, content model, emitter, verifier and dev server. |
 | `config.json` | `base`, `version`, `title`, `tagline`, `repository`. |
-| `src/` | The static sources. `{{BASE}}`, `{{VERSION}}`, `{{TITLE}}` and `{{REPOSITORY}}` are substituted on copy, in subdirectories too. |
+| `src/index.html` | The shell. The only place `{{BASE}}` appears in a URL. |
+| `src/app.js` | The client application's entry module (`type="module"`). |
+| `src/app.css` | Material 3 tokens and every component. One file, no `@import`. |
+| `src/lib/` | The application's modules: router, regex, colour, i18n, store, theme, tabs, settings, pages, dim sum. |
+| `release.json` | The installer manifest, **generated at publish time and git-ignored**. See below. |
 | `_site/` | The build output. Git-ignored; never edit it. |
 
+Plain ES modules, loaded directly by the browser — no bundler, no transpiler,
+no build step beyond `build.js`. `app.js` imports `./lib/*.js` by relative
+specifier, so `lib/` ships under whatever prefix the deployment has without the
+build substituting anything into an import.
+
 > [!IMPORTANT]
-> **`src/app.js` and `src/app.css` do not exist yet.** `index.html` references
-> them, so `--verify` reports both as missing and exits 1. That is the verifier
-> working. The page cannot run, and the Pages workflow will not publish it,
-> until they are written.
+> **A module import is a subresource.** `--verify` resolves every
+> `import … from '…'` in the emitted JavaScript against its importer and fails
+> the build if the target is not there. It has to: a missing `lib/` file appears
+> in no `src=`, `href=` or `url()`, and an unresolvable import fails the whole
+> module graph — a blank page, not a degraded one.
+
+## The download button
+
+The landing page shows a download button only when `release.json` is present and
+every asset URL in it is the immutable `<repo>/releases/download/<tag>/<file>`
+form. `pages.yml` generates it with `gh release view`; it is never committed,
+because a checked-in copy is stale the moment the next release ships. No
+manifest means no button — the page will not guess a URL.
+
+```sh
+# what CI does, if you want the button locally
+gh release view --repo Ding-Ding-Projects/material-winscp \
+  --json tagName,name,publishedAt,isDraft,assets > site/release.json
+```
 
 ## The base path
 
@@ -41,8 +65,13 @@ prefix with `--base /x/` or `SITE_BASE`; CI takes it from Pages itself.
 Articles are generated from `docs/`, so writing a feature article there is how a
 page appears here — do not copy documentation into `src/`.
 
-The application may be split into modules: `src/app/ui/tabs.js` and friends are
-copied recursively, with the same substitution, and `--verify` walks the whole
-output tree looking for bad URLs.
+The application is already split into modules under `src/lib/`; they are copied
+recursively, with the same substitution, and `--verify` walks the whole output
+tree looking for bad URLs and unresolvable imports.
 
-Run `node --test test/site-build.test.js` after touching `build.js`.
+Run `node --test test/site-build.test.js` after touching `build.js`, and
+`node --test test/site-app.test.js` after touching anything under `src/lib/`.
+The second suite covers the parts that can be wrong quietly: the router's
+ambiguous-anchor resolution, the regex predicate and its refusals, the colour
+translator's round trip, the funny levels' parameter survival, and the settings
+store's normalisation.

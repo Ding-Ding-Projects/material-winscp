@@ -39,6 +39,11 @@ RELEASES
 # --- site build -------------------------------------------------------------
 site/_site/
 site/.cache/
+# The installer manifest the landing page's download button is built from. It is
+# generated at publish time from `gh release view` and never committed: a
+# checked-in copy is stale the moment the next release ships, and the site would
+# then advertise a download that 404s. No manifest means no button, on purpose.
+site/release.json
 
 # --- logs and local state ---------------------------------------------------
 logs/

@@ -110,8 +110,9 @@ function tempRepo() {
   fs.cpSync(path.join(ROOT, 'site', 'config.json'), path.join(repo, 'site', 'config.json'));
   fs.cpSync(path.join(ROOT, 'site', 'src'), path.join(repo, 'site', 'src'), { recursive: true });
 
-  // The client application has not been written yet; these stand-ins exist so
-  // the CLI tests below fail for their OWN reason rather than for that one.
+  // The real application is copied above; these stand-ins replace it so a CLI
+  // test fails for its OWN reason rather than dragging the whole lib/ module
+  // graph into a fixture that is meant to isolate one broken thing.
   put(repo, 'site/src/app.js', '// stand-in for the application\n');
   put(repo, 'site/src/app.css', '/* stand-in for the stylesheet */\n');
   return repo;
@@ -335,6 +336,45 @@ test('a module imported from a subdirectory must exist, and is resolved relative
   assert.match(said(result), /referenced file is missing from the output: \.\/missing-icon\.svg \(referenced by app\/tabs\.js\)/);
 });
 
+test('an ES module import that resolves nowhere is caught, like any other fetch', () => {
+  // app.js is a module and pulls lib/*.js in by relative specifier. That is a
+  // fetch the browser makes, and it appears in no src=, href= or url() — so the
+  // scan that caught the original bug would sail straight past a missing lib/
+  // file, which fails the WHOLE module graph and blanks the page. An import is
+  // a subresource; it is checked like one.
+  const out = emitted({
+    'app.js': "import { render } from './lib/pages.js';\nimport './lib/gone.js';\nrender();\n",
+    'lib/pages.js': "export { x } from './helpers.js';\nexport const render = () => {};\n",
+  });
+  const result = verify({ out, base: BASE });
+  assert.strictEqual(result.ok, false);
+  assert.match(said(result), /imported module is missing from the output: \.\/lib\/gone\.js \(imported by app\.js\)/);
+  // …and resolved relative to the IMPORTER, not the output root: pages.js lives
+  // in lib/, so './helpers.js' means lib/helpers.js.
+  assert.match(said(result), /imported module is missing from the output: \.\/helpers\.js \(imported by lib\/pages\.js\)/);
+});
+
+test('a bare specifier and a cross-origin import are both refused', () => {
+  const out = emitted({
+    'app.js': "import fs from 'node:fs';\nimport x from 'https://cdn.example.invalid/x.js';\n",
+  });
+  const result = verify({ out, base: BASE });
+  assert.strictEqual(result.ok, false);
+  // A bare specifier works in Node and silently does not work in a browser,
+  // which is the worst possible place for it to be discovered.
+  assert.match(said(result), /bare specifier "node:fs"/);
+  assert.match(said(result), /imports from another host: https:\/\/cdn\.example\.invalid\/x\.js/);
+});
+
+test('an import that does resolve is not reported', () => {
+  const out = emitted({
+    'app.js': "import { render } from './lib/pages.js';\nrender();\n",
+    'lib/pages.js': 'export const render = () => {};\n',
+  });
+  const result = verify({ out, base: BASE });
+  assert.deepStrictEqual(result.problems, []);
+});
+
 test('build() copies a subdirectory of the sources and substitutes inside it', () => {
   // The copy loop used to `continue` on any directory, so the client app had to
   // be three files at the top of site/src/ forever. Splitting it into modules
@@ -375,18 +415,36 @@ test('normalizeBase always yields exactly one leading and trailing slash', () =>
   assert.strictEqual(normalizeBase('/'), '/');
 });
 
-test('`node site/build.js --verify` names the missing files instead of a stack trace', () => {
-  // End to end, exactly as CI runs it. app.js and app.css are genuinely absent
-  // from site/src/ — this is the repository's real state, and the verifier's
-  // job is to say so in words an operator can act on.
+test('`node site/build.js --verify` names a missing file instead of a stack trace', () => {
+  // This used to run against the repository itself, because app.js and app.css
+  // were genuinely absent and that WAS the repository's state. They exist now,
+  // so asserting the real tree still fails would be asserting that the site
+  // stays broken. The property being tested has not changed — the verifier must
+  // report a missing referenced file in words an operator can act on, never by
+  // exploding — so it is asserted against a tree where the file is deliberately
+  // removed, and the green case is asserted separately below.
+  const repo = tempRepo();
+  fs.rmSync(path.join(repo, 'site', 'src', 'app.js'));
+
+  const r = runCli(repo);
+  assert.strictEqual(r.status, 1, 'a failing verify must exit non-zero');
+  assert.match(r.text, /VERIFY FAILED/);
+  assert.match(r.text, /app\.js/);
+  assert.doesNotMatch(r.text, /ENOENT/, 'the verifier crashed instead of reporting');
+  assert.doesNotMatch(r.text, /at Object\.readFileSync/, 'a stack trace is not a report');
+});
+
+test('the repository itself now verifies clean, end to end, exactly as CI runs it', () => {
+  // The whole point of the exercise: site/src/ contains a real client
+  // application, every file index.html and app.js reference is emitted, and no
+  // URL loses the base prefix. If this ever goes red the published site is
+  // serving 404s again, which is precisely how it got into that state before.
   const r = spawnSync(process.execPath, [BUILD, '--verify'], { cwd: ROOT, encoding: 'utf8' });
   const all = `${r.stdout}\n${r.stderr}`;
 
-  assert.strictEqual(r.status, 1, 'a failing verify must exit non-zero');
-  assert.match(all, /VERIFY FAILED/);
-  assert.match(all, /app\.js/);
-  assert.doesNotMatch(all, /ENOENT/, 'the verifier crashed instead of reporting');
-  assert.doesNotMatch(all, /at Object\.readFileSync/, 'a stack trace is not a report');
+  assert.strictEqual(r.status, 0, `the real build must verify clean:\n${all}`);
+  assert.match(all, /VERIFY OK/);
+  assert.doesNotMatch(all, /VERIFY FAILED/);
 });
 
 test('the CLI catches a base-path trap inside a source subdirectory', () => {
@@ -438,4 +496,87 @@ test('the real build emits the base prefix on its own asset references', () => {
   const rooted = [...html.matchAll(/(?:src|href)="(\/[^"]*)"/g)].map((m) => m[1]);
   assert.ok(rooted.length > 0, 'no root-absolute URLs at all — the fixture stopped testing anything');
   for (const u of rooted) assert.ok(u.startsWith(BASE), `root-absolute URL without the prefix: ${u}`);
+});
+
+/* ------------------------------------------- the installer download button */
+
+/**
+ * The landing page's download button exists only when the builder can PROVE
+ * what it points at, and the proof is a manifest whose asset URLs are the
+ * immutable /releases/download/<tag>/<file> form on this repository.
+ *
+ * The failure this guards against is the tempting one: assembling
+ * ".../releases/latest/download/Setup.exe" out of the version number. That link
+ * builds green, deploys green, and 404s the first time an asset is named
+ * something other than what was guessed. A download button that does not
+ * download is worse than no button, because the reader concludes the project
+ * does not ship rather than that the page is wrong.
+ */
+function withRelease(manifest) {
+  const repo = tempRepo();
+  if (manifest !== null) put(repo, 'site/release.json', JSON.stringify(manifest));
+  const r = spawnSync(process.execPath, [path.join(repo, 'site', 'build.js')], { encoding: 'utf8' });
+  assert.strictEqual(r.status, 0, r.stderr);
+  const text = fs.readFileSync(path.join(repo, 'site', '_site', 'content.js'), 'utf8');
+  return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)).release;
+}
+
+const REPO_URL = 'https://github.com/Ding-Ding-Projects/material-winscp';
+
+test('no manifest means no release data at all, so the page shows no button', () => {
+  assert.strictEqual(withRelease(null), null);
+});
+
+test('a real manifest yields an immutable installer URL', () => {
+  const rel = withRelease({
+    tagName: 'v9.9.9',
+    name: 'WinSCP Material 9.9.9',
+    publishedAt: '2026-01-01T00:00:00Z',
+    assets: [
+      { name: 'RELEASES', size: 88, url: `${REPO_URL}/releases/download/v9.9.9/RELEASES` },
+      { name: 'WinSCP.Material.9.9.9.Setup.exe', size: 1234, url: `${REPO_URL}/releases/download/v9.9.9/WinSCP.Material.9.9.9.Setup.exe` },
+    ],
+  });
+  assert.strictEqual(rel.tag, 'v9.9.9');
+  assert.strictEqual(rel.version, '9.9.9');
+  assert.strictEqual(rel.installer.name, 'WinSCP.Material.9.9.9.Setup.exe');
+  assert.strictEqual(rel.installer.platform, 'Windows');
+  assert.ok(rel.installer.url.startsWith(`${REPO_URL}/releases/download/v9.9.9/`));
+});
+
+test('a mutable or foreign asset URL is dropped rather than turned into a button', () => {
+  const mutable = withRelease({
+    tagName: 'v9.9.9',
+    assets: [{ name: 'Setup.exe', size: 1, url: `${REPO_URL}/releases/latest/download/Setup.exe` }],
+  });
+  assert.strictEqual(mutable.installer, null, 'a "latest" link became a download button');
+  assert.deepStrictEqual(mutable.assets, [], 'a mutable URL survived into the asset list');
+
+  const foreign = withRelease({
+    tagName: 'v9.9.9',
+    assets: [{ name: 'Setup.exe', size: 1, url: 'https://example.invalid/releases/download/v9.9.9/Setup.exe' }],
+  });
+  assert.strictEqual(foreign.installer, null, 'another host became a download button');
+});
+
+test('a draft, a tagless manifest and unparseable JSON all mean no release', () => {
+  assert.strictEqual(withRelease({ tagName: 'v9.9.9', isDraft: true, assets: [] }), null);
+  assert.strictEqual(withRelease({ assets: [] }), null);
+
+  // A broken manifest must not fail the docs build. The page loses its button
+  // and says why; it does not lose the documentation.
+  const repo = tempRepo();
+  put(repo, 'site/release.json', '{ not json');
+  const r = spawnSync(process.execPath, [path.join(repo, 'site', 'build.js')], { encoding: 'utf8' });
+  assert.strictEqual(r.status, 0, 'a broken manifest must not fail the whole build');
+  assert.match(r.stdout, /not parseable JSON/);
+});
+
+test('a release with no installer asset still records the release, without a button', () => {
+  const rel = withRelease({
+    tagName: 'v9.9.9',
+    assets: [{ name: 'notes.txt', size: 10, url: `${REPO_URL}/releases/download/v9.9.9/notes.txt` }],
+  });
+  assert.strictEqual(rel.installer, null);
+  assert.strictEqual(rel.assets.length, 1);
 });

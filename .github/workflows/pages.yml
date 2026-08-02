@@ -104,6 +104,35 @@ jobs:
           enablement: true
           token: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
 
+      # The landing page carries a download button only when it can point at a
+      # REAL, IMMUTABLE release asset, and shows no button at all otherwise. So
+      # the release is fetched here, by the one participant that actually knows
+      # what shipped, and written to a file the builder validates. Three things
+      # make this safe rather than a guess:
+      #
+      #   * `|| true` — a repository with no release yet, or a token that cannot
+      #     read releases, must not fail the docs build. The manifest is simply
+      #     absent and the page says there is no installer.
+      #   * the builder re-validates every asset URL against
+      #     <repository>/releases/download/<tag>/ and drops anything else, so a
+      #     mutable "latest" link or another host can never become a button.
+      #   * site/release.json is generated, never committed. A checked-in copy
+      #     would be stale the moment the next release published, and a stale
+      #     download link is worse than none: it 404s and looks like the project
+      #     does not ship.
+      - name: Resolve the published release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view --repo "$GITHUB_REPOSITORY" \
+            --json tagName,name,publishedAt,isDraft,assets > site/release.json || true
+          if [ -s site/release.json ]; then
+            echo "release manifest:"; head -c 400 site/release.json; echo
+          else
+            rm -f site/release.json
+            echo "no published release; the page will show no download button"
+          fi
+
       - name: Build the site
         env:
           # The published prefix, taken FROM PAGES rather than guessed. A

@@ -10,6 +10,7 @@ How WinSCP Material is built, installed, released and updated.
 | [installer.md](installer.md) | The Squirrel.Windows installer and the install/update lifecycle. |
 | [ci.md](ci.md) | The GitHub Actions workflow, its gating, and the token chain. |
 | [site.md](site.md) | The documentation site: its base path, what `--verify` proves, and how Pages publishes it. |
+| [site-app.md](site-app.md) | The site's client application: routing, search, appearance, tabs and accessibility. |
 | [releases.md](releases.md) | Release tagging, assets, and the dim sum code names. |
 | [updates.md](updates.md) | In-app update checks and how a user is offered a new version. |
 | [changelog.md](changelog.md) | The in-app changelog viewer, its filters and its export. |
