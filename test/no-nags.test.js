@@ -41,9 +41,28 @@ function appFiles() {
   ].filter((p) => !/[\\/]forms\.json$/.test(p));
 }
 
+/**
+ * The changelog is a HISTORICAL RECORD, generated from real commit messages by
+ * tools/changelog.js. It necessarily contains the sentence "the donation URL
+ * must not exist anywhere in the app", because that is what the commit removing
+ * the Donate action said.
+ *
+ * Scanning it for promotional words therefore fails on the entry describing
+ * this very test — which is circular, and would either force the project to
+ * stop writing honestly about what it removed, or force this test to be
+ * deleted. Neither is acceptable, so the prose heuristics skip it and a
+ * dedicated check below covers what actually matters: that the changelog
+ * module contains no executable nag.
+ */
+const HISTORICAL_RECORD = /[\\/]changelog\.js$/;
+
+function prosePages() {
+  return appFiles().filter((p) => !HISTORICAL_RECORD.test(p));
+}
+
 test('no promotional word appears on a line that also raises a surface', () => {
   const offenders = [];
-  for (const file of appFiles()) {
+  for (const file of prosePages()) {
     const lines = fs.readFileSync(file, 'utf8').split('\n');
     lines.forEach((line, i) => {
       // A comment explaining the policy is not a violation of it.
@@ -79,7 +98,7 @@ test('the Donate action is removed, not merely quiet', () => {
 
 test('nothing schedules a promotional surface on a timer or at startup', () => {
   const offenders = [];
-  for (const file of appFiles()) {
+  for (const file of prosePages()) {
     const text = fs.readFileSync(file, 'utf8');
     if (!PROMO.test(text)) continue;
     // Look at the whole neighbourhood, not one line: a nag is usually a timer
@@ -113,4 +132,26 @@ test('the update check reports through a corner notification, not a modal', () =
   const updates = fs.readFileSync(path.join(ROOT, 'design', 'main', 'updates.js'), 'utf8');
   assert.ok(!/showMessageBoxSync|dialog\.showMessageBox\s*\(/.test(updates),
     'an update result must not open a blocking dialog from the main process');
+});
+
+test('the changelog records history without becoming a nag itself', () => {
+  const file = path.join(ROOT, 'design', 'renderer', 'ui', 'changelog.js');
+  const src = fs.readFileSync(file, 'utf8');
+
+  // Strip every string literal: what remains is the module's executable code.
+  // A changelog ENTRY may say "donation" — that is history. The module's CODE
+  // may not raise anything promotional.
+  const code = src
+    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+    .replace(/'(?:[^'\\]|\\.)*'/g, "''")
+    .replace(/`(?:[^`\\]|\\.)*`/g, '``')
+    .replace(/\/\/.*$/gm, '');
+
+  assert.ok(!PROMO.test(code),
+    'changelog.js code (strings excluded) must contain no promotional identifier');
+
+  // And the hard rule still applies to the whole file, prose included: the
+  // donation URL itself must not be anywhere in the shipping app.
+  assert.ok(!/winscp\.net\/eng\/donate/.test(src),
+    'the donation URL must not appear even in a changelog entry');
 });
