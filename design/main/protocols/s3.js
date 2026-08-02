@@ -17,6 +17,7 @@
 
 const http = require('http');
 const https = require('https');
+const tls = require('tls');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -582,7 +583,6 @@ class S3Adapter extends Adapter {
 
   async _verifyCertificate(host, port) {
     if (!this.secure || !this.options.certVerifier) return;
-    const tls = require('tls');
     const socket = await new Promise((res, rej) => {
       const s = tls.connect({ host, port, servername: host, rejectUnauthorized: false }, () => res(s));
       s.once('error', rej);

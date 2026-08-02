@@ -78,6 +78,23 @@
       "targets": ["design/main/protocols/webdav.js"],
       "note": "Hand-written client; PROPFIND parsing and RFC 7616 Digest auth covered by tests."
     },
+    "core/S3FileSystem": {
+      "status": "partial",
+      "progress": 0.5,
+      "targets": ["design/main/protocols/s3.js"],
+      "note": "Hand-written SigV4 verified against published AWS vectors; multipart, paging, AssumeRole. No live endpoint tested yet."
+    },
+    "core/NeonIntf": {
+      "status": "replaced",
+      "targets": ["design/main/protocols/webdav.js"],
+      "note": "neon (the C WebDAV/HTTP library WinSCP links) is replaced by a hand-written client on node:http/https."
+    },
+    "core/Http": {
+      "status": "partial",
+      "progress": 0.5,
+      "targets": ["design/main/protocols/webdav.js", "design/main/protocols/s3.js"],
+      "note": "HTTP plumbing lives with the two protocols that need it."
+    },
     "core/FileMasks": {
       "status": "partial",
       "progress": 0.7,

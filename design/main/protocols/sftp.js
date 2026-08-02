@@ -1055,6 +1055,23 @@ class SftpAdapter extends Adapter {
     await this._call('utimes', this.normalize(p), a, m);
   }
 
+  /**
+   * WinSCP's SFTP queue depths pipeline several read/write requests at once.
+   * This library only does that in its all-at-once fastGet/fastPut helpers,
+   * which cannot resume or report progress, so the streaming path stays
+   * request-at-a-time and the setting is reported as inactive rather than
+   * pretended into effect.
+   */
+  _warnQueueDepth() {
+    if (this._queueDepthWarned) return;
+    this._queueDepthWarned = true;
+    const down = Number(this.session.sftpDownloadQueue) || 0;
+    const up = Number(this.session.sftpUploadQueue) || 0;
+    if (down > 1 || up > 1) {
+      this._log('warn', `SFTP request pipelining (download queue ${down}, upload queue ${up}) is not available on the resumable transfer path; transfers run one request at a time`);
+    }
+  }
+
   // ---- streaming -------------------------------------------------------
   async createReadStream(p, opts = {}) {
     if (!this.sftp) throw new Error('Not connected');
@@ -1062,9 +1079,11 @@ class SftpAdapter extends Adapter {
     const options = { autoClose: true };
     if (Number(opts.start) > 0) options.start = Number(opts.start);
     if (Number.isFinite(opts.end)) options.end = Number(opts.end);
-    if (opts.highWaterMark) options.highWaterMark = opts.highWaterMark;
-    if (this.session.sftpDownloadQueue) options.concurrency = Number(this.session.sftpDownloadQueue);
-    if (this.session.sftpMaxPacketSize) options.chunkSize = Number(this.session.sftpMaxPacketSize);
+    // The stream's high-water mark *is* the SFTP read packet size in this
+    // library, so the site's maximum packet size lands here.
+    const hwm = opts.highWaterMark || Number(this.session.sftpMaxPacketSize) || 0;
+    if (hwm > 0) options.highWaterMark = hwm;
+    this._warnQueueDepth();
     this._log('debug', `download ${target}${options.start ? ' from offset ' + options.start : ''}`);
     return this.sftp.createReadStream(target, options);
   }
@@ -1079,8 +1098,9 @@ class SftpAdapter extends Adapter {
     if (start > 0) { options.flags = 'r+'; options.start = start; }
     else options.flags = opts.append ? 'a' : 'w';
     if (opts.mode !== undefined) options.mode = opts.mode;
-    if (this.session.sftpUploadQueue) options.concurrency = Number(this.session.sftpUploadQueue);
-    if (this.session.sftpMaxPacketSize) options.chunkSize = Number(this.session.sftpMaxPacketSize);
+    const hwm = opts.highWaterMark || Number(this.session.sftpMaxPacketSize) || 0;
+    if (hwm > 0) options.highWaterMark = hwm;
+    this._warnQueueDepth();
     this._log('debug', `upload ${target}${start ? ' from offset ' + start : ''}`);
     return this.sftp.createWriteStream(target, options);
   }

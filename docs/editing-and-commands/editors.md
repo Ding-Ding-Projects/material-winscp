@@ -1,0 +1,106 @@
+# Editors
+
+## What it does
+
+Opens a remote file for editing without an explicit download-edit-upload cycle:
+the file is fetched to a temporary location, opened in an editor, watched, and
+uploaded back each time it is saved.
+
+Two kinds of editor are supported. The **internal editor** is built in — a text
+editor with find and replace, encoding control and word wrap. An **external
+editor** is any program on the machine, launched with the temporary path.
+
+## Configuration
+
+Under **Preferences → Editors**, stored in `PREF_DEFAULTS.editor`.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `list` | `[{mask:'*.*', type:'internal'}]` | Ordered associations. First matching [mask](file-masks.md) wins. |
+| `fontName`, `fontSize`, `fontCharset`, `fontStyle` | Consolas 11 | Internal editor font. |
+| `autoFont` | `true` | Pick a font suited to the file's content. |
+| `wordWrap` | `false` | |
+| `tabSize` | `8` | |
+| `encoding` | `auto` | `auto`, `utf8`, `utf8bom`, `ansi`. |
+| `warnOnEncodingFallback` | `true` | Say when the chosen encoding could not represent the content. |
+| `maxEditors` | `500` | Concurrent open editors. |
+| `singleEditor` | `true` | Reuse one internal editor window with tabs. |
+| `sDIShellEditor`, `sDIExternal` | `false` | Treat an external editor as single-document, so its exit means the edit finished. |
+| `earlyClose` | `2` | Seconds within which an external editor exiting is treated as "it handed off to another instance" rather than "editing finished". |
+| `keepTemporaryFiles` | `false` | Keep temporaries for debugging. Warns when on. |
+| `warnOrphans` | `true` | Warn about temporary files left from a previous run. |
+| `findText`, `replaceText`, `findMatchCase`, `findByMask`, `findWholeWord`, `findDown` | — | Remembered find state. |
+
+The internal editor's find bar carries the
+[regex builder](../search-and-regex/regex-builder.md) like every other search
+surface — `findByMask` additionally allows a [file mask](file-masks.md) as the
+search term.
+
+## Behaviour worth knowing
+
+- **Temporary files live under the app's own data tree** (`paths.js`), never in
+  the user's folders and never in a location another user can read.
+- **Upload-on-save is watched, not polled.** Saving triggers an upload through
+  the ordinary queue, so transfer settings and speed limits apply.
+- **`earlyClose` exists because of how modern editors launch.** Many exit
+  immediately after handing the file to an already-running instance; treating
+  that as "editing finished" would upload an unedited file and close the session
+  too early.
+- **Remote changes are detected.** Before uploading, the remote file's timestamp
+  and size (and ETag for WebDAV) are compared with what was downloaded. A change
+  means a conflict prompt, not a silent overwrite.
+
+## Failure modes
+
+| Situation | What the user sees | Recoverable |
+| --- | --- | --- |
+| External editor not found at its configured path | Named error, and the association is not silently reassigned. | Yes |
+| File changed on the server while being edited | A modal conflict prompt: upload anyway, download theirs, or save locally. This is a decision, so it is modal. | Yes |
+| Editor exits before saving | Nothing is uploaded. The temporary is kept briefly so an accidental close is recoverable. | Yes |
+| Encoding cannot represent an edited character | With `warnOnEncodingFallback`, a warning naming the character and offering UTF-8. Without it, the substitution is still recorded in the session log. | Yes |
+| Binary file opened in the internal editor | Detected and refused with an explanation, rather than displaying and re-saving mangled bytes. | Yes |
+| Very large file | Above a threshold the internal editor declines and suggests downloading; it does not attempt to load it entirely into memory. | Yes |
+| Session lost while editing | The temporary survives. Reconnecting offers to upload it. | Yes |
+| Orphaned temporaries from a crash | With `warnOrphans`, a startup notification listing them with an option to recover or discard. | Yes |
+| `maxEditors` reached | Refused with a count, rather than opening an editor that cannot be tracked. | Yes |
+
+## Security considerations
+
+- **The temporary file is plaintext on local disk** for the duration of the
+  edit, even when the site uses [at-rest encryption](../security-and-credentials/file-encryption.md).
+  This is unavoidable — an editor needs plaintext — and it is stated where the
+  feature is configured.
+- **Temporaries are cleaned up on exit** per `temporaryDirectoryCleanup`.
+  `keepTemporaryFiles` leaves sensitive content on disk and warns that it does.
+- **An external editor receives a path and runs with the user's privileges.**
+  Associating an editor is trusting it; the association editor shows the full
+  command line before it is saved.
+- **Filenames are quoted when passed to an external editor**, so a remote file
+  named with shell metacharacters cannot become a command.
+- **Conflict detection is best-effort** — it relies on the metadata the protocol
+  provides. Where none is available the prompt says the check could not be made,
+  rather than implying it passed.
+- **The temporary directory layout can leak structure.** `temporaryDirectoryAppendPath`
+  and `temporaryDirectoryAppendSession` mirror remote paths locally, which is
+  convenient and mildly revealing; `temporaryDirectoryDeterministic` makes the
+  names predictable, which is worse and off by default.
+
+## Verification
+
+- Association matching is tested against the mask engine, including ordering and
+  first-match-wins.
+- The download-edit-upload cycle is tested against the local adapter with
+  simulated saves, asserting one upload per save.
+- Conflict detection is tested by mutating the remote file between download and
+  save.
+- `earlyClose` is tested with a synthetic editor that exits immediately.
+- Encoding round trips are tested for UTF-8 with and without BOM, and for the
+  ANSI fallback path including the warning.
+- Orphan recovery is tested by leaving temporaries behind and restarting.
+
+## Suggested articles
+
+- [File masks](file-masks.md) — the association language.
+- [Custom commands](custom-commands.md) — the other way to act on a selected file.
+- [At-rest encryption](../security-and-credentials/file-encryption.md) — why editing means plaintext locally.
+- [The regex builder](../search-and-regex/regex-builder.md) — the find bar's builder.

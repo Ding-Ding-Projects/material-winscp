@@ -8,14 +8,14 @@ not started; a mapping pointing at a file that does not exist is reported as a
 problem. The percentage is weighted by source lines, so a large subsystem
 cannot be made to look finished by porting a handful of small files.
 
-**Overall: 7.1% of 318,002 lines across 125 units.**
+**Overall: 7.9% of 318,002 lines across 125 units.**
 
 ## By area
 
 | Area | Units | Ported | Lines | Coverage |
 |---|---:|---:|---:|---:|
 | `forms` | 51 | 0 | 199,082 | 1.6% |
-| `core` | 36 | 0 | 76,572 | 27.0% |
+| `core` | 36 | 1 | 76,572 | 30.2% |
 | `windows` | 20 | 0 | 32,403 | 1.2% |
 | `resource` | 9 | 0 | 4,110 | 0.0% |
 | `components` | 6 | 0 | 3,734 | 0.0% |
@@ -67,7 +67,7 @@ counted as replaced rather than transcribed.
 | ⬜ Not started | `windows/VCLCommon` | windows | 3,323 | — |  |
 | 🚧 In progress | `core/SecureShell` | core | 3,208 | `design/main/protocols/sftp.js` | Transport, host-key verification and keepalives live with the SSH adapter. |
 | ⬜ Not started | `forms/Rights` | forms | 3,151 | — |  |
-| ⬜ Not started | `core/S3FileSystem` | core | 3,046 | — |  |
+| 🚧 In progress | `core/S3FileSystem` | core | 3,046 | `design/main/protocols/s3.js` | Hand-written SigV4 verified against published AWS vectors; multipart, paging, AssumeRole. No live endpoint tested yet. |
 | ⬜ Not started | `windows/ConsoleRunner` | windows | 3,044 | — |  |
 | 🚧 In progress | `core/ScpFileSystem` | core | 3,041 | `design/main/protocols/scp.js` | SCP over the shared SSH transport, with listing-command parsing. |
 | ⬜ Not started | `windows/Setup` | windows | 2,980 | — |  |
@@ -114,7 +114,7 @@ counted as replaced rather than transcribed.
 | ⬜ Not started | `resource/TextsWin` | resource | 751 | — |  |
 | ⬜ Not started | `forms/About` | forms | 746 | — |  |
 | ⬜ Not started | `resource/TextsWin1` | resource | 746 | — |  |
-| ⬜ Not started | `core/NeonIntf` | core | 701 | — |  |
+| 🔁 Replaced by an equivalent | `core/NeonIntf` | core | 701 | `design/main/protocols/webdav.js` | neon (the C WebDAV/HTTP library WinSCP links) is replaced by a hand-written client on node:http/https. |
 | ⬜ Not started | `core/Bookmarks` | core | 700 | — |  |
 | ⬜ Not started | `forms/ImportSessions` | forms | 698 | — |  |
 | ⬜ Not started | `windows/CustomWinConfiguration` | windows | 672 | — |  |
@@ -129,7 +129,7 @@ counted as replaced rather than transcribed.
 | ⬜ Not started | `core/Usage` | core | 408 | — |  |
 | ⬜ Not started | `forms/RemoteTransfer` | forms | 388 | — |  |
 | ⬜ Not started | `core/FileBuffer` | core | 374 | — |  |
-| ⬜ Not started | `core/Http` | core | 366 | — |  |
+| 🚧 In progress | `core/Http` | core | 366 | `design/main/protocols/webdav.js`<br>`design/main/protocols/s3.js` | HTTP plumbing lives with the two protocols that need it. |
 | ⬜ Not started | `windows/SynchronizeController` | windows | 364 | — |  |
 | ⬜ Not started | `resource/TextsCore2` | resource | 353 | — |  |
 | ⬜ Not started | `forms/CopyLocal` | forms | 334 | — |  |

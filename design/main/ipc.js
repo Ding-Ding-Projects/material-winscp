@@ -464,9 +464,28 @@ class Ipc {
     // ---- masks (the regex builder and the mask editor both use this) ----
     this.handle('app:maskMatches', (mask, name, options) => {
       const mod = masksModule();
+      need(typeof mod.FileMask === 'function', 'design/main/masks.js does not export the FileMask matcher.');
       const o = optObj(options, 'options');
-      return callOn(mod, ['matches', 'matchesMask', 'match'], 'File-mask matching',
-        str(mask, 'mask', LIMITS.small), str(name, 'name', LIMITS.path), o);
+      const m = new mod.FileMask(str(mask, 'mask', LIMITS.small));
+      return m.matches(str(name, 'name', LIMITS.path), {
+        isDir: o.isDir === true,
+        path: optStr(o.path, 'options.path', LIMITS.path) || undefined,
+        size: o.size === undefined ? undefined : num(o.size, 'options.size', 0),
+        mtime: o.mtime === undefined ? undefined : num(o.mtime, 'options.mtime', 0),
+      });
+    });
+
+    /** Validate a mask before it is saved, so a bad one is caught in the editor. */
+    this.handle('app:maskValidate', (mask) => {
+      const mod = masksModule();
+      const source = str(mask, 'mask', LIMITS.small);
+      try {
+        if (typeof mod.validate === 'function') mod.validate(source);
+        else new mod.FileMask(source);
+        return { valid: true, error: '' };
+      } catch (e) {
+        return { valid: false, error: e.message };
+      }
     });
   }
 

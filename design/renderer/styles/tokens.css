@@ -1,0 +1,251 @@
+/* tokens.css — Material Design 3 token layer.
+ *
+ * The colour values here are only a first-paint floor. theme.js derives the
+ * real scheme from the seed with HCT and writes every --md-sys-color-* and its
+ * short alias onto :root at boot, so what ships in this file never has to be
+ * kept in sync with a palette by hand.
+ *
+ * The short aliases (--p, --onp, --sfc …) are the names the approved mockup
+ * uses; both spellings resolve to the same value.
+ *
+ * No @import, no @font-face pointing at a network host, no CDN. Typography
+ * falls back to the platform UI face, which on Windows is Segoe UI with
+ * Microsoft JhengHei for Traditional Chinese.
+ */
+
+:root {
+  /* ---- colour: light-scheme floor, replaced at boot ---- */
+  --md-sys-color-primary: #0b57d0;              --p: #0b57d0;
+  --md-sys-color-on-primary: #ffffff;           --onp: #ffffff;
+  --md-sys-color-primary-container: #d3e3fd;    --pc: #d3e3fd;
+  --md-sys-color-on-primary-container: #041e49; --onpc: #041e49;
+  --md-sys-color-secondary: #575e71;            --sec: #575e71;
+  --md-sys-color-on-secondary: #ffffff;         --onsec: #ffffff;
+  --md-sys-color-secondary-container: #dbe2f9;  --secc: #dbe2f9;
+  --md-sys-color-on-secondary-container: #141b2c; --onsecc: #141b2c;
+  --md-sys-color-tertiary: #725572;             --ter: #725572;
+  --md-sys-color-tertiary-container: #fbd7fa;   --terc: #fbd7fa;
+  --md-sys-color-on-tertiary-container: #2a122c; --onterc: #2a122c;
+  --md-sys-color-error: #b3261e;                --err: #b3261e;
+  --md-sys-color-on-error: #ffffff;             --onerr: #ffffff;
+  --md-sys-color-error-container: #f9dedc;      --errc: #f9dedc;
+  --md-sys-color-on-error-container: #410e0b;   --onerrc: #410e0b;
+  --md-sys-color-surface: #f9f9ff;              --sfc: #f9f9ff;
+  --md-sys-color-on-surface: #191c20;           --onsfc: #191c20;
+  --md-sys-color-surface-variant: #e1e2ec;      --sv: #e1e2ec;
+  --md-sys-color-on-surface-variant: #44474e;   --onsv: #44474e;
+  --md-sys-color-surface-container-lowest: #ffffff;  --c-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #f3f3fa;     --c-low: #f3f3fa;
+  --md-sys-color-surface-container: #ededf4;         --c: #ededf4;
+  --md-sys-color-surface-container-high: #e7e8ee;    --c-high: #e7e8ee;
+  --md-sys-color-surface-container-highest: #e1e2e9; --c-highest: #e1e2e9;
+  --md-sys-color-outline: #74777f;              --outline: #74777f;
+  --md-sys-color-outline-variant: #c4c6d0;      --outline-var: #c4c6d0;
+  --md-sys-color-inverse-surface: #2e3036;      --inv-sfc: #2e3036;
+  --md-sys-color-inverse-on-surface: #f0f0f7;   --inv-onsfc: #f0f0f7;
+  --md-sys-color-inverse-primary: #a8c7fa;      --inv-p: #a8c7fa;
+  --md-sys-color-surface-tint: #0b57d0;         --tint: #0b57d0;
+  --desk: #dde2eb;
+
+  /* ---- elevation ---- */
+  --e1: 0 1px 2px rgba(0, 0, 0, .3), 0 1px 3px 1px rgba(0, 0, 0, .15);
+  --e2: 0 1px 2px rgba(0, 0, 0, .3), 0 2px 6px 2px rgba(0, 0, 0, .15);
+  --e3: 0 4px 8px 3px rgba(0, 0, 0, .15), 0 1px 3px rgba(0, 0, 0, .3);
+  --e4: 0 6px 10px 4px rgba(0, 0, 0, .15), 0 2px 3px rgba(0, 0, 0, .3);
+  --e5: 0 8px 12px 6px rgba(0, 0, 0, .15), 0 4px 4px rgba(0, 0, 0, .3);
+
+  /* ---- shape ---- */
+  --shape-xs: 4px;
+  --shape-sm: 8px;
+  --shape-md: 12px;
+  --shape-lg: 16px;
+  --shape-xl: 28px;
+  --shape-full: 999px;
+
+  /* ---- typography ---- */
+  --ui: system-ui, 'Segoe UI', 'Microsoft JhengHei', 'Noto Sans HK', sans-serif;
+  --mono: 'Cascadia Mono', Consolas, 'Roboto Mono', 'Courier New', monospace;
+  --font-size: 14px;
+  --font-weight: 400;
+
+  /* Material 3 type scale, expressed against the user's base size so the
+     whole scale moves together when they change it. */
+  --type-display-lg: calc(var(--font-size) * 4.07);
+  --type-headline-md: calc(var(--font-size) * 2.0);
+  --type-title-lg: calc(var(--font-size) * 1.57);
+  --type-title-md: calc(var(--font-size) * 1.14);
+  --type-body-lg: calc(var(--font-size) * 1.14);
+  --type-body-md: var(--font-size);
+  --type-body-sm: calc(var(--font-size) * 0.86);
+  --type-label-lg: calc(var(--font-size) * 1.0);
+  --type-label-md: calc(var(--font-size) * 0.86);
+  --type-label-sm: calc(var(--font-size) * 0.79);
+
+  /* ---- density and scale ---- */
+  --den: 1;          /* 1 … 0.76 as density goes 0 … -3 */
+  --uiscale: 1;      /* 1 / 1.25 / 1.5 / 2 */
+
+  /* ---- motion ---- */
+  --motion-short: 120ms;
+  --motion-medium: 220ms;
+  --motion-long: 380ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-accelerate: cubic-bezier(0.3, 0, 1, 1);
+
+  /* ---- layout ---- */
+  --titlebar-h: calc(44px * var(--den));
+  --stripbar-h: calc(42px * var(--den));
+  --statusbar-h: calc(28px * var(--den));
+  --row-h: calc(36px * var(--den));
+  --control-h: calc(40px * var(--den));
+}
+
+/* ------------------------------------------------------------------ */
+/* reset                                                               */
+/* ------------------------------------------------------------------ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--sfc);
+}
+
+body {
+  font-family: var(--ui);
+  font-size: calc(var(--font-size) * var(--uiscale));
+  font-weight: var(--font-weight);
+  color: var(--onsfc);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+input, select, textarea, button { font-family: inherit; font-size: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: none; padding: 0; }
+img { max-width: 100%; }
+p { margin: 0 0 .6em; }
+h1, h2, h3, h4 { margin: 0; font-weight: 500; }
+kbd {
+  font-family: var(--mono);
+  font-size: .82em;
+  border: 1px solid var(--outline-var);
+  border-bottom-width: 2px;
+  border-radius: var(--shape-xs);
+  padding: 0 4px;
+  background: var(--c-low);
+}
+a { color: var(--p); text-decoration: none; }
+a:hover { text-decoration: underline; }
+::selection { background: var(--pc); color: var(--onpc); }
+
+/* Focus is always visible. This is a shipping requirement, not a default. */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--p);
+  outline-offset: 2px;
+  border-radius: var(--shape-xs);
+}
+
+/* Scrollbars follow the theme instead of the platform's default chrome. */
+* { scrollbar-width: thin; scrollbar-color: var(--outline-var) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: var(--outline-var);
+  border-radius: var(--shape-full);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--outline); background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
+input[type="range"] { accent-color: var(--p); }
+input[type="checkbox"], input[type="radio"] {
+  accent-color: var(--p);
+  width: calc(18px * var(--uiscale));
+  height: calc(18px * var(--uiscale));
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* motion                                                              */
+/* ------------------------------------------------------------------ */
+
+@keyframes m3-fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes m3-pop { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes m3-slide-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+@keyframes m3-slide-out { to { opacity: 0; transform: translateX(24px); } }
+@keyframes m3-indeterminate { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+@keyframes m3-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+:root[data-rm="1"] *,
+:root[data-rm="1"] *::before,
+:root[data-rm="1"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* utilities                                                           */
+/* ------------------------------------------------------------------ */
+
+.sr-only {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.mono { font-family: var(--mono); font-variant-ligatures: none; }
+.spacer { flex: 1 1 auto; min-width: 0; }
+.muted { color: var(--onsv); }
+.stack { display: flex; flex-direction: column; gap: calc(12px * var(--den)); }
+.row { display: flex; align-items: center; gap: calc(10px * var(--den)); flex-wrap: wrap; }
+
+/* Layers. Floating surfaces live here so stacking is never a guess. */
+.layer { position: fixed; inset: 0; pointer-events: none; }
+.layer > * { pointer-events: auto; }
+.layer-toast { display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; }
+
+/* Surfaces at each elevation, per M3's tonal-surface model. */
+.surface-1 { background: var(--c-low); box-shadow: var(--e1); }
+.surface-2 { background: var(--c); box-shadow: var(--e2); }
+.surface-3 { background: var(--c-high); box-shadow: var(--e3); }
+
+/* Text never overflows silently: long strings wrap, and where a single line
+   is required the ellipsis is explicit and the full text is in the title. */
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.prose { line-height: 1.55; text-wrap: pretty; max-width: 68ch; }
+
+/* Bilingual labels: a prominent primary line, a compact secondary line. */
+.bi-primary { display: block; }
+.bi-secondary {
+  display: block;
+  font-size: .82em;
+  opacity: .78;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+/* SVG icons inherit colour and stay optically aligned with text. */
+svg.mi { flex: 0 0 auto; vertical-align: -0.15em; color: inherit; }

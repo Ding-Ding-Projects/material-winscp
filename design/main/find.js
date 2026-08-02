@@ -193,7 +193,13 @@ async function* search(adapter, root, userOptions = {}) {
       const verdict = mask.matchesEx(entry.name, params);
 
       if (isDir) {
-        if (verdict.matched && options.includeDirectories && !matcher) {
+        // A directory is a RESULT only when it was matched deliberately. The
+        // mask engine lets directories through implicitly whenever the mask
+        // has no directory rule — that is what keeps '*.txt' recursing instead
+        // of pruning every subtree — but reporting every directory as a hit
+        // for a mask the user wrote about files would be nonsense.
+        const explicitDir = mask.empty || !verdict.implicit;
+        if (verdict.matched && explicitDir && options.includeDirectories && !matcher) {
           yield {
             path: full, name: entry.name, type: 'dir', size: entry.size,
             mtime: entry.mtime, depth, entry, matches: null,

@@ -39,11 +39,19 @@ function masks() {
   } catch (e) {
     throw new Error(`design/main/masks.js could not be loaded, so editor masks cannot be evaluated: ${e.message}`);
   }
-  const fn = mod.matches || mod.matchesMask || mod.match || (mod.FileMasks && mod.FileMasks.matches);
-  if (typeof fn !== 'function') {
-    throw new Error('design/main/masks.js does not export a mask-matching function (expected `matches`).');
+  if (typeof mod.FileMask !== 'function') {
+    throw new Error('design/main/masks.js does not export the FileMask matcher.');
   }
-  _masks = { matches: (mask, name, opts) => fn(mask, name, opts) };
+  // FileMask parses once and answers many items; the editor list is short and
+  // stable, so the compiled masks are cached by their source string.
+  const cache = new Map();
+  _masks = {
+    matches(mask, name, params) {
+      let m = cache.get(mask);
+      if (!m) { m = new mod.FileMask(mask); cache.set(mask, m); }
+      return m.matches(name, params || {});
+    },
+  };
   return _masks;
 }
 
@@ -160,9 +168,7 @@ class EditorManager extends EventEmitter {
     const list = this.prefs().list || [];
     for (const e of list) {
       const mask = e.mask || '*.*';
-      let hit;
-      try { hit = masks().matches(mask, fileName, { isDirectory: false }); } catch (err) { throw err; }
-      if (hit) return { ...e, mask };
+      if (masks().matches(mask, fileName, { isDir: false })) return { ...e, mask };
     }
     return { mask: '*.*', type: 'internal', external: '', externalParams: true };
   }
