@@ -48,6 +48,67 @@
       "note": "All 301 actions extracted from the original with captions, hints and shortcuts; handlers pending."
     },
 
+    "core/SftpFileSystem": {
+      "status": "partial",
+      "progress": 0.45,
+      "targets": ["design/main/protocols/sftp.js"],
+      "note": "SFTP over ssh2: auth, tunnels, proxies, listing, transfers with resume. Bug-workaround matrix still to verify against a real server."
+    },
+    "core/ScpFileSystem": {
+      "status": "partial",
+      "progress": 0.4,
+      "targets": ["design/main/protocols/scp.js"],
+      "note": "SCP over the shared SSH transport, with listing-command parsing."
+    },
+    "core/SecureShell": {
+      "status": "partial",
+      "progress": 0.4,
+      "targets": ["design/main/protocols/sftp.js"],
+      "note": "Transport, host-key verification and keepalives live with the SSH adapter."
+    },
+    "core/FtpFileSystem": {
+      "status": "partial",
+      "progress": 0.4,
+      "targets": ["design/main/protocols/ftp.js"],
+      "note": "FTP/FTPS over basic-ftp; MLSD and multi-dialect LIST parsing covered by tests."
+    },
+    "core/WebDAVFileSystem": {
+      "status": "partial",
+      "progress": 0.45,
+      "targets": ["design/main/protocols/webdav.js"],
+      "note": "Hand-written client; PROPFIND parsing and RFC 7616 Digest auth covered by tests."
+    },
+    "core/FileMasks": {
+      "status": "partial",
+      "progress": 0.7,
+      "targets": ["design/main/masks.js"],
+      "note": "WinSCP mask syntax including size and time masks, with a test table."
+    },
+    "core/Queue": {
+      "status": "partial",
+      "progress": 0.4,
+      "targets": ["design/main/queue.js"],
+      "note": "Parallel transfers, pause/resume, throttling, overwrite queries."
+    },
+    "core/CopyParam": {
+      "status": "partial",
+      "progress": 0.5,
+      "targets": ["design/main/queue.js", "design/main/defaults.js"],
+      "note": "Transfer parameters declared and applied by the queue."
+    },
+    "core/FileOperationProgress": {
+      "status": "partial",
+      "progress": 0.4,
+      "targets": ["design/main/queue.js"],
+      "note": "Byte/file counters, throughput and ETA reporting."
+    },
+    "windows/EditorManager": {
+      "status": "partial",
+      "progress": 0.4,
+      "targets": ["design/main/editors.js"],
+      "note": "Internal and external editor lifecycle with upload-on-save."
+    },
+
     "putty/putty": { "status": "na", "note": "Directory-level replacement is recorded separately, not per unit." },
     "filezilla/filezilla": { "status": "na", "note": "Directory-level replacement is recorded separately, not per unit." }
   }

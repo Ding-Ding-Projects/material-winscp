@@ -1,0 +1,242 @@
+# CI — test, build the Windows installer, publish exactly one release.
+#
+# Trigger: every push, plus manual dispatch.
+# Runner:  GitHub-hosted windows-latest. The app is a Windows Electron
+#          application and the Squirrel maker needs a Windows toolchain, so the
+#          hosted Windows image is the natural fit. No self-hosted runner is
+#          used or needed.
+#
+# Contract:
+#   * `npm test` runs FIRST, in its own job. If it fails the release job never
+#     starts and NO release is created.
+#   * On success exactly ONE non-draft GitHub Release is published per run,
+#     under a unique monotonic tag derived from the run number, so no earlier
+#     release is ever recycled or overwritten.
+#   * The release carries the genuine Setup.exe built by that same run, the
+#     .nupkg and RELEASES update manifest, a real dim sum photograph taken from
+#     the repository's bundled catalog (decoded and verified in-run, never
+#     generated or downloaded), and the dim sum code name for the build.
+#   * Nothing here pushes a commit back to this repository, so a release can
+#     never retrigger the workflow.
+name: CI
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: Why this build is being run (recorded in the release notes)
+        required: false
+        default: Manual dispatch
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Node 22 LTS. Newer majors currently ship a Node build on which the
+  # packaging chain's zip extractor (extract-zip -> yauzl 2.x -> fd-slicer)
+  # stalls silently; pinning keeps the installer build reproducible.
+  NODE_VERSION: '22'
+
+jobs:
+  # ---------------------------------------------------------------- 1. test --
+  test:
+    name: Test (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          # vendor/winscp is the upstream porting reference and is large; it is
+          # not needed to build or test this app.
+          submodules: false
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run the test suite
+        run: npm test
+
+  # ------------------------------------------------------- 2. build+release --
+  release:
+    name: Build installer and publish release
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Regenerate the application icon from the tracked catalog image
+        run: node build/make-icon.js
+
+      - name: Read the package version
+        id: pkg
+        shell: bash
+        run: |
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "product=$(node -p "require('./package.json').productName")" >> "$GITHUB_OUTPUT"
+
+      # A monotonic, never-recycled tag. github.run_number increases by one for
+      # every run of this workflow in this repository and is never reused, so
+      # two builds can never collide on a tag.
+      - name: Compute the release tag
+        id: tag
+        shell: bash
+        run: echo "tag=v${{ steps.pkg.outputs.version }}-build.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      # Resolves the dish for this release number from build/release-codenames.json
+      # and DECODES its bundled PNG before offering it. A record whose image is
+      # missing or corrupt is skipped, never substituted.
+      - name: Resolve the dim sum code name and verify its photo decodes
+        id: dimsum
+        shell: bash
+        run: node build/pick-codename.js --index "${{ github.run_number }}" --json codename.json
+
+      - name: Build the Squirrel installer
+        run: npm run make
+
+      - name: Locate the built artefacts
+        id: art
+        shell: bash
+        run: |
+          set -euo pipefail
+          setup=$(find out/make/squirrel.windows -name '*Setup.exe' -print -quit || true)
+          nupkg=$(find out/make/squirrel.windows -name '*.nupkg' -print -quit || true)
+          releases=$(find out/make/squirrel.windows -name 'RELEASES' -print -quit || true)
+          zip=$(find out/make/zip -name '*.zip' -print -quit || true)
+
+          # A release without a real installer is not a release.
+          if [ -z "$setup" ] || [ ! -s "$setup" ]; then
+            echo "::error::No Setup.exe was produced by npm run make."
+            exit 1
+          fi
+
+          {
+            echo "setup=$setup"
+            echo "nupkg=$nupkg"
+            echo "releases=$releases"
+            echo "zip=$zip"
+            echo "setup_size=$(node -e "console.log((require('fs').statSync(process.argv[1]).size/1048576).toFixed(1))" "$setup")"
+          } >> "$GITHUB_OUTPUT"
+
+      # The photo is copied next to the installer under a descriptive name so
+      # the release asset list reads clearly. It is a byte-for-byte copy of the
+      # tracked catalog file — no re-encoding, no substitution.
+      - name: Stage the dim sum photograph as a release asset
+        id: photo
+        shell: bash
+        run: |
+          set -euo pipefail
+          src=$(node -p "require('./codename.json').imagePath || ''")
+          if [ -z "$src" ] || [ ! -f "$src" ]; then
+            echo "::warning::No verified dim sum photo is available; the release will ship without one."
+            echo "photo=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          mkdir -p out/release
+          dest="out/release/dim-sum-$(node -p "require('./codename.json').id || 'photo'").png"
+          cp "$src" "$dest"
+          # Verify the COPY still decodes, not merely the source.
+          node -e "require('./build/make-icon.js').decodePng(require('fs').readFileSync(process.argv[1]))" "$dest"
+          {
+            echo "photo=$dest"
+            echo "photo_src=$src"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Compose the release notes
+        run: node build/release-notes.js --tag "${{ steps.tag.outputs.tag }}" --out RELEASE_NOTES.md
+        shell: bash
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+          RUN_ID: ${{ github.run_id }}
+          COMMIT_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+          DISPATCH_REASON: ${{ github.event.inputs.reason }}
+          SETUP_PATH: ${{ steps.art.outputs.setup }}
+          NUPKG_PATH: ${{ steps.art.outputs.nupkg }}
+          ZIP_PATH: ${{ steps.art.outputs.zip }}
+          PHOTO_PATH: ${{ steps.photo.outputs.photo }}
+
+      # Exactly one release per run. --draft is deliberately absent: releases
+      # are published, not staged. The token chain prefers a repository-scoped
+      # fine-grained PAT, then the organization token, then the workflow token.
+      # It is passed only through GH_TOKEN and is never echoed.
+      - name: Publish the GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
+          SETUP_PATH: ${{ steps.art.outputs.setup }}
+          NUPKG_PATH: ${{ steps.art.outputs.nupkg }}
+          RELEASES_PATH: ${{ steps.art.outputs.releases }}
+          ZIP_PATH: ${{ steps.art.outputs.zip }}
+          PHOTO_PATH: ${{ steps.photo.outputs.photo }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          TITLE: ${{ steps.pkg.outputs.product }} ${{ steps.pkg.outputs.version }} (build ${{ github.run_number }})
+        run: |
+          set -euo pipefail
+          assets=("$SETUP_PATH")
+          for extra in "$NUPKG_PATH" "$RELEASES_PATH" "$ZIP_PATH" "$PHOTO_PATH" "codename.json"; do
+            if [ -n "$extra" ] && [ -f "$extra" ]; then assets+=("$extra"); fi
+          done
+
+          gh release create "$TAG" \
+            --repo "${{ github.repository }}" \
+            --title "$TITLE" \
+            --notes-file RELEASE_NOTES.md \
+            --target "${{ github.sha }}" \
+            "${assets[@]}"
+
+      - name: Record the build in the run summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## ${{ steps.pkg.outputs.product }} ${{ steps.tag.outputs.tag }}"
+            echo
+            echo "| Item | Value |"
+            echo "| --- | --- |"
+            echo "| Tag | \`${{ steps.tag.outputs.tag }}\` |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Installer | \`${{ steps.art.outputs.setup }}\` (${{ steps.art.outputs.setup_size }} MB) |"
+            echo "| Code name | ${{ steps.dimsum.outputs.codename }} |"
+            echo "| Code name assigned | ${{ steps.dimsum.outputs.assigned }} |"
+            echo "| Dim sum photo | \`${{ steps.photo.outputs.photo }}\` |"
+            echo "| Verified dishes in catalog | ${{ steps.dimsum.outputs.eligible_count }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Keeps the exact artefacts of this run retrievable even if a release
+      # asset is later edited. Artifacts are supplementary evidence here; the
+      # release itself is the deliverable.
+      - name: Upload the build artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: winscp-material-build-${{ github.run_number }}
+          path: |
+            out/make/**
+            codename.json
+            RELEASE_NOTES.md
+          if-no-files-found: warn
+          retention-days: 30

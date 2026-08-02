@@ -1,0 +1,47 @@
+{
+  "$comment": [
+    "Dim sum release code-name ledger for WinSCP Material.",
+    "",
+    "Every build carries a dim sum code name (dish English name + Traditional",
+    "Chinese) beside its version number. The code name labels the build; it never",
+    "replaces the version, which stays the thing users and machines identify a",
+    "build by.",
+    "",
+    "HOW ASSIGNMENT WORKS, AND WHY IT IS AUDITABLE WITHOUT A PUSH.",
+    "CI must not push back to this repository (that would retrigger itself), so",
+    "the mapping is not appended here by a workflow. Instead it is DETERMINISTIC:",
+    "`order` below is the fixed sequence, and release number N (the GitHub",
+    "Actions run number, which is monotonic) takes order[N - 1]. Anyone can",
+    "recompute the whole mapping from this file with:",
+    "",
+    "    node build/pick-codename.js --index <N>",
+    "",
+    "Each release also carries the assignment in three places a reader can check",
+    "without trusting CI: the release notes, a codename.json release asset, and",
+    "the workflow run summary.",
+    "",
+    "USED ONCE PER RELEASE. A dish is never reused. The bundled catalog is still",
+    "being filled in (design/winscp-data.js reports the verified dishes), so when",
+    "the sequence is exhausted the release ships with its version alone and the",
+    "notes say so plainly, rather than recycling a name and making two builds",
+    "indistinguishable.",
+    "",
+    "ONLY DISHES WITH A REAL BUNDLED IMAGE ARE ELIGIBLE. build/pick-codename.js",
+    "decodes the PNG before offering a dish; a record whose image is missing or",
+    "does not decode is skipped, never guessed at, and never substituted."
+  ],
+  "catalogSource": "design/winscp-data.js",
+  "catalogStatus": "in-progress",
+  "assignment": "order[runNumber - 1]",
+  "order": [
+    "hk-dish-0001",
+    "hk-dish-0011",
+    "hk-dish-0051",
+    "hk-dish-0058",
+    "hk-dish-0081",
+    "hk-dish-0139"
+  ],
+  "reserved": {
+    "hk-dish-0001": "Also the source image for build/icon.ico."
+  }
+}

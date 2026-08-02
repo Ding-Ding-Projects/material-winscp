@@ -8,15 +8,15 @@ not started; a mapping pointing at a file that does not exist is reported as a
 problem. The percentage is weighted by source lines, so a large subsystem
 cannot be made to look finished by porting a handful of small files.
 
-**Overall: 3.2% of 318,002 lines across 125 units.**
+**Overall: 7.1% of 318,002 lines across 125 units.**
 
 ## By area
 
 | Area | Units | Ported | Lines | Coverage |
 |---|---:|---:|---:|---:|
 | `forms` | 51 | 0 | 199,082 | 1.6% |
-| `core` | 36 | 0 | 76,572 | 8.8% |
-| `windows` | 20 | 0 | 32,403 | 0.0% |
+| `core` | 36 | 0 | 76,572 | 27.0% |
+| `windows` | 20 | 0 | 32,403 | 1.2% |
 | `resource` | 9 | 0 | 4,110 | 0.0% |
 | `components` | 6 | 0 | 3,734 | 0.0% |
 | `console` | 2 | 0 | 1,178 | 0.0% |
@@ -53,23 +53,23 @@ counted as replaced rather than transcribed.
 | 🚧 In progress | `core/SessionData` | core | 6,884 | `design/main/defaults.js`<br>`design/main/config.js` | Full option set declared; URL parsing and raw-settings editing pending. |
 | 🚧 In progress | `forms/NonVisual` | forms | 6,486 | `tools/extract-actions.js`<br>`design/renderer/actions.js` | All 301 actions extracted from the original with captions, hints and shortcuts; handlers pending. |
 | ⬜ Not started | `forms/SiteAdvanced` | forms | 6,290 | — |  |
-| ⬜ Not started | `core/SftpFileSystem` | core | 6,074 | — |  |
+| 🚧 In progress | `core/SftpFileSystem` | core | 6,074 | `design/main/protocols/sftp.js` | SFTP over ssh2: auth, tunnels, proxies, listing, transfers with resume. Bug-workaround matrix still to verify against a real server. |
 | ⬜ Not started | `forms/SynchronizeChecklist` | forms | 5,850 | — |  |
 | ⬜ Not started | `forms/ScpCommander` | forms | 5,807 | — |  |
 | ⬜ Not started | `core/Common` | core | 5,234 | — |  |
-| ⬜ Not started | `core/FtpFileSystem` | core | 5,106 | — |  |
+| 🚧 In progress | `core/FtpFileSystem` | core | 5,106 | `design/main/protocols/ftp.js` | FTP/FTPS over basic-ftp; MLSD and multi-dialect LIST parsing covered by tests. |
 | ⬜ Not started | `windows/WinConfiguration` | windows | 4,989 | — |  |
 | ⬜ Not started | `forms/Progress` | forms | 4,841 | — |  |
 | ⬜ Not started | `core/RemoteFiles` | core | 4,145 | — |  |
-| ⬜ Not started | `core/Queue` | core | 3,760 | — |  |
+| 🚧 In progress | `core/Queue` | core | 3,760 | `design/main/queue.js` | Parallel transfers, pause/resume, throttling, overwrite queries. |
 | ⬜ Not started | `core/Script` | core | 3,336 | — |  |
 | ⬜ Not started | `windows/GUITools` | windows | 3,331 | — |  |
 | ⬜ Not started | `windows/VCLCommon` | windows | 3,323 | — |  |
-| ⬜ Not started | `core/SecureShell` | core | 3,208 | — |  |
+| 🚧 In progress | `core/SecureShell` | core | 3,208 | `design/main/protocols/sftp.js` | Transport, host-key verification and keepalives live with the SSH adapter. |
 | ⬜ Not started | `forms/Rights` | forms | 3,151 | — |  |
 | ⬜ Not started | `core/S3FileSystem` | core | 3,046 | — |  |
 | ⬜ Not started | `windows/ConsoleRunner` | windows | 3,044 | — |  |
-| ⬜ Not started | `core/ScpFileSystem` | core | 3,041 | — |  |
+| 🚧 In progress | `core/ScpFileSystem` | core | 3,041 | `design/main/protocols/scp.js` | SCP over the shared SSH transport, with listing-command parsing. |
 | ⬜ Not started | `windows/Setup` | windows | 2,980 | — |  |
 | 🚧 In progress | `core/Configuration` | core | 2,875 | `design/main/config.js`<br>`design/main/defaults.js`<br>`design/main/paths.js` | Store, atomic writes, defaults. INI import/export still to do. |
 | ⬜ Not started | `forms/Console` | forms | 2,828 | — |  |
@@ -77,14 +77,14 @@ counted as replaced rather than transcribed.
 | ⬜ Not started | `windows/WinInterface` | windows | 2,545 | — |  |
 | ⬜ Not started | `forms/LocationProfiles` | forms | 2,529 | — |  |
 | ⬜ Not started | `forms/FileFind` | forms | 2,525 | — |  |
-| ⬜ Not started | `core/WebDAVFileSystem` | core | 2,511 | — |  |
+| 🚧 In progress | `core/WebDAVFileSystem` | core | 2,511 | `design/main/protocols/webdav.js` | Hand-written client; PROPFIND parsing and RFC 7616 Digest auth covered by tests. |
 | 🚧 In progress | `core/HierarchicalStorage` | core | 2,407 | `design/main/config.js` | JSON store replaces INI/registry hierarchy; INI compatibility layer pending. |
 | ⬜ Not started | `core/SessionInfo` | core | 2,274 | — |  |
 | ⬜ Not started | `forms/ScpExplorer` | forms | 2,054 | — |  |
 | ⬜ Not started | `forms/Custom` | forms | 2,008 | — |  |
 | ⬜ Not started | `windows/Tools` | windows | 1,821 | — |  |
 | ⬜ Not started | `windows/GUIConfiguration` | windows | 1,728 | — |  |
-| ⬜ Not started | `core/FileMasks` | core | 1,707 | — |  |
+| 🚧 In progress | `core/FileMasks` | core | 1,707 | `design/main/masks.js` | WinSCP mask syntax including size and time masks, with a test table. |
 | ⬜ Not started | `core/PuttyIntf` | core | 1,689 | — |  |
 | ⬜ Not started | `forms/Properties` | forms | 1,599 | — |  |
 | ⬜ Not started | `windows/UserInterface` | windows | 1,501 | — |  |
@@ -92,8 +92,8 @@ counted as replaced rather than transcribed.
 | ⬜ Not started | `windows/WinMain` | windows | 1,411 | — |  |
 | ⬜ Not started | `components/UnixDirView` | components | 1,328 | — |  |
 | ⬜ Not started | `forms/GenerateUrl` | forms | 1,325 | — |  |
-| ⬜ Not started | `core/FileOperationProgress` | core | 1,280 | — |  |
-| ⬜ Not started | `core/CopyParam` | core | 1,279 | — |  |
+| 🚧 In progress | `core/FileOperationProgress` | core | 1,280 | `design/main/queue.js` | Byte/file counters, throughput and ETA reporting. |
+| 🚧 In progress | `core/CopyParam` | core | 1,279 | `design/main/queue.js`<br>`design/main/defaults.js` | Transfer parameters declared and applied by the queue. |
 | ⬜ Not started | `forms/Synchronize` | forms | 1,262 | — |  |
 | ⬜ Not started | `forms/Authenticate` | forms | 1,220 | — |  |
 | ⬜ Not started | `components/UnixDriveView` | components | 1,151 | — |  |
@@ -108,7 +108,7 @@ counted as replaced rather than transcribed.
 | ⬜ Not started | `resource/TextsFileZilla` | resource | 902 | — |  |
 | ⬜ Not started | `components/ThemePageControl` | components | 882 | — |  |
 | ⬜ Not started | `forms/CopyParams` | forms | 869 | — |  |
-| ⬜ Not started | `windows/EditorManager` | windows | 784 | — |  |
+| 🚧 In progress | `windows/EditorManager` | windows | 784 | `design/main/editors.js` | Internal and external editor lifecycle with upload-on-save. |
 | ⬜ Not started | `windows/QueueController` | windows | 764 | — |  |
 | ⬜ Not started | `core/Exceptions` | core | 761 | — |  |
 | ⬜ Not started | `resource/TextsWin` | resource | 751 | — |  |
