@@ -149,13 +149,15 @@ export function openMenu(opts = {}) {
   } else {
     const vw = document.documentElement.clientWidth;
     const vh = document.documentElement.clientHeight;
+    // Cap the height BEFORE measuring, or a long menu is clamped against a
+    // height it will never have and runs off the bottom of the window.
+    root.style.maxHeight = `${vh - 12}px`;
     const r = root.getBoundingClientRect();
     const left = clamp(opts.x ?? 0, 6, Math.max(6, vw - r.width - 6));
     const top = clamp(opts.y ?? 0, 6, Math.max(6, vh - r.height - 6));
     root.style.position = 'fixed';
     root.style.left = `${Math.round(left)}px`;
     root.style.top = `${Math.round(top)}px`;
-    root.style.maxHeight = `${vh - 12}px`;
   }
 
   function focusRow(row) {

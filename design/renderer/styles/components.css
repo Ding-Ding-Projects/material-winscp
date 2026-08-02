@@ -385,7 +385,8 @@ textarea.field-input { padding: 8px 12px; resize: vertical; }
 /* regex builder                                                       */
 /* ================================================================== */
 
-.rb-popover { width: min(560px, calc(100vw - 24px)); }
+.rb-popover { width: min(560px, calc(100vw - 24px)); max-height: min(660px, calc(100vh - 24px)); display: flex; flex-direction: column; }
+.rb-popover .rb-body { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
 .rb-title { flex: 1 1 auto; min-width: 0; }
 .rb-title-main { font-size: var(--type-title-md); font-weight: 500; }
 .rb-engine { font-size: var(--type-label-sm); color: var(--onsv); }
@@ -413,7 +414,7 @@ textarea.field-input { padding: 8px 12px; resize: vertical; }
   color: var(--onsv);
 }
 .rb-flag[aria-pressed="true"] { background: var(--pc); color: var(--onpc); border-color: var(--p); font-weight: 700; }
-.rb-constructs { display: flex; flex-direction: column; gap: 4px; max-height: 190px; overflow-y: auto; }
+.rb-constructs { display: flex; flex-direction: column; gap: 4px; max-height: 148px; overflow-y: auto; }
 .rb-cat { font-size: var(--type-label-sm); color: var(--onsv); text-transform: uppercase; letter-spacing: .04em; margin-top: 4px; }
 .rb-cat-row { display: flex; flex-wrap: wrap; gap: 4px; }
 .rb-chip {

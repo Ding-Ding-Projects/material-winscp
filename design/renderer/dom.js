@@ -305,20 +305,28 @@ export function anchorTo(el, anchorEl, opts = {}) {
       if (fits[flip]) side = flip;
     }
 
+    // Cap the height FIRST, then re-measure. Clamping against the uncapped
+    // height is what makes a tall popover jump to the top of the window and
+    // cover the chrome it was supposed to sit under.
+    if (side === 'bottom' || side === 'top') {
+      const avail = side === 'bottom' ? vh - a.bottom - gap - pad : a.top - gap - pad;
+      el.style.maxHeight = `${Math.max(160, Math.floor(avail))}px`;
+    } else {
+      el.style.maxHeight = `${Math.max(160, vh - 2 * pad)}px`;
+    }
+    const r2 = el.getBoundingClientRect();
+    const hFinal = r2.height;
+
     let top, left;
     if (side === 'bottom' || side === 'top') {
-      top = side === 'bottom' ? a.bottom + gap : a.top - gap - hgt;
+      top = side === 'bottom' ? a.bottom + gap : a.top - gap - hFinal;
       left = align === 'end' ? a.right - w : align === 'center' ? a.left + (a.width - w) / 2 : a.left;
-      // vertical space is finite: cap the height and let the surface scroll
-      const avail = side === 'bottom' ? vh - a.bottom - gap - pad : a.top - gap - pad;
-      el.style.maxHeight = `${Math.max(140, Math.floor(avail))}px`;
     } else {
       left = side === 'right' ? a.right + gap : a.left - gap - w;
-      top = align === 'end' ? a.bottom - hgt : align === 'center' ? a.top + (a.height - hgt) / 2 : a.top;
-      el.style.maxHeight = `${Math.max(140, vh - 2 * pad)}px`;
+      top = align === 'end' ? a.bottom - hFinal : align === 'center' ? a.top + (a.height - hFinal) / 2 : a.top;
     }
     left = clamp(left, pad, Math.max(pad, vw - w - pad));
-    top = clamp(top, pad, Math.max(pad, vh - hgt - pad));
+    top = clamp(top, pad, Math.max(pad, vh - hFinal - pad));
     el.style.position = 'fixed';
     el.style.left = `${Math.round(left)}px`;
     el.style.top = `${Math.round(top)}px`;
