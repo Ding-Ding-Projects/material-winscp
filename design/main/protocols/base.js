@@ -58,6 +58,18 @@ class Adapter extends EventEmitter {
   /** Human-readable protocol name, shown in the UI and the log. */
   get protocolName() { return 'unknown'; }
 
+  /**
+   * TCustomFileSystem::GetUserName — who this connection is logged in as.
+   *
+   * It is the file system that owns the answer rather than the session record,
+   * because a backend can learn a better one during authentication (a
+   * keyboard-interactive login that resolves a different account, say) than the
+   * name that was typed into the site. Nothing overrides it yet, so the session
+   * data is the answer everywhere; the seam exists so a backend that does know
+   * better has somewhere to say so.
+   */
+  get userName() { return (this.session && this.session.userName) || ''; }
+
   /** Path helpers — overridden by the local backend for Windows separators. */
   get sep() { return '/'; }
 

@@ -29,6 +29,7 @@ const { finished } = require('stream/promises');
 
 const { FileMask } = require('./masks');
 const { COPY_PARAM_DEFAULTS, PREF_DEFAULTS } = require('./defaults');
+const { sameUserName, ownerName } = require('./remotefiles');
 // The overwrite decision (ConfirmFileOverwrite / EffectiveBatchOverwrite) and
 // the robust retry substrate live in transfer.js, the port of Terminal.cpp's
 // transfer half. The queue moves the bytes; that module decides what happens
@@ -275,6 +276,28 @@ function allowResume(copyParam, size, fileName) {
     case 'smart': return size >= copyParam.resumeThreshold;
     default: return false;
   }
+}
+
+/**
+ * SftpFileSystem.cpp:4694-4700 — "never do resumable transfer for file owned by
+ * other user, as deleting and recreating the file would change ownership".
+ *
+ * The partial-file dance below does not overwrite the target in place: it
+ * removes it and renames a file this session created onto the name, so the
+ * replacement belongs to whoever uploaded it. Refusing the resume costs one
+ * optimization; taking it costs a colleague their file's ownership.
+ *
+ * `ownerName` is the load-bearing half. WinSCP guards on
+ * `!Owner.Name.IsEmpty()` and admits in its own comment that the check is inert
+ * against OpenSSH, "as it does not provide owner name (only UID)". ssh2 speaks
+ * SFTP-3 and nothing else, so sftp.js hands the adapter a uid string; comparing
+ * that with a login name is false for every file on every server, which would
+ * turn resumable uploads off wholesale rather than guarding anything.
+ */
+function ownedByAnotherUser(existing, userName) {
+  if (!existing) return false;
+  const name = ownerName(existing.owner);
+  return !!name && !sameUserName(name, userName);
 }
 
 /** UseAsciiTransfer: 'automatic' consults the asciiFileMask. */
@@ -920,6 +943,29 @@ class TransferQueue extends EventEmitter {
       }
     }
 
+    // "Preserve overwritten remote files to recycle bin" — TSFTPFileSystem's
+    // SFTPOpenRemote recycle (SftpFileSystem.cpp:5226-5270), which has to
+    // happen HERE, before anything below can touch the target. Every route out
+    // of this method destroys the existing file: the server-side copy just
+    // below overwrites it, the partial-file path removes it outright before
+    // renaming, and a plain write truncates it. WinSCP gets the ordering for
+    // free by opening with SSH_FXF_EXCL and recycling from the failure; with
+    // no exclusive-create to lean on, the port has to do it deliberately.
+    //
+    // Nulling `existing` afterwards is load-bearing rather than tidiness. The
+    // file is gone from this name, so `_copyBytes` must not try to remove it
+    // and `copyRemote` must not be told to expect it — both would fail on a
+    // path that no longer exists. Only `overwrite` qualifies (WinSCP tests
+    // `OverwriteMode == omOverwrite` at 5133): append and resume extend the
+    // file that is already there, so nothing is being overwritten.
+    let recycledRights;
+    if (existing && existing.type !== 'dir' && mode === 'overwrite') {
+      const r = await T.recycleOverwritten(dst, targetPath, existing,
+        (item.session && item.session.data) || {},
+        (msg) => this.emit('log', { id: item.id, text: msg }));
+      if (r.recycled) { recycledRights = r.rights; existing = null; }
+    }
+
     // A server-side copy never leaves the server. When both ends are the same
     // adapter and it advertises copy-file/copy-data (SFTP's copy-file and
     // copy-data extensions), duplicating a 40 GB file costs one request instead
@@ -929,6 +975,9 @@ class TransferQueue extends EventEmitter {
     if (item.side === 'remote-copy' && mode === 'overwrite' && !text
         && src === dst && dst.caps && dst.caps.copyRemote && typeof dst.copyRemote === 'function') {
       await dst.copyRemote(entry.srcPath, targetPath, { overwrite: !!existing });
+      if (recycledRights && !cp.preserveRights && dst.caps.rights) {
+        await this._tolerate(cp, () => dst.setRights(targetPath, recycledRights));
+      }
       item.progress.bytes = item._bytesDone + entry.size;
       item.progress.filesDone += 1;
       this._emitProgress(item, true);
@@ -943,6 +992,12 @@ class TransferQueue extends EventEmitter {
     }
     if (cp.preserveRights && dst.caps.rights) {
       await this._tolerate(cp, () => dst.setRights(targetPath, entry.rights || cp.rights));
+    } else if (recycledRights && dst.caps.rights) {
+      // PreserveExistingRights (SftpFileSystem.cpp:4804, 4818-4827). The old
+      // file kept its permissions on the way into the bin; the replacement
+      // standing in its place gets them back, so turning the safety net on
+      // does not quietly re-mode every file it protects.
+      await this._tolerate(cp, () => dst.setRights(targetPath, recycledRights));
     }
     if (toLocal && cp.preserveReadOnly && entry.readOnly && dst.caps.rights) {
       await this._tolerate(cp, () => dst.setRights(targetPath, 'r--r--r--'));
@@ -1142,9 +1197,12 @@ class TransferQueue extends EventEmitter {
       startAt = existing.size;
       readFrom = existing.size;
       if (readFrom >= entry.size) return 0;      // already complete
-    } else if (allowResume(cp, entry.size, dst.basename(targetPath)) && canRange && !text) {
+    } else if (allowResume(cp, entry.size, dst.basename(targetPath)) && canRange && !text
+               && !ownedByAnotherUser(existing, dst.userName)) {
       // Text mode cannot resume: the byte offsets on the two sides differ once
       // line endings are rewritten, so a restart would splice mid-line.
+      // The ownership refusal is the same one transfer.js's source() makes —
+      // this is the route a click actually takes, so the two have to agree.
       usingPartial = true;
       writePath = targetPath + cp.partialFileExt;
       const part = await statOrNull(dst, writePath);

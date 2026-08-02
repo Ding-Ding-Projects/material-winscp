@@ -528,6 +528,8 @@ export function createPresetList({ value = [], current, onChange } = {}) {
  *   target     the initial target directory
  *   session    { id, hostName, userName, remoteDirectory, localDirectory } —
  *              used for preset autoselection and for the history key
+ *   queue      TCopyParamType::Queue as the command preset it: true (asOn),
+ *              false (asOff) or undefined (asAuto — the stored default)
  *   onConfirm  ({ target, copyParam, queue }) — the caller performs the copy
  *
  * The dialog itself never transfers anything: it resolves what to transfer and
@@ -586,7 +588,15 @@ export function openCopyDialog(props = {}) {
   }, t('transferSettingsShort'));
 
   const queueCheck = h('input', { type: 'checkbox', class: 'pref-check-input', id: uid('copy-bg') });
-  queueCheck.checked = readPref('queue.enabledByDefault') !== false;
+  // CopyParamDialog renders this box out of TCopyParamType::Queue, and
+  // ExecuteCopyOperationCommand has already preset that from the action's
+  // cocQueue / cocNonQueue flag — so a *NonQueueAction must open with it
+  // unticked rather than at the stored default, or the command that exists to
+  // avoid the queue silently opts back into it. `undefined` is asAuto: keep
+  // whatever the configuration says.
+  queueCheck.checked = props.queue === undefined
+    ? readPref('queue.enabledByDefault') !== false
+    : !!props.queue;
 
   const neverAgain = h('input', { type: 'checkbox', class: 'pref-check-input', id: uid('copy-never') });
 

@@ -610,22 +610,39 @@ class Ipc {
    * growing its own copy of the other's job.
    */
   terminalFor(session) {
-    if (session.__terminal) return session.__terminal;
-    const mod = terminalModule();
-    if (typeof mod.Terminal !== 'function') throw new Error('design/main/terminal.js does not export Terminal.');
-    const t = new mod.Terminal(session, {
-      config: this.config,
-      queryUser: async (query) => this.ask({ kind: 'terminal', sessionId: session.id, ...query }),
-      onProgress: (p) => this.emit('event:progress', { kind: 'operation', sessionId: session.id, progress: p }),
-    });
-    // The engine is created here, once, with the byte mover attached. Without
-    // it every Source/Sink would throw "this transfer engine has no byte mover".
+    let t = session.__terminal;
+    if (!t) {
+      const mod = terminalModule();
+      if (typeof mod.Terminal !== 'function') throw new Error('design/main/terminal.js does not export Terminal.');
+      t = new mod.Terminal(session, {
+        config: this.config,
+        queryUser: async (query) => this.ask({ kind: 'terminal', sessionId: session.id, ...query }),
+        // `p` is the LIVE OperationProgress, and its two callbacks are own
+        // properties — so webContents.send's structured clone refuses the whole
+        // payload, emit() swallows the DataCloneError as an undeliverable push,
+        // and a foreground transfer reports nothing at all while it runs.
+        // snapshot() is the shape that was written to cross the bridge
+        // (terminal.js OperationProgress::snapshot), so send that.
+        onProgress: (p) => this.emit('event:progress', {
+          kind: 'operation',
+          sessionId: session.id,
+          progress: (p && typeof p.snapshot === 'function') ? p.snapshot() : p,
+        }),
+      });
+      Object.defineProperty(session, '__terminal', {
+        value: t, enumerable: false, configurable: true, writable: true,
+      });
+    }
+    // The byte mover is attached on EVERY path through here, not only on the
+    // one that constructs. terminal.js exports its own terminalFor() that sets
+    // session.__terminal WITHOUT it; anything reaching that one first would
+    // leave an early return handing back an engine whose every Source/Sink
+    // throws "this transfer engine has no byte mover". transferEngineFor()
+    // re-supplies late dependencies rather than building a second engine, so
+    // paying for this on each call costs two assignments and closes the hole.
     t.transferEngine({
       localAdapter: this.localAdapter(),
       copyBytes: (plan) => this.queue().moveBytes(plan),
-    });
-    Object.defineProperty(session, '__terminal', {
-      value: t, enumerable: false, configurable: true, writable: true,
     });
     return t;
   }
@@ -2166,15 +2183,21 @@ class Ipc {
     });
 
     /**
-     * CanParallel — whether ONE file may be split across several connections.
-     * Asked before the transfer so the answer can be reported rather than
-     * discovered halfway through.
+     * CanParallel — whether this session may spread a transfer over several
+     * connections at all. Asked before the transfer so the answer can be
+     * reported rather than discovered halfway through.
+     *
+     * It answers `parallelAllowed`, not `canParallel`: TTerminal::CanParallel
+     * opens with `ParallelOperation != NULL` and there is no cursor to hand a
+     * pre-flight query, so forwarding it would make this channel a constant
+     * `false` whatever the protocol, the copy parameters or the flags. The
+     * cursor guard stays where WinSCP put it, inside CopyToRemote/CopyToLocal.
      */
     this.handle('transfer:canParallel', (req) => {
       const r = obj(req, 'request');
       const session = this.session(r.sessionId);
       const engine = this.terminalFor(session).transferEngine();
-      return engine.canParallel(copyParamOf(r.copyParam),
+      return engine.parallelAllowed(copyParamOf(r.copyParam),
         r.params === undefined ? 0 : num(r.params, 'params', 0));
     });
 

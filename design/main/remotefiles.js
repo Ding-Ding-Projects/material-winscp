@@ -516,6 +516,25 @@ function sameUserName(userName1, userName2) {
 }
 
 /**
+ * TRemoteToken::GetNameValid, for callers that only have the adapter contract.
+ *
+ * WinSCP keeps a file's owner as a TRemoteToken with two independent fields —
+ * a name and a numeric id — and every ownership question it asks is guarded by
+ * `!Owner.Name.IsEmpty()`, because a protocol that reports only a uid has told
+ * it nothing it can compare against a login name. The adapter boundary in this
+ * port flattens both meanings into one `owner` string: sftp.js writes
+ * `String(uid)` because ssh2 speaks SFTP-3, whose attribute block has no
+ * owner-name field at all; ftp.js writes UNIX.ownername when MLST supplies it
+ * and the numeric UNIX.owner when it does not. That distinction has to be
+ * recovered here or "1000" reads as somebody called 1000, and a comparison
+ * against 'alice' is then false for every file on the server.
+ */
+function ownerName(owner) {
+  const s = String(owner === undefined || owner === null ? '' : owner).trim();
+  return /^\d+$/.test(s) ? '' : s;
+}
+
+/**
  * File type classification. WinSCP keeps the raw `ls` type character and
  * derives everything from it, which is why an unknown character (a door, a
  * whiteout) still lists rather than failing.
@@ -2537,7 +2556,7 @@ module.exports = {
   sameModification, modificationStr, userModificationStr,
   isTimeShiftingApplicable, shiftTimeInSeconds,
   // files
-  getPartialFileExtLen, sameUserName, fileTypeName, compareFiles,
+  getPartialFileExtLen, sameUserName, ownerName, fileTypeName, compareFiles,
   // classes
   TRights, RightsError, TRemoteToken, TRemoteTokenList, TRemoteFile,
   TRemoteDirectoryFile, TRemoteParentDirectory, TRemoteFileList,

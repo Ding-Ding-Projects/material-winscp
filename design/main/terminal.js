@@ -188,6 +188,25 @@ function maskFileName(fileName, mask) {
   return maskFilePart(name, mask).result;
 }
 
+/**
+ * The `*-yyyymmdd-hhnnss.*` mask TTerminal::RecycleFile stamps onto a name on
+ * its way into the bin (Terminal.cpp:4318).
+ *
+ * The timestamp is not decoration: the bin is a flat directory, so recycling
+ * `config` twice would otherwise overwrite the first copy with the second and
+ * destroy the very file the bin exists to keep. It lives out here rather than
+ * inside the method because `transfer.js` recycles an about-to-be-overwritten
+ * file on the upload path and must produce byte-identical names — two
+ * independently written stamps would drift the first time one of them was
+ * tidied up.
+ */
+function recycleFileMask(when) {
+  const stamp = new Date(when === undefined ? Date.now() : when);
+  const pad = (n, w) => String(n).padStart(w || 2, '0');
+  return `*-${stamp.getFullYear()}${pad(stamp.getMonth() + 1)}${pad(stamp.getDate())}-` +
+    `${pad(stamp.getHours())}${pad(stamp.getMinutes())}${pad(stamp.getSeconds())}.*`;
+}
+
 // ===========================================================================
 // Constants — the enums Terminal.cpp switches on
 // ===========================================================================
@@ -941,6 +960,19 @@ class Terminal extends EventEmitter {
   get prefs() { return (this.config && this.config.prefs) || {}; }
 
   get sessionData() { return (this.session && this.session.data) || {}; }
+
+  /**
+   * TTerminal::GetUserName (Terminal.cpp:2758-2768) — the file system's answer,
+   * falling back to the site's when the backend has none. Two callers need it
+   * and both were silently reading `undefined` before it existed:
+   * TRemoteFile::GetIsInaccessibleDirectory (remotefiles.js), which decides
+   * whether a directory can be entered at all, and the resume guard in
+   * transfer.js, which refuses to delete-and-recreate a file somebody else owns.
+   */
+  get userName() {
+    const a = this.adapter;
+    return (a && a.userName) || this.sessionData.userName || '';
+  }
 
   logEvent(text) {
     if (this.session && this.session.log) this.session.log.add('debug', text);
@@ -2110,10 +2142,7 @@ class Terminal extends EventEmitter {
 
     const bin = this.sessionData.recycleBinPath;
     this.logEvent(`Moving file "${name}" to remote recycle bin '${bin}'.`);
-    const stamp = new Date(this._now());
-    const pad = (n, w) => String(n).padStart(w || 2, '0');
-    const mask = `*-${stamp.getFullYear()}${pad(stamp.getMonth() + 1)}${pad(stamp.getDate())}-` +
-      `${pad(stamp.getHours())}${pad(stamp.getMinutes())}${pad(stamp.getSeconds())}.*`;
+    const mask = recycleFileMask(this._now());
 
     const result = await this.doMoveFile(name, file, { target: bin, fileMask: mask, dontOverwrite: false });
     const progress = this.operationProgress;
@@ -2921,6 +2950,7 @@ module.exports = {
   absolutePath,
   maskFileName,
   maskFilePart,
+  recycleFileMask,
   rightsText,
   addExecute,
 };

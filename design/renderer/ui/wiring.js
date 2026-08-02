@@ -410,6 +410,12 @@ function installTransferDialogs() {
       if (!files.length) { notify.warning(t('nothingSelected'), t('selectFiles')); return null; }
       const info = ctx.sessionInfo || {};
       const direction = opts.direction || (ctx.isLocal ? 'upload' : 'download');
+      // TTransferOperationParam::Queue, carried here from the command's own
+      // cocQueue / cocNonQueue flag. This override is what actually runs in the
+      // application — ui/commands.js's inline form only serves a context with no
+      // dialogs registered — so dropping it here is what kept all four
+      // *NonQueueAction commands queueing like the plain Copy ones.
+      const queueMode = opts.queue || 'auto';
       // WinSCP's "Confirm transfers" — and the copy dialog's own "do not show
       // this again", which writes it. Honouring it here is what makes that
       // checkbox mean something: with it off the transfer simply starts, on the
@@ -419,6 +425,7 @@ function installTransferDialogs() {
           direction,
           move: !!opts.move,
           background: readPref('queue.enabledByDefault', true) !== false,
+          queue: queueMode,
           target: ctx.other ? ctx.other.path() : '',
           files: files.map((f) => f.path),
         });
@@ -427,6 +434,11 @@ function installTransferDialogs() {
         direction,
         files: files.map((f) => f.name),
         target: ctx.other ? ctx.other.path() : '',
+        // asOff unticks the background box, asOn ticks it, asAuto leaves it at
+        // the stored default — CopyParamDialog renders that checkbox straight
+        // out of CopyParam.Queue, which ExecuteCopyOperationCommand has already
+        // preset from the action.
+        queue: queueMode === 'auto' ? undefined : queueMode === 'on',
         session: {
           id: ctx.sessionId,
           hostName: info.hostName,
@@ -440,6 +452,13 @@ function installTransferDialogs() {
           direction,
           move: !!opts.move,
           background: queue !== false,
+          // Ticking the box overrides the command's asOff preset, because
+          // ExecuteCopyMoveFileOperation reads the FINAL CopyParam.Queue rather
+          // than the preset. The reverse is deliberately NOT taken: unticking
+          // it on a command that never asked for asOff keeps the queue, so this
+          // change moves the four NonQueue commands onto the foreground path
+          // and leaves every other transfer on the one it already used.
+          queue: (queueMode === 'off' && queue === false) ? 'off' : 'auto',
           target,
           copyParam,
           files: files.map((f) => f.path),

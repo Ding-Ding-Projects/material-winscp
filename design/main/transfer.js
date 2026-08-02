@@ -45,6 +45,8 @@ const {
   trimVmsVersion,
   getPartialFileExtLen,
   PARTIAL_EXT,
+  sameUserName,
+  ownerName,
 } = require('./remotefiles');
 // `common.js` is the port of core/Common.cpp and owns ValidLocalFileName and
 // the two replacement sentinels. It is imported whole because this module both
@@ -57,7 +59,7 @@ const {
   SkipFileError, AbortError, TerminalError,
   classifyException, RobustLoop,
   includeTrailingSlash, excludeTrailingSlash, extractFileName, extractFilePath,
-  samePath, maskFileName,
+  samePath, maskFileName, recycleFileMask,
 } = require('./terminal');
 
 // ===========================================================================
@@ -2350,8 +2352,28 @@ class TransferEngine {
    * an arbitrary order.
    */
   canParallel(copyParam, params, parallelOperation) {
-    return !!parallelOperation &&
-      this.parallelTransfersCapable() &&
+    return !!parallelOperation && this.parallelAllowed(copyParam, params);
+  }
+
+  /**
+   * The same refusals WITHOUT the cursor guard — the question a caller can ask
+   * BEFORE it has a TParallelOperation in hand.
+   *
+   * CanParallel's first term is `ParallelOperation != NULL`, and in WinSCP that
+   * is never a real predicate: it is only ever called from inside CopyToRemote
+   * and CopyToLocal (Terminal.cpp:7606, :8162), where the cursor is whatever
+   * the caller passed. Every foreground caller passes NULL and only the queue
+   * ever constructs one (Queue.cpp:2182). So a standalone "may this session go
+   * parallel?" query that forwarded NULL would answer `false` every time and
+   * describe nothing about the session it was asked about — a constant dressed
+   * up as a decision. This answers the part a caller can actually act on: the
+   * protocol's fcParallelTransfers capability, and the two orderings a split
+   * would break (a MOVE deletes the source directory only after every file
+   * under it is done, and preserving directory timestamps stamps a directory
+   * only after its contents).
+   */
+  parallelAllowed(copyParam, params) {
+    return this.parallelTransfersCapable() &&
       !(params & COPY_FLAGS.delete) &&
       !(copyParam.preserveTime && copyParam.preserveTimeDirs);
   }
@@ -2629,6 +2651,26 @@ class AdapterFileSystem {
           if (existing.isSymlink || existing.type === 'link') {
             resumeAllowed = false;
             engine.logEvent('Existing file is symbolic link, not doing resumable transfer.');
+          } else if (ownerName(existing.owner) &&
+                     !sameUserName(ownerName(existing.owner), engine.terminal.userName)) {
+            // SftpFileSystem.cpp:4689-4700, the third arm of the same chain.
+            // The rename below does not overwrite the target in place — it
+            // deletes it and moves a file this session created onto the name,
+            // so the replacement is owned by whoever uploaded it. On a shared
+            // directory that quietly transfers a colleague's file to you, and
+            // no amount of preserving rights afterwards puts the owner back.
+            //
+            // `ownerName` is what keeps this honest rather than catastrophic.
+            // WinSCP guards on `!Owner.Name.IsEmpty()` and concedes in the
+            // comment above the check that it "won't work for SFTP-3
+            // (OpenSSH) as it does not provide owner name (only UID)"; ssh2
+            // speaks SFTP-3 and nothing else, so sftp.js:1345 hands us a uid
+            // string. Comparing that against a login name is false for every
+            // file on every server, which would not tighten a safety check —
+            // it would switch resumable uploads off for everyone.
+            resumeAllowed = false;
+            engine.logEvent(
+              `Existing file is owned by another user [${existing.owner}], not doing resumable transfer.`);
           }
         }
 
@@ -2666,11 +2708,25 @@ class AdapterFileSystem {
           }
         }
       }
-    } else if (engine.checkRemoteFile(handle.fileName, copyParam, params, progress)) {
-      // Not resumable, but we still have to find out whether anything is there.
-      existing = await statOrNull(dst, destFullName);
-      destFileExists = !!existing;
-      if (destFileExists) {
+    } else {
+      // Not resumable, but we still have to find out whether anything is there
+      // — and "whether we have to" is two questions, not one. WinSCP asks for
+      // the target with SSH_FXF_EXCL when EITHER the overwrite is going to be
+      // confirmed OR the site preserves overwritten files
+      // (SftpFileSystem.cpp:5132-5136), and the comment above that line says
+      // exactly why: "when we want to preserve overwritten files, we need to
+      // find out that they exist first... even if overwrite confirmation is
+      // disabled." Probing only when a question is coming would make the
+      // recycle bin do nothing at all for the many users who turned
+      // confirmations off — the queue ships with them off by default.
+      const confirming = engine.checkRemoteFile(handle.fileName, copyParam, params, progress);
+      const sd = engine.terminal.sessionData || {};
+      const preserving = !!(sd.overwrittenToRecycleBin && sd.recycleBinPath);
+      if (confirming || preserving) {
+        existing = await statOrNull(dst, destFullName);
+        destFileExists = !!existing;
+      }
+      if (destFileExists && confirming) {
         fileParams.destSize = Number(existing.size) || 0;
         fileParams.destTimestamp = Number(existing.mtime) || 0;
         if (existing.modificationFmt !== undefined) fileParams.destPrecision = existing.modificationFmt;
@@ -2690,6 +2746,25 @@ class AdapterFileSystem {
     const doResume = resumeAllowed && overwriteMode === OVERWRITE_MODE.overwrite;
     const writePath = doResume ? destPartialFullName : destFullName;
     if (action) action.destinationPath(destFullName).setSize(progress.localSize);
+
+    // SFTPOpenRemote's recycle (SftpFileSystem.cpp:5226-5270), for the write
+    // that goes straight at the real name. The resumable path writes to a
+    // `.filepart` and does not touch the target until the rename below, so it
+    // recycles there instead; here the very next thing to happen is a
+    // truncating open, and after that the file the user asked to preserve is
+    // unrecoverable. Only an omOverwrite qualifies (5133): append and resume
+    // extend the existing file rather than replacing it, so there is nothing
+    // being overwritten to preserve.
+    let recycledRights;
+    if (!doResume && destFileExists && overwriteMode === OVERWRITE_MODE.overwrite) {
+      const r = await recycleOverwritten(dst, destFullName, existing,
+        engine.terminal.sessionData, (t) => engine.logEvent(t));
+      if (r.recycled) {
+        recycledRights = r.rights;
+        destFileExists = false;
+        existing = null;
+      }
+    }
 
     let readFrom = 0;
     let writeAt = 0;
@@ -2735,7 +2810,17 @@ class AdapterFileSystem {
     if (doResume) {
       // Only now that every byte is there does the real name appear.
       if (destFileExists) {
-        try { await dst.remove(dst.normalize(destFullName), { directory: false }); } catch { /* raced */ }
+        // SftpFileSystem.cpp:4939-4958 — the SECOND recycle site. The rename
+        // below cannot land on top of an existing name, so something has to go
+        // first, and the site's preference decides whether that is a move into
+        // the bin or a delete. `tolerateFailure: false` because the fallback
+        // here is destructive: if the recycle quietly failed we would carry on
+        // and remove the file anyway, which is precisely the outcome the
+        // setting exists to prevent. WinSCP raises DELETE_ON_RESUME_ERROR.
+        const r = await recycleOverwritten(dst, destFullName, existing,
+          engine.terminal.sessionData, (t) => engine.logEvent(t), { tolerateFailure: false });
+        if (r.recycled) recycledRights = r.rights;
+        else try { await dst.remove(dst.normalize(destFullName), { directory: false }); } catch { /* raced */ }
       }
       await dst.rename(dst.normalize(writePath), dst.normalize(destFullName));
     }
@@ -2743,6 +2828,12 @@ class AdapterFileSystem {
     if (copyParam.preserveRights && engine.terminal.isCapable('modeChangingUpload')) {
       await tolerate(copyParam, () =>
         dst.setRights(dst.normalize(destFullName), remoteFileRights(copyParam, false)));
+    } else if (recycledRights && dst.caps && dst.caps.rights) {
+      // PreserveExistingRights (SftpFileSystem.cpp:4804, 4818-4827). The name
+      // survives the recycle, so its permissions should too — otherwise
+      // switching the safety net on quietly re-modes every file it protects to
+      // whatever the server's umask happens to produce.
+      await tolerate(copyParam, () => dst.setRights(dst.normalize(destFullName), recycledRights));
     }
     if (copyParam.preserveTime && engine.terminal.isCapable('preservingTimestampUpload') && handle.modification) {
       await tolerate(copyParam, () =>
@@ -2941,6 +3032,86 @@ async function statOrNull(adapter, p) {
   try { return await adapter.stat(adapter.normalize(p)); } catch { return null; }
 }
 
+/**
+ * "Preserve overwritten remote files to recycle bin" — the recycle WinSCP does
+ * on the UPLOAD path, not the delete path.
+ *
+ * TSFTPFileSystem::SFTPOpenRemote (SftpFileSystem.cpp:5226-5270) is where this
+ * lives, and the way it is spelled there is worth keeping in mind because it
+ * is what pins the ORDERING. WinSCP does not stat-then-recycle-then-write; it
+ * asks for the target with SSH_FXF_EXCL specifically so the create FAILS when
+ * something is already there (5132-5136, whose comment says the existence has
+ * to be discovered "even if overwrite confirmation is disabled"), recycles the
+ * file from the catch, and lets the enclosing do/while retry the open — which
+ * now succeeds, because the original has been moved out of the way. The
+ * replacement is never written until the original is safe. This port has no
+ * exclusive-create to hang that on, so the caller must do the same thing the
+ * blunt way: call this BEFORE a single byte is written, and treat a `recycled`
+ * answer as meaning the target no longer exists.
+ *
+ * The guards, in WinSCP's own order:
+ *   * the site has to have asked for it, and named a bin (5227-5228);
+ *   * SFTP only. Not a capability check — no remote adapter advertises
+ *     `caps.recycleBin` (protocols/sftp.js sets it false, and base.js defaults
+ *     it false), because that flag means the OS trash and only the local
+ *     backend has one. WinSCP's own gate is the protocol: SessionData.cpp,
+ *     SessionInfo.cpp and SftpFileSystem.cpp are the only files that mention
+ *     OverwrittenToRecycleBin, and SiteAdvanced.cpp:1038 greys the checkbox out
+ *     for everything else, which is what the "(SFTP only)" caption means;
+ *   * a symlink is never recycled (5251-5255). Moving it would put the LINK in
+ *     the bin and then create a plain file where the link used to be, so the
+ *     thing the user wanted preserved — the file at the other end — is
+ *     untouched while their link is gone;
+ *   * a file already in the bin is not recycled again (TTerminal::IsRecycledFile,
+ *     Terminal.cpp:4307-4310).
+ *
+ * Failure is NOT fatal by default. `if (!FTerminal->RecycleFile(...)) { //
+ * Allow normal overwrite` (5259-5262) sets DontRecycle, which drops the EXCL
+ * flag on the retry and turns the transfer back into an ordinary truncating
+ * overwrite. A bin the user cannot write to must not cost them the upload, so
+ * this returns `{ recycled: false }` rather than throwing. `tolerateFailure:
+ * false` is for the one caller WinSCP treats differently — the resume
+ * rename-over, wrapped in a FILE_OPERATION_LOOP with DELETE_ON_RESUME_ERROR
+ * (4955-4957) so the user gets retry/skip/abort. Swallowing there would be
+ * worse than useless: the caller's fallback is to DELETE the file, so a
+ * silently-failed recycle would destroy exactly the file it was asked to keep.
+ *
+ * Returns `{ recycled, rights }`. `rights` is the mode of the file that went
+ * into the bin, which the caller chmods onto the replacement — SFTPOpenRemote
+ * records it at 5266-5267 and PreserveExistingRights applies it at 4804/4826,
+ * so that preserving a file does not silently change the permissions of the
+ * name it used to occupy.
+ */
+async function recycleOverwritten(dst, targetPath, existing, sessionData, logEvent, options) {
+  const log = typeof logEvent === 'function' ? logEvent : () => {};
+  const tolerateFailure = !options || options.tolerateFailure !== false;
+  const sd = sessionData || {};
+  const bin = sd.recycleBinPath;
+  if (!sd.overwrittenToRecycleBin || !bin) return { recycled: false };
+  if (!dst || dst.protocolName !== 'SFTP') return { recycled: false };
+  if (!existing) return { recycled: false };
+
+  if (existing.isSymlink || existing.type === 'link') {
+    log('Existing file is a symbolic link, it will not be moved to a recycle bin.');
+    return { recycled: false };
+  }
+  if (samePath(excludeTrailingSlash(extractFilePath(targetPath)), bin)) return { recycled: false };
+
+  const newName = includeTrailingSlash(bin) +
+    maskFileName(extractFileName(targetPath), recycleFileMask(Date.now()));
+  try {
+    log(`Moving file "${targetPath}" to remote recycle bin '${bin}'.`);
+    await dst.rename(dst.normalize(targetPath), dst.normalize(newName));
+  } catch (e) {
+    if (!tolerateFailure) throw e;
+    // Allow normal overwrite — SftpFileSystem.cpp:5261.
+    log(`Cannot move file "${targetPath}" to remote recycle bin '${bin}', ` +
+      `it will be overwritten: ${(e && e.message) || e}`);
+    return { recycled: false };
+  }
+  return { recycled: true, rights: existing.rights || undefined };
+}
+
 async function tolerate(copyParam, fn) {
   try { await fn(); } catch (e) { if (!copyParam.ignorePermErrors) throw e; }
 }
@@ -3008,6 +3179,6 @@ module.exports = {
   OverwriteFileParams, CollectedFileList, ParallelOperation, TransferAction,
   StandaloneHost, SimpleProgress, TransferEngine, AdapterFileSystem,
   // wiring
-  transferEngineFor, normalizeCopyList, canAppendTo,
+  transferEngineFor, normalizeCopyList, canAppendTo, recycleOverwritten,
   extractFileNameLocal, extractFileDirLocal,
 };

@@ -480,14 +480,58 @@ test.describe('the session transfer path moves real bytes over a real server', (
       await fsp.readFile(path.join(server.root, 'uploads', 'tree', 'inner', 'deep.txt'), 'utf8'), 'deep');
   });
 
-  test.it('refuses to split one file across connections when it must not', async () => {
-    // CheckParallelFileTransfer's refusals. Whatever the answer is for this
-    // adapter, it must be a real decision rather than a throw from an engine
-    // that has no byte mover.
-    const answer = await app.ok('transfer.canParallel', {
-      sessionId, copyParam: { transferMode: 'binary', parallelTransfers: 4 },
+  test.it('answers canParallel from the session, not with a constant', async () => {
+    // TTerminal::CanParallel's three real refusals. The channel used to forward
+    // to canParallel() itself, whose first term is `ParallelOperation != NULL`
+    // — and a pre-flight query has no cursor to pass, so every answer was
+    // `false` whatever was asked. A permissive assertion could not tell that
+    // apart from a decision, so this one names the expected value each time.
+    const ask = (copyParam, params) => app.ok('transfer.canParallel', { sessionId, copyParam, params });
+
+    assert.equal(await ask({ transferMode: 'binary', parallelTransfers: 4 }), true,
+      'SFTP is fcParallelTransfers-capable and nothing here refuses, so this must not be a constant false');
+
+    // cpDelete: a MOVE deletes a source directory only after every file under
+    // it is done, which does not survive connections finishing out of order.
+    assert.equal(await ask({ transferMode: 'binary' }, 0x01), false,
+      'a move must refuse to go parallel');
+
+    // Preserving DIRECTORY timestamps has the same ordering problem.
+    assert.equal(await ask({ transferMode: 'binary', preserveTime: true, preserveTimeDirs: true }, 0), false,
+      'preserving directory timestamps must refuse to go parallel');
+
+    // …and preserving file timestamps alone does not, which is what stops the
+    // fix from being "return false a bit less often".
+    assert.equal(await ask({ transferMode: 'binary', preserveTime: true, preserveTimeDirs: false }, 0), true,
+      'preserving file timestamps alone is not a reason to refuse');
+  });
+
+  test.it('pushes the foreground transfer\'s progress to the window', async () => {
+    // ipc.js hands terminal.js an onProgress that emitted the LIVE
+    // OperationProgress. Its two callbacks are own properties, so
+    // webContents.send's structured clone refused the payload and emit()
+    // swallowed the DataCloneError — the renderer saw nothing for the whole
+    // duration of a transfer it was blocking on. Only snapshot() crosses.
+    const payload = crypto.randomBytes(96 * 1024);
+    const local = path.join(localDir, 'progress-probe.bin');
+    await fsp.writeFile(local, payload);
+
+    // Matched on THIS file, so an earlier test's progress cannot stand in for
+    // one that was never delivered.
+    const seen = app.waitForEvent('event:progress',
+      (p) => p.kind === 'operation' && p.sessionId === sessionId && p.progress
+        && String(p.progress.fullFileName || p.progress.fileName || '').includes('progress-probe'), 20000);
+    await app.ok('transfer.copyToRemote', {
+      sessionId, files: [local], target: '/uploads', copyParam: { transferMode: 'binary' },
     });
-    assert.ok(answer === true || answer === false || typeof answer === 'object');
+
+    const event = await seen;
+    assert.ok(event.progress, 'the operation progress never reached the window');
+    // The snapshot's own shape, so a future payload change cannot quietly send
+    // something the renderer's progress bar cannot read.
+    for (const key of ['operation', 'side', 'fileName', 'totalSize', 'totalTransferred', 'statistics']) {
+      assert.ok(key in event.progress, `the progress snapshot is missing ${key}`);
+    }
   });
 
   test.it('ASKS about a file it cannot read, rather than skipping it silently', async () => {
@@ -512,5 +556,69 @@ test.describe('the session transfer path moves real bytes over a real server', (
     // caller cannot mistake "the request was handled" for "the files moved".
     assert.equal(reply.value.completed, false,
       'an aborted transfer reported that it completed');
+  });
+
+  // ------------------------------------- the renderer's own reach
+
+  // Reachable from ipc.js and present on the preload is still not reachable
+  // from where the user is. Nothing under design/renderer ever called
+  // window.api.transfer.*: the command layer's `backend` facade had eight
+  // namespaces and none of them was `transfer`, so all sixteen transfer
+  // commands — including the four *NonQueueAction ones, which in WinSCP ARE the
+  // foreground TTerminal path — ended at queue:add. These run inside the real
+  // renderer, against the module the page actually loaded.
+
+  test.it('gives the command layer a call site for the foreground engine', async () => {
+    const shape = await app.evaluate(`(async () => {
+      const m = await import('./ui/commands.js');
+      return {
+        transferHelper: typeof m.backend.transfer,
+        nonQueue: m.transferQueueMode('LocalCopyNonQueueAction'),
+        focusedNonQueue: m.transferQueueMode('RemoteCopyFocusedNonQueueAction'),
+        queued: m.transferQueueMode('LocalCopyQueueAction'),
+        plain: m.transferQueueMode('LocalCopyAction'),
+      };
+    })()`);
+    assert.equal(shape.transferHelper, 'function',
+      'backend has no transfer() helper, so no renderer code can reach transfer:copyToRemote');
+    // Param.Queue = asOff, from cocNonQueue (CustomScpExplorer.cpp:3181-3184).
+    // Without it the NonQueue commands were byte-identical to the plain ones.
+    assert.equal(shape.nonQueue, 'off');
+    assert.equal(shape.focusedNonQueue, 'off');
+    assert.equal(shape.queued, 'on');
+    assert.equal(shape.plain, 'auto');
+  });
+
+  test.it('runs a non-queue transfer through the engine, with NOTHING added to the queue', async () => {
+    // The discriminator. The file lands either way — that is exactly why the
+    // gap survived — so what is asserted is the ABSENCE of a queue item, plus
+    // the foreground reply shape. Today queueTransfer ignores `queue` entirely
+    // and returns the array queue:add handed back.
+    const payload = crypto.randomBytes(32 * 1024);
+    const local = path.join(localDir, 'nonqueue-up.bin');
+    await fsp.writeFile(local, payload);
+    await app.ok('queue.clear');
+    assert.deepEqual(await app.ok('queue.list'), [], 'the queue did not start empty');
+
+    const res = await app.evaluate(`(async () => {
+      const m = await import('./ui/commands.js');
+      return await m.queueTransfer({ sessionId: ${JSON.stringify(sessionId)} }, {
+        direction: 'upload',
+        queue: 'off',
+        target: '/uploads',
+        files: [${JSON.stringify(local)}],
+      });
+    })()`);
+
+    assert.ok(res && !Array.isArray(res),
+      `the non-queue transfer returned a queue:add array (${JSON.stringify(res)}) instead of the engine's reply`);
+    assert.equal(res.completed, true, 'TTerminal::CopyToRemote did not report completion');
+
+    const landed = path.join(server.root, 'uploads', 'nonqueue-up.bin');
+    assert.ok(fs.existsSync(landed), 'the non-queue transfer reported success but nothing arrived');
+    assert.ok((await fsp.readFile(landed)).equals(payload), 'the uploaded bytes differ from the source');
+
+    assert.deepEqual(await app.ok('queue.list'), [],
+      'a "non-queue" transfer put an item on the queue — it took the queued path after all');
   });
 });

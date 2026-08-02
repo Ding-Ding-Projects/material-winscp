@@ -57,6 +57,16 @@ defineStrings({
     '要傳輸就要有連住嘅工作階段。 先開個站台啦。',
   ],
   cmQueued: ['{0} item(s) → {1}', '{0} 個項目 → {1}'],
+  // The foreground path's own three sentences. It is a different operation from
+  // a queued one — it finishes before the command returns — so it says so
+  // rather than borrowing the queue's wording and reading as a queued item that
+  // never appears in the queue.
+  cmTransferring: ['{0} item(s) → {1}', '{0} 個項目 → {1}'],
+  cmTransferred: ['{0} item(s) transferred to {1}.', '傳咗 {0} 個項目去 {1}。'],
+  cmTransferIncomplete: [
+    'The transfer did not finish: it was cancelled, or an error was not recovered from. Check what actually arrived at {0} before deleting anything.',
+    '個傳輸未做完： 唔係俾人取消咗，就係有錯冇補救到。 刪任何嘢之前，請先去 {0} 睇實際到咗啲乜。',
+  ],
   cmSelectedCount: ['{0} item(s) selected.', '揀咗 {0} 個項目。'],
   cmUnselectedCount: ['{0} item(s) unselected.', '取消揀咗 {0} 個項目。'],
   cmLocalCalc: [
@@ -167,6 +177,13 @@ export const backend = {
   explorer(fn, ...a) { return backend.call('explorer', fn, ...a); },
   session(fn, ...a) { return backend.call('session', fn, ...a); },
   queue(fn, ...a) { return backend.call('queue', fn, ...a); },
+  /**
+   * design/main/transfer.js — the FOREGROUND path, TTerminal::CopyToRemote and
+   * CopyToLocal. `queue` above is the background one; the difference a user can
+   * see is that a call through here does not come back until every byte has
+   * moved, which is exactly what WinSCP's *NonQueueAction commands do.
+   */
+  transfer(fn, ...a) { return backend.call('transfer', fn, ...a); },
   sync(fn, ...a) { return backend.call('sync', fn, ...a); },
   editor(fn, ...a) { return backend.call('editor', fn, ...a); },
   config(fn, ...a) { return backend.call('config', fn, ...a); },
@@ -436,11 +453,27 @@ function transferTarget(ctx) {
 }
 
 /**
- * Queue a transfer. `direction` is upload (local -> remote), download
- * (remote -> local) or remote-copy (server side). `move` deletes each source
- * once its item has genuinely finished — WinSCP's "and Delete" commands.
+ * cpDelete, from main/transfer.js's COPY_FLAGS. The queue has no move flag and
+ * deletes the source from out here once its item reports `done`; the foreground
+ * engine does it itself, inside TTerminal::UpdateSource, so it takes the flag.
  */
-export async function queueTransfer(ctx, { direction, move = false, background = false, target, copyParam, files }) {
+const CP_DELETE = 0x01;
+
+/**
+ * Transfer. `direction` is upload (local -> remote), download (remote -> local)
+ * or remote-copy (server side). `move` deletes each source once it has
+ * genuinely finished — WinSCP's "and Delete" commands.
+ *
+ * `queue` is TTransferOperationParam::Queue — 'auto', 'on' or 'off'. WinSCP
+ * branches on the final CopyParam.Queue in ExecuteCopyMoveFileOperation
+ * (CustomScpExplorer.cpp:1337): true adds a queue item, false calls
+ * TTerminal::CopyToRemote right there and blocks until it is done. 'off' is
+ * therefore not a variation on queueing, it is the other path entirely — and it
+ * is what the four *NonQueueAction commands exist to reach.
+ */
+export async function queueTransfer(ctx, {
+  direction, move = false, background = false, queue = 'auto', target, copyParam, files,
+}) {
   const list = files || selPaths(ctx);
   if (!list.length) { notify.warning(t('nothingSelected'), t('selectFiles')); return null; }
   const dest = target || transferTarget(ctx);
@@ -458,6 +491,9 @@ export async function queueTransfer(ctx, { direction, move = false, background =
   // remembered. The dialog's own fields still win — they are what the user just
   // typed — and anything neither of them sets falls through to main's defaults.
   const effective = { ...currentCopyParam(), ...(copyParam || {}) };
+  if (queue === 'off') {
+    return foregroundTransfer(ctx, { sessionId, direction, move, target: dest, copyParam: effective, files: list });
+  }
   try {
     const added = await backend.queue('add', {
       sessionId, direction, files: list, target: dest,
@@ -469,6 +505,66 @@ export async function queueTransfer(ctx, { direction, move = false, background =
     afterWrite(ctx, true);
     return added;
   } catch (err) { return fail(err, t('transferSettingsShort')); }
+}
+
+/**
+ * TTerminal::CopyToRemote / CopyToLocal — the foreground transfer.
+ *
+ * WinSCP reaches it from NonVisual.cpp:566 (LocalCopyNonQueueAction) through
+ * ExecuteCopyOperationCommand(..., cocNonQueue), which sets Param.Queue = asOff
+ * so ExecuteCopyMoveFileOperation calls Terminal->CopyToRemote directly
+ * (CustomScpExplorer.cpp:2858) instead of building a queue item. Everything in
+ * this port already existed for it — the channel, the preload namespace, the
+ * engine with the queue attached as its byte mover — and nothing in the
+ * renderer ever called it, which made all four NonQueue actions duplicates of
+ * the queued ones.
+ *
+ * Two things differ from the queued path, and both follow from the call not
+ * returning until the last byte has moved:
+ *
+ *   * `move` is passed as cpDelete rather than watched for out here. The engine
+ *     deletes each source itself once the file is genuinely up, so running
+ *     watchAndDelete over this as well would put two deleters on one path.
+ *   * the progress has to be shown, or a large transfer is a window that looks
+ *     frozen. main/ipc.js pushes the operation progress on `event:progress`;
+ *     this is the surface it lands on.
+ */
+async function foregroundTransfer(ctx, { sessionId, direction, move, target, copyParam, files }) {
+  const title = direction === 'upload' ? t('uploadTitle') : t('downloadTitle');
+  const toast = notify.progress(title, t('cmTransferring', files.length, oneLine(target, 60)), { progress: true });
+  const off = backend.on('event:progress', (p) => {
+    if (!p || p.kind !== 'operation' || p.sessionId !== sessionId || !p.progress) return;
+    // totalSize is only known once the engine has calculated it, and it never
+    // is for a transfer that did not need the figure. An indeterminate bar is
+    // the honest rendering of "moving, total unknown" — a fabricated
+    // percentage would be worse than no percentage.
+    const total = Number(p.progress.totalSize) || 0;
+    const done = Number(p.progress.totalTransferred) || 0;
+    toast.update({
+      body: oneLine(p.progress.fileName || target, 60),
+      progress: total > 0 ? Math.min(1, done / total) : true,
+    });
+  });
+  try {
+    const res = await backend.transfer(direction === 'upload' ? 'copyToRemote' : 'copyToLocal', {
+      sessionId, files, target,
+      copyParam: Object.keys(copyParam).length ? copyParam : undefined,
+      params: move ? CP_DELETE : 0,
+    });
+    // TTerminal::CopyToRemote returns a BOOLEAN, and main/ipc.js forwards it as
+    // `completed`: false means cancelled, or an error that was never recovered
+    // from. Reporting that as a success is the one lie that loses a file
+    // quietly, so it gets its own warning naming where to go and look.
+    if (res && res.completed === false) notify.warning(title, t('cmTransferIncomplete', oneLine(target, 60)));
+    else notify.success(title, t('cmTransferred', files.length, oneLine(target, 60)));
+    afterWrite(ctx, true);
+    return res;
+  } catch (err) {
+    return fail(err, t('transferSettingsShort'));
+  } finally {
+    off();
+    toast.dismiss();
+  }
 }
 
 /**
@@ -1214,31 +1310,54 @@ async function runFindFiles(ctx) {
 
 /* ---------------- transfers ---------------- */
 
+/**
+ * The transfer commands, and the one field that distinguishes them.
+ *
+ * `queue` is TTransferOperationParam::Queue, which
+ * TCustomScpExplorerForm::ExecuteCopyOperationCommand sets from the cocQueue /
+ * cocNonQueue flag the action carries (CustomScpExplorer.cpp:3177-3184):
+ *
+ *   'on'    cocQueue    — asOn,   CopyParam.Queue = true  -> a queue item
+ *   'off'   cocNonQueue — asOff,  CopyParam.Queue = false -> TTerminal::CopyToRemote
+ *   'auto'  neither     — asAuto, keep whatever the configuration says
+ *
+ * Without it the four *NonQueueAction commands were byte-identical to the plain
+ * Copy ones and queued like everything else, which made "non-queue" a name with
+ * no behaviour behind it. It only PRESETS the dialog's background checkbox —
+ * WinSCP branches on the FINAL CopyParam.Queue after the dialog closes — so a
+ * user who ticks "transfer in background" on a NonQueue command still queues.
+ */
 const TRANSFERS = [
-  // [name, side, direction, move, background, focused-only]
-  ['RemoteCopyAction', 'remote', 'download', false, false],
-  ['RemoteCopyNonQueueAction', 'remote', 'download', false, false],
-  ['RemoteCopyQueueAction', 'remote', 'download', false, true],
-  ['RemoteMoveAction', 'remote', 'download', true, false],
-  ['RemoteCopyFocusedAction', 'remote', 'download', false, false],
-  ['RemoteCopyFocusedNonQueueAction', 'remote', 'download', false, false],
-  ['RemoteCopyFocusedQueueAction', 'remote', 'download', false, true],
-  ['RemoteMoveFocusedAction', 'remote', 'download', true, false],
-  ['LocalCopyAction', 'local', 'upload', false, false],
-  ['LocalCopyNonQueueAction', 'local', 'upload', false, false],
-  ['LocalCopyQueueAction', 'local', 'upload', false, true],
-  ['LocalMoveAction', 'local', 'upload', true, false],
-  ['LocalCopyFocusedAction', 'local', 'upload', false, false],
-  ['LocalCopyFocusedNonQueueAction', 'local', 'upload', false, false],
-  ['LocalCopyFocusedQueueAction', 'local', 'upload', false, true],
-  ['LocalMoveFocusedAction', 'local', 'upload', true, false],
+  // [name, side, direction, move, background, queue]
+  ['RemoteCopyAction', 'remote', 'download', false, false, 'auto'],
+  ['RemoteCopyNonQueueAction', 'remote', 'download', false, false, 'off'],
+  ['RemoteCopyQueueAction', 'remote', 'download', false, true, 'on'],
+  ['RemoteMoveAction', 'remote', 'download', true, false, 'auto'],
+  ['RemoteCopyFocusedAction', 'remote', 'download', false, false, 'auto'],
+  ['RemoteCopyFocusedNonQueueAction', 'remote', 'download', false, false, 'off'],
+  ['RemoteCopyFocusedQueueAction', 'remote', 'download', false, true, 'on'],
+  ['RemoteMoveFocusedAction', 'remote', 'download', true, false, 'auto'],
+  ['LocalCopyAction', 'local', 'upload', false, false, 'auto'],
+  ['LocalCopyNonQueueAction', 'local', 'upload', false, false, 'off'],
+  ['LocalCopyQueueAction', 'local', 'upload', false, true, 'on'],
+  ['LocalMoveAction', 'local', 'upload', true, false, 'auto'],
+  ['LocalCopyFocusedAction', 'local', 'upload', false, false, 'auto'],
+  ['LocalCopyFocusedNonQueueAction', 'local', 'upload', false, false, 'off'],
+  ['LocalCopyFocusedQueueAction', 'local', 'upload', false, true, 'on'],
+  ['LocalMoveFocusedAction', 'local', 'upload', true, false, 'auto'],
 ];
 
-for (const [name, side, direction, move, background] of TRANSFERS) {
+/** The queue mode a transfer command runs with, by WinSCP action name. */
+export function transferQueueMode(name) {
+  const row = TRANSFERS.find((r) => r[0] === name);
+  return row ? row[5] : undefined;
+}
+
+for (const [name, side, direction, move, background, queue] of TRANSFERS) {
   def(name, {
     side,
     enabled: (c) => haveSel(c) && bothPanels(c) && !!c.sessionId,
-    run: (c) => transferWithOptions(c, { direction, move, background }),
+    run: (c) => transferWithOptions(c, { direction, move, background, queue }),
   });
 }
 
@@ -1314,8 +1433,13 @@ async function transferWithOptions(ctx, opts) {
     includeFileMask: exclude ? `| ${exclude}` : '',
     cpsLimit: Number(speedField.value) || 0,
   };
+  // Param.Queue only presets the checkbox. ExecuteCopyMoveFileOperation reads
+  // CopyParam.Queue AFTER the dialog closes, so ticking "transfer in
+  // background" on a NonQueue command genuinely queues it — the user's last
+  // word wins over the command's preset, exactly as it does in WinSCP.
+  const queue = bgBox.checked ? 'on' : (opts.queue || 'auto');
   return queueTransfer(ctx, {
-    direction: opts.direction, move: opts.move, background: bgBox.checked,
+    direction: opts.direction, move: opts.move, background: bgBox.checked, queue,
     target: targetField.value, copyParam,
   });
 }

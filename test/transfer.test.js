@@ -104,6 +104,7 @@ class MemoryAdapter extends Adapter {
       size: n.size || 0,
       mtime: n.mtime || 0,
       rights: n.rights || '',
+      owner: n.owner || '',
       isSymlink: !!n.isSymlink,
       hidden: !!n.hidden,
       readOnly: !!n.readOnly,
@@ -1416,6 +1417,79 @@ test('a part file longer than the source is deleted and the transfer restarted',
   assert.strictEqual(remote.text('/r/a.bin'), 'ABC');
 });
 
+// ---------------------------------------------------------------------------
+// "Never do resumable transfer for file owned by other user, as deleting and
+// recreating the file would change ownership" — SftpFileSystem.cpp:4694-4700,
+// the third arm of the chain whose first arm is the symlink refusal above.
+// ---------------------------------------------------------------------------
+
+/** An upload of 'ABCDEFGH' over an existing target owned by `owner`. */
+async function uploadOver(owner, userName) {
+  const ctx = makeEngine({ data: { userName } });
+  ctx.local.put('/l/a.bin', 'ABCDEFGH');
+  ctx.remote.putDir('/r').put('/r/a.bin', 'OLD', 0, { owner });
+  await ctx.engine.copyToRemote(['/l/a.bin'], '/r/',
+    cp({ preserveTime: false, resumeSupport: 'on' }), COPY_FLAGS.noConfirmation, null);
+  return ctx;
+}
+
+test('a resumable upload refuses a target owned by another user', async () => {
+  // The resume path does not overwrite the target in place: it writes a
+  // '.filepart', removes the target and renames onto the name, so the file that
+  // ends up there is owned by whoever uploaded it. On a shared directory that
+  // silently takes a colleague's file away from them, and preserving the rights
+  // afterwards does not put the owner back — so the resume is dropped and the
+  // bytes go straight at the real name, leaving the file itself untouched.
+  const { remote, moved, session } = await uploadOver('bob', 'alice');
+
+  assert.strictEqual(moved[0].targetPath, '/r/a.bin',
+    'no .filepart: the existing file must not be replaced by a new one');
+  assert.deepStrictEqual(remote.calls.rename, [],
+    'and nothing is renamed over the target');
+  assert.deepStrictEqual(remote.calls.remove, [],
+    'the file whose ownership we are protecting is never deleted');
+  assert.strictEqual(remote.text('/r/a.bin'), 'ABCDEFGH',
+    'the transfer still happens — WinSCP clears ResumeAllowed, it does not skip');
+  assert.ok(session.lines.some((l) => /owned by another user \[bob\]/.test(l)),
+    `expected the refusal in the log, got ${JSON.stringify(session.lines)}`);
+});
+
+test('the owner check goes through SameUserName, not a string compare', async () => {
+  // RemoteFiles.cpp:583-588. Bitvise reports the owner as 'user@host' while the
+  // session logged in as 'user', and the comparison is case-insensitive — a
+  // file the user does own must not be mistaken for somebody else's and lose
+  // its resume for nothing.
+  const { remote, moved } = await uploadOver('Alice@vshnode', 'alice');
+
+  assert.strictEqual(moved[0].targetPath, '/r/a.bin.filepart',
+    'this file IS ours, so the resumable path is still taken');
+  assert.deepStrictEqual(remote.calls.rename, [['/r/a.bin.filepart', '/r/a.bin']]);
+});
+
+test('a numeric owner is a uid, not a user name, and never blocks resume', async () => {
+  // The regression guard. WinSCP concedes in the comment above its own check
+  // that it "won't work for SFTP-3 (OpenSSH) as it does not provide owner name
+  // (only UID)", and ssh2 speaks SFTP-3 and nothing else — sftp.js:1345 writes
+  // String(uid) into the adapter's flat `owner` field. Comparing '1000' with
+  // 'alice' is false for every file on every server, so dropping the
+  // ownerName() gate would not tighten this check: it would switch resumable
+  // uploads off for everybody on SFTP.
+  const { remote, moved } = await uploadOver('1000', 'alice');
+
+  assert.strictEqual(moved[0].targetPath, '/r/a.bin.filepart',
+    'a uid says nothing about who owns the file, so resume survives');
+  assert.deepStrictEqual(remote.calls.rename, [['/r/a.bin.filepart', '/r/a.bin']]);
+});
+
+test('an owner the protocol never reported does not block resume', async () => {
+  // `!File->Owner.Name.IsEmpty()` is the precondition of the whole arm: an
+  // unknown owner is not evidence of a foreign one.
+  const { remote, moved } = await uploadOver('', 'alice');
+
+  assert.strictEqual(moved[0].targetPath, '/r/a.bin.filepart');
+  assert.deepStrictEqual(remote.calls.rename, [['/r/a.bin.filepart', '/r/a.bin']]);
+});
+
 test('cpNoConfirmation and tfNewDirectory both suppress the existence probe', async () => {
   // A directory we just created cannot contain anything, so a resumable
   // upload into it does not go looking for a part file or a target.
@@ -1425,6 +1499,140 @@ test('cpNoConfirmation and tfNewDirectory both suppress the existence probe', as
   await engine.copyToRemote(['/l/d'], '/r/', cp({ preserveTime: false, resumeSupport: 'on' }), 0, null);
   // Straight to the part file and a rename; nothing existed to ask about.
   assert.deepStrictEqual(remote.calls.rename, [['/r/d/a.bin.filepart', '/r/d/a.bin']]);
+});
+
+// ---------------------------------------------------------------------------
+// "Preserve overwritten remote files to recycle bin", TSFTPFileSystem::Source's
+// half. queue.js is the path a click actually takes, but this is the literal
+// SFTPSource port, and the two have to agree or they drift.
+// ---------------------------------------------------------------------------
+
+/** An SFTP engine whose site preserves what it overwrites. */
+function recycleEngine(over = {}) {
+  return makeEngine({
+    remote: new MemoryAdapter({ name: 'SFTP' }),
+    data: { overwrittenToRecycleBin: true, recycleBinPath: '/r/.bin', ...(over.data || {}) },
+    ...over.rest,
+  });
+}
+
+const binned = (remote) => remote.paths().filter((p) => p.startsWith('/r/.bin/'));
+
+test('an overwritten upload target is moved to the bin, confirmations or not', async () => {
+  // cpNoConfirmation is the point: SftpFileSystem.cpp:5129-5131 says the
+  // existence has to be discovered "even if overwrite confirmation is
+  // disabled", because that is the only way the file can be preserved. Probing
+  // only when a question was coming would leave the setting doing nothing for
+  // everyone who turned confirmations off.
+  const { engine, local, remote } = recycleEngine();
+  local.put('/l/a.bin', 'NEW');
+  remote.putDir('/r').putDir('/r/.bin').put('/r/a.bin', 'OLD');
+
+  await engine.copyToRemote(['/l/a.bin'], '/r/',
+    cp({ preserveTime: false, resumeSupport: 'off' }), COPY_FLAGS.noConfirmation, null);
+
+  assert.strictEqual(remote.text('/r/a.bin'), 'NEW');
+  const bin = binned(remote);
+  assert.strictEqual(bin.length, 1, `expected one recycled file, got ${bin}`);
+  assert.match(bin[0], /^\/r\/\.bin\/a-\d{8}-\d{6}\.bin$/);
+  assert.strictEqual(remote.text(bin[0]), 'OLD', 'the original must survive intact');
+});
+
+test('the resume rename-over recycles the target instead of deleting it', async () => {
+  // The SECOND recycle site, SftpFileSystem.cpp:4939-4958: a resumable upload
+  // writes a .filepart and has to clear the real name before renaming onto it.
+  // With the setting on, that clearing is a move into the bin, not a delete.
+  const { engine, local, remote } = recycleEngine();
+  local.put('/l/a.bin', 'ABCDEFGH');
+  remote.putDir('/r').putDir('/r/.bin').put('/r/a.bin', 'OLD');
+
+  await engine.copyToRemote(['/l/a.bin'], '/r/',
+    cp({ preserveTime: false, resumeSupport: 'on' }), COPY_FLAGS.noConfirmation, null);
+
+  assert.strictEqual(remote.text('/r/a.bin'), 'ABCDEFGH');
+  assert.strictEqual(remote.has('/r/a.bin.filepart'), false);
+  assert.deepStrictEqual(remote.calls.remove, [], 'the old file must not be removed');
+  const bin = binned(remote);
+  assert.strictEqual(bin.length, 1, `expected one recycled file, got ${bin}`);
+  assert.strictEqual(remote.text(bin[0]), 'OLD');
+});
+
+test('a symbolic link target is overwritten but never recycled', async () => {
+  // SftpFileSystem.cpp:5251-5255. source() only ever looked at isSymlink to
+  // switch resume off; the bin needs it for its own reason, which is that
+  // moving the link preserves the pointer and abandons the file.
+  const { engine, local, remote } = recycleEngine();
+  local.put('/l/a.bin', 'NEW');
+  remote.putDir('/r').putDir('/r/.bin').put('/r/a.bin', 'OLD', 0, { isSymlink: true });
+
+  await engine.copyToRemote(['/l/a.bin'], '/r/',
+    cp({ preserveTime: false, resumeSupport: 'off' }), COPY_FLAGS.noConfirmation, null);
+
+  assert.strictEqual(remote.text('/r/a.bin'), 'NEW', 'the transfer still happens');
+  assert.deepStrictEqual(binned(remote), []);
+});
+
+test('the recycle bin is SFTP only on the upload path too', async () => {
+  // SiteAdvanced.cpp:1038. Not caps.recycleBin — no remote adapter in this port
+  // advertises that, so gating on it would build a feature that never fires.
+  const { engine, local, remote } = makeEngine({
+    remote: new MemoryAdapter({ name: 'FTP' }),
+    data: { overwrittenToRecycleBin: true, recycleBinPath: '/r/.bin' },
+  });
+  local.put('/l/a.bin', 'NEW');
+  remote.putDir('/r').putDir('/r/.bin').put('/r/a.bin', 'OLD');
+
+  await engine.copyToRemote(['/l/a.bin'], '/r/',
+    cp({ preserveTime: false, resumeSupport: 'off' }), COPY_FLAGS.noConfirmation, null);
+
+  assert.strictEqual(remote.text('/r/a.bin'), 'NEW');
+  assert.deepStrictEqual(binned(remote), []);
+});
+
+test('a bin that cannot be written to costs the user nothing but the bin', async () => {
+  // `// Allow normal overwrite` — SftpFileSystem.cpp:5259-5262.
+  const { engine, local, remote } = recycleEngine();
+  local.put('/l/a.bin', 'NEW');
+  remote.putDir('/r').putDir('/r/.bin').put('/r/a.bin', 'OLD');
+  const realRename = remote.rename.bind(remote);
+  const attempted = [];
+  remote.rename = async (from, to) => {
+    if (String(to).startsWith('/r/.bin/')) { attempted.push(to); throw new Error('Permission denied'); }
+    return realRename(from, to);
+  };
+
+  await engine.copyToRemote(['/l/a.bin'], '/r/',
+    cp({ preserveTime: false, resumeSupport: 'off' }), COPY_FLAGS.noConfirmation, null);
+
+  assert.strictEqual(attempted.length, 1, 'the recycle must have been attempted');
+  assert.strictEqual(remote.text('/r/a.bin'), 'NEW', 'and the upload must still land');
+});
+
+test('an append is not an overwrite, so nothing is recycled', async () => {
+  // WinSCP gates on `OverwriteMode == omOverwrite` (SftpFileSystem.cpp:5133,
+  // 5226): an append extends the file that is already there.
+  const { engine, local, remote } = recycleEngine({ rest: { answers: [ANSWERS.retry] } });
+  local.put('/l/a.bin', 'TAIL');
+  remote.putDir('/r').putDir('/r/.bin').put('/r/a.bin', 'HEAD');
+
+  await engine.copyToRemote(['/l/a.bin'], '/r/',
+    cp({ preserveTime: false, resumeSupport: 'off' }), 0, null);
+
+  assert.strictEqual(remote.text('/r/a.bin'), 'HEADTAIL');
+  assert.deepStrictEqual(binned(remote), []);
+});
+
+test('the recycled file lends its permissions to the replacement', async () => {
+  // PreserveExistingRights — SftpFileSystem.cpp:4804 and 4818-4827.
+  const { engine, local, remote } = recycleEngine();
+  local.put('/l/a.bin', 'NEW');
+  remote.putDir('/r').putDir('/r/.bin').put('/r/a.bin', 'OLD', 0, { rights: 'rw-------' });
+
+  await engine.copyToRemote(['/l/a.bin'], '/r/',
+    cp({ preserveTime: false, preserveRights: false, resumeSupport: 'off' }),
+    COPY_FLAGS.noConfirmation, null);
+
+  assert.deepStrictEqual(remote.calls.setRights, [['/r/a.bin', 'rw-------']]);
 });
 
 test('a move deletes the source only after the bytes have landed', async () => {
@@ -1753,6 +1961,27 @@ test('CanParallel refuses the two orderings a parallel transfer would break', ()
   // a time — WinSCP answers fcParallelTransfers false for it.
   const scp = makeEngine({ remote: new MemoryAdapter({ name: 'SCP' }) });
   assert.strictEqual(scp.engine.canParallel(cp(), 0, op), false);
+});
+
+test('parallelAllowed answers the same refusals without a cursor to hand it', () => {
+  // The cursor guard is the one term a pre-flight query cannot supply, and
+  // forwarding NULL for it makes the whole predicate a constant false. This is
+  // CanParallel minus that term, and nothing else: the ipc.js
+  // `transfer:canParallel` channel answers from here so it reports a decision
+  // about the session rather than a value it was always going to return.
+  const { engine } = makeEngine();
+  assert.strictEqual(engine.parallelAllowed(cp(), 0), true,
+    'a capable protocol with no refusal must not answer false');
+  assert.strictEqual(engine.parallelAllowed(cp(), COPY_FLAGS.delete), false);
+  assert.strictEqual(engine.parallelAllowed(cp({ preserveTime: true, preserveTimeDirs: true }), 0), false);
+  assert.strictEqual(engine.parallelAllowed(cp({ preserveTime: false, preserveTimeDirs: true }), 0), true);
+
+  const scp = makeEngine({ remote: new MemoryAdapter({ name: 'SCP' }) });
+  assert.strictEqual(scp.engine.parallelAllowed(cp(), 0), false);
+
+  // And CanParallel still refuses without one, so the port stays faithful to
+  // Terminal.cpp:7505 where WinSCP actually asks it.
+  assert.strictEqual(engine.canParallel(cp(), 0, null), false);
 });
 
 // ===========================================================================

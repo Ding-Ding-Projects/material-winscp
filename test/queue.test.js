@@ -48,7 +48,7 @@ class MemoryAdapter extends Adapter {
 
   get protocolName() { return this.name; }
 
-  put(p, contents, mtime = 1000000) {
+  put(p, contents, mtime = 1000000, extra) {
     const np = this.normalize(p);
     this._ensureParents(np);
     this.files.set(np, {
@@ -56,6 +56,7 @@ class MemoryAdapter extends Adapter {
       data: Buffer.isBuffer(contents) ? contents : Buffer.from(contents),
       mtime,
       rights: 'rw-r--r--',
+      ...(extra || {}),
     });
     return np;
   }
@@ -98,6 +99,7 @@ class MemoryAdapter extends Adapter {
         size: r.type === 'dir' ? 0 : r.data.length,
         mtime: r.mtime,
         rights: r.rights,
+        isSymlink: !!r.isSymlink,
         hidden: rest.startsWith('.'),
       }));
     }
@@ -114,6 +116,7 @@ class MemoryAdapter extends Adapter {
       size: r.type === 'dir' ? 0 : r.data.length,
       mtime: r.mtime,
       rights: r.rights,
+      isSymlink: !!r.isSymlink,
     });
   }
 
@@ -651,6 +654,299 @@ test('an overwrite query is raised and every answer is honoured', async () => {
     assert.ok(remote.read('/r/a.bin').equals(payload));
     assert.deepStrictEqual(local.reads.map((r) => r.start), [3072]);
   }
+});
+
+// ---------------------------------------------------------------------------
+// "Preserve overwritten remote files to recycle bin"
+//
+// TSFTPFileSystem::SFTPOpenRemote (SftpFileSystem.cpp:5226-5270). The setting
+// only earns its name if the move happens BEFORE the replacement is written —
+// afterwards there is nothing left to preserve — so the ordering is asserted
+// here rather than assumed, along with every guard WinSCP puts around it.
+// ---------------------------------------------------------------------------
+
+/** The recycle bin lives on the site, so it reaches the queue on the session. */
+const RECYCLE_SESSION = { data: { overwrittenToRecycleBin: true, recycleBinPath: '/r/.bin' } };
+
+/**
+ * A pair whose remote really is SFTP. The gate is the PROTOCOL, not a
+ * capability: `caps.recycleBin` is false on every remote adapter in this port
+ * (it means the OS trash, which only the local backend has), and WinSCP's own
+ * gate is SiteAdvanced.cpp:1038 greying the checkbox out for anything but SFTP.
+ */
+function sftpPair(options) {
+  const pair = makePair(options);
+  pair.remote.name = 'SFTP';
+  pair.remote.putDir('/r/.bin');
+  return pair;
+}
+
+/** Everything sitting in the bin, so "exactly one file" can be asserted. */
+async function binContents(remote, dir = '/r/.bin') {
+  const files = await remote.list(dir);
+  return files.map((f) => ({ name: f.name, data: remote.read(`${dir}/${f.name}`) }));
+}
+
+const STAMPED = /^a-\d{8}-\d{6}\.bin$/;
+
+test('an overwritten remote file is moved to the recycle bin, not destroyed', async () => {
+  const { local, remote } = sftpPair();
+  const oldBytes = bigBuffer(5000, 7);
+  const newBytes = bigBuffer(9000, 99);
+  remote.put('/r/a.bin', oldBytes);
+  local.put('/l/a.bin', newBytes);
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote, session: RECYCLE_SESSION,
+  });
+  await q.idle();
+
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.ok(remote.read('/r/a.bin').equals(newBytes), 'the new bytes must land under the real name');
+
+  const bin = await binContents(remote);
+  assert.strictEqual(bin.length, 1, `expected one recycled file, got ${bin.map((f) => f.name)}`);
+  // The `*-yyyymmdd-hhnnss.*` mask is Terminal.cpp:4318, and it is what stops a
+  // second overwrite of the same name from burying the first copy.
+  assert.match(bin[0].name, STAMPED);
+  assert.ok(bin[0].data.equals(oldBytes), 'the recycled copy must be the original, byte for byte');
+});
+
+test('the recycle happens before the replacement is written, not after', async () => {
+  // WinSCP gets this ordering from SSH_FXF_EXCL (SftpFileSystem.cpp:5132-5136):
+  // the create FAILS while the old file is still there, and only the retry
+  // after the recycle succeeds. Kill the write and the bin must still hold a
+  // complete original — a recycle that ran afterwards would leave it empty.
+  const { local, remote } = sftpPair();
+  const oldBytes = bigBuffer(5000, 3);
+  remote.put('/r/a.bin', oldBytes);
+  local.put('/l/a.bin', bigBuffer(9000, 5));
+  remote.createWriteStream = async () => {
+    const e = new Error('Permission denied'); e.code = 'EACCES'; throw e;
+  };
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote, session: RECYCLE_SESSION,
+  });
+  await q.idle();
+
+  assert.strictEqual(item.state, 'error');
+  const bin = await binContents(remote);
+  assert.strictEqual(bin.length, 1, 'the original must already be in the bin when the write dies');
+  assert.ok(bin[0].data.equals(oldBytes), 'and it must be complete');
+});
+
+test('the recycle bin is off unless the site asked for it', async () => {
+  // Every other test in this file queues without a session, so this is also
+  // what keeps them honest: no session data, no recycling, no behaviour change.
+  const { local, remote } = sftpPair();
+  remote.put('/r/a.bin', bigBuffer(500, 1));
+  local.put('/l/a.bin', bigBuffer(600, 2));
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote,
+  });
+  await q.idle();
+
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.deepStrictEqual(await binContents(remote), []);
+});
+
+test('the recycle bin is SFTP only, whatever the site setting says', async () => {
+  // SiteAdvanced.cpp:1038, and the shipped "(SFTP only)" caption. SCP, FTP,
+  // WebDAV and S3 never mention OverwrittenToRecycleBin in WinSCP at all.
+  const { local, remote } = sftpPair();
+  remote.name = 'FTP';
+  remote.put('/r/a.bin', bigBuffer(500, 1));
+  const newBytes = bigBuffer(600, 2);
+  local.put('/l/a.bin', newBytes);
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote, session: RECYCLE_SESSION,
+  });
+  await q.idle();
+
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.deepStrictEqual(await binContents(remote), []);
+  assert.ok(remote.read('/r/a.bin').equals(newBytes), 'the overwrite itself still happens');
+});
+
+test('a symbolic link is never moved to the recycle bin', async () => {
+  // SftpFileSystem.cpp:5251-5255. Moving the LINK would bin the pointer and
+  // leave the file it pointed at untouched — the opposite of preserving it.
+  const { local, remote } = sftpPair();
+  remote.put('/r/a.bin', bigBuffer(500, 1), 1000000, { isSymlink: true });
+  const newBytes = bigBuffer(600, 2);
+  local.put('/l/a.bin', newBytes);
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const logs = [];
+  q.on('log', (e) => logs.push(e.text));
+  const item = q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote, session: RECYCLE_SESSION,
+  });
+  await q.idle();
+
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.deepStrictEqual(await binContents(remote), []);
+  assert.ok(remote.read('/r/a.bin').equals(newBytes), 'the transfer still completes');
+  assert.ok(logs.some((t) => /symbolic link/.test(t)), `no explanation was logged: ${logs}`);
+});
+
+test('a failed recycle degrades to a normal overwrite instead of failing the item', async () => {
+  // `if (!FTerminal->RecycleFile(...)) { // Allow normal overwrite` —
+  // SftpFileSystem.cpp:5259-5262. A bin the user cannot write to must not cost
+  // them the upload.
+  const { local, remote } = sftpPair();
+  remote.put('/r/a.bin', bigBuffer(500, 1));
+  const newBytes = bigBuffer(600, 2);
+  local.put('/l/a.bin', newBytes);
+  const realRename = remote.rename.bind(remote);
+  const attempted = [];
+  remote.rename = async (from, to) => {
+    if (String(to).startsWith('/r/.bin/')) {
+      attempted.push(to);
+      throw new Error('Permission denied');
+    }
+    return realRename(from, to);
+  };
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote, session: RECYCLE_SESSION,
+  });
+  await q.idle();
+
+  // The attempt has to have happened, or this test would pass on a build that
+  // never recycles at all — which is exactly the state this whole block exists
+  // to rule out.
+  assert.strictEqual(attempted.length, 1, 'the recycle must have been attempted');
+  assert.match(attempted[0], /^\/r\/\.bin\/a-\d{8}-\d{6}\.bin$/);
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.strictEqual(item.error, null);
+  assert.ok(remote.read('/r/a.bin').equals(newBytes));
+  assert.deepStrictEqual(await binContents(remote), []);
+});
+
+test('a file already in the recycle bin is not recycled a second time', async () => {
+  // TTerminal::IsRecycledFile, Terminal.cpp:4307-4310.
+  const { local, remote } = sftpPair();
+  remote.put('/r/.bin/a.bin', bigBuffer(500, 1));
+  const newBytes = bigBuffer(600, 2);
+  local.put('/l/a.bin', newBytes);
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/.bin/a.bin',
+    sourceAdapter: local, targetAdapter: remote, session: RECYCLE_SESSION,
+  });
+  await q.idle();
+
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  const bin = await binContents(remote);
+  assert.deepStrictEqual(bin.map((f) => f.name), ['a.bin'], 'no stamped second copy');
+  assert.ok(bin[0].data.equals(newBytes));
+});
+
+test('the recycled file lends its permissions to the replacement', async () => {
+  // PreserveExistingRights — SftpFileSystem.cpp:4804 and 4818-4827. The name
+  // survived, so its mode should too; otherwise switching the safety net on
+  // quietly re-modes every file it protects.
+  const { local, remote } = sftpPair();
+  remote.put('/r/a.bin', bigBuffer(500, 1));
+  remote.files.get('/r/a.bin').rights = 'rw-------';
+  local.put('/l/a.bin', bigBuffer(600, 2));
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote, session: RECYCLE_SESSION,
+    copyParam: { preserveRights: false },
+  });
+  await q.idle();
+
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.strictEqual(remote.files.get('/r/a.bin').rights, 'rw-------',
+    'a fresh write would have left the adapter default rw-r--r--');
+});
+
+test('append and resume are not overwrites, so nothing is recycled', async () => {
+  // WinSCP tests `OverwriteMode == omOverwrite` at SftpFileSystem.cpp:5133 and
+  // 5226: both of these EXTEND the file that is already there, so there is
+  // nothing being overwritten to preserve.
+  const p = prefs({ queue: { noConfirmations: false } });
+
+  {
+    const { local, remote } = sftpPair();
+    remote.put('/r/a.bin', Buffer.from('HEAD'));
+    local.put('/l/a.bin', Buffer.from('TAIL'));
+    const q = new TransferQueue({ prefs: p, progressMs: 0 });
+    q.on('query', (e) => e.respond('append'));
+    const item = q.add({
+      side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+      sourceAdapter: local, targetAdapter: remote, session: RECYCLE_SESSION,
+    });
+    await q.idle();
+    assert.strictEqual(item.state, 'done', item.error && item.error.message);
+    assert.strictEqual(remote.read('/r/a.bin').toString(), 'HEADTAIL');
+    assert.deepStrictEqual(await binContents(remote), []);
+  }
+
+  {
+    const { local, remote } = sftpPair({ chunkSize: 1024 });
+    const payload = bigBuffer(8192);
+    local.put('/l/a.bin', payload);
+    remote.put('/r/a.bin', payload.subarray(0, 3072));
+    const q = new TransferQueue({ prefs: p, progressMs: 0 });
+    q.on('query', (e) => e.respond('resume'));
+    const item = q.add({
+      side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+      sourceAdapter: local, targetAdapter: remote, session: RECYCLE_SESSION,
+      copyParam: { resumeSupport: 'on' },
+    });
+    await q.idle();
+    assert.strictEqual(item.state, 'done', item.error && item.error.message);
+    assert.ok(remote.read('/r/a.bin').equals(payload));
+    assert.deepStrictEqual(await binContents(remote), []);
+  }
+});
+
+test('the partial-file path recycles the target instead of removing it', async () => {
+  // The `.filepart` route reaches the target through `remove` + `rename`
+  // (queue.js `_copyBytes`), which is the second place the existing file dies.
+  // WinSCP's own resume rename-over recycles there too — SftpFileSystem.cpp
+  // 4939-4958.
+  const { local, remote } = sftpPair({ chunkSize: 1024 });
+  const oldBytes = bigBuffer(4000, 11);
+  const newBytes = bigBuffer(8192, 22);
+  remote.put('/r/a.bin', oldBytes);
+  local.put('/l/a.bin', newBytes);
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote, session: RECYCLE_SESSION,
+    copyParam: { resumeSupport: 'on' },
+  });
+  await q.idle();
+
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.strictEqual(remote.read('/r/a.bin.filepart'), null, 'the partial is renamed away');
+  assert.ok(remote.read('/r/a.bin').equals(newBytes));
+  const bin = await binContents(remote);
+  assert.strictEqual(bin.length, 1, `expected one recycled file, got ${bin.map((f) => f.name)}`);
+  assert.match(bin[0].name, STAMPED);
+  assert.ok(bin[0].data.equals(oldBytes), 'the original must be in the bin, not removed');
 });
 
 test('newerOnly skips a target that is already up to date', async () => {
