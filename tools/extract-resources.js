@@ -382,11 +382,44 @@ const POLICY_EXCLUDED = new Map([
 /* main                                                                */
 /* ------------------------------------------------------------------ */
 
+/**
+ * True when vendor/winscp is checked out far enough to rebuild the table.
+ *
+ * .github/workflows/ci.yml checks out with `submodules: false` — the vendored
+ * WinSCP tree is the porting reference, not a build input, and it is large. So
+ * "the source is absent" is a routine, expected state on the machine that runs
+ * the suite, and callers need to be able to ask about it rather than discover
+ * it by dying.
+ */
+function sourceAvailable() {
+  return [...RC_FILES, ...ID_HEADERS, ...HELP_HEADERS]
+    .every((f) => fs.existsSync(path.join(SRC, f)));
+}
+
+/**
+ * Reads one unit of source/resource.
+ *
+ * This used to call process.exit(1) when the submodule was absent, which is
+ * defensible in a command-line tool and catastrophic in a library: build() is
+ * called from test/messages.test.js, and process.exit takes the whole test
+ * process down mid-report. `node --test` then has nothing to attribute the
+ * death to, so it synthesises a file-level failure at messages.test.js:1:1
+ * reading only "test failed" — every assertion that had already passed is lost
+ * with the process, and the one line saying which file was missing is on
+ * stderr, where the TAP reader shows it as an unrelated comment above the
+ * failure. A whole afternoon can go into deciding whether that file-level
+ * entry is real, which is exactly what a dead process buys you.
+ *
+ * It throws now. The caller that genuinely is a command line — main() below —
+ * turns it back into the same message and the same exit code.
+ */
 function readSource(file) {
   const full = path.join(SRC, file);
   if (!fs.existsSync(full)) {
-    console.error('WinSCP source not found at ' + full + '\nRun: git submodule update --init');
-    process.exit(1);
+    const err = new Error('WinSCP source not found at ' + full + '\nRun: git submodule update --init');
+    err.code = 'ENOVENDOR';
+    err.path = full;
+    throw err;
   }
   return fs.readFileSync(full, 'utf8');
 }
@@ -518,10 +551,24 @@ function main() {
   }
 }
 
-if (require.main === module) main();
+// The exit code and the message a missing submodule produced before readSource
+// started throwing, restored at the boundary where exiting is the right thing:
+// this is a command line, and it has nobody to hand an exception to.
+if (require.main === module) {
+  try {
+    main();
+  } catch (e) {
+    if (e && e.code === 'ENOVENDOR') {
+      console.error(e.message);
+      process.exit(1);
+    }
+    throw e;
+  }
+}
 
 module.exports = {
   build, parseRc, parseDefines, resolveDefine, decodeCString, tokenize,
-  analyseParams, stripDisabledRegions, RC_FILES, ID_HEADERS, HELP_HEADERS,
+  analyseParams, stripDisabledRegions, readSource, sourceAvailable,
+  RC_FILES, ID_HEADERS, HELP_HEADERS, SRC,
   LITERAL_PERCENT_IDS, POLICY_EXCLUDED,
 };

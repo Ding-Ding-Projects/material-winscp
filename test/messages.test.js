@@ -29,6 +29,20 @@ const extractor = require('../tools/extract-resources.js');
 
 const TABLE = require('../design/renderer/messages.json');
 
+// Two of the tests below re-run the extractor over vendor/winscp and compare
+// the result with the committed table. That submodule is the porting
+// reference, not a build input, and .github/workflows/ci.yml checks out with
+// `submodules: false` — so on the machine that actually runs this suite the
+// .rc files are usually absent, and these two tests have nothing to read.
+//
+// They say so, out loud, instead of failing: node reports them as skipped with
+// the reason attached, which is a state a reader can act on. Everything else in
+// this file reads design/renderer/messages.json, which is committed, so the
+// other 43 tests run everywhere.
+const NO_VENDOR = extractor.sourceAvailable() ? false
+  : 'vendor/winscp is not checked out (CI uses submodules: false) — '
+    + 'run `git submodule update --init` to check the committed table against the vendored source';
+
 let dictModule = null;
 async function dict() {
   if (!dictModule) dictModule = await import('../design/winscp-i18n.js');
@@ -136,7 +150,39 @@ test('the parameter shape of a message is read from its text', () => {
   assert.deepStrictEqual(shape('%port expands to port number'), []);
 });
 
-test('the committed table is what the extractor produces from the vendored source', () => {
+test('a missing vendored unit is thrown, not exited — a library may not kill its caller', () => {
+  // The regression this pins is a diagnostic one, and it cost a whole
+  // investigation. readSource() used to call process.exit(1) when
+  // vendor/winscp was absent, which is the ordinary state in CI
+  // (.github/workflows/ci.yml checks out with `submodules: false`). build() is
+  // called from a test in this very file, so process.exit took the test
+  // process down mid-run: `node --test` had no test to blame, so it reported
+  // the *file* as failed at messages.test.js:1:1 with the text "test failed",
+  // and every assertion that had already passed vanished with the process —
+  // the whole file reports as `# tests 1  # fail 1`. From the outside that is
+  // indistinguishable from a sibling file poisoning this one, which is exactly
+  // the wrong tree to go barking up.
+  //
+  // Throwing keeps the failure attached to the call that caused it. The file
+  // name is in the message so the reader is told which unit is missing, and
+  // the remedy is in there too.
+  //
+  // Without the fix this assertion does not fail — the process dies inside it
+  // and the whole file reports as one file-level failure with no output.
+  assert.throws(() => extractor.readSource('NoSuchUnit.h'), (e) => {
+    assert.strictEqual(e.code, 'ENOVENDOR');
+    assert.match(e.message, /NoSuchUnit\.h/);
+    assert.match(e.message, /git submodule update --init/);
+    return true;
+  });
+
+  // …and the answer to "can I rebuild the table here?" is available without
+  // provoking that throw, which is what lets the two tests below stand down
+  // cleanly rather than exploding.
+  assert.strictEqual(typeof extractor.sourceAvailable(), 'boolean');
+});
+
+test('the committed table is what the extractor produces from the vendored source', { skip: NO_VENDOR }, () => {
   // A stale messages.json is the failure nobody notices: the application keeps
   // working while it quotes a wording WinSCP no longer ships.
   const built = extractor.build();
@@ -183,12 +229,17 @@ test('the promotional strings are withheld, named and unreachable', () => {
   assert.deepStrictEqual(nagging, [], 'a promotional ask survived into the shipped message table');
 });
 
-test('every unit under source/resource contributes to the table', () => {
+// Only the directory listing needs the submodule, so it is the only part that
+// stands down without it — the arithmetic below is over the committed table and
+// keeps running everywhere.
+test('the extractor reads every unit that exists under source/resource', { skip: NO_VENDOR }, () => {
   const dir = path.join(__dirname, '..', 'vendor', 'winscp', 'source', 'resource');
   const onDisk = fs.readdirSync(dir).filter((f) => f.endsWith('.rc') || f.endsWith('.h'));
   // Nine units, ten files: TextsFileZilla.rc and TextsFileZilla.h share a stem.
   assert.deepStrictEqual(onDisk.sort(), [...extractor.RC_FILES, ...extractor.ID_HEADERS, ...extractor.HELP_HEADERS].sort());
+});
 
+test('every unit under source/resource contributes to the table', () => {
   for (const file of extractor.RC_FILES) {
     assert.ok(TABLE.counts.perFile[file] > 0, `${file} contributed no messages`);
   }
