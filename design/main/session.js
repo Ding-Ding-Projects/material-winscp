@@ -143,6 +143,10 @@ class Session extends EventEmitter {
   info() {
     return {
       id: this.id,
+      // A stored site's id is stable across sessions; the runtime session id
+      // is not. The renderer needs both so a connected tab can be restored and
+      // saved without guessing from the host name.
+      siteId: this.data.id || '',
       name: this.name,
       protocol: this.protocol,
       hostName: this.data.hostName,

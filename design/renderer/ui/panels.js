@@ -103,7 +103,8 @@ const MODULE_CSS = `
   border-radius:var(--shape-xs,6px);overflow:hidden}
 .fp-tile-thumb img{max-width:100%;max-height:100%;object-fit:contain}
 .fp-empty{padding:calc(18px*var(--den,1));color:var(--md-sys-color-on-surface-variant,var(--onsfcv,#49454F));
-  font-size:var(--type-body-sm,.8125rem)}
+  font-size:var(--type-body-sm,.8125rem);display:flex;flex-direction:column;align-items:flex-start;
+  gap:calc(12px*var(--den,1))}
 .fp-drop{position:absolute;inset:0;pointer-events:none;border:2px dashed var(--md-sys-color-primary,var(--pri,#0B57D0));
   border-radius:var(--shape-sm,8px);background:color-mix(in srgb,var(--md-sys-color-primary,#0B57D0) 8%,transparent);display:none}
 .fp.is-dropping .fp-drop{display:block}
@@ -618,6 +619,12 @@ export function createFilePanel(opts = {}) {
             : (filterMask || searchBar.isActive)
               ? noMatchMessage(searchBar.predicate, isLocal ? t('localPanel') : t('remotePanel'))
               : t('emptyDir')));
+      if (!isLocal && !loading && !sessionId()) {
+        emptyNote.appendChild(h('button', {
+          type: 'button', class: 'btn-tonal',
+          onclick: () => runAction('SiteManagerAction', { workspace }),
+        }, icon('add_link', 17), h('span', {}, t('newConnection'))));
+      }
       if (!loading && !loadError && hiddenCount) {
         emptyNote.appendChild(h('div', { class: 'muted' }, t('hiddenCount', String(hiddenCount))));
       }

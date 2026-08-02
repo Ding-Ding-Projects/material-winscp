@@ -39,9 +39,8 @@
   width: calc(26px * var(--uiscale));
   height: calc(26px * var(--uiscale));
   border-radius: calc(9px * var(--uiscale));
-  background: linear-gradient(135deg, var(--p), color-mix(in srgb, var(--ter) 60%, var(--p)));
-  color: var(--onp);
-  display: flex; align-items: center; justify-content: center;
+  display: block;
+  object-fit: contain;
   flex: 0 0 auto;
 }
 .tb-logo.is-big { width: calc(44px * var(--uiscale)); height: calc(44px * var(--uiscale)); border-radius: var(--shape-lg); }
@@ -84,6 +83,16 @@
 }
 .tb-chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tb-chip:hover { background: color-mix(in srgb, var(--onsfc) 8%, transparent); }
+.tb-action-label { color: var(--p); border-color: color-mix(in srgb, var(--p) 45%, var(--outline-var)); }
+.tb-action-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 900px) {
+  .tb-codename { display: none; }
+}
+@media (max-width: 760px) {
+  .tb-version, .tb-chip-label, .tb-action-text { display: none; }
+  .tb-chip { width: calc(38px * var(--den)); padding: 0; justify-content: center; border-color: transparent; }
+}
 
 .win-btn { width: calc(44px * var(--den)); height: calc(32px * var(--den)); color: var(--onsv); }
 .win-btn.is-close:hover { background: var(--err); color: var(--onerr); }

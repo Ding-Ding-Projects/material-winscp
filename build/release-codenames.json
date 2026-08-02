@@ -40,8 +40,5 @@
     "hk-dish-0058",
     "hk-dish-0081",
     "hk-dish-0139"
-  ],
-  "reserved": {
-    "hk-dish-0001": "Also the source image for build/icon.ico."
-  }
+  ]
 }

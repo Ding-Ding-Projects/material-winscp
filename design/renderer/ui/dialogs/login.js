@@ -23,8 +23,10 @@ import {
   copyText, downloadText,
 } from '../../dom.js';
 import { t, bindText, bindRender } from '../../i18n.js';
-import { api, bus, store, persistCurrent } from '../../state.js';
-import { registerDialog, openDialog, runCommand, registerCommand } from '../../app.js';
+import { api, bus, store, persistCurrent, session as appSession } from '../../state.js';
+import {
+  registerDialog, openDialog, runCommand, registerCommand, registerTitlebarAction,
+} from '../../app.js';
 import { notify } from '../notifications.js';
 import { attachMenuButton, SEPARATOR } from '../contextmenu.js';
 import { colorSwatchButton } from '../colorpicker.js';
@@ -328,7 +330,8 @@ export function createLoginPanel(opts = {}) {
     const portId = uid('lg-port');
     const hostInput = h('input', {
       type: 'text', id: hostId, class: 'sd-input', spellcheck: 'false',
-      autocomplete: 'off', placeholder: 'example.com',
+      autocomplete: 'off', placeholder: 'example.com', required: true, 'aria-required': 'true',
+      autofocus: !state.sourceId,
       oninput: () => { state.site.hostName = hostInput.value; state.dirty = true; syncButtons(); },
     });
     hostInput.value = state.site.hostName;
@@ -720,7 +723,7 @@ export function createLoginPanel(opts = {}) {
             notifySitesChanged();
             await tree.refresh();
             if (saved?.id) tree.select(`site:${saved.id}`);
-            notify.success(t('siteSaved'), chosen || name);
+            notify.success(t('siteSaved', chosen || name), '');
           } catch (err) { notify.error(t('save'), err.message || String(err)); }
         },
       });
@@ -735,7 +738,7 @@ export function createLoginPanel(opts = {}) {
       state.dirty = false;
       notifySitesChanged();
       await tree.refresh();
-      notify.success(t('siteSaved'), name);
+      notify.success(t('siteSaved', name), '');
     } catch (err) { notify.error(t('save'), err.message || String(err)); }
   }
 
@@ -966,7 +969,7 @@ export function createLoginPanel(opts = {}) {
         confirmLabel: t('delete_'),
         onConfirm: async () => {
           await siteStore.removeSite(node.site.id);
-          notify.success(t('siteDeleted'), node.label);
+          notify.success(t('siteDeleted', node.label), '');
           notifySitesChanged();
           await tree.refresh();
           tree.select('new-site');
@@ -1588,7 +1591,11 @@ export function registerLoginDialog() {
   registerDialog('login', ({ props, close }) => {
     const panel = createLoginPanel({
       prefs: props.prefs,
-      onLogin: () => { panel.destroy(); close('login'); },
+      onLogin: (info) => {
+        props.onLogin?.(info);
+        panel.destroy();
+        close('login');
+      },
       onClose: () => { panel.destroy(); close('close'); },
     });
     livePanel = panel;
@@ -1602,8 +1609,14 @@ export function registerLoginDialog() {
   });
 
   registerCommand({
-    id: 'session.siteManager', labelKey: 'siteManager', icon: 'dns', shortcut: 'Ctrl+N',
+    id: 'session.siteManager', labelKey: 'newConnection', icon: 'add_link', shortcut: 'Ctrl+N',
     run: () => openLogin(),
+  });
+
+  registerTitlebarAction({
+    id: 'new-connection', icon: 'add_link', labelKey: 'newConnection', order: 5,
+    showLabel: true,
+    onSelect: () => openLogin(),
   });
 
   // Other surfaces need a route to this dialog without importing it.
@@ -1613,7 +1626,12 @@ export function registerLoginDialog() {
 /** Open the Login / Site Manager dialog. */
 export function openLogin(props = {}) {
   registerLoginDialog();
-  return openDialog('login', props);
+  const targetWorkspace = props.workspace || appSession.get('workspace');
+  const onLogin = props.onLogin || ((info) => {
+    bus.emit('session:opened', info);
+    targetWorkspace?.attachSession(info);
+  });
+  return openDialog('login', { ...props, onLogin });
 }
 
 if (typeof document !== 'undefined') {

@@ -29,6 +29,7 @@ import { createTabStrip, getStrip } from './ui/tabs.js';
 import { maybeShowDimSum } from './ui/dimsum.js';
 import { createSearchBar } from './ui/searchbar.js';
 import { openColorPicker } from './ui/colorpicker.js';
+import { appMark } from './ui/appmark.js';
 import { VERSION, CODENAME, SEEDS } from '../winscp-data.js';
 
 /* ================================================================== */
@@ -108,10 +109,11 @@ export function listCommands() { return Array.from(commands.values()); }
 
 /** Add a button to the title bar's right-hand cluster. */
 export function registerTitlebarAction(spec) {
-  titlebarActions.push({ order: 100, ...spec });
+  const entry = { order: 100, ...spec };
+  titlebarActions.push(entry);
   renderTitlebarActions();
   return () => {
-    const i = titlebarActions.indexOf(spec);
+    const i = titlebarActions.indexOf(entry);
     if (i >= 0) titlebarActions.splice(i, 1);
     renderTitlebarActions();
   };
@@ -133,7 +135,7 @@ let els = {};
 
 function buildTitleBar() {
   const brand = h('div', { class: 'tb-brand' },
-    h('div', { class: 'tb-logo' }, icon('swap_vert', 17)),
+    appMark('tb-logo'),
     h('div', { class: 'tb-titles' },
       h('span', { class: 'tb-title' }, t('appName')),
       h('span', { class: 'tb-version mono' }, VERSION)));
@@ -216,12 +218,23 @@ function renderTitlebarActions() {
   if (!els.titlebarActions) return;
   clear(els.titlebarActions);
   for (const a of titlebarActions.slice().sort((x, y) => x.order - y.order)) {
+    const label = a.label || t(a.labelKey || 'help');
     const btn = h('button', {
-      type: 'button', class: 'icon-btn tb-btn',
-      'aria-label': a.label || t(a.labelKey || 'help'),
-      title: a.label || t(a.labelKey || 'help'),
+      type: 'button', class: a.showLabel ? 'tb-chip tb-action-label' : 'icon-btn tb-btn',
+      'aria-label': label,
+      title: label,
       onclick: () => a.onSelect?.(btn),
-    }, icon(a.icon || 'more_vert', 18));
+    }, icon(a.icon || 'more_vert', 18),
+    a.showLabel ? h('span', { class: 'tb-action-text' }, label) : null);
+    if (a.labelKey) {
+      bindRender(btn, () => {
+        const next = a.label || t(a.labelKey);
+        btn.setAttribute('aria-label', next);
+        btn.title = next;
+        const text = btn.querySelector('.tb-action-text');
+        if (text) text.textContent = next;
+      });
+    }
     appearanceTarget(btn, `titlebar-action-${a.id || uid('a')}`, a.label || a.id || 'Title bar action');
     els.titlebarActions.appendChild(btn);
   }
@@ -525,7 +538,7 @@ function openAbout() {
     width: 520,
     content: h('div', { class: 'stack' },
       h('div', { class: 'about-head' },
-        h('div', { class: 'tb-logo is-big' }, icon('swap_vert', 26)),
+        appMark('tb-logo is-big'),
         h('div', {},
           h('div', { class: 'about-name' }, t('appName')),
           h('div', { class: 'about-ver mono' }, `${t('aboutBuild')} ${VERSION}`),
@@ -543,7 +556,13 @@ function openAbout() {
 
 function installShortcuts() {
   window.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === ',') { e.preventDefault(); runCommand('app.preferences'); }
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'n') {
+      e.preventDefault();
+      runCommand('session.siteManager');
+    } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      runCommand('session.siteManager');
+    } else if ((e.ctrlKey || e.metaKey) && e.key === ',') { e.preventDefault(); runCommand('app.preferences'); }
     else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'l') { e.preventDefault(); cycleLanguage(); }
     else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
       e.preventDefault();

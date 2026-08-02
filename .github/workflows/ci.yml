@@ -168,7 +168,7 @@ jobs:
             cat LINE_COUNT.md
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Regenerate the application icon from the tracked catalog image
+      - name: Regenerate the application icon from the tracked vector logo
         run: node build/make-icon.js
 
       # The build number becomes the PATCH component, for two reasons that both

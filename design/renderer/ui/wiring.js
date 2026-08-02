@@ -220,7 +220,7 @@ export function installWiring() {
 
   /* ---- Site manager (forms/Login.dfm) ---- */
   for (const name of SITE_MANAGER) {
-    registerActionDialog(name, () => openLogin());
+    registerActionDialog(name, (ctx) => openLogin({ workspace: ctx.workspace }));
   }
 
   /* ---- Generate session URL (forms/GenerateUrl.dfm) ---- */

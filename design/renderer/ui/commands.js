@@ -121,6 +121,34 @@ export const services = {
 
 let installed = false;
 
+// Electron's native menu emits these command ids over event:command. Route
+// the complete Session menu into the same action registry as the Material
+// menus and toolbars so its accelerators cannot become a second, inert UI.
+const MAIN_SESSION_ACTIONS = Object.freeze({
+  'session.new': 'SiteManagerAction',
+  'session.sites': 'SiteManagerAction',
+  'session.newTab': 'NewTabAction',
+  'session.duplicate': 'DuplicateTabAction',
+  'session.close': 'CloseTabAction',
+  'session.saveSite': 'SaveCurrentSessionAction2',
+  'session.generateUrl': 'SessionGenerateUrlAction2',
+  'session.saveWorkspace': 'SaveWorkspaceAction',
+  'session.openWorkspace': 'WorkspacesAction',
+  'session.reconnect': 'ReconnectSessionAction',
+  'session.disconnect': 'DisconnectSessionAction',
+  'session.fsInfo': 'FileSystemInfoAction',
+  'session.changePassword': 'ChangePasswordAction',
+  'options.preferences': 'PreferencesAction',
+});
+
+function installMainCommandHandler() {
+  return backend.on('event:command', (payload) => {
+    if (!payload || payload.type !== 'menu') return;
+    const action = MAIN_SESSION_ACTIONS[payload.command];
+    if (action) runAction(action);
+  });
+}
+
 /**
  * Wire the live UI into the command layer. Safe to call more than once and
  * from more than one module — later calls merge, they do not replace.
@@ -132,7 +160,10 @@ export function installCommands(patch = {}) {
   if (!installed) {
     installed = true;
     reportShortcutConflicts();
-    if (typeof window !== 'undefined') installShortcutHandler();
+    if (typeof window !== 'undefined') {
+      installShortcutHandler();
+      installMainCommandHandler();
+    }
   }
   publishToShell();
   return services;
@@ -3010,7 +3041,7 @@ const I18N_KEYS = {
   LockAction: 'lockTab', UnlockAction: 'unlockTab',
   CalculateDirectorySizesAction: 'calcSize', LocalCalculateDirectorySizesAction: 'calcSize',
   RemoteCalculateDirectorySizesAction: 'calcSize',
-  SiteManagerAction: 'siteManager', SavedSessionsAction2: 'sites',
+  SiteManagerAction: 'newConnection', SavedSessionsAction2: 'sites',
   DisconnectSessionAction: 'disconnect', ReconnectSessionAction: 'reconnect',
   SaveCurrentSessionAction2: 'saveSessionSite', SessionGenerateUrlAction2: 'genUrlSite',
   ChangePasswordAction: 'changePassword', PrivateKeyUploadAction: 'installKey',

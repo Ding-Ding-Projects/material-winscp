@@ -596,7 +596,10 @@ export function openModal(opts = {}) {
   document.addEventListener('keydown', onKey, true);
 
   requestAnimationFrame(() => {
-    (autofocusEl || focusables(dialog)[0] || dialog).focus();
+    // Content-owned dialogs such as Login know their most useful first field.
+    // Honour native autofocus before falling back to the first focusable node;
+    // modal action buttons still win when the caller chose one explicitly.
+    (autofocusEl || dialog.querySelector('[autofocus]') || focusables(dialog)[0] || dialog).focus();
   });
 
   return { close, element: dialog, scrim };

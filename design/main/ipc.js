@@ -259,8 +259,19 @@ class Ipc {
     // moved, the behaviour did not, until the app was restarted. Re-apply them
     // whenever the store changes, on every path that can change it.
     if (this.config && typeof this.config.on === 'function') {
-      this.config.on('pref-changed', () => this.refreshQueuePrefs());
-      this.config.on('changed', () => this.refreshQueuePrefs());
+      const publishConfig = () => this.emit('event:config', publicConfig(this.config));
+      this.config.on('pref-changed', () => {
+        this.refreshQueuePrefs();
+        publishConfig();
+      });
+      // Site, folder and workspace mutations use this event. Publish the same
+      // credential-free document as config:get so menus and toolbars refresh
+      // immediately after a save instead of waiting for an app restart.
+      this.config.on('sites-changed', publishConfig);
+      this.config.on('changed', () => {
+        this.refreshQueuePrefs();
+        publishConfig();
+      });
     }
 
     if (this.config && typeof this.config.attachHistory === 'function') {
@@ -890,13 +901,7 @@ class Ipc {
       return this.config;
     };
 
-    this.handle('config:get', () => ({
-      prefs: cfg().prefs,
-      sites: cfg().sites.map(publicSite),
-      folders: cfg().data.folders,
-      workspaces: cfg().data.workspaces,
-      needsUnlock: cfg().needsUnlock(),
-    }));
+    this.handle('config:get', () => publicConfig(cfg()));
 
     this.handle('config:getPref', (dotted) => cfg().getPref(str(dotted, 'preference', 256)));
 
@@ -2333,6 +2338,17 @@ function publicSite(s) {
     out[f] = out[f] ? '__stored__' : '';
   }
   return out;
+}
+
+/** The complete configuration document safe to clone into the renderer. */
+function publicConfig(config) {
+  return {
+    prefs: config.prefs,
+    sites: config.sites.map(publicSite),
+    folders: config.data.folders,
+    workspaces: config.data.workspaces,
+    needsUnlock: config.needsUnlock(),
+  };
 }
 
 const PROTOCOLS = new Set(['sftp', 'scp', 'ftp', 'webdav', 's3', 'local']);

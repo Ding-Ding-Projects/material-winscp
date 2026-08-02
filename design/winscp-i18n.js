@@ -26,7 +26,8 @@ export const I18N = {
   preview: ['Preview','預覽'], none: ['None','冇'], default_: ['Default','預設'], custom: ['Custom','自訂'],
   on: ['On','開'], off: ['Off','閂'], name: ['Name','名稱'], value: ['Value','數值'], all: ['All','全部'],
   // Login / site manager
-  loginTitle: ['Login','登入'], newSite: ['New Site','新站點'], siteName: ['Site name','站點名'],
+  loginTitle: ['Login','登入'], newConnection: ['New connection','新增連線'],
+  newSite: ['New Site','新站點'], siteName: ['Site name','站點名'],
   hostName: ['Host name','主機名'], portNumber: ['Port number','連接埠'], userName: ['User name','用戶名'],
   password: ['Password','密碼'], fileProtocol: ['File protocol','檔案協定'], encryption: ['Encryption','加密'],
   anonymousLogin: ['Anonymous login','匿名登入'], credAws: ['Credentials from AWS environment','用 AWS 環境憑證'],

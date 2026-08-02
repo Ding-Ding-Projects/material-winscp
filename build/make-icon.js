@@ -1,10 +1,9 @@
-// build/make-icon.js — produce build/icon.ico from a repository-tracked image.
+// build/make-icon.js — produce build/icon.ico from the tracked vector app logo.
 //
-// Provenance: the source is an image ALREADY TRACKED in this repository
-// (design/assets/dim-0001-har-gow.png, the "Classic Har Gow · 蝦餃" catalog
-// photo). Nothing is generated, downloaded, scraped or fetched here — this
-// script only decodes that tracked PNG, box-samples it to the standard Windows
-// icon sizes and re-encodes the result as a multi-size .ico. Run it with:
+// The source of truth is design/assets/app-logo.svg. This script validates its
+// exact geometry, renders that geometry locally at high resolution, box-samples
+// it to the Windows icon sizes and encodes a multi-size .ico. Nothing is
+// downloaded or fetched. Run it with:
 //
 //     node build/make-icon.js
 //
@@ -16,9 +15,34 @@ const path = require('path');
 const zlib = require('zlib');
 
 const REPO = path.resolve(__dirname, '..');
-const SOURCE = path.join(REPO, 'design', 'assets', 'dim-0001-har-gow.png');
+const SOURCE = path.join(REPO, 'design', 'assets', 'app-logo.svg');
 const OUT = path.join(__dirname, 'icon.ico');
-const SIZES = [16, 24, 32, 48, 64, 128, 256];
+const SIZES = [16, 20, 24, 32, 40, 48, 64, 128, 256];
+const VIEWBOX = 64;
+
+const LOGO = Object.freeze({
+  background: { x: 0, y: 0, width: 64, height: 64, radius: 16, color: '#0B57D0' },
+  panes: [
+    { x: 10, y: 14, width: 17, height: 36, radius: 5, color: '#EADDFF' },
+    { x: 37, y: 14, width: 17, height: 36, radius: 5, color: '#D0BCFF' },
+  ],
+  arrows: [
+    { color: '#FFFFFF', points: [[17, 23], [37, 23], [37, 19], [47, 28], [37, 37], [37, 33], [17, 33]] },
+    { color: '#FFD8E4', points: [[47, 34], [27, 34], [27, 30], [17, 39], [27, 48], [27, 44], [47, 44]] },
+  ],
+});
+
+function logoSvg() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" data-logo-version="1">
+  <title>WinSCP Material</title>
+  <desc>Two file panes exchanging files in both directions</desc>
+  <rect width="64" height="64" rx="16" fill="#0B57D0"/>
+  <rect x="10" y="14" width="17" height="36" rx="5" fill="#EADDFF"/>
+  <rect x="37" y="14" width="17" height="36" rx="5" fill="#D0BCFF"/>
+  <path d="M17 23h20v-4l10 9-10 9v-4H17z" fill="#FFFFFF"/>
+  <path d="M47 34H27v-4l-10 9 10 9v-4h20z" fill="#FFD8E4"/>
+</svg>`;
+}
 
 /* ------------------------------------------------------------------ decode */
 
@@ -102,6 +126,92 @@ function decodePng(buf) {
   }
 
   return { width, height, rgba: out };
+}
+
+/* ---------------------------------------------------------- vector render */
+
+function rgba(hex) {
+  const text = String(hex).replace(/^#/, '');
+  if (!/^[0-9a-f]{6}$/i.test(text)) throw new Error(`invalid logo colour ${hex}`);
+  return [
+    Number.parseInt(text.slice(0, 2), 16),
+    Number.parseInt(text.slice(2, 4), 16),
+    Number.parseInt(text.slice(4, 6), 16),
+    255,
+  ];
+}
+
+function setPixel(image, x, y, color) {
+  const i = (y * image.width + x) * 4;
+  image.rgba[i] = color[0];
+  image.rgba[i + 1] = color[1];
+  image.rgba[i + 2] = color[2];
+  image.rgba[i + 3] = color[3];
+}
+
+function inRoundedRect(px, py, shape) {
+  const { x, y, width, height, radius } = shape;
+  if (px < x || px > x + width || py < y || py > y + height) return false;
+  const nearestX = Math.max(x + radius, Math.min(px, x + width - radius));
+  const nearestY = Math.max(y + radius, Math.min(py, y + height - radius));
+  const dx = px - nearestX;
+  const dy = py - nearestY;
+  return dx * dx + dy * dy <= radius * radius;
+}
+
+function paintRoundedRect(image, shape) {
+  const scale = image.width / VIEWBOX;
+  const color = rgba(shape.color);
+  const left = Math.max(0, Math.floor(shape.x * scale));
+  const top = Math.max(0, Math.floor(shape.y * scale));
+  const right = Math.min(image.width, Math.ceil((shape.x + shape.width) * scale));
+  const bottom = Math.min(image.height, Math.ceil((shape.y + shape.height) * scale));
+  for (let y = top; y < bottom; y++) {
+    const py = (y + 0.5) / scale;
+    for (let x = left; x < right; x++) {
+      const px = (x + 0.5) / scale;
+      if (inRoundedRect(px, py, shape)) setPixel(image, x, y, color);
+    }
+  }
+}
+
+function pointInPolygon(px, py, points) {
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const [xi, yi] = points[i];
+    const [xj, yj] = points[j];
+    const crosses = ((yi > py) !== (yj > py)) &&
+      (px < ((xj - xi) * (py - yi)) / (yj - yi) + xi);
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
+function paintPolygon(image, shape) {
+  const scale = image.width / VIEWBOX;
+  const color = rgba(shape.color);
+  const xs = shape.points.map((p) => p[0]);
+  const ys = shape.points.map((p) => p[1]);
+  const left = Math.max(0, Math.floor(Math.min(...xs) * scale));
+  const top = Math.max(0, Math.floor(Math.min(...ys) * scale));
+  const right = Math.min(image.width, Math.ceil(Math.max(...xs) * scale));
+  const bottom = Math.min(image.height, Math.ceil(Math.max(...ys) * scale));
+  for (let y = top; y < bottom; y++) {
+    const py = (y + 0.5) / scale;
+    for (let x = left; x < right; x++) {
+      const px = (x + 0.5) / scale;
+      if (pointInPolygon(px, py, shape.points)) setPixel(image, x, y, color);
+    }
+  }
+}
+
+/** Render the exact tracked mark without a browser or an image dependency. */
+function rasterizeLogo(size = 1024) {
+  const image = { width: size, height: size, rgba: Buffer.alloc(size * size * 4) };
+  paintRoundedRect(image, LOGO.background);
+  for (const pane of LOGO.panes) paintRoundedRect(image, pane);
+  for (const arrow of LOGO.arrows) paintPolygon(image, arrow);
+  return image;
 }
 
 /* ---------------------------------------------------------------- resample */
@@ -224,14 +334,18 @@ function buildIco(images) {
 
 function main() {
   if (!fs.existsSync(SOURCE)) {
-    throw new Error(`tracked source image is missing: ${SOURCE}`);
+    throw new Error(`tracked vector logo is missing: ${SOURCE}`);
   }
-  const src = decodePng(fs.readFileSync(SOURCE));
-  console.log(`source ${path.relative(REPO, SOURCE)} ${src.width}x${src.height}`);
+  const tracked = fs.readFileSync(SOURCE, 'utf8').replace(/\r\n/g, '\n').trim();
+  if (tracked !== logoSvg().trim()) {
+    throw new Error('design/assets/app-logo.svg no longer matches the icon renderer; update both together.');
+  }
+  const src = rasterizeLogo(1024);
+  console.log(`source ${path.relative(REPO, SOURCE)} — validated 64x64 vector, rendered ${src.width}x${src.height}`);
 
   const images = SIZES.map((size) => ({
     size,
-    data: dibEntry(roundCorners(resample(src, size), size), size),
+    data: dibEntry(resample(src, size), size),
   }));
 
   const ico = buildIco(images);
@@ -241,4 +355,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { decodePng, resample, buildIco, dibEntry };
+module.exports = { decodePng, resample, buildIco, dibEntry, logoSvg, rasterizeLogo };

@@ -33,6 +33,7 @@ const dimsum = require('./dimsum');
 
 const IS_WIN = process.platform === 'win32';
 const DEV = process.argv.includes('--dev') || !!process.env.WINSCP_MATERIAL_DEV;
+const APP_ICON = path.join(__dirname, '..', '..', 'build', 'icon.ico');
 
 /** Everything the app keeps alive for its whole run. */
 const state = {
@@ -322,6 +323,7 @@ function createWindow() {
     minHeight: 480,
     show: false,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#101418' : '#FDFCFF',
+    ...(fs.existsSync(APP_ICON) ? { icon: APP_ICON } : {}),
     // A Material 3 title bar is drawn by the renderer, so the OS frame goes.
     frame: false,
     titleBarStyle: IS_WIN ? 'hidden' : 'hiddenInset',
@@ -577,13 +579,18 @@ function start() {
       P.setRoot(fs.existsSync(target) && fs.statSync(target).isDirectory() ? target : path.dirname(target));
     }
 
-    state.config = new Config().load();
-    state.config.appVersion = app.getVersion();
+    // EventEmitter treats an unhandled `error` event as an exception. Attach
+    // this BEFORE load(): a malformed configuration is recoverable (Config
+    // backs it up and resets to defaults), and must not abort startup before
+    // the window exists.
+    state.config = new Config();
     state.config.on('error', (e) => {
       // A configuration problem is worth a real dialog: it is a decision (the
       // user's sites may need restoring), not an informational toast.
       dialog.showErrorBox('WinSCP Material', e.message);
     });
+    state.config.load();
+    state.config.appVersion = app.getVersion();
 
     // `/log=FILE` and `/loglevel=N` turn logging on for this run only.
     if (early.log) {

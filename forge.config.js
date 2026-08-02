@@ -17,8 +17,8 @@ const fs = require('fs');
 
 const pkg = require('./package.json');
 
-/** Windows icon, produced by `node build/make-icon.js` from a tracked catalog
- *  image. Missing icon is a warning, never a build failure. */
+/** Windows icon, produced by `node build/make-icon.js` from the tracked vector
+ *  application logo. Missing icon is a warning, never a build failure. */
 const ICON_ICO = path.join(__dirname, 'build', 'icon.ico');
 const hasIcon = fs.existsSync(ICON_ICO);
 if (!hasIcon) {

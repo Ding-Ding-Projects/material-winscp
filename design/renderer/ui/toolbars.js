@@ -58,7 +58,8 @@ export const BANDS = {
     id: 'session', label: 'Sessions and Tabs', iface: 'both', order: 20,
     items: [
       A('NewTabAction', true), A('SaveCurrentSessionAction2'), SEP,
-      A('DuplicateTabAction'), A('CloseTabAction'), SEP, A('SavedSessionsAction2', true),
+      A('DuplicateTabAction'), A('CloseTabAction'), SEP,
+      A('SiteManagerAction', true), A('SavedSessionsAction2', true),
     ],
   },
   preferences: {

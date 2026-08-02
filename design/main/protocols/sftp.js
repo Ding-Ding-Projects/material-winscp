@@ -15,7 +15,7 @@ const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
 const { Duplex } = require('stream');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const { EventEmitter } = require('events');
 
 const { Client } = require('ssh2');
@@ -373,13 +373,29 @@ async function openSocket(session, host, port, timeoutMs, log) {
 // ---------------------------------------------------------------- transport
 
 /** Where the SSH agent lives on this host. */
+function pageantRunning() {
+  if (process.platform !== 'win32') return false;
+  try {
+    const probe = spawnSync('tasklist.exe', [
+      '/FI', 'IMAGENAME eq pageant.exe', '/NH', '/FO', 'CSV',
+    ], {
+      encoding: 'utf8', windowsHide: true, timeout: 1500,
+    });
+    return probe.status === 0 && /"pageant\.exe"/i.test(probe.stdout || '');
+  } catch {
+    return false;
+  }
+}
+
 function agentPath() {
   if (process.env.SSH_AUTH_SOCK) return process.env.SSH_AUTH_SOCK;
   if (process.platform !== 'win32') return null;
   // Windows OpenSSH publishes a named pipe; Pageant uses a window message and
-  // is what WinSCP itself talks to, so it is the fallback.
+  // is what WinSCP itself talks to. ssh2 treats an absent Pageant as a fatal
+  // agent error, so offer it only while its process is actually present; a
+  // missing optional agent must never prevent password authentication.
   try { if (fs.existsSync('\\\\.\\pipe\\openssh-ssh-agent')) return '\\\\.\\pipe\\openssh-ssh-agent'; } catch { /* not present */ }
-  return 'pageant';
+  return pageantRunning() ? 'pageant' : null;
 }
 
 /**

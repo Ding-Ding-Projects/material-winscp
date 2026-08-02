@@ -136,6 +136,27 @@ bite a successor who assumes otherwise:
 
 <!-- hand-written: preserved across regeneration -->
 
+**Connection recovery and app identity handoff (2026-08-02).** Startup now
+installs the configuration error listener before loading the profile, so a
+malformed `winscp-material.json` is backed up and reset without terminating the
+app. The New connection flow is reachable from the title bar, session toolbar,
+menus, disconnected-panel empty state, native menu commands and keyboard route;
+saved sites refresh immediately, persist across restart, and successful sessions
+attach to the active workspace. Windows password authentication also skips an
+absent Pageant instead of letting an optional agent abort the connection.
+
+The new code-native vector mark is shared by the title bar and About surfaces,
+is assigned to the development `BrowserWindow`, and is rasterized deterministically
+into the tracked multi-size Squirrel/Windows `build/icon.ico`. Headless desktop
+verification recovered from deliberately malformed JSON and completed a real
+password-authenticated local SFTP connection whose remote pane listed
+`connection-verified.txt`. `node --check` over the edited JavaScript,
+`git diff --check`, and `node build/make-icon.js` passed. The full test suite was
+not run under the current desktop-only scope. Packaging was deliberately left
+for the next pass when the user requested an immediate handoff; use Node 22 LTS,
+run `npm run package` and `npm run make`, then launch the packaged executable and
+verify the installer/release job.
+
 **Run `node tools/fix-node26-deps.js` after `npm install`, always.** npm runs
 Electron's postinstall *during* the install, while `extract-zip` is still the
 broken Node 26 copy — so the binary is unpacked with the very bug that tool

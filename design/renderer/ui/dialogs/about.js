@@ -38,6 +38,7 @@ import { VERSION, CODENAME } from '../../../winscp-data.js';
 import { openLicense, LICENSE_ID } from './license.js';
 import { openChangelog } from '../changelog.js';
 import { openHistoryPanel } from '../historypanel.js';
+import { appMark } from '../appmark.js';
 import { registerDialog, openDialog } from '../../app.js';
 
 /* ------------------------------------------------------------------ */
@@ -141,8 +142,7 @@ function ensureStyles() {
 .ab { display: flex; flex-direction: column; gap: calc(12px * var(--den)); }
 .ab-head { display: flex; align-items: center; gap: calc(14px * var(--den)); }
 .ab-logo { width: calc(52px * var(--uiscale)); height: calc(52px * var(--uiscale));
-  border-radius: var(--shape-lg); background: var(--pc); color: var(--onpc);
-  display: flex; align-items: center; justify-content: center; flex: none; }
+  border-radius: var(--shape-lg); object-fit: contain; display: block; flex: none; }
 .ab-name { font-size: var(--type-title-lg); font-weight: 700; }
 .ab-ver { font-size: var(--type-label-lg); color: var(--onsv); font-variant-numeric: tabular-nums; }
 .ab-code { display: flex; align-items: center; gap: calc(12px * var(--den));
@@ -264,7 +264,7 @@ export function createAboutBody() {
 
   const root = h('div', { class: 'ab' },
     h('div', { class: 'ab-head' },
-      h('div', { class: 'ab-logo' }, icon('swap_vert', 26)),
+      appMark('ab-logo'),
       h('div', {},
         h('div', { class: 'ab-name' }, t('appName')),
         verEl,
