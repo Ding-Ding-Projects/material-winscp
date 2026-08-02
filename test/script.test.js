@@ -1700,6 +1700,62 @@ test('parseOpenUrl understands each protocol scheme and its default port', () =>
   assert.throws(() => parseOpenUrl('gopher://h'), /Unknown protocol 'gopher'\./);
 });
 
+test('the ftps:// scheme dials the implicit-TLS port, not the plaintext one', () => {
+  // TSessionData::GetDefaultPort — fsFTP + ftpsImplicit is 990. Answering 21
+  // connects to the plaintext control port and then tries to negotiate TLS on a
+  // socket the server never expected it on.
+  assert.equal(parseOpenUrl('ftps://h').portNumber, 990);
+  assert.equal(parseOpenUrl('ftp://h').portNumber, 21);
+  assert.equal(parseOpenUrl('ftpes://h').portNumber, 21);
+  // A port in the URL always wins.
+  assert.equal(parseOpenUrl('ftps://h:2121').portNumber, 2121);
+});
+
+test('the TLS switches read their VALUE, so -implicit=off means off', () => {
+  // Options is built from a command line, the way `open` receives its switches.
+  const url = (u, args) => parseOpenUrl(u, new Options().parse(args.join(' ')));
+
+  // Presence alone is "on", exactly as before.
+  assert.equal(url('ftp://h', ['-implicit']).ftps, 'implicit');
+  assert.equal(url('ftp://h', ['-implicit']).portNumber, 990);
+  // And a value of off turns it OFF. Treating the switch's presence as "on"
+  // dialled implicit TLS for a user who had asked for plaintext — a
+  // wrong-protocol connection, not a missing feature.
+  assert.equal(url('ftp://h', ['-implicit=off']).ftps, 'none');
+  assert.equal(url('ftp://h', ['-implicit=off']).portNumber, 21);
+
+  assert.equal(url('ftp://h', ['-explicit']).ftps, 'explicitTls');
+  assert.equal(url('ftp://h', ['-explicit=off']).ftps, 'none');
+
+  // The 5.5.x backward-compatibility spellings are consumed too; before this
+  // an existing script carrying one stopped with "Unknown switch".
+  assert.equal(url('ftp://h', ['-explicittls']).ftps, 'explicitTls');
+  assert.equal(url('ftp://h', ['-explicitssl']).ftps, 'explicitSsl');
+  assert.equal(url('ftp://h', ['-explicitssl=off']).ftps, 'none');
+
+  // An explicit port survives every one of them.
+  assert.equal(url('ftp://h:2121', ['-implicit']).portNumber, 2121);
+});
+
+test('-sessionname, -newpassword and -hostkey do what the switch promises', () => {
+  const url = (args) => parseOpenUrl('sftp://h', new Options().parse(args.join(' ')));
+
+  assert.equal(url(['-sessionname=Production']).name, 'Production');
+
+  // ChangePassword is the flag that actually triggers the change; recording the
+  // new password without it left the switch doing nothing at all.
+  const changed = url(['-newpassword=n3w']);
+  assert.equal(changed.newPassword, 'n3w');
+  assert.equal(changed.changePassword, true);
+
+  // FOverrideCachedHostKey — without it a fingerprint pinned on the command
+  // line does not override the one already cached.
+  const pinned = url(['-hostkey="ssh-rsa 2048 aa:bb"']);
+  assert.equal(pinned.hostKey, 'ssh-rsa 2048 aa:bb');
+  assert.equal(pinned.overrideCachedHostKey, true);
+  assert.equal(url(['-certificate=aa:bb']).overrideCachedHostKey, true);
+});
+
 test('parseOpenUrl splits credentials, port, IPv6 host and remote path', () => {
   const d = parseOpenUrl('sftp://martin:p%40ss@example.com:2222/var/www');
   assert.equal(d.userName, 'martin');

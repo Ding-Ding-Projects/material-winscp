@@ -8,7 +8,7 @@ The goal is stated in [`docs/porting-mandate.md`](docs/porting-mandate.md) and i
 not negotiable: **port 100% of WinSCP, however many lines it takes.** Scale is
 not a reason to narrow scope.
 
-**Currently 53.2% of 209,889 logic lines.**
+**Currently 55.3% of 209,889 logic lines.**
 
 ## Done
 
@@ -39,18 +39,18 @@ not a reason to narrow scope.
 
 ## Not started
 
-- `windows/VCLCommon` — 3,323 lines
-- `windows/WinInterface` — 2,545 lines
 - `core/SessionInfo` — 2,274 lines
 - `core/PuttyIntf` — 1,689 lines
-- `windows/UserInterface` — 1,501 lines
-- `components/UnixDirView` — 1,328 lines
-- `components/UnixDriveView` — 1,151 lines
-- `console/Main` — 1,078 lines
-- `resource/TextsFileZilla` — 902 lines
 - `components/ThemePageControl` — 882 lines
 - `windows/QueueController` — 764 lines
 - `core/Exceptions` — 761 lines
+- `core/Bookmarks` — 700 lines
+- `core/Usage` — 408 lines
+- `core/CoreMain` — 269 lines
+- `core/NamedObjs` — 218 lines
+- `windows/WinApi` — 198 lines
+- `core/Interface` — 197 lines
+- `core/Global` — 132 lines
 
 ## Tracked as issues
 

@@ -200,6 +200,58 @@ is stated as what the **user** cannot do, and each row names the code path in
 | **`AnyOtherInstanceOfSelf` needs `tasklist`** | installer's "close the running copy" check | 🔁 Worked around | No Node API enumerates processes. `anyOtherInstanceOfSelf()` shells out to `tasklist`; on a machine where that is blocked it answers `false`, i.e. it under-reports rather than blocking an install. |
 | **COM registration inspection (`/ComRegistration`)** | the .NET assembly's COM registration | ➖ Not applicable | `Setup.cpp:2466-2937` inspects and unregisters the `WinSCP.` COM classes that back the .NET assembly. This port ships no COM server and no .NET assembly, so there is nothing to inspect. Nothing is lost for a user of this application. |
 
+## The console front-end (`console/`, `windows/ConsoleRunner.cpp`)
+
+WinSCP ships two binaries: `winscp.exe` owns the window, and `winscp.com` is a
+separate console-subsystem program that a shell launches, that owns the
+terminal, and that talks to the GUI half through a named file mapping and three
+named events. This port ships one Node program, `bin/winscp-com.js`, which runs
+both halves in one process.
+
+| Gap | WinSCP feature affected | Status | Consequence today |
+|---|---|---|---|
+| **The out-of-process transport** | `/consolechild=`, a separate `winscp.com` | ➖ Deliberate difference | The `TConsoleCommStruct` wire protocol, its version handshake and all eight event types are ported and exercised, but both halves share one Node process and rendezvous in memory rather than through a file mapping, three named events and a kill-on-close job object. The user cannot point a *separately built* `winscp.com` at this application, and a crash in one half takes the other with it. Everything a script does is unaffected. |
+| **The legacy console code page** | running under a non-UTF-8 code page | ⬜ Not available | `Main.cpp:512` catches `ERROR_GEN_FAILURE` from `WriteConsole` and retries through `WriteConsoleA` in `CP_ACP`, which is how WinSCP degrades to transliterated text on a console that cannot render a character. Node writes UTF-8 unconditionally and surfaces no such failure, so on a legacy code page the user sees mojibake where WinSCP showed an approximation. |
+| **Restoring the terminal title** | the title a script sets | 🚧 Partial | `GetConsoleTitle`/`SetConsoleTitle` have no Node equivalent, so the title is set with OSC 2 and saved and restored with `ESC[22;2t` / `ESC[23;2t`. On a terminal without the xterm title stack the title the script set is left behind after the run. |
+| **The console's own confirmation prompt** | `option batch`, an overwrite question asked from a script | ⬜ Not wired | `TConsoleRunner::QueryUser` (ConsoleRunner.cpp:1712) drives `FConsole->Choice`, which is how a script is asked "overwrite?" and how `option batch abort` declines. `ExternalConsole.choice()` and `.progress()` are implemented and covered, and nothing in `design/main/consolerunner.js` calls them, so a scripted transfer never reaches that prompt. |
+| **Chunked `/stdout` framing outside the front-end** | `winscp.com /stdout=chunked` | 🚧 Partial | The framing is implemented in `design/main/console.js` and is what `bin/winscp-com.js` uses. `consolerunner.js`'s own in-process `StdConsole` cannot length-prefix its output, so asking it for chunked framing is **refused** rather than silently downgraded to raw bytes — a reader expecting lengths and receiving a stream cannot tell where a file ends. |
+
+## The transfer engine (`core/Terminal.cpp`, transfer half)
+
+`design/main/transfer.js` is the decision layer and `design/main/queue.js` is
+the one byte mover; `transfer:copyToRemote` / `copyToLocal` and `queue:add` are
+the two ways in. These rows are behaviour the original has and this does not.
+
+| Gap | WinSCP option affected | Status | Consequence today |
+|---|---|---|---|
+| **The overwritten remote file is not recycled** | `OverwrittenToRecycleBin` on a site | ⬜ Not available | WinSCP moves the existing remote file into the recycle-bin directory before overwriting it, with a symlink check (a link is never recycled) and a `DontRecycle` fallback when the move fails. The setting exists in the site model and in the Advanced Site Settings dialog, and `terminal.js` has a working `recycleFile()`, but nothing on the transfer path calls it. A user who deliberately turned the safety net on does not get it, and the overwritten file is gone. |
+| **A resumable upload does not refuse a target owned by another user** | resume support | ⬜ Not available | Resuming renames the `.filepart` over the target, which deletes and recreates the file and therefore silently changes its ownership. `SftpFileSystem.cpp:4675` disables resumable transfer when the existing remote file's owner is not the logged-in user; this port keeps only the symlink refusal from that block. |
+| **The retry budget is never reset by progress** | reconnect during a long FTP transfer | ⬜ Not available | `tfUseFileTransferAny` tells `TRobustOperationLoop` to restart its reconnect window whenever bytes actually moved. WinSCP's FTP file system passes it in both directions; this port never sets it, so a long FTP transfer that keeps making progress across drops gives up sooner than the original would. The loop itself is ported faithfully — nothing turns it on. |
+| **`ExcludeEmptyDirectories` does nothing** | "Exclude empty directories" | ⬜ Not available | `DoAllowLocalFileTransfer`/`DoAllowRemoteFileTransfer` both end with an `IsEmptyDirectory` test. The port implements the hidden-file rule, the temporary-file rule and the include mask but not this one, so an empty directory is still created on the far side. |
+| **One file is split across FTP connections where WinSCP refuses** | "Use multiple connections for a single transfer" | 🚧 Divergent | `fcParallelFileTransfers` is true only for SFTP in the original; FTP, S3, WebDAV and SCP all return false. This port gates on `caps.resume`, which `ftp.js` sets whenever the server advertises `REST STREAM`, so a large FTP download can be split and merged where WinSCP would transfer it in one stream. |
+| **`OnTransferIn` / `OnTransferOut`** | the .NET assembly's `Session.GetFile` / `PutFile` | ➖ Not applicable | Streaming a transfer to or from a caller-supplied stream, with `CopyToLocal`'s `fcTransferOut` refusal. Nothing in this port has such a caller; the scripting surface's own `/stdout` path is implemented separately. |
+| **`InvalidCharsReplacement` defaults to `_`, not to token encoding** | "Replace invalid characters" | 🚧 Divergent | `TCopyParamType::Default` sets `InvalidCharsReplacement = TokenReplacement`, so a downloaded `a:b.txt` becomes `a%3Ab.txt` and re-uploads under its original name. This port defaults to `_`, so the reversible codec — which is implemented and tested — is inert in the shipped configuration and a round trip renames the file. Changing the default is a one-line change with a migration question attached, so it is recorded rather than made silently. |
+
+## The message resources (`resource/`)
+
+| Gap | WinSCP feature affected | Status | Consequence today |
+|---|---|---|---|
+| **The ported modules still carry their own copies of the wording** | every error and confirmation | 🚧 Partial | All 1,420 message resources are extracted with their printf shapes, resolvable by id, and reachable over `messages:*`. About 150 exact resource strings are still transcribed inline across the main-process modules, so changing the table does not change what those modules say. The user sees WinSCP's wording either way; the risk is drift, not a wrong sentence. |
+| **The bilingual layer rewrites some captions** | funny-level 1–5, bilingual mode | 🚧 Divergent | 106 of the 1,420 resources have a Cantonese counterpart and five voices. Of those, 34 render an English voice that is no longer the resource's own sentence once accelerators are stripped, and `COMPARE_NO_DIFFERENCES` in particular voices "No differences found." (a claim about the comparison) as "Directories are already in sync." (a claim about the directories) — which is false under an include/exclude mask. Every mapped caption also loses its `&` accelerator, so `voiced()` is not a drop-in for `loadStr()` on a caption. |
+| **Donation and store strings are withheld** | WinSCP's donation prompts | ➖ Deliberate | Seven strings are excluded by policy (Ding-Ding-Projects/material-winscp#22) and named in `EXCLUDED_BY_POLICY` with their reason, so a future `loadStr('DONATE_URL')` gets an answer rather than a mystery. |
+
+## The Windows-only user-interface layer (`windows/`, `components/`)
+
+| Gap | WinSCP feature affected | Status | Consequence today |
+|---|---|---|---|
+| **Capturing a hung application's stack** | `/dumpcallstack` | ⬜ Not available | `TCallstackThread` opens the main thread from a second thread, `SuspendThread`s it, walks its stack with JclDebug and writes the trace to a file — which is how a user reports a WinSCP that has stopped responding. Node and Electron cannot suspend and walk the main thread from outside it. When this application stops responding there is no way to capture what it is stuck on. |
+| **The tray icon and its balloons** | minimize to tray, background-transfer notifications | ⬜ Not available | `TTrayIcon` and the delivery half of `ShowNotification` are not ported; the decision layer is. A user who minimises to the tray, or who expects a balloon when a background transfer finishes or a session drops, gets nothing. |
+| **The command-line operations** | `/upload`, `/download`, `/edit`, `/synchronize`, `/keepuptodate`, `/refresh` | ⬜ Not available | `startupPlan()` selects the right branch and nothing executes it. A user passing one of those switches gets a branch decision and no work. |
+| **A `/ini` that names a missing file is not reported** | `/ini=FILE` | ⬜ Not available | WinSCP shows a `qtError` dialog before choosing any maintenance branch. A user with a typo in `/ini` gets silence and their real configuration instead of the warning. |
+| **The Explorer icon cache, thumbnails and drive notification** | the file panels and the drive tree | ⬜ Not available | `components/DirView.cpp`'s asynchronous icon-update queue, `IEDriveInfo`'s drive enumeration and `WM_DEVICECHANGE` registration, volume labels and serial numbers, and `ThemePageControl` are not ported. A USB drive plugged in while the application is running does not appear in the drive list until the list is rebuilt. |
+| **The file-editing round trip** | editing a remote file from the explorer shell | ⬜ Not available | `ExecutedFileChanged`, `ExecutedFileReload`, `ExecutedFileEarlyClosed` and `EditedFileUploaded` are not ported — "the file you edited changed, upload it back?", "the remote file changed under you", and "you closed the editor before the upload finished". `explorershell.js` ports only the decisions taken *before* the editor opens; `editors.js` owns the editor registry and its own upload path, and nothing bridges the two. |
+| **Workspaces are decided but not saved** | "Save workspace" on close | ⬜ Not available | `SaveWorkspace`, `DoCollectWorkspace`, `CloneCurrentSessionData` and `DoOpenFolderOrWorkspace` are not ported in `explorershell.js`. Its close-query branch that exists to *prevent* losing a multi-tab layout calls out to an operation that saves nothing, so answering "No, save it" on close saves nothing. |
+
 ## How to use this page
 
 - A new gap goes here the moment it is discovered, with its consequence stated

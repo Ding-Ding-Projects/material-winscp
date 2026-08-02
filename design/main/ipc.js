@@ -2143,8 +2143,13 @@ class Ipc {
       const files = strArr(r.files, 'files', 200000).map((f) => path.resolve(f));
       need(files.length, 'No files were given to transfer.');
       const target = remotePath(session, r.target, 'target');
-      return t.copyToRemote(files, target, copyParamOf(r.copyParam),
+      // TTerminal::CopyToRemote returns a boolean: false when the operation was
+      // cancelled or an error was not recovered from. It is reported as
+      // `completed` rather than as the reply's own `ok`, so a caller cannot
+      // read "the request was handled" as "every file moved".
+      const completed = await t.copyToRemote(files, target, copyParamOf(r.copyParam),
         r.params === undefined ? 0 : num(r.params, 'params', 0));
+      return { completed: completed !== false, target };
     });
 
     this.handle('transfer:copyToLocal', async (req) => {
@@ -2154,8 +2159,10 @@ class Ipc {
       const t = this.terminalFor(session);
       const files = strArr(r.files, 'files', 200000).map((f) => remotePath(session, f, 'file'));
       need(files.length, 'No files were given to transfer.');
-      return t.copyToLocal(files, path.resolve(str(r.target, 'target', LIMITS.path)),
-        copyParamOf(r.copyParam), r.params === undefined ? 0 : num(r.params, 'params', 0));
+      const target = path.resolve(str(r.target, 'target', LIMITS.path));
+      const completed = await t.copyToLocal(files, target, copyParamOf(r.copyParam),
+        r.params === undefined ? 0 : num(r.params, 'params', 0));
+      return { completed: completed !== false, target };
     });
 
     /**

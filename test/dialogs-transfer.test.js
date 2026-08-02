@@ -809,6 +809,25 @@ test('Escape resolves to cancel when there is one, and to a safe answer otherwis
   assert.equal(MD.escapeAnswer({ buttons: 'yesNo' }), 'no');
   assert.equal(MD.escapeAnswer({ buttons: 'ok' }), 'ok');
   assert.equal(MD.escapeAnswer({ buttons: 'yesNo', cancelAnswer: 'yes' }), 'yes');
+  // CancelAnswer's ladder is cancel -> no -> abort -> ok, and the last rung is
+  // the one that used to be missing: this set escapes as OK, not as Retry.
+  assert.equal(MD.escapeAnswer({ buttons: [{ answer: 'retry' }, { answer: 'ok' }] }), 'ok');
+  assert.equal(MD.escapeAnswer({ buttons: 'abortRetryIgnore' }), 'abort');
+
+  // DefaultAnswer is Yes, else OK, else Retry — a property of the answer set,
+  // not of which button happens to be listed last.
+  assert.equal(MD.defaultAnswerFor({ buttons: 'yesNoCancel' }), 'yes');
+  assert.equal(MD.defaultAnswerFor({ buttons: 'okCancel' }), 'ok');
+  assert.equal(MD.defaultAnswerFor({ buttons: 'retryCancel' }), 'retry');
+
+  // Only a positive answer may be made permanent: "no, and never ask again"
+  // would refuse every future occurrence with nothing on screen to say why.
+  assert.equal(MD.isPositiveAnswer('yes'), true);
+  assert.equal(MD.isPositiveAnswer('ok'), true);
+  assert.equal(MD.isPositiveAnswer('yesToAll'), true);
+  assert.equal(MD.isPositiveAnswer('no'), false);
+  assert.equal(MD.isPositiveAnswer('cancel'), false);
+  assert.equal(MD.isPositiveAnswer('skip'), false);
 });
 
 test('a custom button list keeps its own labels and its last button is primary', () => {

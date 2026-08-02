@@ -163,6 +163,8 @@ export const backend = {
     return unwrap(res);
   },
   fs(fn, ...a) { return backend.call('fs', fn, ...a); },
+  /** design/main/explorershell.js — the orchestration decisions. */
+  explorer(fn, ...a) { return backend.call('explorer', fn, ...a); },
   session(fn, ...a) { return backend.call('session', fn, ...a); },
   queue(fn, ...a) { return backend.call('queue', fn, ...a); },
   sync(fn, ...a) { return backend.call('sync', fn, ...a); },
@@ -513,23 +515,62 @@ function watchAndDelete(ctx, added, direction) {
   });
 }
 
+/**
+ * The recycle-versus-delete decision, taken by design/main/explorershell.js.
+ *
+ * Three things it knows that a locally-computed version did not:
+ *
+ *   * a remote delete recycles because the SITE says so and has a recycle-bin
+ *     path, not because the protocol happens to have a `recycleBin` capability;
+ *   * a file that is ALREADY in the recycle bin is deleted rather than moved
+ *     into it a second time;
+ *   * recycling and deleting have SEPARATE confirmation preferences
+ *     (`confirmRecycling` and `confirmDeleting`), so turning one off does not
+ *     turn the other off.
+ *
+ * If the decision cannot be reached — a browser preview with no bridge — the
+ * local rules are used and the user is told nothing was skipped. Falling back
+ * is safe here because the fallback is strictly more cautious: it confirms.
+ */
+async function deleteDecisionFor(ctx, paths, alternative) {
+  const prefs = readPrefs();
+  const fallback = () => {
+    const binDefault = ctx.isLocal
+      ? prefs.deleteToRecycleBin !== false
+      : !!(ctx.sessionInfo && ctx.caps && ctx.caps.recycleBin);
+    return {
+      recycle: alternative ? !binDefault : binDefault,
+      needConfirmation: prefs.confirmDeleting !== false,
+      query: '',
+    };
+  };
+  if (!backend.present) return fallback();
+  try {
+    await backend.explorer('setPanels', {
+      currentSide: ctx.isLocal ? 'local' : 'remote',
+      sessionId: ctx.sessionId || null,
+    });
+    return await backend.explorer('deleteDecision', ctx.isLocal ? 'local' : 'remote', paths, alternative);
+  } catch {
+    return fallback();
+  }
+}
+
 /** Delete the selection, with WinSCP's confirmation and recycle-bin rules. */
 async function deleteSelection(ctx, { alternative = false } = {}) {
   const paths = selPaths(ctx);
   if (!paths.length) { notify.warning(t('nothingSelected'), t('selectFiles')); return; }
-  const prefs = readPrefs();
-  const confirmDeleting = prefs.confirmDeleting !== false;
   // "Alternative delete" is WinSCP's Shift+Delete: the opposite of whatever the
-  // recycle-bin preference says, so the user can force either behaviour.
-  const binDefault = ctx.isLocal
-    ? prefs.deleteToRecycleBin !== false
-    : !!(ctx.sessionInfo && ctx.caps && ctx.caps.recycleBin);
-  const toRecycleBin = alternative ? !binDefault : binDefault;
+  // recycle-bin setting says, so the user can force either behaviour.
+  const decision = await deleteDecisionFor(ctx, paths, alternative);
+  const toRecycleBin = !!decision.recycle;
   const label = paths.length === 1 ? oneLine(paths[0], 70) : `${paths.length} items`;
-  if (confirmDeleting) {
+  if (decision.needConfirmation !== false) {
     const ok = await confirm({
       title: t('deleteTitle'),
-      body: t('deleteBody', label),
+      // The main process composes WinSCP's own sentence, which distinguishes
+      // "Delete" from "Move to recycle bin"; the local one is the fallback.
+      body: decision.query || t('deleteBody', label),
       detail: toRecycleBin ? t('deleteToBin') : 'This cannot be undone.',
       confirmLabel: t('delete_'), danger: true,
     });

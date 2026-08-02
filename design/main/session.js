@@ -395,6 +395,19 @@ class Session extends EventEmitter {
       this.state.lastError = { message: e.message, code: e.code || 'CONNECT_FAILED' };
       this.log.exception(e);
       this._emitState();
+      // TSecureShell::Open's catch: when SSH failed in a way that looks like
+      // the host is really an FTP server, WinSCP says so instead of leaving the
+      // user to guess. The adapter computes the verdict; nothing read it, so a
+      // user pointing SFTP at an FTP-only host got a bare protocol error.
+      if (e && e.ftpSuggestion && e.ftpSuggestion.suggest) {
+        this.log.add('error', e.ftpSuggestion.message);
+        this._send('event:notify', {
+          sessionId: this.id,
+          kind: 'warning',
+          title: 'This may be an FTP server',
+          body: e.ftpSuggestion.message,
+        });
+      }
       this._scheduleReconnect(e);
       throw e;
     }
@@ -415,8 +428,14 @@ class Session extends EventEmitter {
    * not ask is not a verifier.
    */
   _adapterCallbacks() {
+    const security = (this.config && this.config.prefs && this.config.prefs.security) || {};
     return {
       log: (level, message) => this.log.add(level, message),
+
+      // TSecureShell::TryFtp reads Configuration->TryFtpWhenSshFails. Leaving
+      // it to the adapter's own default meant the preference existed, persisted
+      // and changed nothing.
+      tryFtpWhenSshFails: security.tryFtpWhenSshFails !== false,
 
       hostKeyVerifier: (hostPort, fingerprintSHA256, algorithm, extra) => {
         const e = extra || {};
@@ -517,6 +536,22 @@ class Session extends EventEmitter {
     const sec = (this.config && this.config.prefs.security) || {};
     const delay = Number(sec.sessionReopenAuto) || 0;
     if (!delay || this._closing || !this._reconnectWanted()) return;
+
+    // A REJECTED CREDENTIAL is not a dropped connection, and retrying it on a
+    // timer is actively harmful: the same wrong password goes back to the same
+    // server every few seconds, and a server that counts failed attempts locks
+    // the account. `classifySshError` in protocols/sftp-extensions.js already
+    // draws WinSCP's own distinction between "Authentication failed." and a
+    // transport failure; nothing read it until now.
+    const ssh = cause && cause.ssh;
+    if (ssh && (ssh.authenticationHopeless || ssh.retriable === false)) {
+      this.log.add('error',
+        `Not reconnecting: ${ssh.authenticationHopeless
+          ? 'the credentials were rejected, so retrying would only repeat a failed authentication'
+          : 'this failure will not be recovered by reconnecting'}.`);
+      this._reconnect.startedAt = 0;
+      return;
+    }
 
     if (!this._reconnect.startedAt) this._reconnect.startedAt = Date.now();
     const budget = Number(sec.sessionReopenTimeout) || 0;

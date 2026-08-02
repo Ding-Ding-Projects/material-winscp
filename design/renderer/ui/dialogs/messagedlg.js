@@ -89,19 +89,59 @@ export function resolveButtons(options = {}) {
   }));
 }
 
-/** The answer Escape and the scrim produce for a given options object. */
+/**
+ * The answer Escape and the scrim produce — `CancelAnswer` (Common.cpp:2550).
+ *
+ * The ladder is cancel -> no -> abort -> ok, and the last rung matters: a set
+ * of `['retry','ok']` escapes as OK, not as Retry. Falling back to the first
+ * button instead made Escape RUN the operation on any set that happened to list
+ * a positive answer first. `design/main/userinterface.js` is the authority for
+ * this rule and serves it over `ui:messageDialog`; the copy here exists because
+ * Escape must not wait on a round trip.
+ */
 export function escapeAnswer(options = {}, buttons = resolveButtons(options)) {
   if (options.cancelAnswer) return options.cancelAnswer;
-  if (buttons.some((b) => b.answer === 'cancel')) return 'cancel';
-  if (buttons.some((b) => b.answer === 'no')) return 'no';
+  for (const answer of ['cancel', 'no', 'abort', 'ok']) {
+    if (buttons.some((b) => b.answer === answer)) return answer;
+  }
   return buttons[0].answer;
 }
 
-/** A remembered answer for this question, or undefined. */
+/**
+ * `DefaultAnswer` (Common.cpp:2588) — Yes, else OK, else Retry. Which button is
+ * *primary* is a property of the answer set, not of where the button happens to
+ * sit in the list.
+ */
+export function defaultAnswerFor(options = {}, buttons = resolveButtons(options)) {
+  if (options.defaultAnswer) return options.defaultAnswer;
+  for (const answer of ['yes', 'ok', 'retry']) {
+    if (buttons.some((b) => b.answer === answer)) return answer;
+  }
+  return buttons[buttons.length - 1].answer;
+}
+
+/**
+ * `IsPositiveAnswer` (WinInterface.cpp:86). Only these three may be made
+ * permanent by the never-ask-again box.
+ */
+export function isPositiveAnswer(answer) {
+  return answer === 'yes' || answer === 'ok' || answer === 'yesToAll';
+}
+
+/**
+ * A remembered answer for this question, or undefined.
+ *
+ * A NEGATIVE answer is never restored, even if one is somehow stored: WinSCP's
+ * NeverAskAgainCheckClick disables every button but the positive one while the
+ * box is ticked, so "no, and never ask again" cannot be produced in the first
+ * place. Honouring one here would silently refuse every future occurrence of
+ * the question with nothing on screen to say why.
+ */
 export function rememberedAnswer(options = {}) {
   const pref = options.neverAskPref || '';
   if (!pref) return undefined;
   const stored = transferPref(pref, undefined);
+  if (!isPositiveAnswer(stored)) return undefined;
   const buttons = resolveButtons(options);
   return buttons.some((b) => b.answer === stored) ? stored : undefined;
 }
@@ -117,6 +157,7 @@ function buildSpec(options, done) {
   const buttons = resolveButtons(options);
   const pref = options.neverAskPref || '';
   const cancelAnswer = escapeAnswer(options, buttons);
+  const primaryAnswer = defaultAnswerFor(options, buttons);
 
   let settled = false;
   let neverAsk = false;
@@ -157,13 +198,16 @@ function buildSpec(options, done) {
     if (settled) return;
     settled = true;
     if (neverAsk && pref) {
+      // Only a positive answer is ever stored, for the same reason
+      // rememberedAnswer refuses to restore anything else.
+      if (!isPositiveAnswer(answer)) { done({ answer, neverAskAgain: false, remembered: false }); return; }
       setTransferPref(pref, answer, `Remembered the "${answer}" answer for ${pref}`);
       notify.info(options.title || '', t('txMsgSuppressed', t(MESSAGE_ANSWERS[answer] || answer)));
     }
     done({ answer, neverAskAgain: neverAsk, remembered: false });
   }
 
-  const defaultAnswer = options.defaultAnswer || buttons[buttons.length - 1].answer;
+  const defaultAnswer = primaryAnswer;
 
   return {
     title: options.title || t(kind === 'error' ? 'error' : 'ok'),
@@ -173,7 +217,8 @@ function buildSpec(options, done) {
     onClose: () => finish(cancelAnswer),
     actions: buttons.map((b) => ({
       label: b.label || t(b.labelKey || MESSAGE_ANSWERS[b.answer] || b.answer),
-      kind: b.danger ? 'danger' : b.primary ? 'filled' : 'text',
+      // The primary button is the DEFAULT answer, not the last in the list.
+      kind: b.danger ? 'danger' : (b.answer === defaultAnswer || (b.primary && !buttons.some((x) => x.answer === defaultAnswer))) ? 'filled' : 'text',
       autofocus: b.answer === defaultAnswer,
       onSelect: () => finish(b.answer),
     })),

@@ -91,9 +91,26 @@ class StdConsole extends ConsoleBase {
       [CF.LIMITED_OUTPUT]: live,
       [CF.NO_INTERACTIVE_INPUT]: !!options.noInteractiveInput,
       [CF.WANTS_PROGRESS]: !!options.wantsProgress,
-      [CF.STD_OUT]: !!options.stdOut,
-      [CF.STD_IN]: !!options.stdIn,
+      // The flag says "this stream carries transfer DATA"; the mode says how it
+      // is framed. 'off' is a string and would be truthy, so the comparison is
+      // explicit rather than a coercion.
+      [CF.STD_OUT]: !!options.stdOut && options.stdOut !== 'off',
+      [CF.STD_IN]: !!options.stdIn && options.stdIn !== 'off',
     });
+    /**
+     * The framing this console was asked for. `binary` writes the bytes
+     * straight through, which is what this console does. `chunked` needs a
+     * length prefix per block, and framing it is the console FRONT-END's job
+     * (design/main/console.js, reached through bin/winscp-com.js) — asking for
+     * it here is refused rather than silently downgraded, because a reader that
+     * expects lengths and receives raw bytes cannot tell where a file ends.
+     */
+    this.stdOutMode = options.stdOut === undefined ? 'off' : String(options.stdOut);
+    this.stdInMode = options.stdIn === undefined ? 'off' : String(options.stdIn);
+    if (this.stdOutMode === 'chunked') {
+      throw new Error(
+        'Chunked /stdout framing needs the console front-end; run this through winscp-com rather than in-process.');
+    }
     this.out = out;
     this.err = err;
     this.in = options.stdin || process.stdin;
@@ -208,9 +225,11 @@ class BufferConsole extends ConsoleBase {
       [CF.LIMITED_OUTPUT]: !!options.limitedOutput,
       [CF.NO_INTERACTIVE_INPUT]: options.input === undefined,
       [CF.WANTS_PROGRESS]: !!options.wantsProgress,
-      [CF.STD_OUT]: !!options.stdOut,
-      [CF.STD_IN]: !!options.stdIn,
+      [CF.STD_OUT]: !!options.stdOut && options.stdOut !== 'off',
+      [CF.STD_IN]: !!options.stdIn && options.stdIn !== 'off',
     });
+    this.stdOutMode = options.stdOut === undefined ? 'off' : String(options.stdOut);
+    this.stdInMode = options.stdIn === undefined ? 'off' : String(options.stdIn);
     this.output = '';
     this.errors = '';
     this.lines = [];
@@ -861,9 +880,16 @@ async function runConsole(argv = [], deps = {}) {
     if (parameters) for (const p of parameters) scriptParameters.push(p);
   }
 
-  const stdOutMode = params.locateSwitch('stdout');
-  const stdInMode = params.locateSwitch('stdin');
-  const noInteractiveInput = params.findSwitch('nointeractiveinput') || stdInMode.found;
+  // /stdout and /stdin are not booleans: `=binary` and `=chunked` are different
+  // framings, and `/stdin=chunked` is REFUSED (there is no way to frame input
+  // the far side has not sent yet). Reducing them to "present or not" silently
+  // downgraded chunked output to binary, and a reader could then not tell where
+  // one file ended and the next began. design/main/console.js owns the parse,
+  // including that refusal, so it is used here rather than re-derived.
+  const { parseStdInOutMode, STDINOUT } = require('./console');
+  const stdOutMode = parseStdInOutMode(params, 'stdout', true);
+  const stdInMode = parseStdInOutMode(params, 'stdin', false);
+  const noInteractiveInput = params.findSwitch('nointeractiveinput') || stdInMode !== STDINOUT.OFF;
 
   let consoleInstance = deps.console;
   if (!consoleInstance) {
@@ -873,8 +899,8 @@ async function runConsole(argv = [], deps = {}) {
         stderr: deps.stderr,
         stdin: deps.stdin,
         noInteractiveInput,
-        stdOut: stdOutMode.found,
-        stdIn: stdInMode.found,
+        stdOut: stdOutMode,
+        stdIn: stdInMode,
         wantsProgress: params.findSwitch('wantsprogress'),
       });
     } else {

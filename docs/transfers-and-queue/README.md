@@ -13,6 +13,7 @@ counts, which is why pausing, throttling and resuming work uniformly.
 | [transfer-settings.md](transfer-settings.md) | Every transfer option, and the named presets that bundle them. |
 | [resume.md](resume.md) | Resume, `.filepart` files, overwrite modes and what each protocol can actually do. |
 | [speed-limits.md](speed-limits.md) | Per-transfer and global throttling, and how the limit is enforced. |
+| [overwrite-decision.md](overwrite-decision.md) | What happens when the file is already there: the batch-mode ladder, the per-file question, and every refusal behind the Append and Resume buttons. |
 
 ## The shape of a transfer
 

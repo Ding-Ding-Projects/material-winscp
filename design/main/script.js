@@ -31,6 +31,10 @@ const fs = require('fs');
 
 const { isEffectiveFileNameMask, FileMask } = require('./masks');
 const { COPY_PARAM_DEFAULTS } = require('./defaults');
+// The port numbers are TSessionData's own constants; `sessiondata.js` is the
+// port of that file and owns them, so the scripting surface reads them rather
+// than carrying a second set that can drift.
+const { FTP_PORT, FTPS_IMPLICIT_PORT } = require('./sessiondata');
 
 // ---------------------------------------------------------------------------
 // messages — transcribed from resource/TextsCore1.rc and TextsCore2.rc
@@ -1671,6 +1675,13 @@ class Script {
       for (const f of fileList) {
         const buf = await this.terminal.adapter.readFile(this.terminal.absolute(f.path));
         this.onTransferOut(this, buf);
+        // "Once we issue <download> we must terminate the data stream"
+        // (Terminal.cpp:8402, in the __finally of every streamed sink). The
+        // zero-length call IS the terminator, and it is PER FILE, not once at
+        // the end: without it a /stdout=chunked reader has no way to tell where
+        // one file stops and the next begins, so a multi-file `get` produces
+        // one unsplittable blob.
+        this.onTransferOut(this, Buffer.alloc(0));
       }
       return;
     }
@@ -2741,10 +2752,17 @@ function parseOpenUrl(url, options) {
     }
   }
 
-  applyOpenSwitches(data, options);
+  // A port given in the URL is DEFINED, and a TLS switch must not overwrite it.
+  const portNumberDefined = data.portNumber > 0;
+  applyOpenSwitches(data, options, portNumberDefined);
 
   if (!data.portNumber) {
-    data.portNumber = { sftp: 22, scp: 22, ftp: 21, webdav: data.ftps === 'implicit' ? 443 : 80, s3: 443 }[data.protocol] || 0;
+    // TSessionData::GetDefaultPort — implicit FTPS is 990. Answering 21 for it
+    // connected to the plaintext control port and then tried to negotiate TLS
+    // on a socket the server never expected it on.
+    data.portNumber = data.protocol === 'ftp'
+      ? (data.ftps === 'implicit' ? FTPS_IMPLICIT_PORT : FTP_PORT)
+      : ({ sftp: 22, scp: 22, webdav: data.ftps === 'implicit' ? 443 : 80, s3: 443 }[data.protocol] || 0);
   }
   return data;
 }
@@ -2756,7 +2774,7 @@ function parseOpenUrl(url, options) {
  * switch up is what marks it "used" — anything left over afterwards is what
  * `checkParams` reports as an unknown switch.
  */
-function applyOpenSwitches(data, options) {
+function applyOpenSwitches(data, options, portNumberDefined) {
   if (!options) return data;
 
   const take = (name) => {
@@ -2766,27 +2784,66 @@ function applyOpenSwitches(data, options) {
 
   const privateKey = take('privatekey');
   if (privateKey !== undefined) data.publicKeyFile = privateKey;
-  const hostKey = take('hostkey');
-  if (hostKey !== undefined) data.hostKey = hostKey;
   const clientCert = take('clientcert');
   if (clientCert !== undefined) data.tlsClientCertificate = clientCert;
-  const certificate = take('certificate');
-  if (certificate !== undefined) data.hostKey = certificate;
   const passphrase = take('passphrase');
   if (passphrase !== undefined) data.passphrase = passphrase;
   const username = take('username');
   if (username !== undefined) data.userName = username;
   const password = take('password');
   if (password !== undefined) data.password = password;
+  // -sessionname names the session in the log and the tab. Not consuming it at
+  // all meant an existing script carrying it stopped with "Unknown switch".
+  const sessionName = take('sessionname');
+  if (sessionName !== undefined) data.name = sessionName;
   const newPassword = take('newpassword');
-  if (newPassword !== undefined) data.newPassword = newPassword;
+  if (newPassword !== undefined) {
+    // ChangePassword is the flag that actually triggers the change; recording
+    // the new password without it left the switch doing nothing at all.
+    data.newPassword = newPassword;
+    data.changePassword = true;
+  }
   const timeout = take('timeout');
   if (timeout !== undefined) data.timeout = Number(timeout) || 0;
 
-  const passive = options.locateSwitch('passive');
-  if (passive.found) data.ftpPasvMode = passive.value === '' || /^(on|1)$/i.test(passive.value);
-  if (options.findSwitch('implicit')) data.ftps = 'implicit';
-  if (options.findSwitch('explicit')) data.ftps = 'explicitTls';
+  // -hostkey and -certificate are the SAME assignment in the original, and both
+  // set FOverrideCachedHostKey — without it a fingerprint pinned on the command
+  // line does not override the one already cached, which is not what the user
+  // asked for.
+  const hostKey = take('hostkey');
+  const certificate = take('certificate');
+  const pinned = hostKey !== undefined ? hostKey : certificate;
+  if (pinned !== undefined) {
+    data.hostKey = pinned;
+    data.overrideCachedHostKey = true;
+  }
+
+  data.ftpPasvMode = options.switchValueBool('passive', data.ftpPasvMode !== false, data.ftpPasvMode !== false);
+
+  // Every TLS switch reads its VALUE as a boolean, so `-implicit=off` turns
+  // implicit TLS OFF. Treating the switch's mere presence as "on" dialled an
+  // implicit-TLS connection for a user who had explicitly asked for plaintext —
+  // a wrong-protocol connection, not a missing feature. The port defaults
+  // follow the same rule: implicit FTPS is 990, not 21, and an explicit port in
+  // the URL always wins.
+  if (options.findSwitch('implicit')) {
+    const enabled = options.switchValueBool('implicit', true);
+    data.ftps = enabled ? 'implicit' : 'none';
+    if (!portNumberDefined && enabled) data.portNumber = FTPS_IMPLICIT_PORT;
+  }
+  // Backward compatibility with 5.5.x: -explicitssl and -explicittls.
+  if (options.findSwitch('explicitssl')) {
+    const enabled = options.switchValueBool('explicitssl', true);
+    data.ftps = enabled ? 'explicitSsl' : 'none';
+    if (!portNumberDefined && enabled) data.portNumber = FTP_PORT;
+  }
+  if (options.findSwitch('explicit') || options.findSwitch('explicittls')) {
+    const name = options.findSwitch('explicit') ? 'explicit' : 'explicittls';
+    const enabled = options.switchValueBool(name, true);
+    data.ftps = enabled ? 'explicitTls' : 'none';
+    if (!portNumberDefined && enabled) data.portNumber = FTP_PORT;
+  }
+
   if (options.findSwitch('passwordsfromfiles')) data.passwordsFromFiles = true;
   // `-filezilla` selects a different site source; consumed here so it is not
   // reported as unknown even where no FileZilla site list is available.

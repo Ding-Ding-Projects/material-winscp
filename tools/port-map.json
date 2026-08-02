@@ -141,11 +141,11 @@
     },
     "core/Queue": {
       "status": "partial",
-      "progress": 0.4,
+      "progress": 0.45,
       "targets": [
         "design/main/queue.js"
       ],
-      "note": "Parallel transfers, pause/resume, throttling, overwrite queries."
+      "note": "The queue engine, its throttle, pause gates and text converter, and now the single byte mover both it and the session transfer path move their bytes through. Server-side copy is taken when the protocol offers it."
     },
     "core/CopyParam": {
       "status": "partial",
@@ -183,14 +183,14 @@
     },
     "core/Terminal": {
       "status": "partial",
-      "progress": 0.62,
+      "progress": 0.35,
       "targets": [
         "design/main/terminal.js",
+        "design/main/transfer.js",
         "design/main/session.js",
-        "design/main/sync.js",
-        "design/main/transfer.js"
+        "design/main/sync.js"
       ],
-      "note": "Operation lifecycle, delete/rename/move with their real confirmations and refusals, retry/skip/abort, directory cache, recursive properties, size calculation. The transfer half is now transfer.js: CopyToRemote/CopyToLocal, Source/Sink and their robust reconnect loops, DirectorySource/SinkFile, CreateTargetDirectory, UpdateSource/UpdateTargetAttrs/UpdateTargetTime, TCollectedFileList, TParallelOperation and the full overwrite decision (EffectiveBatchOverwrite/ConfirmFileOverwrite/CheckRemoteFile), which queue.js now calls instead of its own simplified copy. transfer.js moves no bytes itself — queue.js supplies the byte mover — so there is one decision maker and one transfer engine."
+      "note": "Operation lifecycle, delete/rename/move with real confirmations, retry/skip/abort, caches. The transfer half (transfer.js) is written but its adversarial verifier rated it 0.30 and REACHABLE=false: only the overwrite decision is live via queue.js; copyToRemote/copyToLocal, source/sink and ParallelOperation have no IPC channel and no production caller. Do not raise this without proving reachability."
     },
     "windows/TerminalManager": {
       "status": "partial",
@@ -416,9 +416,11 @@
         "design/renderer/ui/commands.js",
         "design/renderer/ui/menus.js",
         "design/renderer/ui/toolbars.js",
-        "design/renderer/ui/statusbar.js"
+        "design/renderer/ui/statusbar.js",
+        "design/main/explorershell.js",
+        "design/main/ipc.js"
       ],
-      "note": "The shared explorer behaviour: panels, selection, the command layer over all 301 actions, both menu bars, the bands and the status bars."
+      "note": "The orchestration half (side resolution, file-operation entry points, the delete decision with both confirmations, transfer-preset auto-selection, drag-and-drop decisions, queue predicates, synchronized browsing) is ported and reachable over explorer:*. Not ported: the file-editing round trip (ExecutedFileChanged/EditedFileUploaded), ExecuteFile/EditNew, SetProperties' body, the synchronization engine and the whole workspace lifecycle."
     },
     "forms/EditMask": {
       "status": "partial",
@@ -577,9 +579,11 @@
         "design/renderer/ui/menus.js",
         "design/renderer/ui/statusbar.js",
         "design/renderer/ui/panelcolumns.js",
-        "design/renderer/ui/driveview.js"
+        "design/renderer/ui/driveview.js",
+        "design/main/interfaces.js",
+        "design/main/ipc.js"
       ],
-      "note": "Two-pane Commander with the real filesystem, both menu bars complete (194 of 194 dfm actions), the column sets, the drive tree and the status bars. 33 band buttons and the DropdownCombo split buttons are still missing from the toolbars."
+      "note": "Panel arrangement, the splitter model, both shortcut sets, the component and band maps, the layout string formats, the command line, synchronized browsing and the workspace decisions — reachable over interface:*. The renderer still ships its own shallower panel and toolbar layer beside it; DDGetTarget and the fake-file drag are not ported."
     },
     "forms/ScpExplorer": {
       "status": "partial",
@@ -587,9 +591,11 @@
       "targets": [
         "design/renderer/ui/panels.js",
         "design/renderer/ui/toolbars.js",
-        "design/renderer/ui/menus.js"
+        "design/renderer/ui/menus.js",
+        "design/main/interfaces.js",
+        "design/main/ipc.js"
       ],
-      "note": "The single-pane Explorer interface with its own bands and menu bar (146 of 146 dfm actions). The same toolbar gaps as Commander."
+      "note": "The Explorer arrangement, its action gating (afExplorer/afCommander), the address bar with its failed-address retry, and RestoreParams/StoreParams for the Explorer shape. Reachable over interface:*."
     },
     "forms/SelectMask": {
       "status": "partial",
@@ -738,6 +744,192 @@
         "design/main/security.js"
       ],
       "note": "Version info for About and the update check. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
+    },
+    "resource/TextsCore1": {
+      "status": "partial",
+      "progress": 0.6,
+      "targets": [
+        "design/main/messages.js",
+        "design/renderer/messages.json",
+        "tools/extract-resources.js",
+        "design/main/ipc.js"
+      ],
+      "note": "Every string extracted with its printf shape and resolvable by id through messages:*; the ported modules still carry their own inline copies of about 150 of them, so the table is the source of truth in principle rather than in every caller."
+    },
+    "resource/TextsCore2": {
+      "status": "partial",
+      "progress": 0.6,
+      "targets": [
+        "design/main/messages.js",
+        "design/renderer/messages.json",
+        "tools/extract-resources.js",
+        "design/main/ipc.js"
+      ],
+      "note": "The scripting help topics, extracted with adjacent-literal concatenation. Reachable over messages:load; script.js still prints its own transcriptions."
+    },
+    "resource/TextsWin1": {
+      "status": "partial",
+      "progress": 0.6,
+      "targets": [
+        "design/main/messages.js",
+        "design/renderer/messages.json",
+        "tools/extract-resources.js",
+        "design/main/ipc.js"
+      ],
+      "note": "Window and dialog strings. Seven donation/store strings are deliberately withheld (issue #22) and named with their reason."
+    },
+    "resource/TextsFileZilla": {
+      "status": "partial",
+      "progress": 0.6,
+      "targets": [
+        "design/main/messages.js",
+        "design/renderer/messages.json",
+        "tools/extract-resources.js",
+        "design/main/ipc.js"
+      ],
+      "note": "FileZilla-derived FTP strings, including the ids hidden inside #if 0 blocks. Extracted and resolvable; the FTP adapter has not been rewired to read them."
+    },
+    "resource/TextsCore": {
+      "status": "partial",
+      "progress": 0.8,
+      "targets": [
+        "design/main/messages.js",
+        "design/renderer/messages.json",
+        "tools/extract-resources.js",
+        "design/main/ipc.js"
+      ],
+      "note": "The numeric id header. Every id is extracted, alias chains resolved, and mapped to its string."
+    },
+    "resource/TextsWin": {
+      "status": "partial",
+      "progress": 0.8,
+      "targets": [
+        "design/main/messages.js",
+        "design/renderer/messages.json",
+        "tools/extract-resources.js",
+        "design/main/ipc.js"
+      ],
+      "note": "The numeric id header for the window strings, extracted the same way."
+    },
+    "resource/HelpCore": {
+      "status": "partial",
+      "progress": 0.8,
+      "targets": [
+        "design/main/messages.js",
+        "design/renderer/messages.json",
+        "tools/extract-resources.js",
+        "design/main/ipc.js"
+      ],
+      "note": "Help-topic keywords, alias chains resolved. Served by messages:meta; no surface opens a help topic yet."
+    },
+    "resource/HelpWin": {
+      "status": "partial",
+      "progress": 0.8,
+      "targets": [
+        "design/main/messages.js",
+        "design/renderer/messages.json",
+        "tools/extract-resources.js",
+        "design/main/ipc.js"
+      ],
+      "note": "The window half of the help keywords, same treatment."
+    },
+    "resource/Propagation": {
+      "status": "partial",
+      "progress": 0.2,
+      "targets": [
+        "design/main/messages.js",
+        "design/renderer/messages.json",
+        "tools/extract-resources.js",
+        "design/main/ipc.js"
+      ],
+      "note": "Website and store marketing copy. No numeric id, never compiled into the binary, and nothing in the application will display it — it belongs to site/, and is extracted only so the ledger records a decision rather than an omission."
+    },
+    "components/UnixDirView": {
+      "status": "partial",
+      "progress": 0.55,
+      "targets": [
+        "design/main/dirview.js",
+        "design/main/ipc.js",
+        "design/renderer/ui/panels.js",
+        "design/renderer/ui/panelcolumns.js"
+      ],
+      "note": "Columns, the full comparator, LoadFiles with its filter and counters, the Norton-like selection model, incremental search, the rename refusals, path history and PanelExport — reachable over panel:*. Not ported: ExecuteFile/ChangeDirectory/ReloadDirectory, thumbnails, icon indexes and the whole drag-and-drop surface."
+    },
+    "components/UnixDriveView": {
+      "status": "partial",
+      "progress": 0.3,
+      "targets": [
+        "design/main/dirview.js"
+      ],
+      "note": "The path-keyed tree model, UpdatePath reconciliation, expanded-state save/restore and NodeTryDelete. Not ported: Change/CanChange, LoadDirectory, RebuildTree, node colours and overlays, the terminal wiring and the drag file list."
+    },
+    "components/DirView": {
+      "status": "partial",
+      "progress": 0.2,
+      "targets": [
+        "design/main/dirview.js"
+      ],
+      "note": "PathChanged and the per-drive last-path memory only. The rest of the file is the Win32 shell icon-update queue, which has no counterpart here."
+    },
+    "components/DriveView": {
+      "status": "partial",
+      "progress": 0.25,
+      "targets": [
+        "design/main/dirview.js"
+      ],
+      "note": "The drive naming, key, root and fixed-drive rules. The per-drive TDriveStatus array and its A..Z seeding are not ported."
+    },
+    "components/IEDriveInfo": {
+      "status": "partial",
+      "progress": 0.35,
+      "targets": [
+        "design/main/dirview.js"
+      ],
+      "note": "The pure naming/key/root/fixed-drive rules. Asynchronous drive enumeration, WM_DEVICECHANGE registration, volume labels and serial numbers are not ported."
+    },
+    "console/Main": {
+      "status": "partial",
+      "progress": 0.75,
+      "targets": [
+        "design/main/console.js",
+        "bin/winscp-com.js"
+      ],
+      "note": "The TConsoleCommStruct wire protocol, the console host, the child command line, /stdout= and /stdin= parsing and the exit-code contract, reachable as `winscp-com`. Not ported: the out-of-process transport (both halves share one process), the legacy code-page fallback and the console title restore."
+    },
+    "console/Console": {
+      "status": "partial",
+      "progress": 0.85,
+      "targets": [
+        "design/main/console.js"
+      ],
+      "note": "The struct definitions and every event type, exercised end to end against the real scripting engine."
+    },
+    "windows/WinInterface": {
+      "status": "partial",
+      "progress": 0.45,
+      "targets": [
+        "design/main/userinterface.js",
+        "design/main/ipc.js",
+        "design/renderer/ui/dialogs/messagedlg.js"
+      ],
+      "note": "The message-dialog contract in full — answer bits, button building, the Yes>OK>Retry default, CancelAnswer fall-through, split buttons, the never-ask-again enablement rule and its catalogue of 21 questions, timeouts, and the exception dialogs — reachable over ui:*. Not ported: the tray icon and balloons, the transfer-preset popup, the toolbar layout strings, the shortcut combo helpers and DumpCallstack."
+    },
+    "windows/UserInterface": {
+      "status": "partial",
+      "progress": 0.4,
+      "targets": [
+        "design/main/userinterface.js",
+        "design/main/ipc.js"
+      ],
+      "note": "ShowExtendedExceptionEx as plan+apply, the busy cursor and operation visualizers, modal-state tracking, the foreground/flash handlers and the progress-window contract. Not ported: the master-password dialog, the colour palette and menus, ConvertMenu, the About dialog and the tray-balloon delivery half of ShowNotification."
+    },
+    "windows/VCLCommon": {
+      "status": "partial",
+      "progress": 0.15,
+      "targets": [
+        "design/main/userinterface.js"
+      ],
+      "note": "Only the portable subset: accessible names from labels, caption formatting, control sizing, ResizeForm/CutFormToDesktop/CenterFormOn and the path word-break algorithm. Everything DPI-, theme- or WindowProc-shaped is listed as deliberately not ported at the top of the module."
     }
   }
 }

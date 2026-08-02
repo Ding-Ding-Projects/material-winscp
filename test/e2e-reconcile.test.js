@@ -287,6 +287,46 @@ test.describe('the reconciled subsystems are reachable from the application', ()
       ['/srv/a.txt']);
   });
 
+  test.it('decides recycle-versus-delete from the SITE, and picks the right confirmation', async () => {
+    await app.ok('explorer.setPanels', {
+      currentSide: 'local',
+      local: { path: 'C:\work', entries: [{ name: 'a.txt' }], selected: ['a.txt'], hasFocus: true },
+    });
+
+    // The local side follows the deleteToRecycleBin preference...
+    await app.ok('config.setPref', 'deleteToRecycleBin', true);
+    const recycling = await app.ok('explorer.deleteDecision', 'local', ['C:\work\a.txt'], false);
+    assert.equal(recycling.recycle, true);
+    // ...and recycling and deleting have SEPARATE confirmation preferences, so
+    // turning one off does not turn the other off.
+    assert.equal(recycling.confirmPref, 'confirmRecycling');
+    assert.match(recycling.query, /recycle bin/i);
+
+    // Shift+Delete inverts it, whichever way the setting points.
+    const forced = await app.ok('explorer.deleteDecision', 'local', ['C:\work\a.txt'], true);
+    assert.equal(forced.recycle, false);
+    assert.equal(forced.confirmPref, 'confirmDeleting');
+    assert.doesNotMatch(forced.query, /recycle bin/i);
+
+    await app.ok('config.setPref', 'deleteToRecycleBin', false);
+    const deleting = await app.ok('explorer.deleteDecision', 'local', ['C:\work\a.txt'], false);
+    assert.equal(deleting.recycle, false);
+    assert.equal(deleting.confirmPref, 'confirmDeleting');
+
+    // Turning the DELETE confirmation off must not silence the RECYCLE one.
+    await app.ok('config.setPref', 'confirmDeleting', false);
+    assert.equal((await app.ok('explorer.deleteDecision', 'local', ['C:\work\a.txt'], false)).needConfirmation, false);
+    await app.ok('config.setPref', 'deleteToRecycleBin', true);
+    assert.equal((await app.ok('explorer.deleteDecision', 'local', ['C:\work\a.txt'], false)).needConfirmation, true);
+    await app.ok('config.setPref', 'confirmDeleting', true);
+  });
+
+  test.it('refuses to delete nothing, rather than reporting a successful no-op', async () => {
+    const reply = await app.api('explorer.delete', 'local', [], false);
+    assert.equal(reply.ok, false);
+    assert.equal(typeof reply.error.message, 'string');
+  });
+
   test.it('reports a command state rather than making the renderer guess', async () => {
     const state = await app.ok('explorer.state', 'copy', {});
     assert.equal(typeof state, 'object');
@@ -388,7 +428,7 @@ test.describe('the session transfer path moves real bytes over a real server', (
 
   test.after(async () => {
     if (app) await app.stop();
-    if (server) await server.stop();
+    if (server) await server.close();
     if (localDir) await fsp.rm(localDir, { recursive: true, force: true });
   });
 
@@ -466,7 +506,11 @@ test.describe('the session transfer path moves real bytes over a real server', (
     await app.api('ui.answer', prompt.promptId, 'abort');
 
     const reply = await pending;
-    assert.equal(reply.ok, false, 'a transfer of a file that is not there reported success');
-    assert.equal(typeof reply.error.message, 'string');
+    assert.equal(reply.ok, true, 'the handler threw across the bridge instead of reporting');
+    // TTerminal::CopyToRemote returns a BOOLEAN, and an aborted operation
+    // returns false. The channel carries that through as `completed`, so a
+    // caller cannot mistake "the request was handled" for "the files moved".
+    assert.equal(reply.value.completed, false,
+      'an aborted transfer reported that it completed');
   });
 });

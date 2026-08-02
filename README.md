@@ -316,18 +316,18 @@ regex-builder search and export — and **never invents an entry** to fill a gap
 
 | Part | Files | Lines | Non-blank |
 |---|---:|---:|---:|
-| Tests | 11 | 4,558 | 3,977 |
-| Application — main process | 26 | 15,937 | 14,402 |
-| Application — renderer | 13 | 6,889 | 6,230 |
-| Styles and markup | 6 | 4,883 | 4,787 |
-| Build and porting tools | 11 | 2,143 | 1,917 |
+| Tests | 54 | 44,867 | 39,485 |
+| Application — main process | 50 | 62,897 | 56,930 |
+| Application — renderer | 57 | 45,098 | 41,247 |
+| Styles and markup | 6 | 4,888 | 4,792 |
+| Build and porting tools | 15 | 4,339 | 3,972 |
 | Landing page and docs site | 1 | 22 | 22 |
-| Translations and catalog data | 3 | 951 | 944 |
-| Documentation | 76 | 8,606 | 6,864 |
-| Configuration | 6 | 1,157 | 982 |
-| **Hand-written total** | **153** | **45,146** | **40,125** |
-| Generated (extracted from WinSCP's own definitions) | 5 | 49,595 | 49,557 |
-| **Total including generated** | | **94,741** | **89,682** |
+| Translations and catalog data | 4 | 15,780 | 15,773 |
+| Documentation | 81 | 9,662 | 7,731 |
+| Configuration | 7 | 1,230 | 1,052 |
+| **Hand-written total** | **275** | **188,783** | **171,004** |
+| Generated (extracted from WinSCP's own definitions) | 5 | 49,602 | 49,563 |
+| **Total including generated** | | **238,385** | **220,567** |
 
 **Excluded, deliberately:**
 
@@ -336,7 +336,7 @@ regex-builder search and export — and **never invents an entry** to fill a gap
 - `package-lock.json` — a lockfile is not code.
 - Binary assets (images, icons, fonts).
 
-Measured over `git ls-files` at commit `6105f2b` on 2026-08-02. Reproduce with:
+Measured over `git ls-files` at commit `74a92c6` on 2026-08-02. Reproduce with:
 
 ```bash
 node tools/count-lines.js

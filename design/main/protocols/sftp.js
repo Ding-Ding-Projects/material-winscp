@@ -315,6 +315,35 @@ class CommandSocket extends Duplex {
 }
 
 /** Build the socket the SSH session will run over, honouring session.proxy*. */
+/**
+ * `TSecureShell::TryFtp`'s knock: connect to port 21 and wait 2000 ms.
+ *
+ * The timeout is the original's, and it is short on purpose — this runs after a
+ * connection has ALREADY failed, so a user waiting on an error must not then
+ * wait on a probe. Nothing is sent and nothing is read: the question is only
+ * whether a TCP connection is accepted at all.
+ */
+const FTP_PORT_NUMBER = 21;
+const FTP_KNOCK_TIMEOUT_MS = 2000;
+
+function knockFtpPort(host, timeoutMs) {
+  return new Promise((resolve) => {
+    if (!host) { resolve(false); return; }
+    let settled = false;
+    const done = (answer) => {
+      if (settled) return;
+      settled = true;
+      try { socket.destroy(); } catch { /* already gone */ }
+      resolve(answer);
+    };
+    const socket = net.connect({ host, port: FTP_PORT_NUMBER });
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => done(true));
+    socket.once('timeout', () => done(false));
+    socket.once('error', () => done(false));
+  });
+}
+
 async function openSocket(session, host, port, timeoutMs, log) {
   const method = session.proxyMethod || 'none';
   if (method === 'none') return rawSocket(session, host, port, timeoutMs);
@@ -428,9 +457,25 @@ class SshTransport extends EventEmitter {
     return info;
   }
 
-  /** Whether this failure justifies probing port 21 (`TSecureShell::TryFtp`). */
-  ftpSuggestion(classification) {
-    return ext.shouldSuggestFtp(this.session, classification || this.lastError || {}, this.options);
+  /**
+   * `TSecureShell::TryFtp`, in full.
+   *
+   * The refusals (wrong protocol, non-standard port, a tunnel, a proxy, the
+   * preference turned off) are `shouldSuggestFtp`'s. What it cannot do is the
+   * second half: the original OPENS A SOCKET to port 21 and waits 2000 ms, and
+   * only suggests FTP once that connect succeeds. Skipping the knock leaves the
+   * message asserting "but it listens for FTP connections" about a server
+   * nothing has spoken to — a sentence that sends a user to change their
+   * protocol on the strength of a guess.
+   */
+  async ftpSuggestion(classification) {
+    const verdict = ext.shouldSuggestFtp(this.session, classification || this.lastError || {}, this.options);
+    if (!verdict.suggest) return verdict;
+    const reachable = await knockFtpPort(this.session.hostName, FTP_KNOCK_TIMEOUT_MS);
+    if (!reachable) {
+      return { suggest: false, reason: 'nothing answered on the FTP port either' };
+    }
+    return verdict;
   }
 
   get timeoutMs() { return Math.max(1, Number(this.session.timeout) || 15) * 1000; }
@@ -470,7 +515,7 @@ class SshTransport extends EventEmitter {
       // worth anything at all.
       const info = this.classify(e);
       e.ssh = info;
-      e.ftpSuggestion = this.ftpSuggestion(info);
+      e.ftpSuggestion = await this.ftpSuggestion(info);
       if (info.message && info.message !== e.message) {
         this.log('error', info.message);
       }
@@ -1487,7 +1532,31 @@ class SftpAdapter extends Adapter {
   async setRights(p, rights) {
     const mode = typeof rights === 'number' ? rights : parseRights(rights);
     if (mode === null) throw new Error(`"${rights}" is not a permission string or mode`);
+    if (await this._applyToLink(p, { mode })) return;
     await this._call('chmod', this.normalize(p), mode);
+  }
+
+  /**
+   * Plain SSH_FXP_SETSTAT FOLLOWS a symbolic link, so `chmod`/`utimes` on a
+   * link rewrite the TARGET. That is wrong in both directions: "preserve
+   * timestamps" on a downloaded tree stamps the wrong files, and a
+   * synchronisation that keeps re-stamping the target never converges because
+   * the link's own time never changes.
+   *
+   * `lsetstat@openssh.com` is the operation that does not follow the link.
+   * Returns true when it did the work, false when the caller should fall back
+   * to the ordinary request — an old server, or a path that is not a link.
+   */
+  async _applyToLink(p, attrs) {
+    const target = this.normalize(p);
+    if (!this.ext || typeof this.ext.supports !== 'function' || !this.ext.supports('lsetstat@openssh.com')) {
+      return false;
+    }
+    let isLink = false;
+    try { isLink = (await this._call('lstat', target)).isSymbolicLink(); } catch { return false; }
+    if (!isLink) return false;
+    await this.ext.lsetstat(target, attrs);
+    return true;
   }
 
   async setOwner(p, uid, gid) {
@@ -1498,8 +1567,10 @@ class SftpAdapter extends Adapter {
    *  accepted — see normalizeTimes(). */
   async setTimes(p, mtime, atime) {
     const t = normalizeTimes(mtime, atime);
-    await this._call('utimes', this.normalize(p),
-      Math.floor(t.atime / 1000), Math.floor(t.mtime / 1000));
+    const atimeSec = Math.floor(t.atime / 1000);
+    const mtimeSec = Math.floor(t.mtime / 1000);
+    if (await this._applyToLink(p, { atime: atimeSec, mtime: mtimeSec })) return;
+    await this._call('utimes', this.normalize(p), atimeSec, mtimeSec);
   }
 
   /**

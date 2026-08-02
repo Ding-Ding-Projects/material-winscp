@@ -5,19 +5,19 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `aae58d9`** — Generate HANDOFF and ROADMAP, and unstick a test file that hung the suite
+**At commit `74a92c6`** — Land the remaining workflow output; ledger at 53.2%, tests currently unverified
 
 ## Where the work stands
 
 | | |
 |---|---|
-| **Port coverage (logic)** | **53.2%** of 209,889 lines that are actually code |
-| Port coverage (raw) | 66.5% — includes embedded hex resources, **do not quote this one** |
+| **Port coverage (logic)** | **55.3%** of 209,889 lines that are actually code |
+| Port coverage (raw) | 67.9% — includes embedded hex resources, **do not quote this one** |
 | Tests | not run in this regeneration |
-| Hand-written code | 187,793 lines across 274 files |
-| Commits | 19 on `main` |
-| Working tree | **19 uncommitted change(s)** |
-| Remote | `origin/main` at `aae58d9` — in sync |
+| Hand-written code | 188,928 lines across 275 files |
+| Commits | 20 on `main` |
+| Working tree | **18 uncommitted change(s)** |
+| Remote | `origin/main` at `74a92c6` — in sync |
 
 ### Coverage by area
 
@@ -25,10 +25,10 @@
 |---|---:|---:|
 | `forms` | 10 / 51 | 74.9% |
 | `core` | 1 / 36 | 46.1% |
-| `windows` | 0 / 20 | 36.9% |
-| `resource` | 0 / 9 | 0.0% |
-| `components` | 0 / 6 | 0.0% |
-| `console` | 0 / 2 | 0.0% |
+| `windows` | 0 / 20 | 48.2% |
+| `resource` | 0 / 9 | 50.0% |
+| `components` | 0 / 6 | 38.2% |
+| `console` | 0 / 2 | 50.0% |
 | `dragext` | 0 / 1 | 50.0% |
 
 ## Verification evidence
@@ -74,7 +74,7 @@ The largest outstanding units, by lines of the original still unported.
 | 3,760 | in progress | `core/Queue` |
 | 3,336 | in progress | `core/Script` |
 | 3,331 | in progress | `windows/GUITools` |
-| 3,323 | not started | `windows/VCLCommon` |
+| 3,323 | in progress | `windows/VCLCommon` |
 
 114 units remain outstanding in total. The full list is in
 [`docs/port-coverage.md`](docs/port-coverage.md).
@@ -127,6 +127,7 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `74a92c6` | 2026-08-02 | Land the remaining workflow output; ledger at 53.2%, tests currently unverified |
 | `aae58d9` | 2026-08-02 | Generate HANDOFF and ROADMAP, and unstick a test file that hung the suite |
 | `4b9022f` | 2026-08-02 | Prove the installer end to end, and generate the changelog from real commits |
 | `7756e63` | 2026-08-02 | Reconcile 24,361 lines the ledger was counting as never written |
@@ -134,7 +135,6 @@ bite a successor who assumes otherwise:
 | `216ce9d` | 2026-08-02 | Stop quoting a coverage number that 108,113 lines of hex were inflating |
 | `e7dd988` | 2026-08-02 | Update silently like Chrome, and fix two reasons it never could have |
 | `5a46937` | 2026-08-02 | Delete the Donate action outright, and make the no-nag rule enforceable |
-| `21e40bf` | 2026-08-02 | Report the project's real size, and take on six rules that landed mid-build |
 
 ## Notes from whoever worked on this last
 
