@@ -57,7 +57,13 @@ function tests(skip) {
   // shim on Windows, which either needs shell:true (a command-injection foot-gun
   // the runtime now warns about) or silently produces nothing — and a handoff
   // that reports "tests: null" is worse than one that says it did not run them.
-  const out = sh(process.execPath, ['--test', 'test/**/*.test.js']);
+  //
+  // --test-timeout for the same reason package.json's script carries it: node
+  // --test has no default, so one test that never settles hangs the handoff
+  // generator forever. The escape hatch then looks like --skip-tests, and the
+  // handoff quietly ships "Tests | not run in this regeneration" — which is how
+  // this file came to describe a suite nobody had seen the result of.
+  const out = sh(process.execPath, ['--test', '--test-timeout=120000', 'test/**/*.test.js']);
   const g = (re) => { const m = re.exec(out); return m ? +m[1] : null; };
   const total = g(/^.\s*tests (\d+)/m);
   if (total === null) return { unavailable: true, raw: out.slice(-400) };
