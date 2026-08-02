@@ -63,6 +63,7 @@ any code here.
 | | |
 | --- | --- |
 | [Feature tour](#feature-tour) | What it does, category by category |
+| [Size of the project](#size-of-the-project) | Measured line counts, and what is excluded |
 | [Project layout](#project-layout) | Where everything lives |
 | [Development](#development) | Build, test, package |
 | [Status](#status) | What is real, what is not |
@@ -308,6 +309,44 @@ regex-builder search and export — and **never invents an entry** to fill a gap
 → [`docs/packaging-and-updates/`](docs/packaging-and-updates/README.md)
 
 </details>
+
+---
+
+## Size of the project
+
+| Part | Files | Lines | Non-blank |
+|---|---:|---:|---:|
+| Tests | 11 | 4,558 | 3,977 |
+| Application — main process | 26 | 15,937 | 14,402 |
+| Application — renderer | 13 | 6,889 | 6,230 |
+| Styles and markup | 6 | 4,883 | 4,787 |
+| Build and porting tools | 11 | 2,143 | 1,917 |
+| Landing page and docs site | 1 | 22 | 22 |
+| Translations and catalog data | 3 | 951 | 944 |
+| Documentation | 76 | 8,606 | 6,864 |
+| Configuration | 6 | 1,157 | 982 |
+| **Hand-written total** | **153** | **45,146** | **40,125** |
+| Generated (extracted from WinSCP's own definitions) | 5 | 49,595 | 49,557 |
+| **Total including generated** | | **94,741** | **89,682** |
+
+**Excluded, deliberately:**
+
+- `vendor/winscp` — 421,584 lines of WinSCP's own C++ source, vendored read-only as the porting reference. It is not this project's code.
+- `node_modules`, `out/`, `dist/` — dependencies and build output (untracked).
+- `package-lock.json` — a lockfile is not code.
+- Binary assets (images, icons, fonts).
+
+Measured over `git ls-files` at commit `6105f2b` on 2026-08-02. Reproduce with:
+
+```bash
+node tools/count-lines.js
+```
+
+> [!NOTE]
+> The count is information, not a boast. The generated rows are files extracted
+> from WinSCP's own definitions by `tools/extract-actions.js` and
+> `tools/extract-forms.js` — a person did not type them, so they are reported
+> separately rather than folded into the total.
 
 ---
 

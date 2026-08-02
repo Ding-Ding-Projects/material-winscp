@@ -191,6 +191,90 @@ Includes both interfaces, drive and tree views, column sets and sorting, increme
 **除咗要同 WinSCP 一模一樣，呢啲都係出貨要求，唔係做完先算靚仔嘅嘢。**`,
   },
   {
+    title: '🗺️ Roadmap: command palette — every command and every setting · 指令面板',
+    labels: ['roadmap', 'ui'],
+    body: `Ship a **command palette** on a single discoverable shortcut, listing every command, setting and destination the app has. It is the keyboard route to the whole product: a feature that exists but cannot be reached from the palette is a feature most users will never find.
+
+**Scope**
+- Covers **every setting in every settings surface**, not only top-level actions — each Preferences tab, every properties panel, every appearance editor. A user who knows a setting's name types it and lands on it without knowing which tab it lives under.
+- **Rows are rich controls, not labels.** A row that *is* a setting renders that setting's live control inline (switch, text box, stepper, select) and changing it there changes the setting, with the same persistence and validation as the settings surface itself. A row that is a destination says where it goes.
+- **Selecting a row teleports the user to where the feature lives**: open the surface, reveal the exact control, draw attention to it briefly. Landing someone on the right tab and leaving them to hunt does not satisfy this.
+- **Size is a user choice, persisted** — at least a bounded card and a full-window view, defaulting to the bounded card.
+- Carries its own search wired to the full regex builder, and obeys the language modes, funny levels and accessibility rules.
+
+**範圍** — 一個快捷鍵開到成個 app 嘅所有指令同設定。設定嗰行直接畀你改,唔使跳去第二版;揀咗就直接帶你去嗰個控制項嗰度,唔係掉低你自己揾。`,
+  },
+  {
+    title: '🗺️ Roadmap: overlays paint their own surface and scroll when they do not fit · 浮層要有自己底色',
+    labels: ['roadmap', 'ui'],
+    body: `Every popover, menu, dropdown, tooltip and anchored panel must paint **its own** background, border, elevation and shape.
+
+> [!WARNING]
+> An overlay that renders transparent lets whatever sits behind it read straight through the text on top — the fastest way to make a well-built dialog look broken.
+
+- Where an overlay framework makes decoration optional, this project's default is **decorated**; an undecorated overlay must supply its own surface explicitly.
+- **An overlay is bounded by the viewport and scrolls when it does not fit.** Capping height and hiding the overflow deletes the content past the cap with no scrollbar to say anything is missing — a calendar loses its last week, a menu loses its last items, and the user has no way to know.
+- Overlays never paint outside their own card, never sit under the surface that opened them, and never cover the control they are anchored to.
+- Validate at narrow widths, at every supported display scale, and in the longest localized strings, where an overlay that just fits in English will not.
+
+**重點** — 浮層要有自己嘅底色,唔係透明到見到後面啲字。唔夠位就要可以捲,唔係就咁 cut 走 —— cut 走咗連個 scrollbar 都冇,用家根本唔知少咗嘢。`,
+  },
+  {
+    title: '🗺️ Roadmap: context menus display their keyboard shortcuts · 右鍵選單要顯示快捷鍵',
+    labels: ['roadmap', 'ui', 'accessibility'],
+    body: `Every context-menu item that has a keyboard shortcut must **display it**, right-aligned beside the label, in the platform's own notation.
+
+The context menu is where users go to find out what an object can do. An item whose shortcut is hidden there is a shortcut nobody learns, and the menu becomes the only route to a command that has a faster one.
+
+**79 of the 301 ported actions carry a default shortcut** (see \`design/renderer/actions.js\`) — every one of them must show it wherever it appears in a menu.
+
+**範圍** — 右鍵選單係大家用嚟睇「呢樣嘢可以做乜」嘅地方。唔寫快捷鍵,就等於冇人學得識,個選單就變咗係唯一嘅路。301 個指令入面有 79 個有快捷鍵,全部都要顯示。`,
+  },
+  {
+    title: '🗺️ Roadmap: changelog entries link to their commits · 更新日誌要連到 commit',
+    labels: ['roadmap', 'packaging'],
+    body: `**Every changelog entry links to the commit that made the change.** An entry that says what changed but not where is unverifiable: a reader who doubts it, or who needs the surrounding context, has no way to get from the sentence to the code.
+
+- Carry the full commit SHA with each entry, render it as a short clickable reference in the viewer, and resolve it against the project's own forge so the link works for the repository the build actually came from.
+- Where one entry summarizes several commits, link the commit that **completed** the change and say that it is a summary.
+- **A wrong SHA is worse than none**, because it sends the reader somewhere confidently irrelevant. Validate that every referenced commit exists **before the changelog ships, and fail the build rather than emit a dead link.** An entry whose commit genuinely cannot be identified says so plainly instead of guessing at a neighbour.
+- The same applies to the documentation site's changelog and to release notes; the entry, its date and its commit link travel together wherever it is rendered or exported. Export formats keep the SHA in text so a copied changelog stays traceable.
+- **The changelog is brought current in every project-changing task**, not at release time.
+
+**重點** — 寫咗改咗乜但係唔講改喺邊,等於冇得核實。SHA 錯過冇,因為會send 個讀者去一個好自信但完全唔關事嘅地方。出版之前要驗證每個 SHA 存在,唔存在就寧願 build 肥佬。`,
+  },
+  {
+    title: '🚫 Policy: no promotional nags — do not port WinSCP\'s donation prompts · 唔好扭錢',
+    labels: ['policy', 'ui'],
+    body: `The shared instructions forbid unsolicited promotional prompts:
+
+> Apps must not nag users with unsolicited dialogs, banners, popovers, notifications, or startup interruptions asking for payment, donations, sponsorship, support, reviews, ratings, upgrades, subscriptions, or other promotional action.
+
+**This directly affects the port.** WinSCP's action list includes \`DonatePageAction\`, and the original shows donation prompts. This is a deliberate, documented **divergence** from a strict port:
+
+- ✅ A **user-initiated** menu entry that opens the upstream WinSCP donation page is fine — WinSCP is someone else's work and deserves the credit and the link.
+- ❌ Any **unsolicited** donation dialog, banner, startup interruption or recurring reminder is **not** ported. Not behind a setting, not "just the first run".
+
+Record the divergence in \`docs/\` so it reads as a decision rather than an omission, and make sure the coverage ledger does not mark the unit incomplete for a rule we chose to follow.
+
+**呢個係故意唔跟原版。**用家自己撳去捐錢冇問題 —— WinSCP 係人哋嘅心血,應該畀個link。但係自動彈出嚟扭錢嘅嘢,一律唔搬過嚟,亦都唔會加個 setting 扮畀你熄。`,
+  },
+  {
+    title: '🗺️ Roadmap: truthful empty states and auditable discards · 真實空白狀態同可追蹤嘅捨棄',
+    labels: ['roadmap', 'version-history'],
+    body: `Two rules from the shared instructions that this port must satisfy:
+
+**1. Real app, not a demo shell.** Do not seed fake sample sites, mock sessions, demo documents or "try me" startup content. Start with truthful empty states and real create/open paths. Any example content must be explicitly user-created or clearly marked as a non-product static preview.
+
+> The design mockup at \`design/WinSCP Material 3.dc.html\` contains a simulated filesystem and sample sites. That is a **design reference** and must never become seeded startup content in the shipping app.
+
+**2. Discarding unsaved work is recorded in history.** Discarding unsaved user work must itself be written as an **append-only** local-Git history action (for example \`document discarded\`) **before the close completes**, so the discard is auditable and can be undone through a later restore.
+
+This extends the existing version-history rules: history is append-only, a restore is itself a new revision, and a history write that fails must never fail the operation the user asked for.
+
+**兩條規矩** — 唔好擺假嘅示範資料扮個 app 好豐富,空就要老實話你知係空。仲有,用家掉咗啲未存嘅嘢,呢個動作本身都要寫入歷史,咁先可以事後反悔搵返。`,
+  },
+  {
     title: '🗺️ Roadmap: drag-and-drop and Explorer shell integration · 拖放同 Explorer 整合',
     labels: ['roadmap', 'ui'],
     body: `Port \`dragext/\` and the drag-and-drop paths in \`forms/CustomScpExplorer\`.

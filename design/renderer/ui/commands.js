@@ -1,0 +1,3156 @@
+// ui/commands.js — the command layer.
+//
+// Every one of the 301 actions extracted from WinSCP's NonVisual.dfm resolves
+// to exactly one handler here. Menus, toolbars, context menus, keyboard
+// shortcuts and the panels all go through this registry, so there is one
+// implementation per action and no surface can drift from another.
+//
+// Why this module has no DOM at import time
+// -----------------------------------------
+// It imports only actions.js, i18n.js, state.js, dom.js and notifications.js —
+// all of which are safe to load in Node — so test/commands.test.js can import
+// it headless and assert that every action is bound. Anything that needs a
+// live panel, tab strip or toolbar comes in through installCommands(services);
+// a command whose service is missing reports that plainly instead of pretending
+// it ran.
+//
+// Contract
+// --------
+//   installCommands(services)    wire the live UI in (idempotent, additive)
+//   getCommand(name)             the descriptor for a WinSCP action name
+//   commandState(name, over)     { enabled, visible, checked, reason }
+//   runAction(name, over)        resolve the side, build the context, run it
+//   commandCoverage()            the honest ledger: bound / unavailable / missing
+//   shortcutConflicts()          shortcuts claimed by more than one same-side action
+//   registerActionDialog(n, fn)  let ui/dialogs.js take over an action's dialog
+//
+// Side resolution
+// ---------------
+// WinSCP names carry the side: Local* acts on the local panel, Remote* on the
+// remote one, Current* on whichever panel has focus, and a plain action follows
+// the focused panel too. *Focused* variants act on the item under the cursor
+// rather than the selection — the difference matters when a user right-clicks a
+// row without selecting it.
+
+import { ACTIONS, ACTIONS_BY_NAME } from '../actions.js';
+import { t } from '../i18n.js';
+import { bus, api, session as appSession, store } from '../state.js';
+import { h, icon, openModal, copyText, announce, oneLine, downloadText } from '../dom.js';
+import { notify } from './notifications.js';
+
+/* ================================================================== */
+/* services                                                            */
+/* ================================================================== */
+
+/**
+ * Everything the command layer needs from the rest of the UI. panels.js fills
+ * `workspace`, app.js's registries arrive through `registerShellCommand`, and
+ * toolbars/statusbar/tabs register themselves as they are built. A command
+ * whose service is absent reports the absence rather than failing silently.
+ */
+export const services = {
+  workspace: null,          // panels.js — the two-pane / single-pane host
+  strip: null,              // ui/tabs.js — the session tab strip
+  toolbars: null,           // ui/toolbars.js — band visibility and options
+  statusbar: null,          // ui/statusbar.js
+  queuePanel: null,         // ui/queue.js, when it lands
+  openDialog: null,         // app.js registerDialog/openDialog surface
+  registerShellCommand: null,
+  prefs: null,              // preference reader/writer (panels.js supplies one)
+};
+
+let installed = false;
+
+/**
+ * Wire the live UI into the command layer. Safe to call more than once and
+ * from more than one module — later calls merge, they do not replace.
+ */
+export function installCommands(patch = {}) {
+  for (const [k, v] of Object.entries(patch)) {
+    if (v !== undefined && v !== null) services[k] = v;
+  }
+  if (!installed) {
+    installed = true;
+    reportShortcutConflicts();
+    if (typeof window !== 'undefined') installShortcutHandler();
+  }
+  publishToShell();
+  return services;
+}
+
+/** ui/dialogs.js calls this to take over an action's dialog. */
+const dialogOverrides = new Map();
+export function registerActionDialog(actionName, opener) {
+  if (typeof opener !== 'function') throw new Error('registerActionDialog needs a function');
+  dialogOverrides.set(actionName, opener);
+  return () => dialogOverrides.delete(actionName);
+}
+
+/* ================================================================== */
+/* the bridge to main                                                  */
+/* ================================================================== */
+
+/**
+ * Access to the preload bridge, in one place. `api.raw` is state.js's own
+ * escape hatch; going through it here keeps the "no preload" path — a plain
+ * browser preview — reporting one honest message instead of throwing in a
+ * dozen call sites.
+ */
+export const backend = {
+  get present() { return !!api.raw; },
+  get reason() {
+    return 'This window has no connection to the application process, so file operations are not available here.';
+  },
+  ns(name) {
+    const raw = api.raw;
+    if (!raw || !raw[name]) throw new Error(backend.reason);
+    return raw[name];
+  },
+  async call(nsName, fn, ...args) {
+    const ns = backend.ns(nsName);
+    if (typeof ns[fn] !== 'function') throw new Error(`The application process does not expose ${nsName}.${fn}().`);
+    const res = await ns[fn](...args);
+    return unwrap(res);
+  },
+  fs(fn, ...a) { return backend.call('fs', fn, ...a); },
+  session(fn, ...a) { return backend.call('session', fn, ...a); },
+  queue(fn, ...a) { return backend.call('queue', fn, ...a); },
+  sync(fn, ...a) { return backend.call('sync', fn, ...a); },
+  editor(fn, ...a) { return backend.call('editor', fn, ...a); },
+  config(fn, ...a) { return backend.call('config', fn, ...a); },
+  app(fn, ...a) { return backend.call('app', fn, ...a); },
+  /** Subscribe to a main-process event; returns unsubscribe. */
+  on(event, handler) {
+    const raw = api.raw;
+    if (!raw || typeof raw.on !== 'function') return () => {};
+    try { return raw.on(event, handler) || (() => {}); }
+    catch { return () => {}; }
+  },
+};
+
+/**
+ * A managed stylesheet for one module. Every panel-layer module ships its own
+ * component CSS this way because styles/components.css is another agent's
+ * file; `style-src 'unsafe-inline'` in index.html is what permits it, and the
+ * id keeps a second import from adding a second copy.
+ */
+export function ensureStyle(id, css) {
+  if (typeof document === 'undefined') return null;
+  let el = document.getElementById(id);
+  if (el) return el;
+  el = document.createElement('style');
+  el.id = id;
+  el.textContent = css;
+  document.head.appendChild(el);
+  return el;
+}
+
+function unwrap(res) {
+  if (res == null) return null;
+  if (typeof res === 'object' && 'ok' in res) {
+    if (res.ok) return res.value;
+    const e = res.error;
+    const err = new Error((e && e.message) || String(e) || 'The operation failed.');
+    if (e && e.code) err.code = e.code;
+    throw err;
+  }
+  return res;
+}
+
+/* ================================================================== */
+/* small real modals                                                   */
+/* ================================================================== */
+// These are the command layer's own dialogs. They are deliberately modest —
+// one decision each — and every one of them actually performs the operation.
+// ui/dialogs.js can replace any of them through registerActionDialog() without
+// this file changing, so there is still one implementation per action.
+
+/** A text prompt. Resolves to the string, or null when cancelled. */
+export function promptText(opts = {}) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; resolve(v); } };
+    const input = h('input', {
+      type: opts.password ? 'password' : 'text', class: 'field-input',
+      value: opts.value || '', spellcheck: 'false', autocomplete: 'off',
+      placeholder: opts.placeholder || '',
+    });
+    const extra = opts.extra || null;
+    const modal = openModal({
+      title: opts.title || t('ok'),
+      width: opts.width || 520,
+      content: h('div', { class: 'stack' },
+        opts.body ? h('p', { class: 'prose' }, opts.body) : null,
+        h('label', { class: 'field' },
+          h('span', { class: 'field-label' }, opts.label || t('name')),
+          input),
+        extra),
+      actions: [
+        { label: t('cancel'), kind: 'text', onSelect: () => finish(null) },
+        {
+          label: opts.confirmLabel || t('ok'),
+          kind: opts.danger ? 'danger' : 'filled',
+          onSelect: () => finish(input.value),
+        },
+      ],
+      onClose: () => finish(null),
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(input.value); modal.close('enter'); }
+    });
+    requestAnimationFrame(() => { input.focus(); input.select(); });
+  });
+}
+
+/** A yes/no decision. Modal on purpose: the user must choose to continue. */
+export function confirm(opts = {}) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; resolve(v); } };
+    openModal({
+      title: opts.title || t('ok'),
+      width: opts.width || 480,
+      content: h('div', { class: 'stack' },
+        h('p', { class: 'prose' }, opts.body || ''),
+        opts.detail ? h('p', { class: 'prose muted' }, opts.detail) : null,
+        opts.extra || null),
+      actions: [
+        { label: opts.cancelLabel || t('cancel'), kind: 'text', onSelect: () => finish(false) },
+        {
+          label: opts.confirmLabel || t('ok'),
+          kind: opts.danger ? 'danger' : 'filled', autofocus: true,
+          onSelect: () => finish(true),
+        },
+      ],
+      onClose: () => finish(false),
+    });
+  });
+}
+
+/** A read-only text surface with copy/export — used for URLs, info and logs. */
+export function showText(opts = {}) {
+  const area = h('textarea', {
+    class: 'field-input mono', readonly: true, rows: String(opts.rows || 10),
+    spellcheck: 'false', 'aria-label': opts.title || t('copyClip'),
+    style: { width: '100%', resize: 'vertical' },
+  });
+  area.value = String(opts.text ?? '');
+  return openModal({
+    title: opts.title || '',
+    width: opts.width || 640,
+    content: h('div', { class: 'stack' },
+      opts.body ? h('p', { class: 'prose' }, opts.body) : null, area),
+    actions: [
+      {
+        label: t('copyClip'), kind: 'text',
+        onSelect: () => { copyText(area.value).then((ok) => { if (ok) notify.success(t('copiedClip'), oneLine(area.value, 80)); }); return true; },
+      },
+      opts.fileName ? {
+        label: t('export_'), kind: 'text',
+        onSelect: () => { downloadText(opts.fileName, area.value, 'text/plain'); return true; },
+      } : null,
+      { label: t('close'), kind: 'filled', autofocus: true },
+    ].filter(Boolean),
+  });
+}
+
+/** A single-choice list. Resolves to the chosen item's value, or null. */
+export function chooseFrom(opts = {}) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; resolve(v); } };
+    const items = opts.items || [];
+    const list = h('div', { class: 'stack', role: 'listbox', 'aria-label': opts.title || '' });
+    let current = items.length ? items[0].value : null;
+    const rows = items.map((it) => {
+      const row = h('button', {
+        type: 'button', class: 'btn-text', role: 'option',
+        style: { justifyContent: 'flex-start', width: '100%' },
+        'aria-selected': String(it.value === current),
+        onclick: () => { finish(it.value); modal.close('choice'); },
+      }, it.icon ? icon(it.icon, 16) : null, h('span', {}, it.label),
+      it.detail ? h('span', { class: 'muted' }, it.detail) : null);
+      list.appendChild(row);
+      return row;
+    });
+    const modal = openModal({
+      title: opts.title || '',
+      width: opts.width || 520,
+      content: h('div', { class: 'stack' },
+        opts.body ? h('p', { class: 'prose' }, opts.body) : null,
+        items.length ? list : h('p', { class: 'prose muted' }, opts.empty || t('noMatches'))),
+      actions: [{ label: t('cancel'), kind: 'text', onSelect: () => finish(null) }],
+      onClose: () => finish(null),
+    });
+    requestAnimationFrame(() => rows[0]?.focus());
+  });
+}
+
+/* ================================================================== */
+/* context                                                             */
+/* ================================================================== */
+
+const LOCAL_CAPS = {
+  rights: false, owner: false, symlink: true, hardlink: false, exec: false,
+  resume: true, timestamp: true, recycleBin: true, checksum: false, find: true,
+  rename: true, move: true, copyRemote: true, calculateSize: true,
+  nativeMove: true, hiddenFiles: true, spaceInfo: false,
+};
+
+/** The side a command acts on, given its WinSCP name and the caller's context. */
+export function resolveSide(cmd, over = {}) {
+  if (over.side === 'local' || over.side === 'remote') return over.side;
+  if (cmd && (cmd.side === 'local' || cmd.side === 'remote')) return cmd.side;
+  const ws = services.workspace;
+  if (ws && typeof ws.activeSide === 'function') return ws.activeSide();
+  return 'remote';
+}
+
+/**
+ * Build the invocation context. Everything a handler needs is on it, already
+ * resolved, so no handler repeats the "which panel is this?" question.
+ */
+export function makeContext(cmd, over = {}) {
+  const ws = services.workspace;
+  const side = resolveSide(cmd, over);
+  const panel = over.panel || (ws && typeof ws.panel === 'function' ? ws.panel(side) : null);
+  const other = over.other || (ws && typeof ws.other === 'function' ? ws.other(side) : null);
+  const isLocal = side === 'local';
+  const info = panel && typeof panel.sessionInfo === 'function' ? panel.sessionInfo() : null;
+  const caps = isLocal ? LOCAL_CAPS : (info && info.caps) || null;
+  const focused = cmd && cmd.focused
+    ? (over.entry || (panel && panel.focusedEntry ? panel.focusedEntry() : null))
+    : null;
+  const selection = cmd && cmd.focused
+    ? (focused ? [focused] : [])
+    : (over.selection || (panel && panel.selection ? panel.selection() : []));
+  return {
+    ...over,
+    action: cmd ? cmd.action : null,
+    name: cmd ? cmd.name : over.name,
+    side,
+    isLocal,
+    panel,
+    other,
+    workspace: ws,
+    strip: services.strip || appSession.get('strip') || null,
+    sessionInfo: info,
+    sessionId: info ? info.id : null,
+    connected: isLocal ? true : !!(info && info.connected),
+    caps,
+    selection,
+    focused,
+  };
+}
+
+/* ---- reusable predicates ---- */
+
+const havePanel = (c) => !!c.panel;
+const haveSel = (c) => !!c.panel && c.selection.length > 0;
+const haveFocus = (c) => !!c.panel && !!(c.focused || (c.panel.focusedEntry && c.panel.focusedEntry()));
+const online = (c) => c.isLocal || c.connected;
+const cap = (name) => (c) => !!(c.caps && c.caps[name]);
+const bothPanels = (c) => !!c.panel && !!c.other;
+
+function selPaths(ctx) {
+  const p = ctx.panel;
+  if (!p) return [];
+  return ctx.selection.filter((e) => e && e.name !== '..').map((e) => p.pathOf(e));
+}
+
+function selNames(ctx) {
+  return ctx.selection.filter((e) => e && e.name !== '..').map((e) => e.name);
+}
+
+/* ================================================================== */
+/* shared operations                                                   */
+/* ================================================================== */
+
+function fail(err, what) {
+  const msg = err && err.message ? err.message : String(err);
+  notify.error(what || t('featureSim'), msg);
+  return null;
+}
+
+/** Refresh a panel and, when the operation crossed panels, the other one too. */
+function afterWrite(ctx, alsoOther) {
+  ctx.panel?.refresh(true);
+  if (alsoOther) ctx.other?.refresh(true);
+}
+
+/** The transfer target for a side: the *other* panel's current directory. */
+function transferTarget(ctx) {
+  return ctx.other ? ctx.other.path() : '';
+}
+
+/**
+ * Queue a transfer. `direction` is upload (local -> remote), download
+ * (remote -> local) or remote-copy (server side). `move` deletes each source
+ * once its item has genuinely finished — WinSCP's "and Delete" commands.
+ */
+async function queueTransfer(ctx, { direction, move = false, background = false, target, copyParam, files }) {
+  const list = files || selPaths(ctx);
+  if (!list.length) { notify.warning(t('nothingSelected'), t('selectFiles')); return null; }
+  const dest = target || transferTarget(ctx);
+  if (!dest) {
+    notify.error(t('transferSettingsShort'), 'There is no target directory for this transfer. Open the other panel on the directory you want first.');
+    return null;
+  }
+  const sessionId = ctx.sessionId;
+  if (!sessionId) {
+    notify.error(t('notConnected'), 'A transfer needs a connected session. Open a site first.');
+    return null;
+  }
+  try {
+    const added = await backend.queue('add', {
+      sessionId, direction, files: list, target: dest, copyParam: copyParam || undefined,
+    });
+    if (!background) await backend.queue('setEnabled', true).catch(() => {});
+    notify.info(t('queueTitle'), `${added.length} ${added.length === 1 ? 'item' : 'items'} → ${oneLine(dest, 60)}`);
+    if (move) watchAndDelete(ctx, added, direction);
+    afterWrite(ctx, true);
+    return added;
+  } catch (err) { return fail(err, t('transferSettingsShort')); }
+}
+
+/**
+ * "Upload and Delete" / "Download and Delete". The queue has no move flag, so
+ * the source is deleted only after its own item reports `done` — a failed or
+ * cancelled transfer never loses the original.
+ */
+function watchAndDelete(ctx, added, direction) {
+  const pending = new Map(added.map((it) => [it.id, it.source]));
+  if (!pending.size) return;
+  const off = backend.on('event:queue', async (payload) => {
+    const item = payload && payload.item;
+    if (!item || !pending.has(item.id)) return;
+    if (item.state === 'done') {
+      const source = pending.get(item.id);
+      pending.delete(item.id);
+      try {
+        if (direction === 'upload') await backend.fs('localRemove', [source], { toRecycleBin: false });
+        else await backend.fs('remove', ctx.sessionId, [source], { recursive: true });
+      } catch (err) {
+        notify.error(t('delete_'), `${oneLine(source, 60)}: ${err.message}`);
+      }
+      afterWrite(ctx, true);
+    } else if (item.state === 'error' || item.state === 'cancelled') {
+      pending.delete(item.id);
+      notify.warning(t('delete_'), `${oneLine(item.source, 60)} was not transferred, so it was kept.`);
+    }
+    if (!pending.size) off();
+  });
+}
+
+/** Delete the selection, with WinSCP's confirmation and recycle-bin rules. */
+async function deleteSelection(ctx, { alternative = false } = {}) {
+  const paths = selPaths(ctx);
+  if (!paths.length) { notify.warning(t('nothingSelected'), t('selectFiles')); return; }
+  const prefs = readPrefs();
+  const confirmDeleting = prefs.confirmDeleting !== false;
+  // "Alternative delete" is WinSCP's Shift+Delete: the opposite of whatever the
+  // recycle-bin preference says, so the user can force either behaviour.
+  const binDefault = ctx.isLocal
+    ? prefs.deleteToRecycleBin !== false
+    : !!(ctx.sessionInfo && ctx.caps && ctx.caps.recycleBin);
+  const toRecycleBin = alternative ? !binDefault : binDefault;
+  const label = paths.length === 1 ? oneLine(paths[0], 70) : `${paths.length} items`;
+  if (confirmDeleting) {
+    const ok = await confirm({
+      title: t('deleteTitle'),
+      body: t('deleteBody', label),
+      detail: toRecycleBin ? t('deleteToBin') : 'This cannot be undone.',
+      confirmLabel: t('delete_'), danger: true,
+    });
+    if (!ok) return;
+  }
+  try {
+    const res = ctx.isLocal
+      ? await backend.fs('localRemove', paths, { toRecycleBin })
+      : await backend.fs('remove', ctx.sessionId, paths, { recursive: true, toRecycleBin });
+    const removed = (res && res.removed) || [];
+    const failed = (res && res.failed) || [];
+    if (removed.length) notify.success(t('deletedMsg', String(removed.length)), '');
+    for (const f of failed) notify.error(t('delete_'), `${oneLine(f.path, 60)}: ${f.message}`);
+    afterWrite(ctx);
+  } catch (err) { fail(err, t('delete_')); }
+}
+
+/** Rename in place when the panel can, otherwise a prompt that really renames. */
+async function renameSelection(ctx) {
+  const entry = ctx.focused || ctx.selection[0] || (ctx.panel && ctx.panel.focusedEntry && ctx.panel.focusedEntry());
+  if (!entry || entry.name === '..') { notify.warning(t('nothingSelected'), t('renameTitle')); return; }
+  if (ctx.panel && typeof ctx.panel.beginRename === 'function' && ctx.panel.beginRename(entry)) return;
+  const next = await promptText({ title: t('renameTitle'), label: t('newName'), value: entry.name });
+  if (next === null || next === entry.name || !next.trim()) return;
+  await performRename(ctx, entry, next.trim());
+}
+
+export async function performRename(ctx, entry, nextName) {
+  const from = ctx.panel.pathOf(entry);
+  const to = ctx.panel.pathOf({ ...entry, name: nextName });
+  try {
+    if (ctx.isLocal) await backend.fs('localRename', from, to);
+    else await backend.fs('rename', ctx.sessionId, from, to);
+    notify.success(t('renamedMsg', nextName), '');
+    afterWrite(ctx);
+  } catch (err) { fail(err, t('renameTitle')); }
+}
+
+async function createDirectory(ctx) {
+  const name = await promptText({ title: t('createDirTitle'), label: t('dirName'), value: '' });
+  if (!name || !name.trim()) return;
+  const target = joinPath(ctx, ctx.panel.path(), name.trim());
+  try {
+    if (ctx.isLocal) await backend.fs('localMkdir', target);
+    else await backend.fs('mkdir', ctx.sessionId, target);
+    notify.success(t('createdMsg', name.trim()), '');
+    afterWrite(ctx);
+    ctx.panel.revealName(name.trim());
+  } catch (err) { fail(err, t('createDirTitle')); }
+}
+
+async function createFile(ctx) {
+  const name = await promptText({ title: t('createFileTitle'), label: t('fileName'), value: '' });
+  if (!name || !name.trim()) return;
+  const target = joinPath(ctx, ctx.panel.path(), name.trim());
+  try {
+    if (ctx.isLocal) {
+      // An empty local file is written through the editor bridge, which is the
+      // only local write the preload surface exposes.
+      const opened = await backend.editor('open', { localPath: target, mode: 'internal' });
+      await backend.editor('save', opened.id, '', {});
+      await backend.editor('close', opened.id, { discard: false });
+    } else {
+      await backend.fs('writeFile', ctx.sessionId, target, '');
+    }
+    notify.success(t('createdMsg', name.trim()), '');
+    afterWrite(ctx);
+    ctx.panel.revealName(name.trim());
+  } catch (err) { fail(err, t('createFileTitle')); }
+}
+
+async function createLink(ctx) {
+  if (!ctx.caps || !ctx.caps.symlink) {
+    notify.warning(t('newLink'), `${ctx.isLocal ? 'This platform' : (ctx.sessionInfo?.protocol || 'This protocol').toUpperCase()} does not support links.`);
+    return;
+  }
+  const focused = ctx.focused || ctx.selection[0];
+  const nameField = h('input', { type: 'text', class: 'field-input', value: focused ? focused.name : '' });
+  const hardBox = h('input', { type: 'checkbox', class: 'check' });
+  const target = await promptText({
+    title: t('symlinkTitle'),
+    label: t('linkPointTo'),
+    value: focused ? focused.name : '',
+    extra: h('div', { class: 'stack' },
+      h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('name')), nameField),
+      ctx.caps.hardlink
+        ? h('label', { class: 'field inline' }, hardBox, h('span', { class: 'field-label' }, t('hardLink')))
+        : null),
+  });
+  if (target === null || !target.trim()) return;
+  const linkPath = joinPath(ctx, ctx.panel.path(), (nameField.value || target).trim());
+  try {
+    await backend.fs('symlink', ctx.sessionId, target.trim(), linkPath, hardBox.checked);
+    notify.success(t('createdMsg', linkPath), '');
+    afterWrite(ctx);
+  } catch (err) { fail(err, t('symlinkTitle')); }
+}
+
+function joinPath(ctx, dir, name) {
+  const sep = ctx.isLocal ? '\\' : '/';
+  const base = String(dir || '').replace(/[\\/]+$/, '');
+  return `${base}${sep}${name}`;
+}
+
+/** Selection sizes, with WinSCP's "calculate directory sizes" semantics. */
+async function calculateSizes(ctx) {
+  const dirs = ctx.selection.filter((e) => e.type === 'dir' && e.name !== '..');
+  if (!dirs.length) { notify.info(t('calcSize'), t('nothingSelected')); return; }
+  if (ctx.isLocal) {
+    notify.info(t('calcSize'), 'Local directory sizes are calculated by the panel as it walks the tree.');
+    ctx.panel.calculateSizes(dirs);
+    return;
+  }
+  try {
+    const paths = dirs.map((e) => ctx.panel.pathOf(e));
+    const res = await backend.fs('calculateSize', ctx.sessionId, paths, `calc-${Date.now().toString(36)}`);
+    ctx.panel.applySizes(res);
+    notify.success(t('calcSize'), `${dirs.length} ${dirs.length === 1 ? 'directory' : 'directories'}`);
+  } catch (err) { fail(err, t('calcSize')); }
+}
+
+/** Copy the selection's names — optionally with full paths — to the clipboard. */
+async function copyList(ctx, withPaths) {
+  const list = withPaths ? selPaths(ctx) : selNames(ctx);
+  if (!list.length) { notify.warning(t('nothingSelected'), ''); return; }
+  const text = list.join('\r\n');
+  if (await copyText(text)) notify.success(t('copiedClip'), `${list.length} ${list.length === 1 ? 'name' : 'names'}`);
+  else notify.error(t('copiedClip'), 'The clipboard refused the write.');
+}
+
+/** Read the clipboard through main, so it works with no document focus. */
+async function readClipboard() {
+  try { return String(await backend.app('clipboardRead') || ''); }
+  catch { return ''; }
+}
+
+/* ---- preferences ---------------------------------------------------- */
+// The renderer store persists only the shell's own roots, so panel and window
+// preferences are read from and written to main's configuration document.
+
+let prefCache = {};
+bus.on('config:document', (doc) => { if (doc && doc.prefs) prefCache = doc.prefs; });
+
+export function readPrefs() {
+  if (services.prefs && typeof services.prefs.all === 'function') return services.prefs.all();
+  return prefCache || {};
+}
+
+export function readPref(dotted, fallback) {
+  const parts = String(dotted).split('.');
+  let cur = readPrefs();
+  for (const p of parts) {
+    if (cur == null) return fallback;
+    cur = cur[p];
+  }
+  return cur === undefined ? fallback : cur;
+}
+
+/** Write a preference and keep the local cache in step immediately. */
+export async function writePref(dotted, value, label) {
+  const parts = String(dotted).split('.');
+  const patch = {};
+  let cur = patch;
+  for (let i = 0; i < parts.length - 1; i += 1) { cur[parts[i]] = {}; cur = cur[parts[i]]; }
+  cur[parts[parts.length - 1]] = value;
+  // Optimistic local update: the UI must reflect a toggle before the round trip.
+  let node = prefCache;
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    if (!node[parts[i]] || typeof node[parts[i]] !== 'object') node[parts[i]] = {};
+    node = node[parts[i]];
+  }
+  node[parts[parts.length - 1]] = value;
+  bus.emit('prefs:changed', { path: dotted, value });
+  try { await api.configSet(patch, label || `Changed ${dotted}`); }
+  catch (err) { notify.error(t('settingsSaved'), err.message); }
+  return value;
+}
+
+export function togglePref(dotted, label) {
+  return writePref(dotted, !readPref(dotted, false), label);
+}
+
+/* ================================================================== */
+/* handler groups                                                      */
+/* ================================================================== */
+
+const DEFS = Object.create(null);
+
+/** Register one action's descriptor. */
+function def(name, spec) {
+  if (!ACTIONS_BY_NAME[name]) throw new Error(`commands.js: "${name}" is not a WinSCP action`);
+  if (DEFS[name]) throw new Error(`commands.js: "${name}" is defined twice`);
+  if (typeof spec.run !== 'function') {
+    if (!spec.unavailable) throw new Error(`commands.js: "${name}" has neither run() nor an unavailable reason`);
+    // A declared-unavailable action still gets a handler: running it says why,
+    // every time. A descriptor with no run() would be a silent no-op waiting
+    // to happen the day someone calls it past the state check.
+    spec.run = (ctx) => {
+      const reason = typeof spec.unavailable === 'function' ? spec.unavailable(ctx) : spec.unavailable;
+      notify.warning(actionLabel(name), reason);
+      return null;
+    };
+    spec.enabled = spec.enabled || (() => false);
+  }
+  DEFS[name] = spec;
+}
+
+/** Register the same descriptor under several names (Local/Remote/Current). */
+function defEach(names, factory) {
+  for (const name of names) def(name, factory(name));
+}
+
+/* ---------------- columns ---------------- */
+
+const COLUMN_ACTIONS = {
+  ShowHideRemoteNameColumnAction2: ['remote', 'name'],
+  ShowHideRemoteExtColumnAction2: ['remote', 'ext'],
+  ShowHideRemoteSizeColumnAction2: ['remote', 'size'],
+  ShowHideRemoteChangedColumnAction3: ['remote', 'changed'],
+  ShowHideRemoteRightsColumnAction2: ['remote', 'rights'],
+  ShowHideRemoteOwnerColumnAction2: ['remote', 'owner'],
+  ShowHideRemoteGroupColumnAction2: ['remote', 'group'],
+  ShowHideRemoteLinkTargetColumnAction2: ['remote', 'linkTarget'],
+  ShowHideRemoteTypeColumnAction2: ['remote', 'type'],
+  ShowHideLocalNameColumnAction2: ['local', 'name'],
+  ShowHideLocalExtColumnAction2: ['local', 'ext'],
+  ShowHideLocalTypeColumnAction2: ['local', 'type'],
+  ShowHideLocalSizeColumnAction2: ['local', 'size'],
+  ShowHideLocalChangedColumnAction3: ['local', 'changed'],
+  ShowHideLocalAttrColumnAction2: ['local', 'attr'],
+};
+
+for (const [name, [side, key]] of Object.entries(COLUMN_ACTIONS)) {
+  def(name, {
+    side,
+    kind: 'toggle',
+    enabled: havePanel,
+    checked: (c) => !!(c.panel && c.panel.columns.isVisible(key)),
+    run: (c) => c.panel.columns.toggle(key),
+  });
+}
+
+def('AutoSizeRemoteColumnsAction', { side: 'remote', enabled: havePanel, run: (c) => c.panel.columns.autoSize() });
+def('AutoSizeLocalColumnsAction', { side: 'local', enabled: havePanel, run: (c) => c.panel.columns.autoSize() });
+def('ResetLayoutRemoteColumnsAction', { side: 'remote', enabled: havePanel, run: (c) => c.panel.columns.resetLayout() });
+def('ResetLayoutLocalColumnsAction', { side: 'local', enabled: havePanel, run: (c) => c.panel.columns.resetLayout() });
+def('HideColumnAction', {
+  // Only meaningful from a column header's own menu, which supplies ctx.column.
+  enabled: (c) => !!(c.panel && c.column && c.panel.columns.canHide(c.column)),
+  visible: (c) => !!c.column,
+  run: (c) => c.panel.columns.setVisible(c.column, false),
+});
+
+/* ---------------- sorting ---------------- */
+
+const SORT_KEYS = {
+  Name: 'name', Ext: 'ext', Size: 'size', Type: 'type', Changed: 'changed',
+  Attr: 'attr', Rights: 'rights', Owner: 'owner', Group: 'group',
+};
+
+const SORT_ACTIONS = [
+  ['LocalSortByNameAction2', 'local', 'Name'], ['LocalSortByExtAction2', 'local', 'Ext'],
+  ['LocalSortBySizeAction2', 'local', 'Size'], ['LocalSortByAttrAction2', 'local', 'Attr'],
+  ['LocalSortByTypeAction2', 'local', 'Type'], ['LocalSortByChangedAction3', 'local', 'Changed'],
+  ['RemoteSortByNameAction2', 'remote', 'Name'], ['RemoteSortByExtAction2', 'remote', 'Ext'],
+  ['RemoteSortBySizeAction2', 'remote', 'Size'], ['RemoteSortByRightsAction2', 'remote', 'Rights'],
+  ['RemoteSortByChangedAction3', 'remote', 'Changed'], ['RemoteSortByOwnerAction2', 'remote', 'Owner'],
+  ['RemoteSortByGroupAction2', 'remote', 'Group'], ['RemoteSortByTypeAction2', 'remote', 'Type'],
+  ['CurrentSortByNameAction', 'current', 'Name'], ['CurrentSortByExtAction', 'current', 'Ext'],
+  ['CurrentSortBySizeAction', 'current', 'Size'], ['CurrentSortByTypeAction2', 'current', 'Type'],
+  ['CurrentSortByRightsAction', 'current', 'Rights'], ['CurrentSortByChangedAction2', 'current', 'Changed'],
+  ['CurrentSortByOwnerAction', 'current', 'Owner'], ['CurrentSortByGroupAction', 'current', 'Group'],
+];
+
+for (const [name, side, which] of SORT_ACTIONS) {
+  const key = SORT_KEYS[which];
+  def(name, {
+    side,
+    kind: 'radio',
+    // A column the panel does not carry (owner on a local panel) is hidden
+    // rather than offered and refused.
+    visible: (c) => !c.panel || c.panel.columns.has(key),
+    enabled: (c) => !!c.panel && c.panel.columns.has(key),
+    checked: (c) => !!c.panel && c.panel.sortState().key === key,
+    run: (c) => c.panel.sortBy(key),
+  });
+}
+
+defEach(['LocalSortAscendingAction2', 'RemoteSortAscendingAction2', 'CurrentSortAscendingAction'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : name.startsWith('Remote') ? 'remote' : 'current',
+  kind: 'toggle',
+  enabled: havePanel,
+  checked: (c) => !!c.panel && c.panel.sortState().ascending,
+  run: (c) => c.panel.setSortAscending(!c.panel.sortState().ascending),
+}));
+
+def('SortColumnAscendingAction', {
+  kind: 'radio',
+  visible: (c) => !!c.column,
+  enabled: (c) => !!(c.panel && c.column),
+  checked: (c) => !!c.panel && c.panel.sortState().key === c.column && c.panel.sortState().ascending,
+  run: (c) => { c.panel.sortBy(c.column, true); },
+});
+def('SortColumnDescendingAction', {
+  kind: 'radio',
+  visible: (c) => !!c.column,
+  enabled: (c) => !!(c.panel && c.column),
+  checked: (c) => !!c.panel && c.panel.sortState().key === c.column && !c.panel.sortState().ascending,
+  run: (c) => { c.panel.sortBy(c.column, false); },
+});
+
+/* ---------------- view style ---------------- */
+
+const STYLE_ACTIONS = [
+  ['RemoteIconAction', 'remote', 'icon'], ['RemoteSmallIconAction', 'remote', 'smallIcon'],
+  ['RemoteListAction', 'remote', 'list'], ['RemoteReportAction', 'remote', 'report'],
+  ['RemoteThumbnailAction', 'remote', 'thumbnail'],
+  ['LocalReportAction', 'local', 'report'], ['LocalThumbnailAction', 'local', 'thumbnail'],
+];
+for (const [name, side, style] of STYLE_ACTIONS) {
+  def(name, {
+    side, kind: 'radio',
+    enabled: havePanel,
+    checked: (c) => !!c.panel && c.panel.viewStyle() === style,
+    run: (c) => c.panel.setViewStyle(style),
+  });
+}
+def('RemoteCycleStyleAction', { side: 'remote', enabled: havePanel, run: (c) => c.panel.cycleViewStyle() });
+
+/* ---------------- selection ---------------- */
+
+def('SelectOneAction', {
+  enabled: haveFocus,
+  run: (c) => c.panel.toggleFocusedSelection(),
+});
+
+async function maskSelect(ctx, select) {
+  const title = select ? t('selectFiles') : t('unselectFiles');
+  const dirBox = h('input', { type: 'checkbox', class: 'check' });
+  dirBox.checked = true;
+  const mask = await promptText({
+    title,
+    label: t('colorMask'),
+    value: ctx.panel.lastSelectMask || '*.*',
+    body: t('fileColorsHint'),
+    extra: h('label', { class: 'field inline' }, dirBox, h('span', { class: 'field-label' }, t('applyToDirs'))),
+  });
+  if (mask === null || !mask.trim()) return;
+  ctx.panel.lastSelectMask = mask.trim();
+  const n = await ctx.panel.selectByMask(mask.trim(), select, { includeDirs: dirBox.checked });
+  announce(`${n} ${n === 1 ? 'item' : 'items'} ${select ? 'selected' : 'unselected'}.`);
+}
+
+defEach(['SelectAction', 'LocalSelectAction2', 'RemoteSelectAction2'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : name.startsWith('Remote') ? 'remote' : 'current',
+  enabled: havePanel,
+  run: (c) => maskSelect(c, true),
+}));
+defEach(['UnselectAction', 'LocalUnselectAction2', 'RemoteUnselectAction2'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : name.startsWith('Remote') ? 'remote' : 'current',
+  enabled: havePanel,
+  run: (c) => maskSelect(c, false),
+}));
+defEach(['SelectAllAction', 'LocalSelectAllAction2', 'RemoteSelectAllAction2'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : name.startsWith('Remote') ? 'remote' : 'current',
+  enabled: havePanel,
+  run: (c) => c.panel.selectAll(),
+}));
+def('InvertSelectionAction', { enabled: havePanel, run: (c) => c.panel.invertSelection() });
+def('ClearSelectionAction', { enabled: havePanel, run: (c) => c.panel.clearSelection() });
+def('RestoreSelectionAction', {
+  enabled: (c) => !!c.panel && c.panel.canRestoreSelection(),
+  run: (c) => c.panel.restoreSelection(),
+});
+def('SelectSameExtAction', { enabled: haveFocus, run: (c) => c.panel.selectSameExtension(true) });
+def('UnselectSameExtAction', { enabled: haveFocus, run: (c) => c.panel.selectSameExtension(false) });
+
+/* ---------------- directory navigation ---------------- */
+
+const NAV = [
+  ['LocalBackAction', 'local', 'back'], ['RemoteBackAction', 'remote', 'back'],
+  ['LocalForwardAction', 'local', 'forward'], ['RemoteForwardAction', 'remote', 'forward'],
+  ['LocalParentDirAction', 'local', 'parent'], ['RemoteParentDirAction', 'remote', 'parent'],
+  ['LocalRootDirAction', 'local', 'root'], ['RemoteRootDirAction', 'remote', 'root'],
+  ['LocalHomeDirAction', 'local', 'home'], ['RemoteHomeDirAction', 'remote', 'home'],
+];
+for (const [name, side, what] of NAV) {
+  def(name, {
+    side,
+    enabled: (c) => {
+      if (!c.panel || !online(c)) return false;
+      if (what === 'back') return c.panel.canGoBack();
+      if (what === 'forward') return c.panel.canGoForward();
+      if (what === 'parent') return !c.panel.isRoot();
+      return true;
+    },
+    run: (c) => {
+      if (what === 'back') return c.panel.goBack();
+      if (what === 'forward') return c.panel.goForward();
+      if (what === 'parent') return c.panel.goParent();
+      if (what === 'root') return c.panel.goRoot();
+      return c.panel.goHome();
+    },
+  });
+}
+
+defEach(['LocalRefreshAction', 'RemoteRefreshAction'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : 'remote',
+  enabled: (c) => !!c.panel && online(c),
+  run: (c) => c.panel.refresh(true),
+}));
+
+defEach(['LocalOtherDirAction', 'RemoteOtherDirAction'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : 'remote',
+  // Only meaningful when the other panel is on the same kind of filesystem;
+  // WinSCP maps the path across, so a remote path may be opened locally.
+  enabled: (c) => bothPanels(c) && online(c),
+  run: (c) => c.panel.navigate(mapAcross(c.other.path(), c.isLocal)),
+}));
+
+/** Map a path from one panel's separator convention to the other's. */
+function mapAcross(p, toLocal) {
+  const s = String(p || '');
+  return toLocal ? s.replace(/\//g, '\\') : s.replace(/\\/g, '/');
+}
+
+defEach(['LocalOpenDirAction', 'RemoteOpenDirAction'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : 'remote',
+  enabled: (c) => !!c.panel && online(c),
+  run: (c) => openDirectoryDialog(c),
+}));
+
+async function openDirectoryDialog(ctx) {
+  const key = ctx.isLocal ? 'local' : 'remote';
+  let bookmarks = [];
+  try { bookmarks = (await backend.config('bookmarks', 'default'))?.[key] || []; } catch { /* none yet */ }
+  const history = ctx.panel.history();
+  const items = [
+    ...bookmarks.map((b) => ({ value: b.value || b, label: b.name || b.value || b, icon: 'bookmark' })),
+    ...history.filter((p) => !bookmarks.some((b) => (b.value || b) === p))
+      .map((p) => ({ value: p, label: p, icon: 'history' })),
+  ];
+  const field = h('input', { type: 'text', class: 'field-input', value: ctx.panel.path(), spellcheck: 'false' });
+  let chosen = null;
+  const list = h('div', { class: 'stack' }, ...items.slice(0, 40).map((it) => h('button', {
+    type: 'button', class: 'btn-text', style: { justifyContent: 'flex-start' },
+    onclick: () => { field.value = it.value; field.focus(); },
+  }, icon(it.icon, 15), h('span', { class: 'ellipsis', title: it.label }, it.label))));
+  await new Promise((resolve) => {
+    openModal({
+      title: t('openDirBookmark'),
+      width: 560,
+      content: h('div', { class: 'stack' },
+        h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('location')), field),
+        items.length ? h('div', { class: 'stack' }, h('span', { class: 'field-label' }, t('addBookmark')), list) : null),
+      actions: [
+        { label: t('cancel'), kind: 'text' },
+        { label: t('goTo'), kind: 'filled', autofocus: true, onSelect: () => { chosen = field.value; } },
+      ],
+      onClose: () => resolve(),
+    });
+  });
+  if (chosen && chosen.trim()) ctx.panel.navigate(chosen.trim());
+}
+
+defEach(['LocalAddBookmarkAction2', 'RemoteAddBookmarkAction2'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : 'remote',
+  enabled: (c) => !!c.panel && online(c),
+  run: async (c) => {
+    const p = c.panel.path();
+    try {
+      await backend.config('addBookmark', 'default', c.isLocal ? 'local' : 'remote', p, p);
+      notify.success(t('bookmarkAdded'), oneLine(p, 70));
+    } catch (err) { fail(err, t('addBookmark')); }
+  },
+}));
+
+defEach(['LocalPathToClipboardAction2', 'RemotePathToClipboardAction2'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : 'remote',
+  enabled: havePanel,
+  run: async (c) => {
+    const p = c.panel.path();
+    if (await copyText(p)) notify.success(t('pathCopied'), oneLine(p, 70));
+  },
+}));
+
+def('LocalChangePathAction2', {
+  side: 'local',
+  enabled: havePanel,
+  run: async (c) => {
+    let drives = [];
+    try { drives = await backend.fs('localDrives'); } catch (err) { return fail(err, t('changeDrive')); }
+    const choice = await chooseFrom({
+      title: t('changeDrive'),
+      items: drives.map((d) => ({ value: d.path, label: d.label || d.path, icon: 'computer' })),
+      empty: t('emptyDir'),
+    });
+    if (choice) c.panel.navigate(choice);
+    return null;
+  },
+});
+
+def('RemoteChangePathAction2', {
+  side: 'remote',
+  enabled: (c) => !!c.panel && online(c),
+  run: async (c) => {
+    const p = await promptText({ title: t('goTo'), label: t('location'), value: c.panel.path() });
+    if (p && p.trim()) c.panel.navigate(p.trim());
+  },
+});
+
+def('GoToAddressAction', {
+  enabled: havePanel,
+  run: (c) => c.panel.focusAddress(),
+});
+
+def('IncrementalSearchStartAction', {
+  enabled: havePanel,
+  run: (c) => c.panel.startIncrementalSearch(),
+});
+
+defEach(['LocalFilterAction', 'RemoteFilterAction'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : 'remote',
+  enabled: havePanel,
+  checked: (c) => !!(c.panel && c.panel.filter()),
+  run: async (c) => {
+    const mask = await promptText({
+      title: t('filterMenu'), label: t('filterPh'), value: c.panel.filter() || '',
+      body: t('fileColorsHint'),
+    });
+    if (mask === null) return;
+    c.panel.setFilter(mask.trim());
+  },
+}));
+
+def('LocalExploreDirectoryAction', {
+  side: 'local',
+  enabled: havePanel,
+  run: async (c) => {
+    try { await backend.app('showItemInFolder', c.panel.path()); }
+    catch (err) { fail(err, t('explore')); }
+  },
+});
+
+def('RemoteExploreDirectoryAction', {
+  side: 'remote',
+  // WinSCP opens a remote directory in Windows Explorer through its shell
+  // namespace extension (dragext/). This port has no shell extension, so the
+  // command is declared unavailable rather than opening the wrong thing.
+  unavailable: 'Opening a remote directory in Windows Explorer needs WinSCP\'s shell namespace extension, which this port does not install. Use the local panel\'s Explore Directory, or download the files first.',
+});
+
+def('RemoteFindFilesAction2', {
+  side: 'remote',
+  enabled: (c) => !!c.panel && online(c),
+  run: (c) => runFindFiles(c),
+});
+
+/** A real recursive search over fs:find, streamed through event:progress. */
+async function runFindFiles(ctx) {
+  const maskField = h('input', { type: 'text', class: 'field-input', value: '*.*', spellcheck: 'false' });
+  const textField = h('input', { type: 'text', class: 'field-input', spellcheck: 'false' });
+  const whereField = h('input', { type: 'text', class: 'field-input', value: ctx.panel.path(), spellcheck: 'false' });
+  const recurseBox = h('input', { type: 'checkbox', class: 'check' });
+  recurseBox.checked = true;
+  const results = h('div', { class: 'stack', role: 'listbox', 'aria-label': t('findResults'), style: { maxHeight: '220px', overflow: 'auto' } });
+  const status = h('p', { class: 'prose muted' }, '');
+  let cid = null;
+  let off = null;
+  let found = 0;
+
+  const stop = () => {
+    if (cid) { backend.fs('findCancel', cid).catch(() => {}); cid = null; }
+    if (off) { off(); off = null; }
+  };
+
+  const start = async () => {
+    stop();
+    while (results.firstChild) results.removeChild(results.firstChild);
+    found = 0;
+    status.textContent = t('findStart');
+    cid = `find-${Date.now().toString(36)}`;
+    off = backend.on('event:progress', (p) => {
+      if (!p || p.correlationId !== cid) return;
+      if (p.kind === 'find-hit' && p.hit) {
+        found += 1;
+        const hit = p.hit;
+        results.appendChild(h('button', {
+          type: 'button', class: 'btn-text', role: 'option',
+          style: { justifyContent: 'flex-start', width: '100%' },
+          onclick: () => {
+            const dir = String(hit.path).replace(/\/[^/]*$/, '') || '/';
+            ctx.panel.navigate(dir);
+            ctx.panel.revealName(hit.name);
+            modal.close('goto');
+          },
+        }, icon(hit.type === 'dir' ? 'folder' : 'description', 15),
+        h('span', { class: 'ellipsis', title: hit.path }, hit.path)));
+        status.textContent = `${found} ${t('findResults')}`;
+      } else if (p.kind === 'find-done') {
+        status.textContent = found ? `${found} ${t('findResults')}` : t('findNoResults');
+        stop();
+      }
+    });
+    try {
+      await backend.fs('find', {
+        sessionId: ctx.sessionId, root: whereField.value, mask: maskField.value || undefined,
+        text: textField.value || undefined, recursive: recurseBox.checked, correlationId: cid,
+      });
+    } catch (err) { status.textContent = err.message; stop(); }
+  };
+
+  const modal = openModal({
+    title: t('findTitle'),
+    width: 680,
+    content: h('div', { class: 'stack' },
+      h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('findMask')), maskField),
+      h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('findReplace')), textField),
+      h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('findWhere')), whereField),
+      h('label', { class: 'field inline' }, recurseBox, h('span', { class: 'field-label' }, t('recursive'))),
+      status, results),
+    actions: [
+      { label: t('findStop'), kind: 'text', onSelect: () => { stop(); status.textContent = t('findStop'); return true; } },
+      { label: t('findStart'), kind: 'filled', autofocus: true, onSelect: () => { start(); return true; } },
+      { label: t('close'), kind: 'text' },
+    ],
+    onClose: stop,
+  });
+  return modal;
+}
+
+/* ---------------- transfers ---------------- */
+
+const TRANSFERS = [
+  // [name, side, direction, move, background, focused-only]
+  ['RemoteCopyAction', 'remote', 'download', false, false],
+  ['RemoteCopyNonQueueAction', 'remote', 'download', false, false],
+  ['RemoteCopyQueueAction', 'remote', 'download', false, true],
+  ['RemoteMoveAction', 'remote', 'download', true, false],
+  ['RemoteCopyFocusedAction', 'remote', 'download', false, false],
+  ['RemoteCopyFocusedNonQueueAction', 'remote', 'download', false, false],
+  ['RemoteCopyFocusedQueueAction', 'remote', 'download', false, true],
+  ['RemoteMoveFocusedAction', 'remote', 'download', true, false],
+  ['LocalCopyAction', 'local', 'upload', false, false],
+  ['LocalCopyNonQueueAction', 'local', 'upload', false, false],
+  ['LocalCopyQueueAction', 'local', 'upload', false, true],
+  ['LocalMoveAction', 'local', 'upload', true, false],
+  ['LocalCopyFocusedAction', 'local', 'upload', false, false],
+  ['LocalCopyFocusedNonQueueAction', 'local', 'upload', false, false],
+  ['LocalCopyFocusedQueueAction', 'local', 'upload', false, true],
+  ['LocalMoveFocusedAction', 'local', 'upload', true, false],
+];
+
+for (const [name, side, direction, move, background] of TRANSFERS) {
+  def(name, {
+    side,
+    enabled: (c) => haveSel(c) && bothPanels(c) && !!c.sessionId,
+    run: (c) => transferWithOptions(c, { direction, move, background }),
+  });
+}
+
+/**
+ * WinSCP always shows the transfer dialog before a copy (unless the user turned
+ * the confirmation off), so the target, the preset and the background choice
+ * are all decided before anything moves.
+ */
+async function transferWithOptions(ctx, opts) {
+  const override = dialogOverrides.get(ctx.name);
+  if (override) return override(ctx, opts);
+  const targetField = h('input', {
+    type: 'text', class: 'field-input', spellcheck: 'false',
+    value: transferTarget(ctx),
+  });
+  const bgBox = h('input', { type: 'checkbox', class: 'check' });
+  bgBox.checked = !!opts.background;
+  const modeSel = h('select', { class: 'field-input' },
+    h('option', { value: 'automatic' }, t('modeAuto')),
+    h('option', { value: 'binary' }, t('modeBinary')),
+    h('option', { value: 'text' }, t('modeText')));
+  modeSel.value = readPref('copyParam.transferMode', 'automatic');
+  const preserveBox = h('input', { type: 'checkbox', class: 'check' });
+  preserveBox.checked = readPref('copyParam.preserveTime', true) !== false;
+  const newerBox = h('input', { type: 'checkbox', class: 'check' });
+  const excludeField = h('input', { type: 'text', class: 'field-input', spellcheck: 'false', value: '' });
+  const speedField = h('input', { type: 'number', class: 'field-input', min: '0', step: '1', value: '0' });
+
+  const names = selNames(ctx);
+  const title = opts.direction === 'upload'
+    ? (opts.move ? t('uploadDelete') : t('uploadTitle'))
+    : (opts.move ? t('downloadDelete') : t('downloadTitle'));
+
+  const go = await new Promise((resolve) => {
+    let answered = false;
+    openModal({
+      title,
+      width: 640,
+      content: h('div', { class: 'stack' },
+        h('p', { class: 'prose' }, names.length === 1
+          ? oneLine(names[0], 80)
+          : `${names.length} ${t('syncFiles')}`),
+        h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('destLbl')), targetField),
+        h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('transferMode')), modeSel),
+        h('label', { class: 'field inline' }, preserveBox, h('span', { class: 'field-label' }, t('preserveTimestamp'))),
+        h('label', { class: 'field inline' }, newerBox, h('span', { class: 'field-label' }, t('newerOnly'))),
+        h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('excludeMask')), excludeField),
+        h('label', { class: 'field' }, h('span', { class: 'field-label' }, `${t('speedLimit')} (B/s, 0 = ${t('none')})`), speedField),
+        h('label', { class: 'field inline' }, bgBox, h('span', { class: 'field-label' }, t('transferInBackground')))),
+      actions: [
+        { label: t('cancel'), kind: 'text', onSelect: () => { answered = true; resolve(false); } },
+        {
+          label: opts.direction === 'upload' ? t('upload') : t('download'),
+          kind: 'filled', autofocus: true,
+          onSelect: () => { answered = true; resolve(true); },
+        },
+      ],
+      onClose: () => { if (!answered) resolve(false); },
+    });
+  });
+  if (!go) return null;
+
+  const copyParam = {
+    transferMode: modeSel.value,
+    preserveTime: preserveBox.checked,
+    newerOnly: newerBox.checked,
+    excludeFileMask: excludeField.value || '',
+    cpsLimit: Number(speedField.value) || 0,
+  };
+  return queueTransfer(ctx, {
+    direction: opts.direction, move: opts.move, background: bgBox.checked,
+    target: targetField.value, copyParam,
+  });
+}
+
+/* ---- same-side copy / move (Copy…, Move…, Duplicate…) ---- */
+
+const SAMESIDE = [
+  ['LocalLocalCopyAction', 'local', 'copy', false],
+  ['LocalLocalMoveAction', 'local', 'move', false],
+  ['LocalLocalCopyFocusedAction', 'local', 'copy', true],
+  ['LocalLocalMoveFocusedAction', 'local', 'move', true],
+  ['LocalOtherCopyAction', 'local', 'copy', false],
+  ['LocalOtherMoveAction', 'local', 'move', false],
+  ['RemoteCopyToAction', 'remote', 'copy', false],
+  ['RemoteMoveToAction', 'remote', 'move', false],
+  ['RemoteCopyToFocusedAction', 'remote', 'copy', true],
+  ['RemoteMoveToFocusedAction', 'remote', 'move', true],
+];
+
+for (const [name, side, mode] of SAMESIDE) {
+  def(name, {
+    side,
+    enabled: (c) => haveSel(c) && (mode === 'move' ? capOrLocal(c, 'move') : capOrLocal(c, 'copyRemote')),
+    run: (c) => sameSideOperation(c, mode),
+  });
+}
+
+function capOrLocal(c, name) {
+  if (c.isLocal) return true;
+  return !!(c.caps && c.caps[name]);
+}
+
+/**
+ * WinSCP's Duplicate…/Move To… on the remote side, and Copy…/Move… on the
+ * local side: a target path on the SAME filesystem. A move is a rename; a copy
+ * on the remote side is a server-side copy queued through the queue.
+ */
+async function sameSideOperation(ctx, mode) {
+  const entries = ctx.selection.filter((e) => e.name !== '..');
+  if (!entries.length) return null;
+  const suggestion = entries.length === 1
+    ? joinPath(ctx, ctx.panel.path(), entries[0].name)
+    : `${String(ctx.panel.path()).replace(/[\\/]+$/, '')}${ctx.isLocal ? '\\' : '/'}`;
+  const target = await promptText({
+    title: mode === 'move' ? t('moveToTitle') : t('copyToTitle'),
+    label: t('targetPath'),
+    value: suggestion,
+    confirmLabel: mode === 'move' ? t('move_') : t('copy_'),
+  });
+  if (target === null || !target.trim()) return null;
+  const dest = target.trim();
+  try {
+    if (mode === 'move') {
+      for (const e of entries) {
+        const from = ctx.panel.pathOf(e);
+        const to = entries.length === 1 && !/[\\/]$/.test(dest)
+          ? dest
+          : `${dest.replace(/[\\/]+$/, '')}${ctx.isLocal ? '\\' : '/'}${e.name}`;
+        if (ctx.isLocal) await backend.fs('localRename', from, to);
+        else await backend.fs('rename', ctx.sessionId, from, to);
+      }
+      notify.success(t('renamedMsg', `${entries.length}`), dest);
+      afterWrite(ctx, true);
+      return true;
+    }
+    if (ctx.isLocal) {
+      // A local-to-local copy runs through the queue's local adapter on both
+      // ends, which is exactly how the local "Copy…" behaves in WinSCP.
+      return await queueTransfer(ctx, {
+        direction: 'upload', target: dest, files: entries.map((e) => ctx.panel.pathOf(e)),
+      });
+    }
+    return await queueTransfer(ctx, {
+      direction: 'remote-copy', target: dest, files: entries.map((e) => ctx.panel.pathOf(e)),
+    });
+  } catch (err) { return fail(err, mode === 'move' ? t('moveToTitle') : t('copyToTitle')); }
+}
+
+/* ---------------- file operations ---------------- */
+
+defEach(['LocalRenameAction2', 'RemoteRenameAction2', 'CurrentRenameAction'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : name.startsWith('Remote') ? 'remote' : 'current',
+  enabled: (c) => haveFocus(c) && capOrLocal(c, 'rename'),
+  run: renameSelection,
+}));
+
+defEach(['LocalDeleteAction2', 'RemoteDeleteAction2', 'CurrentDeleteAction'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : name.startsWith('Remote') ? 'remote' : 'current',
+  enabled: haveSel,
+  run: (c) => deleteSelection(c),
+}));
+def('CurrentDeleteFocusedAction', { side: 'current', focusedOnly: true, enabled: haveFocus, run: (c) => deleteSelection(c) });
+def('CurrentDeleteAlternativeAction', {
+  side: 'current', enabled: haveSel, run: (c) => deleteSelection(c, { alternative: true }),
+});
+
+defEach(['LocalCreateDirAction3', 'RemoteCreateDirAction3', 'CurrentCreateDirAction', 'NewDirAction'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : name.startsWith('Remote') ? 'remote' : 'current',
+  enabled: (c) => !!c.panel && online(c),
+  run: createDirectory,
+}));
+
+defEach(['LocalNewFileAction', 'RemoteNewFileAction', 'NewFileAction'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : name.startsWith('Remote') ? 'remote' : 'current',
+  enabled: (c) => !!c.panel && online(c),
+  run: createFile,
+}));
+
+defEach(['LocalAddEditLinkAction3', 'RemoteAddEditLinkAction3', 'NewLinkAction',
+  'CurrentAddEditLinkAction', 'CurrentAddEditLinkContextAction'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : name.startsWith('Remote') ? 'remote' : 'current',
+  enabled: (c) => !!c.panel && online(c) && !!(c.caps && c.caps.symlink),
+  run: createLink,
+}));
+
+defEach(['LocalPropertiesAction2', 'RemotePropertiesAction2', 'CurrentPropertiesAction'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : name.startsWith('Remote') ? 'remote' : 'current',
+  enabled: haveSel,
+  run: (c) => showProperties(c),
+}));
+def('CurrentPropertiesFocusedAction', { side: 'current', enabled: haveFocus, run: (c) => showProperties(c) });
+
+/** Properties, including a working permissions editor where the protocol has one. */
+async function showProperties(ctx) {
+  const override = dialogOverrides.get(ctx.name);
+  if (override) return override(ctx);
+  const entries = ctx.selection.filter((e) => e.name !== '..');
+  if (!entries.length) return null;
+  const one = entries.length === 1 ? entries[0] : null;
+  const totalSize = entries.reduce((n, e) => n + (e.size || 0), 0);
+  const canRights = !!(ctx.caps && ctx.caps.rights);
+  const canOwner = !!(ctx.caps && ctx.caps.owner);
+
+  const rightsField = h('input', {
+    type: 'text', class: 'field-input mono', spellcheck: 'false',
+    value: one ? (one.rights || '') : '',
+    placeholder: 'rwxr-xr-x',
+  });
+  const octalOut = h('span', { class: 'mono muted' }, one ? rightsToOctal(one.rights) : '');
+  rightsField.addEventListener('input', () => { octalOut.textContent = rightsToOctal(rightsField.value); });
+  const recurseBox = h('input', { type: 'checkbox', class: 'check' });
+  const ownerField = h('input', { type: 'text', class: 'field-input', value: one ? (one.owner || '') : '' });
+  const groupField = h('input', { type: 'text', class: 'field-input', value: one ? (one.group || '') : '' });
+
+  const rows = [
+    [t('name'), one ? one.name : `${entries.length} ${t('syncFiles')}`],
+    [t('location'), ctx.panel.path()],
+    [t('sizeLbl'), formatBytes(totalSize)],
+    one ? [t('colChanged'), one.mtime ? new Date(one.mtime).toLocaleString() : '—'] : null,
+    one && one.linkTarget ? [t('linksTo'), one.linkTarget] : null,
+  ].filter(Boolean);
+
+  let apply = false;
+  await new Promise((resolve) => {
+    openModal({
+      title: t('propsTitle'),
+      width: 560,
+      content: h('div', { class: 'stack' },
+        h('div', { class: 'about-grid mono' }, ...rows.flatMap(([k, v]) => [h('span', {}, k), h('span', { class: 'ellipsis', title: String(v) }, String(v))])),
+        canRights ? h('div', { class: 'stack' },
+          h('label', { class: 'field' },
+            h('span', { class: 'field-label' }, t('colRights')),
+            rightsField),
+          h('div', { class: 'row' }, h('span', { class: 'field-label' }, t('rightsOctal')), octalOut),
+          h('label', { class: 'field inline' }, recurseBox, h('span', { class: 'field-label' }, t('recurse')))) : null,
+        canOwner ? h('div', { class: 'stack' },
+          h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('ownerRow')), ownerField),
+          h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('groupRow')), groupField)) : null,
+        !canRights && !canOwner
+          ? h('p', { class: 'prose muted' }, `${(ctx.sessionInfo?.protocol || 'This filesystem').toUpperCase()} does not expose permissions or ownership, so those fields are not shown.`)
+          : null),
+      actions: [
+        { label: t('close'), kind: 'text' },
+        (canRights || canOwner)
+          ? { label: t('apply'), kind: 'filled', onSelect: () => { apply = true; } }
+          : null,
+      ].filter(Boolean),
+      onClose: () => resolve(),
+    });
+  });
+  if (!apply) return null;
+  const paths = entries.map((e) => ctx.panel.pathOf(e));
+  try {
+    if (canRights && rightsField.value.trim()) {
+      await backend.fs('setRights', ctx.sessionId, paths, rightsField.value.trim(), { recursive: recurseBox.checked });
+      notify.success(t('permsChanged'), rightsField.value.trim());
+    }
+    if (canOwner && (ownerField.value || groupField.value)) {
+      await backend.fs('setOwner', ctx.sessionId, paths, ownerField.value || undefined, groupField.value || undefined, { recursive: recurseBox.checked });
+    }
+    afterWrite(ctx);
+  } catch (err) { fail(err, t('propsTitle')); }
+  return null;
+}
+
+function rightsToOctal(rights) {
+  const s = String(rights || '');
+  if (s.length < 9) return '';
+  let out = '';
+  for (let i = 0; i < 9; i += 3) {
+    out += String((s[i] !== '-' ? 4 : 0) + (s[i + 1] !== '-' ? 2 : 0) + (s[i + 2] !== '-' ? 1 : 0));
+  }
+  return out;
+}
+
+export function formatBytes(n, mode) {
+  const bytes = Number(n) || 0;
+  const style = mode || readPref('formatSizeBytes', 'short');
+  if (style === 'none') return bytes.toLocaleString();
+  if (style === 'kilo') return `${Math.ceil(bytes / 1024).toLocaleString()} KB`;
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  let v = bytes; let u = 0;
+  while (v >= 1024 && u < units.length - 1) { v /= 1024; u += 1; }
+  return `${u === 0 ? v.toLocaleString() : v.toFixed(v < 10 ? 1 : 0)} ${units[u]}`;
+}
+
+/* ---- editing / opening ---- */
+
+async function openEntry(ctx, mode) {
+  const entry = ctx.focused || ctx.selection[0];
+  if (!entry) { notify.warning(t('nothingSelected'), ''); return; }
+  if (entry.type === 'dir') { ctx.panel.navigate(ctx.panel.pathOf(entry)); return; }
+  const path = ctx.panel.pathOf(entry);
+  try {
+    const req = ctx.isLocal
+      ? { localPath: path, mode: mode || 'auto' }
+      : { sessionId: ctx.sessionId, remotePath: path, mode: mode || 'auto' };
+    const opened = await backend.editor('open', req);
+    bus.emit('editor:opened', opened);
+    notify.info(t('editorTitle'), oneLine(entry.name, 60));
+  } catch (err) { fail(err, t('editorTitle')); }
+}
+
+async function openEntryWith(ctx) {
+  const entry = ctx.focused || ctx.selection[0];
+  if (!entry) { notify.warning(t('nothingSelected'), ''); return; }
+  const list = readPref('editor.list', []) || [];
+  const items = [
+    { value: 'internal', label: t('editorTitle'), icon: 'edit' },
+    ...list.filter((e) => e.type === 'external' && e.external)
+      .map((e) => ({ value: e.external, label: e.external, icon: 'open_in_new' })),
+    { value: '@browse', label: t('browse'), icon: 'folder_open' },
+  ];
+  let choice = await chooseFrom({ title: t('editWith'), items });
+  if (!choice) return;
+  if (choice === '@browse') {
+    try {
+      const picked = await backend.app('pickPath', { title: t('editWith') });
+      const file = Array.isArray(picked) ? picked[0] : picked;
+      if (!file) return;
+      choice = file;
+    } catch (err) { fail(err, t('editWith')); return; }
+  }
+  const path = ctx.panel.pathOf(entry);
+  try {
+    const req = ctx.isLocal
+      ? { localPath: path, mode: choice === 'internal' ? 'internal' : 'external', external: choice === 'internal' ? undefined : choice }
+      : { sessionId: ctx.sessionId, remotePath: path, mode: choice === 'internal' ? 'internal' : 'external', external: choice === 'internal' ? undefined : choice };
+    const opened = await backend.editor('open', req);
+    bus.emit('editor:opened', opened);
+  } catch (err) { fail(err, t('editWith')); }
+}
+
+defEach(['LocalEditAction2', 'RemoteEditAction2', 'CurrentEditAction'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : name.startsWith('Remote') ? 'remote' : 'current',
+  enabled: (c) => haveFocus(c) && (c.focused || c.panel.focusedEntry())?.type !== 'dir',
+  run: (c) => openEntry(c, 'auto'),
+}));
+def('CurrentEditFocusedAction', { side: 'current', enabled: haveFocus, run: (c) => openEntry(c, 'auto') });
+def('CurrentEditInternalAction', { side: 'current', enabled: haveFocus, run: (c) => openEntry(c, 'internal') });
+def('CurrentEditInternalFocusedAction', { side: 'current', enabled: haveFocus, run: (c) => openEntry(c, 'internal') });
+def('CurrentEditWithAction', { side: 'current', enabled: haveFocus, run: openEntryWith });
+def('CurrentEditWithFocusedAction', { side: 'current', enabled: haveFocus, run: openEntryWith });
+def('CurrentOpenAction', {
+  side: 'current',
+  enabled: haveFocus,
+  run: async (c) => {
+    const entry = c.focused || c.panel.focusedEntry();
+    if (!entry) return;
+    if (entry.type === 'dir') { c.panel.navigate(c.panel.pathOf(entry)); return; }
+    if (c.isLocal) {
+      try { await backend.app('showItemInFolder', c.panel.pathOf(entry)); return; }
+      catch (err) { fail(err, t('view_')); return; }
+    }
+    openEntry(c, 'auto');
+  },
+});
+
+def('CurrentSystemMenuFocusedAction', {
+  side: 'current',
+  enabled: (c) => haveFocus(c) && c.isLocal,
+  // The Windows shell context menu belongs to the shell extension; what this
+  // port can honestly do is reveal the item in the OS file manager.
+  run: async (c) => {
+    const entry = c.focused || c.panel.focusedEntry();
+    try { await backend.app('showItemInFolder', c.panel.pathOf(entry)); }
+    catch (err) { fail(err, t('explore')); }
+  },
+});
+
+/* ---- clipboard / file lists ---- */
+
+defEach(['CurrentCopyToClipboardAction2', 'CurrentCopyToClipboardFocusedAction2'], () => ({
+  side: 'current',
+  enabled: haveSel,
+  run: (c) => copyList(c, true),
+}));
+def('FileListToClipboardAction', { enabled: haveSel, run: (c) => copyList(c, false) });
+def('FullFileListToClipboardAction', { enabled: haveSel, run: (c) => copyList(c, true) });
+def('FileListToCommandLineAction', {
+  enabled: haveSel,
+  run: (c) => {
+    const text = selNames(c).map((n) => (/\s/.test(n) ? `"${n}"` : n)).join(' ');
+    if (services.workspace?.insertIntoCommandLine) { services.workspace.insertIntoCommandLine(text); return true; }
+    notify.warning(t('insertToCmdLine'), 'The command line is not shown. Turn it on from View → Command Line first.');
+    return false;
+  },
+});
+def('PasteAction3', {
+  enabled: (c) => !!c.panel && online(c),
+  run: async (c) => {
+    const text = await readClipboard();
+    if (!text.trim()) { notify.info(t('pasteClip'), 'The clipboard has no text to paste.'); return; }
+    const lines = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    // A single path that names a directory is a navigation; a list of paths is
+    // a transfer request — exactly WinSCP's Paste behaviour.
+    if (lines.length === 1 && /^[a-zA-Z]:[\\/]|^[\\/]/.test(lines[0])) {
+      c.panel.navigate(lines[0]);
+      return;
+    }
+    await queueTransfer(c, {
+      direction: c.isLocal ? 'download' : 'upload',
+      files: lines, target: c.panel.path(),
+    });
+  },
+});
+def('FileListFromClipboardAction', {
+  enabled: (c) => !!c.panel && online(c),
+  run: async (c) => {
+    const text = await readClipboard();
+    const lines = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    if (!lines.length) { notify.info(t('transferClip'), 'The clipboard has no file list.'); return; }
+    await queueTransfer(c, {
+      direction: c.isLocal ? 'download' : 'upload',
+      files: lines, target: c.panel.path(),
+    });
+  },
+});
+
+def('FileGenerateUrlAction2', {
+  enabled: haveSel,
+  run: async (c) => {
+    if (!c.sessionId) { notify.warning(t('genUrl'), t('notConnected')); return; }
+    try {
+      const base = await backend.session('url', c.sessionId, { includePassword: false });
+      const urls = selPaths(c).map((p) => `${String(base).replace(/\/+$/, '')}${p.startsWith('/') ? '' : '/'}${p}`);
+      showText({ title: t('genUrlTitle'), text: urls.join('\n'), fileName: 'file-urls.txt' });
+    } catch (err) { fail(err, t('genUrl')); }
+  },
+});
+
+def('LockAction', {
+  enabled: haveSel,
+  // WinSCP's file locking is a WebDAV/SharePoint feature exposed through the
+  // adapter. No adapter in this port implements it yet, so it is declared.
+  unavailable: 'File locking is a WebDAV capability that none of this port\'s adapters implements yet, so nothing would be locked on the server.',
+});
+def('UnlockAction', {
+  enabled: haveSel,
+  unavailable: 'File unlocking is a WebDAV capability that none of this port\'s adapters implements yet, so nothing would be unlocked on the server.',
+});
+
+defEach(['CalculateDirectorySizesAction', 'LocalCalculateDirectorySizesAction', 'RemoteCalculateDirectorySizesAction'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : name.startsWith('Remote') ? 'remote' : 'current',
+  enabled: (c) => haveSel(c) && c.selection.some((e) => e.type === 'dir'),
+  run: calculateSizes,
+}));
+
+/* ---------------- commands menu ---------------- */
+
+def('CompareDirectoriesAction2', {
+  enabled: bothPanels,
+  run: (c) => {
+    const byTime = readPref('scpCommander.compareByTime', true) !== false;
+    const bySize = readPref('scpCommander.compareBySize', false) === true;
+    const mine = c.panel.entries();
+    const theirs = new Map(c.other.entries().map((e) => [e.name.toLowerCase(), e]));
+    const differing = [];
+    for (const e of mine) {
+      if (e.name === '..' || e.type === 'dir') continue;
+      const o = theirs.get(e.name.toLowerCase());
+      if (!o) { differing.push(e); continue; }
+      const sizeDiff = bySize && (o.size || 0) !== (e.size || 0);
+      // A two-second tolerance: FAT stores even seconds, so an exact compare
+      // marks every file as different after a round trip.
+      const timeDiff = byTime && Math.abs((o.mtime || 0) - (e.mtime || 0)) > 2000 && (e.mtime || 0) > (o.mtime || 0);
+      if (sizeDiff || timeDiff || (!bySize && !byTime && false)) differing.push(e);
+    }
+    c.panel.setSelection(differing);
+    notify.info(t('compareResult'), `${differing.length} ${differing.length === 1 ? 'file' : 'files'}`);
+  },
+});
+
+def('SynchronizeAction', {
+  enabled: (c) => bothPanels(c) && !!c.sessionId,
+  run: (c) => keepUpToDate(c),
+});
+
+async function keepUpToDate(ctx) {
+  const localPath = ctx.isLocal ? ctx.panel.path() : ctx.other?.path();
+  const remotePath = ctx.isLocal ? ctx.other?.path() : ctx.panel.path();
+  const deleteBox = h('input', { type: 'checkbox', class: 'check' });
+  const ok = await confirm({
+    title: t('kutdTitle'),
+    body: t('kutdBody'),
+    detail: `${localPath}  →  ${remotePath}`,
+    confirmLabel: t('kutdStart'),
+    extra: h('label', { class: 'field inline' }, deleteBox, h('span', { class: 'field-label' }, t('syncDeleteFiles'))),
+  });
+  if (!ok) return;
+  try {
+    const started = await backend.sync('keepUpToDate', {
+      sessionId: ctx.sessionId, localPath, remotePath,
+      performDeletions: deleteBox.checked,
+    });
+    notify.success(t('kutdActive'), `${oneLine(localPath, 40)} → ${oneLine(remotePath, 40)}`, {
+      actions: [{ label: t('kutdStop'), onSelect: () => backend.sync('stop', started && started.id).catch(() => {}) }],
+    });
+  } catch (err) { fail(err, t('kutdTitle')); }
+}
+
+def('FullSynchronizeAction2', {
+  enabled: (c) => bothPanels(c) && !!c.sessionId,
+  run: (c) => fullSynchronize(c),
+});
+
+async function fullSynchronize(ctx) {
+  const override = dialogOverrides.get('FullSynchronizeAction2');
+  if (override) return override(ctx);
+  const localPath = ctx.isLocal ? ctx.panel.path() : ctx.other?.path();
+  const remotePath = ctx.isLocal ? ctx.other?.path() : ctx.panel.path();
+  const dirSel = h('select', { class: 'field-input' },
+    h('option', { value: 'remote' }, t('syncRemoteArrow')),
+    h('option', { value: 'local' }, t('syncLocalArrow')),
+    h('option', { value: 'both' }, t('syncBoth')));
+  const modeSel = h('select', { class: 'field-input' },
+    h('option', { value: 'sync' }, t('syncFiles')),
+    h('option', { value: 'mirror' }, t('syncMirror')),
+    h('option', { value: 'timestamps' }, t('syncTimestamps')));
+  const critSel = h('select', { class: 'field-input' },
+    h('option', { value: 'time' }, t('syncByTime')),
+    h('option', { value: 'size' }, t('syncBySize')),
+    h('option', { value: 'either' }, t('syncCriteria')));
+  const delBox = h('input', { type: 'checkbox', class: 'check' });
+  const existingBox = h('input', { type: 'checkbox', class: 'check' });
+
+  let go = false;
+  await new Promise((resolve) => {
+    openModal({
+      title: t('syncTitle'),
+      width: 620,
+      content: h('div', { class: 'stack' },
+        h('p', { class: 'prose mono' }, `${localPath}\n${remotePath}`),
+        h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('syncDirection')), dirSel),
+        h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('syncMode')), modeSel),
+        h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('syncCriteria')), critSel),
+        h('label', { class: 'field inline' }, delBox, h('span', { class: 'field-label' }, t('syncDeleteFiles'))),
+        h('label', { class: 'field inline' }, existingBox, h('span', { class: 'field-label' }, t('syncExisting')))),
+      actions: [
+        { label: t('cancel'), kind: 'text' },
+        { label: t('syncPreview'), kind: 'filled', autofocus: true, onSelect: () => { go = true; } },
+      ],
+      onClose: () => resolve(),
+    });
+  });
+  if (!go) return null;
+
+  let compared;
+  try {
+    compared = await backend.sync('compare', {
+      sessionId: ctx.sessionId, localPath, remotePath,
+      direction: dirSel.value, mode: modeSel.value, criteria: critSel.value,
+      performDeletions: delBox.checked, existingOnly: existingBox.checked,
+    });
+  } catch (err) { return fail(err, t('syncTitle')); }
+
+  const items = (compared && compared.items) || [];
+  if (!items.length) { notify.info(t('syncChecklistTitle'), t('syncNoDiff')); return null; }
+
+  const checked = items.map(() => true);
+  const list = h('div', { class: 'stack', style: { maxHeight: '300px', overflow: 'auto' } });
+  items.forEach((it, i) => {
+    const box = h('input', { type: 'checkbox', class: 'check' });
+    box.checked = true;
+    box.addEventListener('change', () => { checked[i] = box.checked; });
+    list.appendChild(h('label', { class: 'field inline' }, box,
+      h('span', { class: 'ellipsis mono', title: `${it.action}: ${it.path || it.name}` },
+        `${it.action}  ${it.path || it.name}`)));
+  });
+
+  let apply = false;
+  await new Promise((resolve) => {
+    openModal({
+      title: t('syncChecklistTitle'),
+      width: 720,
+      content: h('div', { class: 'stack' },
+        h('p', { class: 'prose' }, `${items.length} ${t('syncAction')}`), list),
+      actions: [
+        { label: t('cancel'), kind: 'text' },
+        { label: t('apply'), kind: 'filled', autofocus: true, onSelect: () => { apply = true; } },
+      ],
+      onClose: () => resolve(),
+    });
+  });
+  if (!apply) return null;
+  try {
+    await backend.sync('apply', {
+      token: compared.token, checked, onlyChecked: true,
+      performDeletions: delBox.checked,
+    });
+    notify.success(t('syncApplied'), `${checked.filter(Boolean).length} ${t('syncAction')}`);
+    afterWrite(ctx, true);
+  } catch (err) { fail(err, t('syncTitle')); }
+  return null;
+}
+
+def('SynchronizeBrowsingAction2', {
+  kind: 'toggle',
+  enabled: bothPanels,
+  checked: () => !!(services.workspace && services.workspace.synchronizedBrowsing()),
+  run: () => {
+    const ws = services.workspace;
+    if (!ws) return false;
+    const next = !ws.synchronizedBrowsing();
+    ws.setSynchronizedBrowsing(next);
+    announce(`${t('synchronizeBrowsing')}: ${next ? t('on') : t('off')}`);
+    return next;
+  },
+});
+
+def('ConsoleAction', {
+  enabled: (c) => !!c.sessionId && !!(c.caps && c.caps.exec),
+  run: (c) => openConsole(c),
+});
+
+/** A real remote console: every line is executed through session:exec. */
+async function openConsole(ctx) {
+  const out = h('pre', {
+    class: 'mono', tabindex: '0', 'aria-label': t('consoleTitle'),
+    style: { maxHeight: '320px', overflow: 'auto', margin: 0, whiteSpace: 'pre-wrap' },
+  });
+  const input = h('input', { type: 'text', class: 'field-input mono', spellcheck: 'false', autocomplete: 'off' });
+  const dirBox = h('input', { type: 'checkbox', class: 'check' });
+  dirBox.checked = true;
+  const append = (text) => { out.appendChild(document.createTextNode(`${text}\n`)); out.scrollTop = out.scrollHeight; };
+  input.addEventListener('keydown', async (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const line = input.value;
+    if (!line.trim()) return;
+    input.value = '';
+    append(`$ ${line}`);
+    try {
+      const res = await backend.session('exec', ctx.sessionId, line, {
+        cwd: dirBox.checked ? ctx.panel?.path() : undefined,
+      });
+      if (res && res.output) append(res.output);
+      if (res && res.exitCode) append(`(exit ${res.exitCode})`);
+      ctx.panel?.refresh(true);
+    } catch (err) { append(`! ${err.message}`); }
+  });
+  openModal({
+    title: t('consoleTitle'),
+    width: 720,
+    content: h('div', { class: 'stack' },
+      out,
+      h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('consolePh')), input),
+      h('label', { class: 'field inline' }, dirBox, h('span', { class: 'field-label' }, t('preserveDirChanges')))),
+    actions: [{ label: t('close'), kind: 'filled' }],
+  });
+  requestAnimationFrame(() => input.focus());
+}
+
+def('PuttyAction', {
+  enabled: (c) => !!c.sessionInfo,
+  run: async (c) => {
+    const puttyPath = readPref('integration.puttyPath', '%PROGRAMFILES%\\PuTTY\\putty.exe');
+    const info = c.sessionInfo;
+    if (!info) { notify.warning(t('openPutty'), t('notConnected')); return; }
+    // The local-command runner is the same one custom commands use, so PuTTY is
+    // launched with exactly the quoting rules the rest of the app applies.
+    const line = `"${puttyPath}" -${info.protocol === 'ftp' ? 'telnet' : 'ssh'} ${info.userName ? `${info.userName}@` : ''}${info.hostName}${info.portNumber ? ` -P ${info.portNumber}` : ''}`;
+    try {
+      await backend.app('runCustomCommand', { command: line, local: true, sessionId: c.sessionId, showResults: false });
+      notify.success(t('openPutty'), oneLine(info.hostName, 50));
+    } catch (err) { fail(err, t('openPutty')); }
+  },
+});
+
+def('ClearCachesAction', {
+  enabled: (c) => !!c.sessionId,
+  run: async (c) => {
+    try { await backend.session('clearCache', c.sessionId); notify.success(t('cacheCleared'), ''); c.panel?.refresh(true); }
+    catch (err) { fail(err, t('clearCaches')); }
+  },
+});
+
+def('FileSystemInfoAction', {
+  enabled: (c) => !!c.sessionId,
+  run: async (c) => {
+    try {
+      const info = await backend.session('fsInfo', c.sessionId, c.panel?.path());
+      const lines = Object.entries(flatten(info)).map(([k, v]) => `${k.padEnd(28)} ${v}`);
+      showText({ title: t('srvInfoTitle'), text: lines.join('\n'), fileName: 'server-info.txt', rows: 16 });
+    } catch (err) { fail(err, t('serverInfo')); }
+  },
+});
+
+function flatten(obj, prefix = '', out = {}) {
+  for (const [k, v] of Object.entries(obj || {})) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v && typeof v === 'object' && !Array.isArray(v)) flatten(v, key, out);
+    else out[key] = Array.isArray(v) ? v.join(', ') : String(v);
+  }
+  return out;
+}
+
+def('CloseApplicationAction2', {
+  run: async () => {
+    if (readPref('confirmExit', true) !== false) {
+      const ok = await confirm({ title: t('quitTitle'), body: t('quitBody'), confirmLabel: t('quit'), danger: true });
+      if (!ok) return;
+    }
+    try { await backend.app('quit'); } catch { api.windowClose(); }
+  },
+});
+
+/* ---- custom commands ---- */
+
+function customCommandList(kind) {
+  const all = readPref('customCommands', []) || [];
+  return all.filter((c) => {
+    const isFile = /![&!]?[\s\S]*/.test(c.command || '') && /!/.test(c.command || '');
+    return kind === 'file' ? isFile : !isFile;
+  });
+}
+
+async function runCustomCommand(ctx, cmd) {
+  try {
+    const meta = await backend.app('customCommandPrompts', cmd.command, { local: !!cmd.local });
+    const answers = {};
+    for (const p of meta.prompts || []) {
+      const value = await promptText({ title: cmd.name || t('customCmdTitle'), label: p.prompt || p.text || t('value') });
+      if (value === null) return null;
+      answers[p.id ?? p.index ?? p.prompt] = value;
+    }
+    const files = selPaths(ctx);
+    const res = await backend.app('runCustomCommand', {
+      command: cmd.command, local: !!cmd.local, sessionId: ctx.sessionId,
+      files, cwd: ctx.isLocal ? ctx.panel?.path() : undefined,
+      localPath: ctx.isLocal ? ctx.panel?.path() : ctx.other?.path(),
+      remotePath: ctx.isLocal ? ctx.other?.path() : ctx.panel?.path(),
+      answers, showResults: !!cmd.showResults, copyResults: !!cmd.copyResults,
+    });
+    if (res && res.showResults) showText({ title: cmd.name || t('customCmdTitle'), text: res.output || '', rows: 14 });
+    else notify.success(cmd.name || t('customCmdTitle'), oneLine(res && res.command, 70));
+    ctx.panel?.refresh(true);
+    return res;
+  } catch (err) { return fail(err, t('customCmdTitle')); }
+}
+
+/** Menu items for the custom-command submenus; menus.js renders these. */
+export function customCommandItems(ctx, kind) {
+  const list = customCommandList(kind);
+  if (!list.length) return [{ label: t('cmdCustomHint'), disabled: true }];
+  return list.map((cmd) => ({
+    label: cmd.name || cmd.command,
+    icon: 'terminal',
+    description: cmd.command,
+    onSelect: () => runCustomCommand(ctx, cmd),
+  }));
+}
+
+def('CustomCommandsFileAction', {
+  enabled: haveSel,
+  submenu: (c) => customCommandItems(c, 'file'),
+  run: async (c) => {
+    const list = customCommandList('file');
+    const pick = await chooseFrom({
+      title: t('fileCustomCmds'),
+      items: list.map((x) => ({ value: x.name || x.command, label: x.name || x.command, detail: x.command })),
+      empty: t('cmdCustomHint'),
+    });
+    const cmd = list.find((x) => (x.name || x.command) === pick);
+    if (cmd) await runCustomCommand(c, cmd);
+  },
+});
+
+def('CustomCommandsNonFileAction', {
+  submenu: (c) => customCommandItems(c, 'static'),
+  run: async (c) => {
+    const list = customCommandList('static');
+    const pick = await chooseFrom({
+      title: t('staticCustomCmds'),
+      items: list.map((x) => ({ value: x.name || x.command, label: x.name || x.command, detail: x.command })),
+      empty: t('cmdCustomHint'),
+    });
+    const cmd = list.find((x) => (x.name || x.command) === pick);
+    if (cmd) await runCustomCommand(c, cmd);
+  },
+});
+
+async function enterCustomCommand(ctx) {
+  const localBox = h('input', { type: 'checkbox', class: 'check' });
+  const showBox = h('input', { type: 'checkbox', class: 'check' });
+  showBox.checked = true;
+  const line = await promptText({
+    title: t('customCmdTitle'),
+    label: t('cmdPattern'),
+    body: t('cmdCustomHint'),
+    extra: h('div', { class: 'stack' },
+      h('label', { class: 'field inline' }, localBox, h('span', { class: 'field-label' }, t('pLocal'))),
+      h('label', { class: 'field inline' }, showBox, h('span', { class: 'field-label' }, t('preview')))),
+  });
+  if (line === null || !line.trim()) return;
+  await runCustomCommand(ctx, { command: line.trim(), local: localBox.checked, showResults: showBox.checked });
+}
+
+def('CustomCommandsEnterAction', { enabled: (c) => !!c.panel, run: enterCustomCommand });
+def('CustomCommandsEnterFocusedAction', { enabled: (c) => !!c.panel, run: enterCustomCommand });
+
+let lastCustomCommand = null;
+defEach(['CustomCommandsLastAction', 'CustomCommandsLastFocusedAction'], () => ({
+  enabled: () => !!lastCustomCommand,
+  run: (c) => (lastCustomCommand ? runCustomCommand(c, lastCustomCommand) : notify.info(t('customCmdTitle'), 'No custom command has been run yet in this session.')),
+}));
+
+def('CustomCommandsCustomizeAction', {
+  run: () => openPreferencesPage('pCustomCommands'),
+});
+
+def('EditorListCustomizeAction', {
+  run: () => openPreferencesPage('pEditor'),
+});
+
+def('PresetsPreferencesAction', { run: () => openPreferencesPage('pPresets') });
+def('QueuePreferencesAction', { run: () => openPreferencesPage('pBackground') });
+def('UpdatesPreferencesAction', { run: () => openPreferencesPage('pUpdates') });
+def('FileColorsPreferencesAction', { run: () => openPreferencesPage('pFileColors') });
+def('PreferencesAction', { run: () => openPreferencesPage('pEnvironment') });
+
+function openPreferencesPage(page) {
+  if (services.openDialog) {
+    const handle = services.openDialog('preferences', { page });
+    if (handle) return handle;
+  }
+  bus.emit('preferences:open', { page });
+  notify.info(t('preferences'), `The preferences surface is not loaded in this build. Theme, language and appearance are on the title bar; ${page} settings live in the preferences module.`);
+  return null;
+}
+
+/* ---------------- session ---------------- */
+
+def('SiteManagerAction', { run: () => openSiteList(t('siteManager')) });
+def('SavedSessionsAction2', {
+  submenu: () => sitesSubmenu(),
+  run: () => openSiteList(t('sites')),
+});
+
+async function loadSites() {
+  try { return await backend.config('sites') || []; }
+  catch { return []; }
+}
+
+function sitesSubmenu() {
+  // Menus are built synchronously, so the list is served from the document the
+  // shell already published and refreshed in the background.
+  const sites = (prefCache && prefCache.__sites) || [];
+  if (!sites.length) return [{ label: t('emptySites'), disabled: true }];
+  return sites.slice(0, 60).map((s) => ({
+    label: s.name || s.hostName, icon: 'dns',
+    onSelect: () => openSite(s.id),
+  }));
+}
+
+bus.on('config:document', (doc) => {
+  if (doc && Array.isArray(doc.sites)) prefCache.__sites = doc.sites;
+});
+
+async function openSiteList(title) {
+  const sites = await loadSites();
+  const pick = await chooseFrom({
+    title,
+    items: sites.map((s) => ({
+      value: s.id, label: s.name || s.hostName, icon: 'dns',
+      detail: `${(s.protocol || '').toUpperCase()} ${s.hostName || ''}`,
+    })),
+    empty: t('emptySites'),
+  });
+  if (pick) await openSite(pick);
+}
+
+async function openSite(siteId) {
+  try {
+    const info = await backend.session('open', { siteId, connect: true });
+    bus.emit('session:opened', info);
+    notify.success(t('connEstablished', info.hostName || info.name || ''), '');
+    services.workspace?.attachSession(info);
+  } catch (err) { fail(err, t('loginTitle')); }
+}
+
+def('DisconnectSessionAction', {
+  enabled: (c) => !!c.sessionId,
+  run: async (c) => {
+    if (readPref('confirmClosingSession', true) !== false) {
+      const ok = await confirm({ title: t('disconnect'), body: t('disconnectedMsg', c.sessionInfo?.hostName || ''), confirmLabel: t('disconnect'), danger: true });
+      if (!ok) return;
+    }
+    try { await backend.session('disconnect', c.sessionId); notify.info(t('disconnect'), c.sessionInfo?.hostName || ''); }
+    catch (err) { fail(err, t('disconnect')); }
+  },
+});
+
+def('ReconnectSessionAction', {
+  enabled: (c) => !!c.sessionId,
+  run: async (c) => {
+    try { const info = await backend.session('reconnect', c.sessionId); notify.success(t('connEstablished', info?.hostName || ''), ''); c.panel?.refresh(true); }
+    catch (err) { fail(err, t('reconnect')); }
+  },
+});
+
+def('SaveCurrentSessionAction2', {
+  enabled: (c) => !!c.sessionInfo,
+  run: async (c) => {
+    const name = await promptText({ title: t('saveSessionSite'), label: t('siteName'), value: c.sessionInfo?.name || c.sessionInfo?.hostName || '' });
+    if (!name || !name.trim()) return;
+    try {
+      await backend.config('addSite', { ...siteFromInfo(c.sessionInfo), name: name.trim() });
+      notify.success(t('siteSaved'), name.trim());
+    } catch (err) { fail(err, t('saveSessionSite')); }
+  },
+});
+
+function siteFromInfo(info) {
+  if (!info) return {};
+  return {
+    protocol: info.protocol, hostName: info.hostName,
+    portNumber: info.portNumber, userName: info.userName,
+    remoteDirectory: info.remotePath, localDirectory: info.localPath,
+    color: info.color || '',
+  };
+}
+
+def('SessionGenerateUrlAction2', {
+  enabled: (c) => !!c.sessionId,
+  run: async (c) => {
+    const includeBox = h('input', { type: 'checkbox', class: 'check' });
+    const area = h('textarea', { class: 'field-input mono', rows: '6', readonly: true, style: { width: '100%' } });
+    const kindSel = h('select', { class: 'field-input' },
+      h('option', { value: 'url' }, t('urlTab')),
+      h('option', { value: 'script' }, t('scriptTab')),
+      h('option', { value: 'net' }, t('netTab')));
+    const refresh = async () => {
+      try {
+        area.value = kindSel.value === 'url'
+          ? await backend.session('url', c.sessionId, { includePassword: includeBox.checked })
+          : await backend.session('code', c.sessionId, kindSel.value, { includePassword: includeBox.checked });
+      } catch (err) { area.value = err.message; }
+    };
+    kindSel.addEventListener('change', refresh);
+    includeBox.addEventListener('change', refresh);
+    await refresh();
+    openModal({
+      title: t('genUrlTitle'),
+      width: 660,
+      content: h('div', { class: 'stack' },
+        h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('name')), kindSel),
+        h('label', { class: 'field inline' }, includeBox, h('span', { class: 'field-label' }, t('includePass'))),
+        area),
+      actions: [
+        { label: t('copyClip'), kind: 'text', onSelect: () => { copyText(area.value).then(() => notify.success(t('urlCopied'), '')); return true; } },
+        { label: t('close'), kind: 'filled', autofocus: true },
+      ],
+    });
+  },
+});
+
+def('ChangePasswordAction', {
+  enabled: (c) => !!c.sessionId && c.sessionInfo?.protocol === 'ftp',
+  run: async (c) => {
+    const oldField = h('input', { type: 'password', class: 'field-input', autocomplete: 'current-password' });
+    const newField = h('input', { type: 'password', class: 'field-input', autocomplete: 'new-password' });
+    const confirmField = h('input', { type: 'password', class: 'field-input', autocomplete: 'new-password' });
+    let go = false;
+    await new Promise((resolve) => {
+      openModal({
+        title: t('changePwTitle'),
+        width: 480,
+        content: h('div', { class: 'stack' },
+          h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('currentPw')), oldField),
+          h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('newPw')), newField),
+          h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('confirmPw')), confirmField)),
+        actions: [
+          { label: t('cancel'), kind: 'text' },
+          { label: t('ok'), kind: 'filled', autofocus: true, onSelect: () => { go = true; } },
+        ],
+        onClose: () => resolve(),
+      });
+    });
+    if (!go) return;
+    if (newField.value !== confirmField.value) { notify.error(t('changePwTitle'), t('pwMismatch')); return; }
+    try {
+      await backend.session('changePassword', c.sessionId, oldField.value, newField.value);
+      notify.success(t('pwChanged'), '');
+    } catch (err) { fail(err, t('changePwTitle')); }
+    finally { oldField.value = ''; newField.value = ''; confirmField.value = ''; }
+  },
+});
+
+def('PrivateKeyUploadAction', {
+  enabled: (c) => !!c.sessionId && (c.sessionInfo?.protocol === 'sftp' || c.sessionInfo?.protocol === 'scp'),
+  run: async (c) => {
+    let picked;
+    try { picked = await backend.app('pickPath', { title: t('installKeyTitle') }); }
+    catch (err) { return fail(err, t('installKeyTitle')); }
+    const file = Array.isArray(picked) ? picked[0] : picked;
+    if (!file) return null;
+    let keyText = '';
+    try {
+      const opened = await backend.editor('open', { localPath: file, mode: 'internal' });
+      const read = await backend.editor('read', opened.id);
+      keyText = String((read && read.text) || '').trim();
+      await backend.editor('close', opened.id, { discard: true });
+    } catch (err) { return fail(err, t('installKeyTitle')); }
+    if (!/^(ssh-|ecdsa-|sk-)/.test(keyText)) {
+      notify.error(t('installKeyTitle'), 'That file does not look like an OpenSSH public key (it must start with ssh-rsa, ssh-ed25519 or similar).');
+      return null;
+    }
+    const ok = await confirm({
+      title: t('installKeyTitle'), body: t('installKeyBody'),
+      detail: `${oneLine(keyText, 60)} → ~/.ssh/authorized_keys`, confirmLabel: t('ok'),
+    });
+    if (!ok) return null;
+    try {
+      const home = c.sessionInfo?.home || '.';
+      const target = `${String(home).replace(/\/+$/, '')}/.ssh/authorized_keys`;
+      let existing = '';
+      try {
+        const cur = await backend.fs('readFile', c.sessionId, target, {});
+        existing = decodeBase64(cur && (cur.base64 || cur));
+      } catch { /* the file may not exist yet, which is fine */ }
+      if (existing.includes(keyText)) { notify.info(t('installKeyTitle'), 'That key is already installed.'); return null; }
+      const next = `${existing.replace(/\s*$/, '')}\n${keyText}\n`.replace(/^\n/, '');
+      try { await backend.fs('mkdir', c.sessionId, `${String(home).replace(/\/+$/, '')}/.ssh`); } catch { /* exists */ }
+      await backend.fs('writeFile', c.sessionId, target, encodeBase64(next));
+      if (c.caps && c.caps.rights) {
+        await backend.fs('setRights', c.sessionId, [target], 'rw-------', {}).catch(() => {});
+      }
+      notify.success(t('keyInstalled'), target);
+    } catch (err) { fail(err, t('installKeyTitle')); }
+    return null;
+  },
+});
+
+function decodeBase64(b64) {
+  if (!b64) return '';
+  try { return decodeURIComponent(escape(atob(String(b64)))); } catch { return atob(String(b64)); }
+}
+function encodeBase64(text) {
+  try { return btoa(unescape(encodeURIComponent(text))); } catch { return btoa(text); }
+}
+
+/* ---------------- tabs ---------------- */
+
+function strip(ctx) { return ctx.strip || services.strip || appSession.get('strip'); }
+
+def('NewTabAction', {
+  submenu: () => [
+    { labelKey: 'remoteTab', icon: 'dns', onSelect: () => runAction('NewRemoteTabAction') },
+    { labelKey: 'localTab', icon: 'computer', onSelect: () => runAction('NewLocalTabAction') },
+    { separator: true },
+    {
+      labelKey: 'default_', icon: 'star',
+      checked: readPref('window.defaultToNewRemoteTab', true) !== false,
+      onSelect: () => runAction('DefaultToNewRemoteTabAction'),
+    },
+  ],
+  run: (c) => (readPref('window.defaultToNewRemoteTab', true) !== false
+    ? runAction('NewRemoteTabAction', c)
+    : runAction('NewLocalTabAction', c)),
+});
+
+def('NewRemoteTabAction', {
+  enabled: (c) => !!strip(c),
+  run: (c) => {
+    const s = strip(c);
+    if (!s) return null;
+    return s.openTab({ title: t('remoteTab'), icon: 'dns', key: `remote-${Date.now().toString(36)}`, data: { kind: 'remote' } });
+  },
+});
+def('NewLocalTabAction', {
+  enabled: (c) => !!strip(c),
+  run: (c) => {
+    const s = strip(c);
+    if (!s) return null;
+    return s.openTab({ title: t('localTab'), icon: 'computer', key: `local-${Date.now().toString(36)}`, data: { kind: 'local' } });
+  },
+});
+def('DefaultToNewRemoteTabAction', {
+  kind: 'toggle',
+  checked: () => readPref('window.defaultToNewRemoteTab', true) !== false,
+  run: () => togglePref('window.defaultToNewRemoteTab', 'Changed the default new-tab kind'),
+});
+def('CloseTabAction', {
+  enabled: (c) => !!strip(c) && !!strip(c).activeId,
+  run: (c) => { const s = strip(c); return s ? s.closeTab(s.activeId) : null; },
+});
+def('DuplicateTabAction', {
+  enabled: (c) => !!strip(c) && !!strip(c).activeId,
+  run: (c) => {
+    const s = strip(c);
+    const tab = s && s.getTab(s.activeId);
+    if (!tab) return null;
+    return s.openTab({ ...tab, id: undefined, key: undefined, panel: undefined, title: `${tab.title} (2)` });
+  },
+});
+def('RenameTabAction', {
+  enabled: (c) => !!strip(c) && !!strip(c).activeId,
+  run: async (c) => {
+    const s = strip(c);
+    const tab = s && s.getTab(s.activeId);
+    if (!tab) return;
+    const name = await promptText({ title: t('renameTab'), label: t('name'), value: tab.title });
+    if (name && name.trim()) s.renameTab(tab.id, name.trim());
+  },
+});
+def('OpenedTabsAction', {
+  submenu: (c) => {
+    const s = strip(c);
+    if (!s) return [{ label: t('noTabsMatched'), disabled: true }];
+    return s.tabs.map((tab) => ({
+      label: tab.title, icon: tab.icon || 'dns',
+      checked: tab.id === s.activeId, radio: true,
+      onSelect: () => s.activateTab(tab.id),
+    }));
+  },
+  run: (c) => { const s = strip(c); return s ? s.openMasterSearch() : null; },
+});
+def('WorkspacesAction', {
+  submenu: () => {
+    const list = (prefCache && prefCache.__workspaces) || [];
+    if (!list.length) return [{ label: t('workspaces'), disabled: true }];
+    return list.map((w) => ({ label: w.name, icon: 'layers', onSelect: () => restoreWorkspace(w.name) }));
+  },
+  run: async () => {
+    let list = [];
+    try { list = await backend.config('workspaces') || []; } catch { /* none */ }
+    const pick = await chooseFrom({
+      title: t('workspaces'),
+      items: list.map((w) => ({ value: w.name, label: w.name, icon: 'layers' })),
+      empty: t('workspaces'),
+    });
+    if (pick) restoreWorkspace(pick);
+  },
+});
+
+async function restoreWorkspace(name) {
+  try {
+    const list = await backend.config('workspaces') || [];
+    const ws = list.find((w) => w.name === name);
+    if (!ws) { notify.warning(t('workspaces'), `No workspace named ${name}.`); return; }
+    for (const s of ws.sessions || []) {
+      if (s.siteId) await openSite(s.siteId);
+    }
+    notify.success(t('workspaceSaved'), name);
+  } catch (err) { fail(err, t('workspaces')); }
+}
+
+def('SaveWorkspaceAction', {
+  run: async (c) => {
+    const name = await promptText({ title: t('saveWorkspace'), label: t('name'), value: '' });
+    if (!name || !name.trim()) return;
+    const s = strip(c);
+    const sessions = (s ? s.tabs : []).map((tab) => ({
+      title: tab.title, siteId: tab.data && tab.data.siteId,
+      localPath: tab.data && tab.data.localPath, remotePath: tab.data && tab.data.remotePath,
+    }));
+    try {
+      await backend.config('saveWorkspace', name.trim(), sessions);
+      notify.success(t('workspaceSaved'), name.trim());
+    } catch (err) { fail(err, t('saveWorkspace')); }
+  },
+});
+
+def('ColorMenuAction2', {
+  enabled: (c) => !!strip(c) && !!strip(c).activeId,
+  run: (c) => {
+    const s = strip(c);
+    const tab = s && s.getTab(s.activeId);
+    if (!tab) return null;
+    bus.emit('appearance:open', {
+      key: `tab-${tab.key}`,
+      element: s.element.querySelector(`[data-tab-id="${tab.id}"]`) || s.element,
+      label: `${t('tabColor')}: ${tab.title}`,
+    });
+    return true;
+  },
+});
+
+/* ---------------- queue ---------------- */
+
+function queueSelection(ctx) {
+  return (ctx.queueItem || (services.queuePanel && services.queuePanel.selected())) || null;
+}
+
+const QUEUE_ITEM_ACTIONS = [
+  ['QueueItemExecuteAction', (id) => backend.queue('move', id, -1000)],
+  ['QueueItemPauseAction', (id) => backend.queue('pause', id)],
+  ['QueueItemResumeAction', (id) => backend.queue('resume', id)],
+  ['QueueItemDeleteAction', (id) => backend.queue('cancel', id)],
+  ['QueueItemUpAction', (id) => backend.queue('move', id, -1)],
+  ['QueueItemDownAction', (id) => backend.queue('move', id, 1)],
+];
+for (const [name, fn] of QUEUE_ITEM_ACTIONS) {
+  def(name, {
+    enabled: (c) => !!queueSelection(c),
+    run: async (c) => {
+      const item = queueSelection(c);
+      if (!item) return null;
+      try { return await fn(item.id); }
+      catch (err) { return fail(err, t('queueTitle')); }
+    },
+  });
+}
+
+def('QueueItemQueryAction', {
+  enabled: (c) => !!queueSelection(c) && !!queueSelection(c).query,
+  run: (c) => { bus.emit('queue:showQuery', queueSelection(c)); return true; },
+});
+def('QueueItemErrorAction', {
+  enabled: (c) => !!queueSelection(c) && !!queueSelection(c).error,
+  run: (c) => {
+    const item = queueSelection(c);
+    showText({ title: t('queueTitle'), text: item.error || '', rows: 8 });
+  },
+});
+def('QueueItemPromptAction', {
+  enabled: (c) => !!queueSelection(c) && !!queueSelection(c).prompt,
+  run: (c) => { bus.emit('queue:showPrompt', queueSelection(c)); return true; },
+});
+def('QueueItemSpeedAction', {
+  enabled: (c) => !!queueSelection(c),
+  run: async (c) => {
+    const item = queueSelection(c);
+    const v = await promptText({ title: t('speed'), label: `${t('speedLimit')} (B/s, 0 = ${t('none')})`, value: String(item.cpsLimit || 0) });
+    if (v === null) return;
+    try { await backend.queue('setSpeed', item.id, Number(v) || 0); }
+    catch (err) { fail(err, t('speed')); }
+  },
+});
+def('QueueGoToAction', {
+  run: () => { bus.emit('queue:focus', {}); return services.queuePanel ? services.queuePanel.focus() : notify.info(t('queueTitle'), 'The queue panel is not shown. Turn it on from View → Queue.'); },
+});
+def('QueuePauseAllAction', { run: () => backend.queue('pause').catch((e) => fail(e, t('suspendAll'))) });
+def('QueueResumeAllAction', { run: () => backend.queue('resume').catch((e) => fail(e, t('resumeAll'))) });
+def('QueueDeleteAllAction', {
+  run: async () => {
+    const ok = await confirm({ title: t('cancelAll'), body: t('cancelAll'), confirmLabel: t('cancelAll'), danger: true });
+    if (ok) backend.queue('clear').catch((e) => fail(e, t('cancelAll')));
+  },
+});
+def('QueueDeleteAllDoneAction', {
+  run: async () => {
+    try {
+      const list = await backend.queue('list');
+      const done = list.filter((i) => i.state === 'done');
+      for (const i of done) await backend.queue('cancel', i.id);
+      notify.success(t('deleteCompleted'), `${done.length}`);
+    } catch (err) { fail(err, t('deleteCompleted')); }
+  },
+});
+def('QueueEnableAction', {
+  kind: 'toggle',
+  checked: () => readPref('queue.enabledByDefault', true) !== false,
+  run: async () => {
+    const next = !(readPref('queue.enabledByDefault', true) !== false);
+    await writePref('queue.enabledByDefault', next, 'Changed queue processing');
+    try { await backend.queue('setEnabled', next); } catch (err) { fail(err, t('processQueue')); }
+    return next;
+  },
+});
+
+const QUEUE_VIEW = [
+  ['QueueShowAction', 'show'], ['QueueHideWhenEmptyAction', 'hideWhenEmpty'], ['QueueHideAction', 'hide'],
+];
+for (const [name, value] of QUEUE_VIEW) {
+  def(name, {
+    kind: 'radio',
+    checked: () => readPref('queue.view', 'show') === value,
+    run: () => writePref('queue.view', value, 'Changed the queue visibility'),
+  });
+}
+def('QueueToggleShowAction', {
+  kind: 'toggle',
+  checked: () => readPref('queue.view', 'show') !== 'hide',
+  submenu: () => [
+    { labelKey: 'queueShow', radio: true, checked: readPref('queue.view', 'show') === 'show', onSelect: () => runAction('QueueShowAction') },
+    { labelKey: 'queueHideEmpty', radio: true, checked: readPref('queue.view', 'show') === 'hideWhenEmpty', onSelect: () => runAction('QueueHideWhenEmptyAction') },
+    { labelKey: 'queueHide', radio: true, checked: readPref('queue.view', 'show') === 'hide', onSelect: () => runAction('QueueHideAction') },
+  ],
+  run: () => writePref('queue.view', readPref('queue.view', 'show') === 'hide' ? 'show' : 'hide', 'Changed the queue visibility'),
+});
+def('QueueToolbarAction', {
+  kind: 'toggle',
+  checked: () => readPref('queue.toolbar', true) !== false,
+  run: () => togglePref('queue.toolbar', 'Changed the queue toolbar'),
+});
+def('QueueFileListAction', {
+  kind: 'toggle',
+  checked: () => readPref('queue.fileList', false) === true,
+  run: () => togglePref('queue.fileList', 'Changed the queue file list'),
+});
+def('QueueResetLayoutColumnsAction', {
+  run: () => { bus.emit('queue:resetColumns', {}); notify.success(t('reset'), t('queueTitle')); return true; },
+});
+
+const ONCE_EMPTY = [
+  ['QueueIdleOnceEmptyAction', 'none'], ['QueueDisconnectOnceEmptyAction2', 'disconnect'],
+  ['QueueSuspendOnceEmptyAction2', 'suspend'], ['QueueShutDownOnceEmptyAction2', 'shutdown'],
+];
+for (const [name, value] of ONCE_EMPTY) {
+  def(name, {
+    kind: 'radio',
+    checked: () => (readPref('queue.onceEmpty', 'none') || 'none') === value,
+    run: () => writePref('queue.onceEmpty', value, 'Changed what happens when the queue empties'),
+  });
+}
+def('QueueCycleOnceEmptyAction', {
+  submenu: () => ONCE_EMPTY.map(([n, v]) => ({
+    label: t(v === 'none' ? 'stayIdle' : v === 'disconnect' ? 'disconnect' : v === 'suspend' ? 'queueOnceEmpty' : 'shutDownDone'),
+    radio: true, checked: (readPref('queue.onceEmpty', 'none') || 'none') === v,
+    onSelect: () => runAction(n),
+  })),
+  run: () => {
+    const order = ONCE_EMPTY.map(([, v]) => v);
+    const cur = order.indexOf(readPref('queue.onceEmpty', 'none') || 'none');
+    return writePref('queue.onceEmpty', order[(cur + 1) % order.length], 'Changed what happens when the queue empties');
+  },
+});
+
+/* ---------------- view / bands / toggles ---------------- */
+
+const BANDS = [
+  ['ExplorerAddressBandAction', 'explorer', 'address'],
+  ['ExplorerMenuBandAction', 'explorer', 'menu'],
+  ['ExplorerToolbarBandAction', 'explorer', 'buttons'],
+  ['ExplorerSelectionBandAction', 'explorer', 'selection'],
+  ['ExplorerSessionBandAction2', 'explorer', 'session'],
+  ['ExplorerPreferencesBandAction', 'explorer', 'preferences'],
+  ['ExplorerSortBandAction', 'explorer', 'sort'],
+  ['ExplorerUpdatesBandAction', 'explorer', 'updates'],
+  ['ExplorerTransferBandAction', 'explorer', 'transfer'],
+  ['ExplorerCustomCommandsBandAction', 'explorer', 'customCommands'],
+  ['CommanderMenuBandAction', 'commander', 'menu'],
+  ['CommanderSessionBandAction2', 'commander', 'session'],
+  ['CommanderPreferencesBandAction', 'commander', 'preferences'],
+  ['CommanderSortBandAction', 'commander', 'sort'],
+  ['CommanderUpdatesBandAction', 'commander', 'updates'],
+  ['CommanderTransferBandAction', 'commander', 'transfer'],
+  ['CommanderCommandsBandAction', 'commander', 'commands'],
+  ['CommanderCustomCommandsBandAction', 'commander', 'customCommands'],
+  ['CommanderLocalHistoryBandAction2', 'commander', 'localHistory'],
+  ['CommanderLocalNavigationBandAction2', 'commander', 'localNavigation'],
+  ['CommanderLocalFileBandAction2', 'commander', 'localFile'],
+  ['CommanderLocalSelectionBandAction2', 'commander', 'localSelection'],
+  ['CommanderRemoteHistoryBandAction2', 'commander', 'remoteHistory'],
+  ['CommanderRemoteNavigationBandAction2', 'commander', 'remoteNavigation'],
+  ['CommanderRemoteFileBandAction2', 'commander', 'remoteFile'],
+  ['CommanderRemoteSelectionBandAction2', 'commander', 'remoteSelection'],
+  ['CustomCommandsBandAction', 'both', 'customCommands'],
+  ['ToolBar2Action', 'both', 'hotkeys'],
+];
+for (const [name, iface, band] of BANDS) {
+  def(name, {
+    kind: 'toggle',
+    visible: () => iface === 'both' || !services.workspace || services.workspace.interfaceMode() === iface,
+    checked: () => !!(services.toolbars && services.toolbars.isBandVisible(band)),
+    enabled: () => !!services.toolbars,
+    run: () => services.toolbars.toggleBand(band),
+  });
+}
+
+def('LockToolbarsAction', {
+  kind: 'toggle',
+  checked: () => readPref('window.lockToolbars', false) === true,
+  run: () => togglePref('window.lockToolbars', 'Changed the toolbar lock'),
+});
+def('SelectiveToolbarTextAction', {
+  kind: 'toggle',
+  checked: () => readPref('window.selectiveToolbarText', true) !== false,
+  run: () => togglePref('window.selectiveToolbarText', 'Changed the toolbar text labels'),
+});
+def('ToolbarIconSizeAction', {
+  submenu: () => ['normal', 'large', 'veryLarge'].map((v, i) => ({
+    label: t(['iconsNormal', 'iconsLarge', 'iconsVeryLarge'][i]),
+    radio: true, checked: readPref('window.toolbarIconSize', 'normal') === v,
+    onSelect: () => writePref('window.toolbarIconSize', v, 'Changed the toolbar icon size'),
+  })),
+  run: () => {
+    const order = ['normal', 'large', 'veryLarge'];
+    const cur = order.indexOf(readPref('window.toolbarIconSize', 'normal'));
+    return writePref('window.toolbarIconSize', order[(cur + 1) % order.length], 'Changed the toolbar icon size');
+  },
+});
+for (const [name, value] of [['ToolbarIconSizeNormalAction', 'normal'], ['ToolbarIconSizeLargeAction', 'large'], ['ToolbarIconSizeVeryLargeAction', 'veryLarge']]) {
+  def(name, {
+    kind: 'radio',
+    checked: () => readPref('window.toolbarIconSize', 'normal') === value,
+    run: () => writePref('window.toolbarIconSize', value, 'Changed the toolbar icon size'),
+  });
+}
+def('CustomizeToolbarAction', {
+  enabled: () => !!services.toolbars,
+  run: () => services.toolbars.openCustomizer(),
+});
+
+def('StatusBarAction', {
+  kind: 'toggle',
+  checked: () => readPref('scpCommander.statusBar', true) !== false,
+  run: () => togglePref('scpCommander.statusBar', 'Changed the status bar'),
+});
+def('LocalStatusBarAction2', {
+  side: 'local', kind: 'toggle',
+  checked: () => readPref('scpCommander.localPanel.statusBar', true) !== false,
+  run: () => togglePref('scpCommander.localPanel.statusBar', 'Changed the local status bar'),
+});
+def('RemoteStatusBarAction2', {
+  side: 'remote', kind: 'toggle',
+  checked: () => readPref('scpCommander.remotePanel.statusBar', true) !== false,
+  run: () => togglePref('scpCommander.remotePanel.statusBar', 'Changed the remote status bar'),
+});
+def('SessionsTabsAction2', {
+  kind: 'toggle',
+  checked: () => readPref('window.sessionTabs', true) !== false,
+  run: () => togglePref('window.sessionTabs', 'Changed the session tab strip'),
+});
+def('CommandLinePanelAction', {
+  kind: 'toggle',
+  enabled: () => !!services.workspace,
+  checked: () => !!(services.workspace && services.workspace.commandLineVisible()),
+  run: () => services.workspace.setCommandLineVisible(!services.workspace.commandLineVisible()),
+});
+def('GoToCommandLineAction', {
+  enabled: () => !!services.workspace,
+  run: () => {
+    const ws = services.workspace;
+    if (!ws.commandLineVisible()) ws.setCommandLineVisible(true);
+    return ws.focusCommandLine();
+  },
+});
+def('GoToTreeAction', {
+  enabled: (c) => !!c.panel,
+  run: (c) => {
+    if (!c.panel.treeVisible()) c.panel.setTreeVisible(true);
+    return c.panel.focusTree();
+  },
+});
+defEach(['LocalTreeAction', 'RemoteTreeAction'], (name) => ({
+  side: name.startsWith('Local') ? 'local' : 'remote',
+  kind: 'toggle',
+  enabled: havePanel,
+  checked: (c) => !!c.panel && c.panel.treeVisible(),
+  run: (c) => c.panel.setTreeVisible(!c.panel.treeVisible()),
+}));
+
+def('ShowHiddenFilesAction', {
+  kind: 'toggle',
+  checked: () => readPref('showHiddenFiles', false) === true,
+  run: async () => {
+    const next = await togglePref('showHiddenFiles', 'Changed hidden-file visibility');
+    services.workspace?.eachPanel((p) => p.setShowHidden(next));
+    return next;
+  },
+});
+def('AutoReadDirectoryAfterOpAction', {
+  kind: 'toggle',
+  checked: () => readPref('autoReadDirectoryAfterOp', true) !== false,
+  run: () => togglePref('autoReadDirectoryAfterOp', 'Changed automatic directory reload'),
+});
+for (const [name, value] of [['FormatSizeBytesNoneAction', 'none'], ['FormatSizeBytesKilobytesAction', 'kilo'], ['FormatSizeBytesShortAction', 'short']]) {
+  def(name, {
+    kind: 'radio',
+    checked: () => readPref('formatSizeBytes', 'short') === value,
+    run: async () => {
+      await writePref('formatSizeBytes', value, 'Changed the size format');
+      services.workspace?.eachPanel((p) => p.repaint());
+    },
+  });
+}
+def('CommanderLocalPanelAction', {
+  submenu: () => [], // menus.js supplies the panel submenu; this is its header
+  enabled: () => !!services.workspace,
+  run: () => services.workspace.setActiveSide('local'),
+});
+def('CommanderRemotePanelAction', {
+  submenu: () => [],
+  enabled: () => !!services.workspace,
+  run: () => services.workspace.setActiveSide('remote'),
+});
+
+/* ---------------- help ---------------- */
+
+const LINKS = {
+  HomepageAction: 'https://winscp.net/',
+  HistoryPageAction: 'https://winscp.net/eng/docs/history',
+  ForumPageAction: 'https://winscp.net/forum/',
+  DonatePageAction: 'https://winscp.net/eng/donate.php',
+  DownloadPageAction: 'https://winscp.net/eng/download.php',
+  TableOfContentsAction: 'https://winscp.net/eng/docs/start',
+};
+for (const [name, url] of Object.entries(LINKS)) {
+  def(name, { run: () => api.openExternal(url) });
+}
+def('AboutAction', {
+  run: () => {
+    if (services.openDialog) { const hnd = services.openDialog('about'); if (hnd) return hnd; }
+    bus.emit('app:about', {});
+    return true;
+  },
+});
+def('CheckForUpdatesAction', {
+  run: async () => {
+    try {
+      const res = await backend.app('checkUpdates', { force: true });
+      if (res && res.newVersion) notify.info(t('updatesLatest'), String(res.version || res.newVersion));
+      else notify.success(t('checkUpdates'), t('updatesLatest'));
+    } catch (err) { fail(err, t('checkUpdates')); }
+  },
+});
+def('TipsAction', {
+  run: () => {
+    const tips = t('tips');
+    showText({ title: t('tipTitle'), text: tips, rows: 10 });
+  },
+});
+
+/* ================================================================== */
+/* build the registry                                                  */
+/* ================================================================== */
+
+const registry = new Map();
+
+const I18N_KEYS = {
+  RemoteCopyAction: 'downloadDots', RemoteCopyNonQueueAction: 'downloadDots',
+  RemoteCopyQueueAction: 'downloadBg', RemoteMoveAction: 'downloadDelete',
+  RemoteCopyFocusedAction: 'downloadDots', RemoteCopyFocusedNonQueueAction: 'downloadDots',
+  RemoteCopyFocusedQueueAction: 'downloadBg', RemoteMoveFocusedAction: 'downloadDelete',
+  LocalCopyAction: 'uploadDots', LocalCopyNonQueueAction: 'uploadDots',
+  LocalCopyQueueAction: 'uploadBg', LocalMoveAction: 'uploadDelete',
+  LocalCopyFocusedAction: 'uploadDots', LocalCopyFocusedNonQueueAction: 'uploadDots',
+  LocalCopyFocusedQueueAction: 'uploadBg', LocalMoveFocusedAction: 'uploadDelete',
+  LocalLocalCopyAction: 'copyDots', LocalLocalMoveAction: 'moveDots',
+  LocalLocalCopyFocusedAction: 'copyDots', LocalLocalMoveFocusedAction: 'moveDots',
+  LocalOtherCopyAction: 'copyDots', LocalOtherMoveAction: 'moveDots',
+  RemoteCopyToAction: 'copyDots', RemoteMoveToAction: 'moveTo',
+  RemoteCopyToFocusedAction: 'copyDots', RemoteMoveToFocusedAction: 'moveTo',
+  LocalRenameAction2: 'rename', RemoteRenameAction2: 'rename', CurrentRenameAction: 'rename',
+  LocalDeleteAction2: 'delete_', RemoteDeleteAction2: 'delete_', CurrentDeleteAction: 'delete_',
+  CurrentDeleteFocusedAction: 'delete_', CurrentDeleteAlternativeAction: 'delete_',
+  LocalEditAction2: 'edit', RemoteEditAction2: 'edit', CurrentEditAction: 'edit',
+  CurrentEditFocusedAction: 'edit', CurrentEditWithAction: 'editWith', CurrentEditWithFocusedAction: 'editWith',
+  LocalPropertiesAction2: 'properties', RemotePropertiesAction2: 'properties',
+  CurrentPropertiesAction: 'properties', CurrentPropertiesFocusedAction: 'properties',
+  LocalCreateDirAction3: 'newDirectory', RemoteCreateDirAction3: 'newDirectory',
+  CurrentCreateDirAction: 'createDirTitle', NewDirAction: 'newDirectory',
+  LocalNewFileAction: 'newFile', RemoteNewFileAction: 'newFile', NewFileAction: 'newFile',
+  NewLinkAction: 'newLink', RemoteAddEditLinkAction3: 'newLink', LocalAddEditLinkAction3: 'newShortcut',
+  CurrentAddEditLinkAction: 'editLink', CurrentAddEditLinkContextAction: 'editLink',
+  LocalBackAction: 'back', RemoteBackAction: 'back', LocalForwardAction: 'forward', RemoteForwardAction: 'forward',
+  LocalParentDirAction: 'parentDir', RemoteParentDirAction: 'parentDir',
+  LocalRootDirAction: 'rootDir', RemoteRootDirAction: 'rootDir',
+  LocalHomeDirAction: 'homeDir', RemoteHomeDirAction: 'homeDir',
+  LocalRefreshAction: 'refresh', RemoteRefreshAction: 'refresh',
+  LocalOpenDirAction: 'openDirBookmark', RemoteOpenDirAction: 'openDirBookmark',
+  LocalAddBookmarkAction2: 'addBookmark', RemoteAddBookmarkAction2: 'addBookmark',
+  LocalChangePathAction2: 'changeDrive', LocalPathToClipboardAction2: 'copyPathClip',
+  RemotePathToClipboardAction2: 'copyPathClip', LocalFilterAction: 'filterMenu', RemoteFilterAction: 'filterMenu',
+  LocalExploreDirectoryAction: 'explore', RemoteExploreDirectoryAction: 'explore',
+  RemoteFindFilesAction2: 'findFiles',
+  SelectAction: 'selectFiles', LocalSelectAction2: 'selectFiles', RemoteSelectAction2: 'selectFiles',
+  UnselectAction: 'unselectFiles', LocalUnselectAction2: 'unselectFiles', RemoteUnselectAction2: 'unselectFiles',
+  SelectAllAction: 'selectAll', LocalSelectAllAction2: 'selectAll', RemoteSelectAllAction2: 'selectAll',
+  InvertSelectionAction: 'invertSel', ClearSelectionAction: 'clearSel', RestoreSelectionAction: 'restoreSel',
+  SelectSameExtAction: 'selectSameExt', UnselectSameExtAction: 'unselectSameExt',
+  LocalSortByNameAction2: 'byName', RemoteSortByNameAction2: 'byName', CurrentSortByNameAction: 'byName',
+  LocalSortByExtAction2: 'byExt', RemoteSortByExtAction2: 'byExt', CurrentSortByExtAction: 'byExt',
+  LocalSortBySizeAction2: 'bySize', RemoteSortBySizeAction2: 'bySize', CurrentSortBySizeAction: 'bySize',
+  LocalSortByTypeAction2: 'byType', RemoteSortByTypeAction2: 'byType', CurrentSortByTypeAction2: 'byType',
+  LocalSortByChangedAction3: 'byChanged', RemoteSortByChangedAction3: 'byChanged', CurrentSortByChangedAction2: 'byChanged',
+  LocalSortByAttrAction2: 'colAttr', RemoteSortByRightsAction2: 'byRights', CurrentSortByRightsAction: 'byRights',
+  RemoteSortByOwnerAction2: 'byOwner', CurrentSortByOwnerAction: 'byOwner',
+  RemoteSortByGroupAction2: 'byGroup', CurrentSortByGroupAction: 'byGroup',
+  LocalSortAscendingAction2: 'ascending', RemoteSortAscendingAction2: 'ascending', CurrentSortAscendingAction: 'ascending',
+  SortColumnAscendingAction: 'sortAsc', SortColumnDescendingAction: 'sortDesc',
+  ShowHideRemoteNameColumnAction2: 'colName', ShowHideLocalNameColumnAction2: 'colName',
+  ShowHideRemoteSizeColumnAction2: 'colSize', ShowHideLocalSizeColumnAction2: 'colSize',
+  ShowHideRemoteTypeColumnAction2: 'colType', ShowHideLocalTypeColumnAction2: 'colType',
+  ShowHideRemoteChangedColumnAction3: 'colChanged', ShowHideLocalChangedColumnAction3: 'colChanged',
+  ShowHideRemoteRightsColumnAction2: 'colRights', ShowHideLocalAttrColumnAction2: 'colAttr',
+  ShowHideRemoteOwnerColumnAction2: 'colOwner', ShowHideRemoteGroupColumnAction2: 'colGroup',
+  ShowHideRemoteLinkTargetColumnAction2: 'colLinkTarget',
+  ShowHideRemoteExtColumnAction2: 'colExt', ShowHideLocalExtColumnAction2: 'colExt',
+  RemoteReportAction: 'details', LocalReportAction: 'details',
+  RemoteThumbnailAction: 'thumbnails', LocalThumbnailAction: 'thumbnails',
+  RemoteCycleStyleAction: 'view_',
+  CompareDirectoriesAction2: 'compareDirs', SynchronizeAction: 'keepUpToDate',
+  FullSynchronizeAction2: 'synchronizeMenu', SynchronizeBrowsingAction2: 'synchronizeBrowsing',
+  ConsoleAction: 'openTerminal', PuttyAction: 'openPutty', ClearCachesAction: 'clearCaches',
+  FileSystemInfoAction: 'serverInfo', CloseApplicationAction2: 'quit',
+  CustomCommandsFileAction: 'fileCustomCmds', CustomCommandsNonFileAction: 'staticCustomCmds',
+  CustomCommandsCustomizeAction: 'customizeCmds',
+  FileListToCommandLineAction: 'insertToCmdLine', FileListToClipboardAction: 'copyListClip',
+  FullFileListToClipboardAction: 'copyListPathsClip', PasteAction3: 'pasteClip',
+  FileListFromClipboardAction: 'transferClip', FileGenerateUrlAction2: 'genUrl',
+  CurrentCopyToClipboardAction2: 'copyClip', CurrentCopyToClipboardFocusedAction2: 'copyClip',
+  LockAction: 'lockTab', UnlockAction: 'unlockTab',
+  CalculateDirectorySizesAction: 'calcSize', LocalCalculateDirectorySizesAction: 'calcSize',
+  RemoteCalculateDirectorySizesAction: 'calcSize',
+  SiteManagerAction: 'siteManager', SavedSessionsAction2: 'sites',
+  DisconnectSessionAction: 'disconnect', ReconnectSessionAction: 'reconnect',
+  SaveCurrentSessionAction2: 'saveSessionSite', SessionGenerateUrlAction2: 'genUrlSite',
+  ChangePasswordAction: 'changePassword', PrivateKeyUploadAction: 'installKey',
+  NewTabAction: 'newTab', NewLocalTabAction: 'localTab', NewRemoteTabAction: 'remoteTab',
+  CloseTabAction: 'closeTab', DuplicateTabAction: 'duplicateTab', RenameTabAction: 'renameTab',
+  OpenedTabsAction: 'openedTabs', WorkspacesAction: 'workspaces', SaveWorkspaceAction: 'saveWorkspace',
+  ColorMenuAction2: 'tabColor',
+  QueueItemPauseAction: 'suspend', QueueItemResumeAction: 'resume',
+  QueuePauseAllAction: 'suspendAll', QueueResumeAllAction: 'resumeAll',
+  QueueDeleteAllAction: 'cancelAll', QueueDeleteAllDoneAction: 'deleteCompleted',
+  QueueEnableAction: 'processQueue', QueueToggleShowAction: 'queueMenu',
+  QueueShowAction: 'queueShow', QueueHideWhenEmptyAction: 'queueHideEmpty', QueueHideAction: 'queueHide',
+  QueueCycleOnceEmptyAction: 'queueOnceEmpty', QueueIdleOnceEmptyAction: 'stayIdle',
+  QueueDisconnectOnceEmptyAction2: 'disconnect', QueueShutDownOnceEmptyAction2: 'shutDownDone',
+  QueueItemSpeedAction: 'speed',
+  LockToolbarsAction: 'lockToolbars', SelectiveToolbarTextAction: 'selectiveLabels',
+  ToolbarIconSizeAction: 'iconsSize', ToolbarIconSizeNormalAction: 'iconsNormal',
+  ToolbarIconSizeLargeAction: 'iconsLarge', ToolbarIconSizeVeryLargeAction: 'iconsVeryLarge',
+  StatusBarAction: 'statusBarMenu', LocalStatusBarAction2: 'statusBarMenu', RemoteStatusBarAction2: 'statusBarMenu',
+  CommandLinePanelAction: 'commandLineMenu', GoToCommandLineAction: 'goToCmdLine',
+  GoToTreeAction: 'goToTree', LocalTreeAction: 'treeToggle', RemoteTreeAction: 'treeToggle',
+  ShowHiddenFilesAction: 'showHiddenFiles', AutoReadDirectoryAfterOpAction: 'autoReload',
+  FormatSizeBytesNoneAction: 'bytes_', FormatSizeBytesKilobytesAction: 'kilobytes', FormatSizeBytesShortAction: 'shortFmt',
+  FileColorsPreferencesAction: 'fileColorsMenu', PreferencesAction: 'preferences',
+  CommanderLocalPanelAction: 'localPanel', CommanderRemotePanelAction: 'remotePanel',
+  AboutAction: 'aboutMenu', HomepageAction: 'homepage', HistoryPageAction: 'versionHistory',
+  ForumPageAction: 'supportForum', CheckForUpdatesAction: 'checkUpdates', DonatePageAction: 'donate',
+  TableOfContentsAction: 'docs', TipsAction: 'showTips',
+  CurrentOpenAction: 'view_', CurrentEditInternalAction: 'editorTitle', CurrentEditInternalFocusedAction: 'editorTitle',
+  SelectOneAction: 'selectFiles',
+};
+
+/**
+ * The glyph for an action. Returning null matters: WinSCP shows no icon beside
+ * most menu items, and a generic chevron there reads as "this opens a submenu"
+ * when it does not. Toolbars substitute a neutral glyph because a button with
+ * no icon has nothing to click.
+ */
+function iconFor(name, action) {
+  if (/CopyQueue|CopyNonQueue|CopyAction|CopyFocused/.test(name)) return name.startsWith('Local') ? 'upload' : 'download';
+  if (/Move/.test(name)) return name.startsWith('Local') ? 'upload' : 'download';
+  if (/Delete/.test(name)) return 'delete';
+  if (/Refresh/.test(name)) return 'refresh';
+  if (/Rename/.test(name)) return 'edit';
+  if (/Edit/.test(name)) return 'edit';
+  if (/Properties/.test(name)) return 'info';
+  if (/CreateDir|NewDir/.test(name)) return 'folder';
+  if (/NewFile/.test(name)) return 'description';
+  if (/Link/.test(name)) return 'open_in_new';
+  if (/Parent/.test(name)) return 'arrow_upward';
+  if (/Back/.test(name)) return 'chevron_left';
+  if (/Forward/.test(name)) return 'chevron_right';
+  if (/Root|Home/.test(name)) return 'folder_open';
+  if (/Bookmark/.test(name)) return 'bookmark';
+  if (/Filter/.test(name)) return 'filter';
+  if (/Find/.test(name)) return 'search';
+  if (/Select|Unselect|Invert/.test(name)) return 'select_all';
+  if (/Sort/.test(name)) return 'unfold_more';
+  if (/Column/.test(name)) return 'view_column';
+  if (/Queue/.test(name)) return 'playlist';
+  if (/Console|Putty/.test(name)) return 'terminal';
+  if (/Synchronize|Compare/.test(name)) return 'sync_alt';
+  if (/Tab/.test(name)) return 'topic';
+  if (/Session|Site/.test(name)) return 'dns';
+  if (/Preferences|Customize/.test(name)) return 'settings';
+  if (/Clipboard|Paste/.test(name)) return 'content_copy';
+  if (/Tree/.test(name)) return 'group_work';
+  if (/Thumbnail/.test(name)) return 'wysiwyg';
+  if (/Report|List|Icon/.test(name)) return 'view_column';
+  if (/About|Homepage|Forum|Donate|Download|Contents|Tips|History/.test(name)) return 'help';
+  if (/Update/.test(name)) return 'restart_alt';
+  if (/Calculate/.test(name)) return 'numbers';
+  if (/ChangePath|OtherDir|GoToAddress/.test(name)) return 'folder_open';
+  if (/Lock|Unlock/.test(name)) return 'key';
+  if (/StatusBar|CommandLine/.test(name)) return 'wysiwyg';
+  if (/Hidden/.test(name)) return 'visibility';
+  if (/Color/.test(name)) return 'palette';
+  if (/Workspace/.test(name)) return 'layers';
+  if (/Quit|CloseApplication/.test(name)) return 'close';
+  if (action && action.opensDialog) return 'tune';
+  return null;
+}
+
+/** The user-facing label: an i18n key where one exists, the WinSCP caption otherwise. */
+export function actionLabel(name) {
+  const key = I18N_KEYS[name];
+  if (key) return t(key);
+  const a = ACTIONS_BY_NAME[name];
+  // A caption that is just the action's own identifier is WinSCP's placeholder
+  // for a programmatic action; show the hint instead of the class name.
+  if (a && a.caption && a.caption !== name) return a.caption;
+  return (a && (a.hint || a.description)) || name;
+}
+
+export function actionLabelKey(name) { return I18N_KEYS[name] || null; }
+
+function buildRegistry() {
+  for (const action of ACTIONS) {
+    const spec = DEFS[action.name] || null;
+    const glyph = iconFor(action.name, action);
+    const cmd = {
+      name: action.name,
+      id: `winscp.${action.name}`,
+      action,
+      category: action.category,
+      side: (spec && spec.side) || action.side,
+      focused: action.focused,
+      shortcut: action.shortcut || '',
+      kind: (spec && spec.kind) || 'command',
+      // `hasIcon` is what menus consult; `icon` is always renderable so a
+      // toolbar button is never an empty rectangle.
+      hasIcon: !!glyph,
+      icon: glyph || 'label',
+      opensDialog: action.opensDialog,
+      hint: action.hint || action.description || '',
+      helpKeyword: action.helpKeyword || '',
+      submenu: spec && spec.submenu ? spec.submenu : null,
+      _spec: spec,
+    };
+    if (!spec) {
+      // Never reachable: the guard below turns a gap into a loud failure at
+      // import time rather than a menu entry that quietly does nothing.
+      throw new Error(`commands.js has no handler for "${action.name}" (${action.category})`);
+    }
+    cmd.unavailableReason = typeof spec.unavailable === 'function' ? spec.unavailable : (spec.unavailable || null);
+    registry.set(action.name, cmd);
+  }
+  return registry;
+}
+
+buildRegistry();
+
+/* ================================================================== */
+/* running                                                             */
+/* ================================================================== */
+
+export function getCommand(name) { return registry.get(name) || null; }
+export function listActionCommands() { return Array.from(registry.values()); }
+export function commandsByCategory(category) {
+  return listActionCommands().filter((c) => c.category === category);
+}
+
+function unavailableReason(cmd, ctx) {
+  const r = cmd.unavailableReason;
+  if (!r) return null;
+  return typeof r === 'function' ? r(ctx) : r;
+}
+
+/** enabled / visible / checked / reason for one action, in one call. */
+export function commandState(name, over = {}) {
+  const cmd = registry.get(name);
+  if (!cmd) return { exists: false, enabled: false, visible: false, checked: undefined, reason: `"${name}" is not a WinSCP action.` };
+  const ctx = makeContext(cmd, over);
+  const reason = unavailableReason(cmd, ctx);
+  const spec = cmd._spec;
+  let visible = true;
+  let enabled = true;
+  let checked;
+  try { visible = spec.visible ? !!spec.visible(ctx) : true; } catch { visible = true; }
+  try { enabled = reason ? false : (spec.enabled ? !!spec.enabled(ctx) : true); } catch { enabled = false; }
+  try { checked = spec.checked ? !!spec.checked(ctx) : undefined; } catch { checked = undefined; }
+  if (!backend.present && spec.needsBridge !== false && NEEDS_BRIDGE.has(cmd.category)) {
+    return { exists: true, enabled: false, visible, checked, reason: backend.reason, ctx };
+  }
+  return { exists: true, enabled, visible, checked, reason, ctx };
+}
+
+/** Categories whose commands genuinely cannot work without the main process. */
+const NEEDS_BRIDGE = new Set([
+  'Local Directory', 'Remote Directory', 'Local Selected Operation', 'Local Focused Operation',
+  'Remote Selected Operation', 'Remote Focused Operation', 'Selected Operation', 'Focused Operation',
+  'Queue', 'Session',
+]);
+
+/** Run an action. Returns whatever the handler returns, or null when refused. */
+export function runAction(name, over = {}) {
+  const cmd = registry.get(name);
+  if (!cmd) { notify.warning('Unknown command', `"${name}" is not a WinSCP action.`); return null; }
+  const state = commandState(name, over);
+  if (state.reason) {
+    // Explicitly unavailable: say why, every time, rather than doing nothing.
+    notify.warning(actionLabel(name), state.reason);
+    return null;
+  }
+  if (!state.enabled) {
+    notify.info(actionLabel(name), disabledExplanation(cmd, state.ctx));
+    return null;
+  }
+  try {
+    const result = cmd._spec.run(state.ctx);
+    if (result && typeof result.then === 'function') {
+      return result.catch((err) => fail(err, actionLabel(name)));
+    }
+    return result;
+  } catch (err) { return fail(err, actionLabel(name)); }
+}
+
+/** Why a command is greyed out, in words the user can act on. */
+function disabledExplanation(cmd, ctx) {
+  if (!ctx.panel) return 'There is no file panel in this tab yet.';
+  if (!ctx.isLocal && !ctx.connected) return t('notConnected');
+  if (cmd.focused && !ctx.focused) return t('nothingSelected');
+  if (!ctx.selection.length && /Selected Operation|Selection/.test(cmd.category)) return t('nothingSelected');
+  if (ctx.caps) {
+    const protocol = (ctx.sessionInfo && ctx.sessionInfo.protocol) || 'this filesystem';
+    if (/Rights|Permission/.test(cmd.name) && !ctx.caps.rights) return `${protocol.toUpperCase()} does not expose file permissions.`;
+    if (/Owner|Group/.test(cmd.name) && !ctx.caps.owner) return `${protocol.toUpperCase()} does not expose file ownership.`;
+    if (/Link/.test(cmd.name) && !ctx.caps.symlink) return `${protocol.toUpperCase()} does not support links.`;
+  }
+  return 'This command does not apply here right now.';
+}
+
+/* ================================================================== */
+/* keyboard shortcuts                                                  */
+/* ================================================================== */
+
+/** Normalise "Ctrl+Num +" / "Shift+Alt+Enter" to a comparable canonical form. */
+export function normalizeShortcut(shortcut) {
+  let s = String(shortcut || '').trim();
+  if (!s) return '';
+  const mods = { ctrl: false, shift: false, alt: false, meta: false };
+  for (;;) {
+    const m = s.match(/^(Ctrl|Shift|Alt|Meta|Cmd)\s*\+\s*/i);
+    if (!m) break;
+    const k = m[1].toLowerCase();
+    mods[k === 'cmd' ? 'meta' : k] = true;
+    s = s.slice(m[0].length);
+  }
+  const key = canonicalKey(s.trim());
+  return `${mods.ctrl ? 'Ctrl+' : ''}${mods.alt ? 'Alt+' : ''}${mods.shift ? 'Shift+' : ''}${mods.meta ? 'Meta+' : ''}${key}`;
+}
+
+function canonicalKey(raw) {
+  const s = String(raw).trim();
+  const num = s.match(/^Num\s*([+\-*/])$/i);
+  if (num) return `Num${num[1]}`;
+  const map = {
+    esc: 'Escape', escape: 'Escape', del: 'Delete', ins: 'Insert', enter: 'Enter',
+    return: 'Enter', space: 'Space', backspace: 'Backspace', tab: 'Tab',
+    left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown',
+    pgup: 'PageUp', pgdn: 'PageDown', home: 'Home', end: 'End',
+  };
+  const low = s.toLowerCase();
+  if (map[low]) return map[low];
+  if (/^f\d{1,2}$/i.test(s)) return s.toUpperCase();
+  if (s.length === 1) return s.toUpperCase();
+  return s;
+}
+
+/** The canonical shortcut a keyboard event represents. */
+export function eventShortcut(e) {
+  let key;
+  switch (e.code) {
+    case 'NumpadAdd': key = 'Num+'; break;
+    case 'NumpadSubtract': key = 'Num-'; break;
+    case 'NumpadMultiply': key = 'Num*'; break;
+    case 'NumpadDivide': key = 'Num/'; break;
+    default: key = canonicalKey(e.key === ' ' ? 'Space' : e.key);
+  }
+  if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return '';
+  return `${e.ctrlKey ? 'Ctrl+' : ''}${e.altKey ? 'Alt+' : ''}${e.shiftKey ? 'Shift+' : ''}${e.metaKey ? 'Meta+' : ''}${key}`;
+}
+
+/** shortcut -> [action names], built once from actions.js. */
+export const SHORTCUTS = (() => {
+  const map = new Map();
+  for (const a of ACTIONS) {
+    if (!a.shortcut) continue;
+    const key = normalizeShortcut(a.shortcut);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(a.name);
+  }
+  return map;
+})();
+
+/**
+ * A conflict is two actions claiming one shortcut that cannot be told apart by
+ * the focused panel — Local/Remote/Current pairs are resolvable and are not
+ * reported. Anything left is a genuine ambiguity and is logged at startup.
+ */
+export function shortcutConflicts() {
+  const out = [];
+  for (const [key, names] of SHORTCUTS) {
+    if (names.length < 2) continue;
+    const bySide = new Map();
+    for (const n of names) {
+      const cmd = registry.get(n);
+      const side = cmd ? cmd.side : 'both';
+      // A *Focused* variant is reached from a context menu, never the keyboard.
+      if (cmd && cmd.focused) continue;
+      if (!bySide.has(side)) bySide.set(side, []);
+      bySide.get(side).push(n);
+    }
+    for (const [side, list] of bySide) {
+      if (list.length > 1) out.push({ shortcut: key, side, actions: list.slice() });
+    }
+  }
+  return out;
+}
+
+function reportShortcutConflicts() {
+  const conflicts = shortcutConflicts();
+  if (!conflicts.length) return;
+  for (const c of conflicts) {
+    console.warn(`[commands] ${c.shortcut} is claimed by ${c.actions.length} ${c.side} actions: ${c.actions.join(', ')}. The first enabled one wins.`);
+  }
+}
+
+/** Pick the action a shortcut should run, given the focused panel. */
+export function resolveShortcut(key, over = {}) {
+  const names = SHORTCUTS.get(key);
+  if (!names || !names.length) return null;
+  const ws = services.workspace;
+  const activeSide = over.side || (ws && ws.activeSide ? ws.activeSide() : 'remote');
+  const ranked = names
+    .map((n) => registry.get(n))
+    .filter(Boolean)
+    // Focused variants belong to context menus; the keyboard uses the selection.
+    .filter((c) => !c.focused)
+    .sort((a, b) => rank(a) - rank(b));
+  function rank(cmd) {
+    if (cmd.side === activeSide) return 0;
+    if (cmd.side === 'current') return 1;
+    if (cmd.side === 'both') return 2;
+    return 3;
+  }
+  for (const cmd of ranked) {
+    const st = commandState(cmd.name, over);
+    if (st.visible && st.enabled) return cmd.name;
+  }
+  return ranked.length ? ranked[0].name : null;
+}
+
+let shortcutsInstalled = false;
+function installShortcutHandler() {
+  if (shortcutsInstalled) return;
+  shortcutsInstalled = true;
+  window.addEventListener('keydown', (e) => {
+    // A text field owns its own keys; only the panel's own incremental search
+    // opts back in, and it does that from the panel, not from here.
+    const el = e.target;
+    if (el && el.closest && el.closest('input,textarea,select,[contenteditable="true"]')) {
+      const combo = eventShortcut(e);
+      if (!/^(Ctrl|Alt|Meta)/.test(combo)) return;
+    }
+    if (document.querySelector('.modal-scrim')) return;   // a modal owns the keyboard
+    const key = eventShortcut(e);
+    if (!key || !SHORTCUTS.has(key)) return;
+    const name = resolveShortcut(key);
+    if (!name) return;
+    const state = commandState(name);
+    if (!state.visible) return;
+    e.preventDefault();
+    e.stopPropagation();
+    runAction(name);
+  }, true);
+}
+
+/* ================================================================== */
+/* shell publication and the coverage ledger                           */
+/* ================================================================== */
+
+let published = false;
+function publishToShell() {
+  if (published || typeof services.registerShellCommand !== 'function') return;
+  published = true;
+  for (const cmd of registry.values()) {
+    services.registerShellCommand({
+      id: cmd.id,
+      label: actionLabel(cmd.name),
+      labelKey: actionLabelKey(cmd.name) || undefined,
+      icon: cmd.icon,
+      shortcut: cmd.shortcut,
+      run: (over) => runAction(cmd.name, over || {}),
+    });
+  }
+}
+
+/**
+ * The honest ledger. `bound` is every action with a real handler, `declared`
+ * is every action registered as explicitly unavailable with a reason, and
+ * `missing` must always be empty — buildRegistry() throws otherwise.
+ */
+export function commandCoverage() {
+  const declared = [];
+  const missing = [];
+  const byCategory = {};
+  for (const a of ACTIONS) {
+    const cmd = registry.get(a.name);
+    if (!cmd) { missing.push(a.name); continue; }
+    byCategory[a.category] = byCategory[a.category] || { total: 0, declared: 0 };
+    byCategory[a.category].total += 1;
+    if (cmd.unavailableReason) {
+      byCategory[a.category].declared += 1;
+      declared.push({
+        name: a.name,
+        category: a.category,
+        reason: typeof cmd.unavailableReason === 'function' ? cmd.unavailableReason({}) : cmd.unavailableReason,
+      });
+    }
+  }
+  return {
+    total: ACTIONS.length,
+    registered: registry.size,
+    bound: registry.size - declared.length,
+    declared,
+    missing,
+    byCategory,
+    shortcuts: SHORTCUTS.size,
+    shortcutActions: ACTIONS.filter((a) => a.shortcut).length,
+    conflicts: shortcutConflicts(),
+  };
+}
+
+/** A readable report, used by the docs and by anyone auditing the port. */
+export function coverageReport() {
+  const c = commandCoverage();
+  const lines = [
+    `Actions: ${c.total}  bound: ${c.bound}  declared unavailable: ${c.declared.length}  missing: ${c.missing.length}`,
+    `Shortcuts: ${c.shortcutActions} actions over ${c.shortcuts} distinct combinations, ${c.conflicts.length} unresolved conflicts`,
+    '',
+  ];
+  for (const [cat, v] of Object.entries(c.byCategory).sort()) {
+    lines.push(`${cat.padEnd(28)} ${String(v.total - v.declared).padStart(3)}/${String(v.total).padStart(3)}`);
+  }
+  if (c.declared.length) {
+    lines.push('', 'Declared unavailable:');
+    for (const d of c.declared) lines.push(`  ${d.name} — ${d.reason}`);
+  }
+  if (c.conflicts.length) {
+    lines.push('', 'Shortcut conflicts:');
+    for (const k of c.conflicts) lines.push(`  ${k.shortcut} (${k.side}): ${k.actions.join(', ')}`);
+  }
+  return lines.join('\n');
+}
+
+export { registry as commandRegistry };
