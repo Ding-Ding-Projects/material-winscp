@@ -81,6 +81,11 @@ tmp/
 temp/
 scratch/
 
+# Agent worktrees. Parallel agents each get a linked worktree here; git already
+# tracks them through .git/worktrees, and the checkouts themselves are disposable.
+# Committing one would commit a second copy of the whole tree.
+.claude/worktrees/
+
 # NOTE: vendor/winscp is a git submodule (upstream WinSCP source, used as the
 # porting reference). It is tracked through .gitmodules and must NOT be listed
 # here.

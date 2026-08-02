@@ -38,6 +38,27 @@ on the site is undocumented in practice, however good its code is.
 > deliberately omitted. Where a rule cannot be stated without one, it is
 > generalized rather than dropped.
 
+## Every instruction applies to every app *and* every page
+
+- Unless a rule names a narrower scope itself, it applies to **all of it**: every
+  user-facing app, every documentation site, every landing page, every Pages
+  surface, every settings screen, every panel, every dialog — and to each one
+  **individually**, not to "the project" as an aggregate some corner can sit
+  outside of.
+- The failure this exists to stop is the plausible-sounding exemption. A rule
+  gets read as being about "the app", so the docs site skips it; or about "the
+  main screen", so a nested panel skips it. Both readings are wrong. If a surface
+  renders to a user it carries the language modes, the funny-level sliders, the
+  Material Design conformance, the appearance customization, the search bar with
+  its regex builder, the tabbed navigation, the non-blocking notifications, the
+  accessibility and sizing rules, the export formats, the bulk actions and the
+  rest — documentation site included, its settings page included.
+- "It is small", "it is obviously scannable", "it is only docs" and "nobody
+  customizes that one" are **not exemptions**. Where a rule genuinely cannot
+  apply, say which rule and why in the project's documentation, rather than
+  leaving a silent gap that reads as an oversight to the next person and as a
+  decision to nobody.
+
 ## Secrets and sensitive input
 
 - Never ask a user to paste a secret into chat, a source file, a command
@@ -532,6 +553,202 @@ on the site is undocumented in practice, however good its code is.
   the language modes and accessibility rules: focusable, screen-reader announced,
   sufficient contrast, adequate dismiss target.
 
+## Super confirmation for destructive actions
+
+- Every user-facing app implements destructive-action super confirmation **in the
+  app's own native UI layer and codebase**. No separate helper app, extra window,
+  hosted page, external CAPTCHA service or detached confirmation site.
+- Use the app's actual framework and rendering surface. Prefer an **anchored**
+  dialog beside the destructive control; use a modal only where the layout cannot
+  safely host an anchored surface.
+- The gate identifies the exact destructive action and the affected data, exposes
+  **two independently operated key controls**, requires both before enabling a
+  **full-range confirmation slider**, shows a dramatic but non-blocking progress
+  animation while the slider moves, and a distinct completion animation after.
+- Provide an always-available **Emergency exit** or equivalent cancel, support the
+  platform's Escape/back path, return focus to the originating control after
+  cancellation or completion, and never perform the action unless both keys and
+  the slider have completed.
+- **Safety facts stay unambiguous at every language and funny-level setting.**
+  Animation and playful copy style the experience; they never obscure what will be
+  deleted, changed or made irreversible. Keyboard-operable, screen-reader named,
+  visibly focused, reduced-motion aware, contrast-safe, usable at narrow widths
+  and high display scales.
+- Test every state: untouched, one key only, both keys, partial slider, full
+  slider, cancel, Escape/back, reduced motion, keyboard navigation, assistive
+  technology labels, localization, and the action's real success/failure path.
+
+## Overlays paint their own surface
+
+- **Every popover, menu, dropdown, tooltip and anchored panel paints its own
+  background, border, elevation and shape.** A transparent overlay lets whatever
+  sits behind it read straight through the text on top — the fastest way to make
+  a well-built dialog look broken. Where a framework makes decoration optional,
+  the project default is decorated.
+- **An overlay is bounded by the viewport and scrolls when it does not fit.**
+  Capping the height and hiding the overflow deletes the content past the cap with
+  no scrollbar to say anything is missing: a calendar loses its last week, a menu
+  its last items, and the user has no way to know.
+- Overlays never paint outside their own card, never sit under the surface that
+  opened them, and never cover the control they are anchored to. Validate at
+  narrow widths, every supported display scale, and the longest localized
+  strings — an overlay that just fits in English will not.
+
+## Right-click menus show their keyboard shortcuts
+
+- **Every context-menu item that has a keyboard shortcut displays it**,
+  right-aligned beside the label, in the platform's own notation. The context menu
+  is where users find out what an object can do; a hidden shortcut is a shortcut
+  nobody learns.
+- The displayed shortcut is the one that **actually works in that context**. Never
+  show one inferred from a similar command, one that only fires when a different
+  surface has focus, or one that was true in an earlier version — a wrong shortcut
+  trains a user to press a key that does nothing. Derive it from the same source
+  that registers the binding so the two cannot drift.
+- Expose it to assistive technology as a shortcut rather than decorative text, and
+  do not announce the same keys twice. An item with no shortcut shows none;
+  padding the column with a placeholder is worse than an empty space.
+
+## Long operations report progress where they were started
+
+- **A dialog that starts a long operation shows that operation's real progress
+  inside the dialog**, not a bare spinner. A spinner is indistinguishable from a
+  hang, and the operations that most need reporting are exactly the ones slow
+  enough for a user to conclude the app has frozen.
+- **The submitting control is disabled for the whole operation, and the handler
+  refuses re-entry.** The disabled button is the visible guard, not the real one —
+  a keyboard submit walks straight past it. Both are required, because the failure
+  they prevent is a duplicated irreversible action.
+- **Expensive optional work is offered as a choice** where it applies: let the user
+  decline it, show the choice only where relevant, and say what declining leaves
+  undone. A choice that does not reach the operation is decoration.
+
+## Recovering from a failed operation
+
+- Where an operation can fail for reasons the user cannot diagnose from the error
+  alone, **offer the recovery route at the surface where the failure is
+  discovered** — beside the control that failed, not in a menu elsewhere. Someone
+  whose push was rejected is looking at the push button.
+- Where the project hands a failure to a local coding agent, the prompt it builds
+  **names the real situation** (the actual remote, branch and reported error) and
+  **forbids the remedies that lose work** by name: never force-push, never rewrite
+  or drop existing commits, never switch branches. Those are precisely the fixes
+  that look fastest when a push is rejected.
+- **Where a failure is a refused credential or a missing permission scope, the
+  surface offers re-authentication directly.** Reporting "insufficient scope" and
+  leaving the user to find the sign-in screen is a dead end at the exact moment
+  they know what they want to do.
+
+## Provider-authored text is rendered, not printed
+
+- Text authored elsewhere and displayed by the app — release notes, issue and
+  pull-request bodies, commit messages, README previews — **is rendered as the
+  markup it actually is**. Printing markdown into a paragraph shows the source:
+  headings as literal hashes, links as brackets, lists as dashes. All of the
+  content is there and none of it is readable.
+- Render it through **one shared, isolated renderer** rather than a new one per
+  surface, so sandboxing, link handling and emoji resolution are shared rather than
+  reinvented and diverging. Never render remote-authored markup with the app's own
+  privileges.
+- Give the renderer what it needs: an emoji map so shortcodes resolve, a base
+  reference so relative links point somewhere real, and an accessible label naming
+  the rendered region. Keep an honest empty state — "no notes were provided" —
+  rather than an empty renderer that reads as a loading failure.
+
+## Filters and statistics stay out of the way
+
+- **Search bars, filter rows and statistics panels are collapsible**, and the ones
+  that merely describe the collection rather than change it **start collapsed**. A
+  view whose controls occupy more space than its content has buried the content.
+- The collapsed state persists, is keyboard-operable with a visible focus ring, and
+  is announced with its expanded state. It **never hides a filter that is currently
+  active without saying so** — a collapsed row quietly excluding results is how a
+  user comes to believe the data is missing.
+
+## Command palette
+
+- Every user-facing app ships a **command palette** on a single discoverable
+  shortcut, listing every command, setting and destination the app has. It is the
+  keyboard route to the whole product, so a feature that cannot be reached from the
+  palette is one most users will never find.
+- **It covers every setting in every settings surface**, not only top-level
+  actions: each preferences tab, every per-repository or per-document properties
+  panel, every appearance editor. A user who knows a setting's name must be able to
+  type it and land on it without knowing which tab it lives under.
+- **Rows are rich controls, not just labels.** A row that *is* a setting renders
+  that setting's live control inline — switch, text box, stepper, select — and
+  changing it there changes the setting, with the same persistence and validation
+  as the settings surface. A row that is a destination says where it goes.
+- **Selecting a row teleports the user to where the feature lives**: open the
+  surface, reveal the exact control, draw attention to it briefly. Landing them on
+  the right tab and leaving them to hunt does not satisfy this.
+- **Size is a user choice, persisted.** Offer at least a bounded card and a
+  full-window view, and default to the bounded card — a search box that swallows
+  the whole window is overwhelming, and a full-screen surface entered by accident
+  is worse than one opted into. The palette carries its own search wired to the
+  full regex builder, and obeys the language modes, funny levels and accessibility
+  rules.
+
+## Export everything, in every format
+
+- **Every record, view, list, log, document, setting and generated artifact an app
+  owns is exportable.** If a surface can show it, the user can take it away. A
+  feature that renders data and offers no way out of it is incomplete, and "you can
+  copy it from the screen" is not an export.
+- **Offer every format that can faithfully represent the data**, not one favourite:
+  JSON, JSONL/NDJSON, YAML, TOML, XML, CSV, TSV, Markdown, HTML, SQL, and the
+  language-source forms where they make sense. Pick per datum rather than per app —
+  tabular gets CSV/TSV, structured records get JSON/YAML/TOML, prose gets
+  Markdown/HTML — and **never offer a format that would silently drop a field**.
+  Where a format cannot carry something, say what will be lost *before* the export
+  runs rather than truncating quietly.
+- Exports are complete and re-importable wherever the shape allows a round trip.
+  State the encoding (UTF-8 unless there is a reason), the line endings, and the
+  schema or version, so the file is readable by something other than the app that
+  wrote it.
+- **Archives are ZIP or 7z**, and the 7z path exposes everything 7z actually
+  offers rather than one hard-coded default: LZMA2, LZMA, PPMd, BZip2, Deflate;
+  levels from store through ultra; dictionary, word and solid-block sizes; solid vs
+  non-solid; multi-threading; split volumes; and both AES-256 content encryption
+  and **encrypted headers** so filenames are hidden too. Never present an encrypted
+  archive as protected while leaving its filenames in the clear.
+- Archive exports keep paths relative so extraction cannot escape its directory,
+  name what is inside, and never place a secret in an archive the surrounding flow
+  has not clearly marked as sensitive.
+
+## Bulk actions everywhere
+
+- **Every list, table, grid and collection supports bulk actions.** Selecting one
+  item and repeating an action forty times is the app failing to do its job.
+  Provide multi-select with click, shift-click ranges and a keyboard equivalent, a
+  select-all that states plainly whether it means *this page* or *every match*, and
+  an inverse selection.
+- Offer the whole set of actions in bulk, not a token subset: delete, export, move,
+  copy, duplicate, rename by pattern, tag/untag, enable/disable, retry. Bulk
+  search-and-filter composes with selection, so "select everything matching this
+  query" is one step, and the search bar's regex builder applies here too.
+- **Say what will happen before it happens.** Show the exact count and a reviewable
+  preview, distinguish "42 selected" from "42 will change" when some are skipped,
+  and use a blocking confirmation only for the destructive ones. **Never let a bulk
+  action silently skip items** — report what was excluded and why.
+- Bulk actions are undoable through the same local version history as everything
+  else, or they explain plainly why one cannot be. Long-running ones report
+  progress, stay cancellable, and state partial results honestly rather than
+  claiming a whole batch succeeded when some of it did not.
+
+## Publishing to a forge
+
+- Where an app publishes a repository, offer **choosing the account and the
+  owner** — a personal account or any organization the account can write to —
+  rather than assuming the signed-in user's own namespace.
+- Offer **copy-and-push as an alternative to forking**. Forking is
+  provider-specific and some providers and self-hosted instances do not support it
+  at all; an app that only forks is an app that cannot publish there. Do not
+  present a fork button guaranteed to fail — offer the route that works and say
+  why.
+- Report which route was taken and what it produced, and never silently substitute
+  one for the other.
+
 ## Material Design and appearance customization
 
 - Every user-facing app conforms fully to **Material Design 3 (M3 Expressive)** —
@@ -700,6 +917,68 @@ on the site is undocumented in practice, however good its code is.
 - The same rule applies to any long documentation page: sections a reader
   navigates, not a wall they scroll.
 
+### Every release reports the project's line count, and CI is what counts it
+
+- **Every release states how many lines of code the project has at that release**,
+  with no exemption for size or kind. A line count is a fact about a specific
+  commit: pinned to the tag it was measured at it is a real datum a reader can
+  compare across releases, whereas a bare number in prose is stale the day after
+  it is written.
+- **CI does the counting, not an agent and not a person.** The release workflow
+  runs the repository's committed counter over the tagged commit and writes the
+  table into the release notes — same run that built the artifacts, exactly the
+  commit being released, no opportunity for a hand-typed number to drift.
+- **Commit the counter as a script** that prints the exact table the release
+  publishes, so the workflow is one command and anyone can reproduce it locally.
+  Record the command in the release notes.
+- **Break it down; do not report one number.** A single grand total is the least
+  informative version and the easiest to inflate. Report at minimum source, tests
+  and styles/markup separately, with both total and non-blank lines, plus whatever
+  further split the project actually has.
+- **Say plainly what is excluded and why.** Vendored trees, dependency
+  directories, build output and lockfiles are not the project's code and are
+  excluded — but the exclusion is stated, not silent. A count that quietly folds
+  in a vendored library misrepresents the project.
+- **Separate generated from hand-written** wherever a generated file is large
+  enough to move the number, so a reader can see how much a person actually wrote.
+- **Report how many lines agents wrote beside how many people wrote.** Attribute
+  per **surviving** line with `git blame`, never by summing added lines from the
+  log — churn is not authorship, and a line written then deleted belongs to
+  nobody. Say which rule was used so the number can be checked. Stated without
+  spin in either direction: a high agent share is neither a boast nor an apology.
+- **Report a grand total alongside the project total**, with the excluded rows
+  visible in the same table. Two clearly-labelled totals let a reader see both what
+  the project is and what the repository holds; one total with silent exclusions
+  lets them see neither.
+- **Make the counter's arithmetic agree with itself.** If the attribution total and
+  the line total disagree, the counter is wrong and must be fixed before the figure
+  is published — an unexplained gap between two numbers in one table destroys the
+  credibility of both. (The usual cause is counting a trailing newline as a line,
+  which `git blame` does not.)
+- The README may carry the latest figure, refreshed on a release, as a convenience
+  copy — **the release notes are the record**. Never hand-edit the README to a
+  number no release ever published, and never let the two disagree.
+
+#### Agents never count lines by hand
+
+- **Whenever a count is wanted — for a release, a README, a report, or because
+  someone asked — run the committed script and read its table.** Never rebuild the
+  number with an ad-hoc `wc -l` sweep, a per-extension grep, or a throwaway script.
+- **This is a cost rule as much as a correctness one.** Ad-hoc counting dumps
+  hundreds of per-file lines into context to arrive at a handful of totals — read
+  once, never the final answer alone, and far more expensive than the short table
+  the script prints.
+- **It is also more accurate.** A path-prefix bucketing written on the spot
+  silently drops every file matching no prefix, and a total that quietly loses
+  whole directories is exactly the misrepresentation these rules forbid. A
+  committed counter can carry a catch-all row, be reviewed, and be fixed once for
+  everyone.
+- If the script's breakdown is wrong or misses an area, **fix the script and re-run
+  it** rather than working around it by hand. The script is what the release
+  publishes, so the correction belongs there.
+- The count is information, never a boast. Do not pad it with generated or vendored
+  code to look bigger, and do not hide test lines to make a ratio look better.
+
 ### The site must be linked from the repository itself
 
 - Every repository sets its **homepage/website field** to the project's landing
@@ -845,3 +1124,40 @@ on the site is undocumented in practice, however good its code is.
   concrete evidence.
 - Treat host inventories and service lists as point-in-time routing hints, not
   authorization to mutate those systems. Recheck live state before deployment.
+
+## Delegated task sessions
+
+> Applies only to runtimes that actually provide separate task sessions, and only
+> when the current user has explicitly authorized creating them. No runtime should
+> infer permission for this from another's behaviour.
+
+- Prefer a fresh task session for a substantial, bounded workstream only when the
+  user explicitly authorizes it, the tooling and nested subagents exist, and the
+  expected speed or quality gain exceeds the coordination overhead. Otherwise stay
+  in the current session and use its subagents directly.
+- **The main session stays the accountable orchestrator.** It defines each task's
+  bounded scope and deliverable, keeps sending follow-ups and course corrections,
+  coordinates dependencies and conflicts, verifies and incorporates every returned
+  result, and owns the final answer. Creating a task is never a fire-and-forget
+  handoff.
+- Every delegated session must itself spawn useful subagents for bounded
+  independent work; do not create one where that nested delegation is unavailable
+  or would only add ceremony. Archive or close a task session once its result is
+  verified and incorporated, and act only on sessions the orchestrator created.
+- Delegation **inherits scope and grants no new authority**. It does not authorize
+  additional access, destructive actions, external communication, secrets,
+  purchases or unrelated work, and never substitutes for a required user decision.
+
+## Skill scope and shared-rule persistence
+
+- The skills installed from the canonical instructions repository apply in **every**
+  repository and project workspace an agent touches, not only the one they came
+  from. Select the relevant skill whenever its trigger matches the work, and carry
+  its workflow through verification and handoff.
+- These shared rules are durable global defaults. Every repository-changing task
+  preserves them, and every repository an agent creates or modifies receives the
+  repository-appropriate **sanitized** mirror of them.
+- A project-local instruction file may add stricter requirements or narrow scope,
+  but it may **not silently disable** a globally applicable skill. Where local
+  instructions conflict with the shared rules, **stop and report the conflict**
+  rather than guessing which wins.
