@@ -24,7 +24,8 @@
     "@electron-forge/cli": "^7.6.0",
     "@electron-forge/maker-squirrel": "^7.6.0",
     "@electron-forge/maker-zip": "^7.6.0",
-    "electron": "^33.3.1"
+    "electron": "^33.3.1",
+    "ftp-srv": "^4.6.3"
   },
   "allowScripts": {
     "electron@33.4.11": true,

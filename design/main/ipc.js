@@ -31,6 +31,7 @@ const { SessionManager } = require('./session');
 const { EditorManager } = require('./editors');
 const { History } = require('./history');
 const { Updates } = require('./updates');
+const { AutoUpdater } = require('./autoupdate');
 
 // ------------------------------------------------------------- envelopes
 
@@ -204,6 +205,15 @@ class Ipc {
       getPrefs: () => (this.config ? this.config.prefs.versionHistory : {}),
     });
     this.updates = new Updates({ config: this.config, currentVersion: this.version, emit: this.emit });
+    // Silent background updating, Chrome-style: it downloads and stages on its
+    // own and never asks. `updates` above stays for the explicit "Check for
+    // Updates…" command, which is the only path that reports anything.
+    this.autoUpdate = new AutoUpdater({
+      config: this.config,
+      logger: (entry) => this.emit('event:log', { source: 'updater', ...entry }),
+    });
+    // Passive only — a surface may render this, nothing may interrupt over it.
+    this.autoUpdate.on('state', (s) => this.emit('event:update-state', s));
     this.commands = new customcmd.CustomCommandRunner({
       onOutput: (o) => this.emit('event:console', o),
     });
@@ -417,6 +427,11 @@ class Ipc {
     // ---- updates ----------------------------------------------------
     this.handle('app:checkUpdates', (options) => this.updates.check({ ...optObj(options, 'options'), reason: 'user' }));
     this.handle('app:lastUpdateResult', () => this.updates.lastResult());
+    // Read-only view of the silent updater, for a passive indicator.
+    this.handle('app:updateState', () => this.autoUpdate.snapshot());
+    // Applying is user-initiated only. Nothing calls this on a timer, and
+    // nothing calls it because an update merely became ready.
+    this.handle('app:applyUpdateAndRestart', () => this.autoUpdate.applyAndRestart());
 
     // ---- custom commands --------------------------------------------
     this.handle('app:customCommandPrompts', (command, options) => {

@@ -621,6 +621,11 @@ function start() {
     // Never on the critical path: the check waits until the window is usable.
     state.ipc.updates.scheduleStartupCheck();
 
+    // Silent background updating. It schedules its own delay, downloads on its
+    // own, and stages for the next launch without ever asking. Nothing here
+    // waits on it.
+    state.ipc.autoUpdate.start();
+
     // Retention runs once per launch, in the background, and its failure is
     // never the user's problem.
     state.ipc.history.prune().catch(() => undefined);
@@ -660,6 +665,7 @@ async function shutdown() {
 
   if (state.ipc) {
     state.ipc.updates.stop();
+    state.ipc.autoUpdate.stop();
     // Editors first: a pending edit is the only thing here that is the user's
     // unsaved work, and uploading it needs a session that is still open.
     await withTimeout(state.ipc.editors.closeAll(), 8000);

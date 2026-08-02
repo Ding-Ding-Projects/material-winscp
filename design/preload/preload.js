@@ -101,6 +101,10 @@ const api = {
 
     checkUpdates: (options) => call('app:checkUpdates', options),
     lastUpdateResult: () => call('app:lastUpdateResult'),
+    // Read-only view of the silent updater, for a passive indicator only.
+    updateState: () => call('app:updateState'),
+    // User-initiated restart. Nothing calls this automatically.
+    applyUpdateAndRestart: () => call('app:applyUpdateAndRestart'),
 
     customCommandPrompts: (command, options) => call('app:customCommandPrompts', command, options),
     customCommandPreview: (command, request) => call('app:customCommandPreview', command, request),

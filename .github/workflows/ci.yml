@@ -98,20 +98,37 @@ jobs:
       - name: Regenerate the application icon from the tracked catalog image
         run: node build/make-icon.js
 
-      - name: Read the package version
+      # The build number becomes the PATCH component, for two reasons that both
+      # break silent updating if we get them wrong:
+      #
+      #   1. The version has to actually INCREASE. Publishing every release as
+      #     "0.1.0" produced a .nupkg with the same version every time, so
+      #      Squirrel compared new against old, found them equal, and correctly
+      #      concluded there was nothing to install. Nine releases, zero updates.
+      #
+      #   2. The tag has to be PLAIN semver. `v0.1.0-build.7` is a prerelease:
+      #      update feeds skip prereleases, and semver sorts it BEFORE `v0.1.0`,
+      #      so it is worse than useless as an update target.
+      #
+      # github.run_number increases by one per run and is never reused, so the
+      # patch number is monotonic and two builds can never collide.
+      - name: Derive this build's version
         id: pkg
         shell: bash
         run: |
-          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+          base=$(node -p "require('./package.json').version")
+          major=$(echo "$base" | cut -d. -f1)
+          minor=$(echo "$base" | cut -d. -f2)
+          version="${major}.${minor}.${{ github.run_number }}"
+          npm version "$version" --no-git-tag-version --allow-same-version
+          echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "product=$(node -p "require('./package.json').productName")" >> "$GITHUB_OUTPUT"
+          echo "Building version $version (from base $base)"
 
-      # A monotonic, never-recycled tag. github.run_number increases by one for
-      # every run of this workflow in this repository and is never reused, so
-      # two builds can never collide on a tag.
       - name: Compute the release tag
         id: tag
         shell: bash
-        run: echo "tag=v${{ steps.pkg.outputs.version }}-build.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+        run: echo "tag=v${{ steps.pkg.outputs.version }}" >> "$GITHUB_OUTPUT"
 
       # Resolves the dish for this release number from build/release-codenames.json
       # and DECODES its bundled PNG before offering it. A record whose image is
@@ -209,11 +226,16 @@ jobs:
             if [ -n "$extra" ] && [ -f "$extra" ]; then assets+=("$extra"); fi
           done
 
+          # --latest=true matters as much as the absence of --draft and
+          # --prerelease: the update feed reads the LATEST non-draft,
+          # non-prerelease release, so a build that is published but not marked
+          # latest is a build nobody ever receives.
           gh release create "$TAG" \
             --repo "${{ github.repository }}" \
             --title "$TITLE" \
             --notes-file RELEASE_NOTES.md \
             --target "${{ github.sha }}" \
+            --latest \
             "${assets[@]}"
 
       - name: Record the build in the run summary
