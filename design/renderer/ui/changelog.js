@@ -187,6 +187,13 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "7d4d84a", kind: 'commit', ref: "7d4d84a", oid: "7d4d84a25152fa5f6c810291c5ec9bae67124d66", date: "2026-08-03",
+    title: "Verify releases and complete headless parity",
+    changes: [
+      { category: "changed", text: "English: Enforce Squirrel Setup.exe, nupkg, and RELEASES hash/size agreement in CI; harden resume-support parsing, bundled dim-sum asset validation, command-palette destinations, and packaging documentation/tests.\\n\\n粵語：installer 三件套而家要對得上 hash 同 size，唔好一包 code 三個版本；resume、dim sum asset 同 palette destination 亦補返真實 headless 規矩，release 唔再靠祈禱。" },
+    ],
+  },
+  {
     id: "aca79a7", kind: 'commit', ref: "aca79a7", oid: "aca79a794e5ad9fb091151086ed2f17e4db0428c", date: "2026-08-03",
     title: "Harden dialogs panels editors and secrets",
     changes: [
@@ -663,13 +670,6 @@ export const DEVELOPMENT = [
     title: "Harden queue sessions search panels and setup",
     changes: [
       { category: "added", text: "Include queue prompt state in once-done requests, fail closed on stale exec capabilities, tolerate watcher errors without items, short-circuit empty find limits, normalize Windows directory caches case-insensitively, and keep shortcut cleanup Windows-only. Add focused tests and indexed documentation. The queue now carries its paperwork, the search knows when zero means zero, and setup stops visiting the wrong operating system.\\n\\n廣東話：queue 帶齊文件、find 明白零就係零、setup 唔再去錯 OS 探親；panel 同 session 都有新路牌。" },
-    ],
-  },
-  {
-    id: "0e0969b", kind: 'commit', ref: "0e0969b", oid: "0e0969bbe0dd01226821c7463d197593ad763cba", date: "2026-08-03",
-    title: "Fix Windows line-ending test extraction",
-    changes: [
-      { category: "fixed", text: "Make the location-profile source-extraction regression accept LF and CRLF endings so the Windows CI checkout tests the same behavior as the local checkout. The regex now reads the file instead of arguing with the newline fashion police.\\n\\n廣東話：location profile 個 regex 而家識睇 LF 同 CRLF，唔會再同換行符號鬥氣，Windows CI 可以正常開工。" },
     ],
   },
 ];
