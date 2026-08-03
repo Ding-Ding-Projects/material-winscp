@@ -187,6 +187,32 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "c38476f", kind: 'commit', ref: "c38476f", oid: "c38476f35d1ea101a5a7137cbeeebb146aac1914", date: "2026-08-03",
+    title: "Harden protocol edge cases and Docker smoke cleanup",
+    changes: [
+      { category: "changed", text: "English: WebDAV redirects, FTP commands, canonical paths, URLs, and dialogs now stop doing interpretive dance at their sharpest edges; the Docker smoke runner gives a stuck daemon a bounded timeout instead of waiting for it to write a memoir." },
+    ],
+    changesYue: [
+      { category: "changed", text: "粵語：WebDAV、FTP、SFTP 同幾個對話框終於唔再喺邊界位跳舞；Docker 卡住時有時限，唔使等個 daemon 寫完自傳先收工。" },
+    ],
+  },
+  {
+    id: "30a8ae7", kind: 'commit', ref: "30a8ae7", oid: "30a8ae744f3cb779ef210dcfc9db8103789549f3", date: "2026-08-03",
+    title: "Record the parity wave in the pushed handoff",
+    changes: [
+      { category: "changed", text: "HANDOFF.md now reflects the 3,393-pass baseline and the synchronized e0fa83f origin/main tip." },
+      { category: "changed", text: "HANDOFF.md 而家記低 3393 pass，同埋已同步嘅 e0fa83f origin/main；parity wave 有收據喇。" },
+    ],
+  },
+  {
+    id: "e0fa83f", kind: 'commit', ref: "e0fa83f", oid: "e0fa83f2b4f74a5a7d44a42af371603fc0227e7e", date: "2026-08-03",
+    title: "Update the in-app changelog for the parity wave",
+    changes: [
+      { category: "fixed", text: "The history now records the Preferences, SiteAdvanced, dialog, action, synchronization, and packaging fixes with validated references." },
+      { category: "changed", text: "App 入面嘅 changelog 而家記低 Preferences、SiteAdvanced、dialog、action、sync 同 packaging 修正，reference 全部驗過，冇死 link 留低。" },
+    ],
+  },
+  {
     id: "0dcc3f4", kind: 'commit', ref: "0dcc3f4", oid: "0dcc3f41b1328058596dad3bc6c23099f1317ae1", date: "2026-08-03",
     title: "Harden preferences, actions, sync, dialogs, and packaging",
     changes: [
@@ -634,30 +660,6 @@ export const DEVELOPMENT = [
     changes: [
       { category: "added", text: "English: Roll back failed configuration imports, drain SCP startup output, scope console events by session, validate optional custom-command prompts, announce terminal progress states, and expose directory execution decisions. Add focused tests and documentation. The boundaries now check their passports before crossing, which is excellent news for the tiny state machines." },
       { category: "changed", text: "廣東話：設定匯入失敗會 rollback、SCP 會食走 startup banner、console event 按 session 分流、custom command optional prompt 會驗、progress terminal state 會講清楚，同 dirview 有 ExecuteFile decision。加 tests 同 docs，啲 boundaries 終於識查 passport，細細粒 state machines 安心晒。" },
-    ],
-  },
-  {
-    id: "9430464", kind: 'commit', ref: "9430464", oid: "9430464453b81f19bef3640a476797d6ab83bc72", date: "2026-08-03",
-    title: "Refresh lifecycle-hardening handoff metadata",
-    changes: [
-      { category: "changed", text: "English: Record the verified 3,285/3,286 test result, unchanged 59.0% logic coverage, 114 remaining units, and this lifecycle checkpoint. The map stays honest while the expedition keeps moving." },
-      { category: "changed", text: "廣東話：記低已驗證嘅 3,285/3,286 測試、仍然 59.0% logic coverage、剩低 114 個 units 同今次 lifecycle checkpoint。張地圖照講真話，隊伍繼續行。" },
-    ],
-  },
-  {
-    id: "ec10eab", kind: 'commit', ref: "ec10eab", oid: "ec10eab31515c37c8e2d67000a83b5435f9ed0f2", date: "2026-08-03",
-    title: "Refresh in-app changelog for lifecycle hardening",
-    changes: [
-      { category: "fixed", text: "English: Record the editor, session, sync, authentication, preset, and workspace lifecycle fixes in the in-app release history. The diary now remembers who cleaned up after the last scene." },
-      { category: "fixed", text: "廣東話：將 editor、session、sync、authentication、preset 同 workspace lifecycle fixes 寫入 app changelog，日記終於記得邊個執返最後一幕啲道具。" },
-    ],
-  },
-  {
-    id: "c95cd9d", kind: 'commit', ref: "c95cd9d", oid: "c95cd9d45a09042bd3528e38457f5b1464a2c68b", date: "2026-08-03",
-    title: "Harden editor, session, sync, auth, and workspace lifecycles",
-    changes: [
-      { category: "added", text: "English: Roll back failed external editor launches, preserve stored-site URL parameters, cancel invalid watchers safely, persist copy presets, expose a secret-free authentication log, and enforce the last local browser floor. Add focused tests and documentation. The lifecycle code now cleans up after its own plot twists instead of leaving props on stage." },
-      { category: "security", text: "廣東話：失敗 external editor launch 會 rollback、stored-site URL 唔再食錯 remote path、壞 watcher 會安全停、copy preset 會記住、authentication log 唔掂 secrets，同埋最後一個 local browser 唔畀亂關。加埋 tests 同 docs，lifecycle code 終於識得收拾道具，唔使劇完仲留低一地 props。" },
     ],
   },
 ];
