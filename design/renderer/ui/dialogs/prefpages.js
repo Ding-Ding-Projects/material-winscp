@@ -1338,25 +1338,58 @@ export function pageById(id, pages = PAGES) { return pages.find((p) => p.id === 
  * a key listed here that HAS gained a consumer fails, and a wired key that
  * loses its consumer fails too. Wiring one is a two-line change — implement the
  * behaviour, delete the entry.
+ *
+ * "A consumer" means production code under design/, outside this dialog, that
+ * READS the key — see test/helpers/consumer-scan.js. It is deliberately not
+ * "the key is mentioned somewhere": the scan used to walk test/ as well, where
+ * test/preferences.test.js names every key it asserts, and it used to match
+ * inside comments. Eleven options were stored, rendered and read by nothing
+ * while this list stayed green, eight of them because their own test named
+ * them and three because one doc comment did.
  */
 export const PENDING_KEYS = new Set([
   'copyParam.saveTransferOptions',
   'dDAllowMove',
   'dDAllowMoveInit',
+  // Drag & drop out of the application is Explorer's IDataObject and the
+  // DragExt shell extension, neither of which this port has: the panel drags
+  // through the browser's own drag events. Until that lands, "drag a fake file
+  // and download to where it lands", the network-drive allow list and the
+  // shell-extension switch are three settings with nothing behind them.
+  'dDDrives',
+  'dDFakeFile',
   'editor.autoFont',
   'editor.disableSmoothScroll',
   'editor.fontCharset',
   'editor.fontName',
   'editor.sDIShellEditor',
   'editor.warnOnEncodingFallback',
+  // editors.js:589 names this option in the doc comment above findOrphans()
+  // and then never asks it anything: the leftover-temporary-files list is
+  // reachable only when the user opens it from the Editors dialog or Cleanup,
+  // so there is no startup warning for the option to suppress. The comment was
+  // also the ONLY mention in the whole tree, which is how it stayed off this
+  // list — the guard used to read a comment as a consumer.
+  'editor.warnOrphans',
   'integration.autoOpenInPutty',
+  'integration.dragExtEnabled',
   'integration.localIconsFromExplorer',
   'logging.logWindowComplete',
   'panel.showFullPathOnAddressBar',
   'queue.disconnectOnceEmpty',
   'queue.individualTransfers',
   'queue.parallelDuplicateTransfers',
+  // The remote panel refreshes when something changes it and when the user
+  // asks; nothing runs it on a timer, so the interval is stored and ignored.
+  'refreshRemotePanelInterval',
   'security.randomSeedFile',
+  // session.js:532-537 documents four sessionReopen* settings above
+  // _scheduleReconnect, and that function reads two of them —
+  // sessionReopenAuto for the delay and sessionReopenTimeout for the budget. A
+  // session here has no notion of being queue-only, and nothing measures a
+  // stall, so the other two describe behaviour that does not exist.
+  'security.sessionReopenAutoStall',
+  'security.sessionReopenBackground',
   'showInaccessibleDirectories',
   'tabs.truncateTitles',
   'timeoutOnStartup',
@@ -1364,6 +1397,8 @@ export const PENDING_KEYS = new Set([
   'versionHistory.snapshotSettings',
   'versionHistory.snapshotSites',
   'window.largeToolbarIcons',
+  // There is no tray icon to minimise to yet.
+  'window.minimizeToTray',
   'window.openedTabsShortcut',
   'window.sessionTabCaptionTruncation',
 ]);
