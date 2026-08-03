@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `14afd31`** — Refresh changelog for CLI and accessibility fixes
+**At commit `e1df1cc`** — Refresh changelog for transfer and security hardening
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3325 run, **3324 pass, 0 fail**, 1 skipped |
-| Hand-written code | 216,802 lines across 398 files |
-| Commits | 132 on `main` |
+| Tests | 3331 run, **3330 pass, 0 fail**, 1 skipped |
+| Hand-written code | 216,960 lines across 399 files |
+| Commits | 135 on `main` |
 | Working tree | **1 uncommitted change(s)** |
-| Remote | `origin/main` at `b03c84f` — **differs from HEAD** |
+| Remote | `origin/main` at `33184f0` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `e1df1cc` | 2026-08-03 | Refresh changelog for transfer and security hardening |
+| `3ba2f1c` | 2026-08-03 | Harden transfer console security and sync edges |
+| `33184f0` | 2026-08-03 | Refresh handoff for CLI and lifecycle wave |
 | `14afd31` | 2026-08-03 | Refresh changelog for CLI and accessibility fixes |
 | `a74836c` | 2026-08-03 | Harden CLI drop classification and progress accessibility |
 | `b03c84f` | 2026-08-03 | Cancel pending queue prompts on removal |
 | `ac29837` | 2026-08-03 | Assign IDs during configuration import |
 | `2960899` | 2026-08-03 | Fix case-insensitive workspace reconnect links |
-| `bf98db8` | 2026-08-03 | Refuse invalid Explorer drop effects |
-| `ceff51c` | 2026-08-03 | Refresh editor-wave handoff metadata |
-| `9e8c679` | 2026-08-03 | Refresh in-app changelog for editor and lifecycle hardening |
 
 ## Notes from whoever worked on this last
 
