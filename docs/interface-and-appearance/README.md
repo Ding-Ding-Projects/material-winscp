@@ -21,8 +21,10 @@ rather than decoration.
 | [usage-and-startup.md](usage-and-startup.md) | Bounded local usage counters, startup milestones, persistence, reset and privacy boundaries. |
 | [preferences.md](preferences.md) | The preference schema, production-consumer audit, live writes, and honest unavailable rows. |
 | [configuration-import-export.md](configuration-import-export.md) | Atomic JSON backups, production-reachable WinSCP INI import/export, hierarchy mapping, and credential handling. |
+| [configuration-roots.md](configuration-roots.md) | Portable and environment-resolved WinConfiguration extension roots. |
 | [winapi-boundary.md](winapi-boundary.md) | Cross-platform path, display, keyboard, shell, and unsupported-operation boundaries. |
 | [local-drive-view.md](local-drive-view.md) | Commander local drive roots, UNC share reveal, keyboard navigation and refresh behaviour. |
+| [window-geometry.md](window-geometry.md) | Safe display metrics, minimum sizing and reachable restored window bounds. |
 
 ## The two rules that decide everything here
 

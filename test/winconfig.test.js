@@ -1253,6 +1253,27 @@ test('extensions are loaded from disk and their state is stored', () => {
   }
 });
 
+test('extension roots resolve portable relative and environment paths consistently', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wc-roots-'));
+  const previous = process.env.WC_WINCONFIG_ROOT;
+  try {
+    process.env.WC_WINCONFIG_ROOT = root;
+    const roots = { appDir: '%WC_WINCONFIG_ROOT%', userDataDir: root };
+    const paths = W.extensionsPaths(roots);
+    assert.equal(paths[0][1], path.resolve(root));
+    assert.equal(paths[1][1], path.join(path.resolve(root), 'Extensions'));
+    assert.equal(W.extensionIdOfPath(path.join(root, 'Extensions', 'Tool.WinSCPextension.ps1'), roots), 'commonext/Tool');
+
+    const relative = W.extensionsPaths({ appDir: '.', userDataDir: '.' });
+    assert.equal(relative[0][1], path.resolve('.'));
+    assert.equal(relative[2][1], path.join(path.resolve('.'), 'Extensions'));
+  } finally {
+    if (previous === undefined) delete process.env.WC_WINCONFIG_ROOT;
+    else process.env.WC_WINCONFIG_ROOT = previous;
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('the dark-theme tri-state resolves against the system only on auto', () => {
   const { config, cleanup } = freshConfig();
   try {

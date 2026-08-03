@@ -887,6 +887,28 @@ function isDigit(c) { return c >= '0' && c <= '9'; }
  * The ordering it produces is deterministic and stable, which is what the
  * panel needs; it is not byte-identical to Windows for exotic collation.
  */
+function normalizeDisplayMetrics(display, fallback) {
+  const d = display || {}, f = fallback || {};
+  const n = (v, def) => Number.isFinite(Number(v)) ? Number(v) : def;
+  return { scaleFactor: Math.max(0.5, n(d.scaleFactor, n(f.scaleFactor, 1))), workArea: {
+    x: n(d.workArea && d.workArea.x, n(f.x, 0)), y: n(d.workArea && d.workArea.y, n(f.y, 0)),
+    width: Math.max(1, n(d.workArea && d.workArea.width, n(f.width, 1280))),
+    height: Math.max(1, n(d.workArea && d.workArea.height, n(f.height, 720))),
+  } };
+}
+
+function constrainWindowBounds(bounds, display, options) {
+  const o = options || {}, area = normalizeDisplayMetrics(display, o.fallback).workArea;
+  const minW = Math.max(320, Number.isFinite(Number(o.minWidth)) ? Number(o.minWidth) : 800);
+  const minH = Math.max(240, Number.isFinite(Number(o.minHeight)) ? Number(o.minHeight) : 520);
+  const width = Math.min(area.width, Math.max(minW, Number.isFinite(Number(bounds && bounds.width)) ? Number(bounds.width) : minW));
+  const height = Math.min(area.height, Math.max(minH, Number.isFinite(Number(bounds && bounds.height)) ? Number(bounds.height) : minH));
+  const visible = Math.min(48, Math.max(1, Math.min(width, height)));
+  const x = Number.isFinite(Number(bounds && bounds.x)) ? Number(bounds.x) : area.x + (area.width - width) / 2;
+  const y = Number.isFinite(Number(bounds && bounds.y)) ? Number(bounds.y) : area.y + (area.height - height) / 2;
+  return { x: Math.min(area.x + area.width - visible, Math.max(area.x - width + visible, x)), y: Math.min(area.y + area.height - visible, Math.max(area.y - height + visible, y)), width, height };
+}
+
 function strCmpLogical(a, b) {
   const s1 = String(a == null ? '' : a);
   const s2 = String(b == null ? '' : b);
@@ -2163,6 +2185,8 @@ module.exports = {
   // text layout
   isEligibleForApplyingTabs,
   applyTabs,
+  normalizeDisplayMetrics,
+  constrainWindowBounds,
 
   // comparison
   strCmpLogical,

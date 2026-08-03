@@ -994,6 +994,10 @@ class Terminal extends EventEmitter {
 
     this._onProgressDep = d.onProgress || null;
     this._onFinishedDep = d.onFinished || null;
+    // Fatal paths can meet while an adapter is unwinding.  Keep one decision
+    // owner per error so nested callers share the same renderer prompt rather
+    // than racing two contradictory reconnect questions.
+    this._reopenPrompts = new WeakMap();
   }
 
   // ------------------------------------------------------------- plumbing
@@ -1315,12 +1319,26 @@ class Terminal extends EventEmitter {
    */
   async doQueryReopen(e) {
     if (e && e.reopenQueried) return false;
+    if (e && typeof e === 'object') {
+      const pending = this._reopenPrompts.get(e);
+      if (pending) return pending;
+      const decision = (async () => {
+        this.logEvent('Connection was lost, asking what to do.');
+        const answer = await this.queryUserException('', e, [ANSWERS.retry, ANSWERS.abort], {
+          type: 'error',
+          aliases: { retry: 'Reconnect' },
+        });
+        e.reopenQueried = true;
+        return answer === ANSWERS.retry;
+      })();
+      this._reopenPrompts.set(e, decision);
+      try { return await decision; } finally { this._reopenPrompts.delete(e); }
+    }
     this.logEvent('Connection was lost, asking what to do.');
     const answer = await this.queryUserException('', e, [ANSWERS.retry, ANSWERS.abort], {
       type: 'error',
       aliases: { retry: 'Reconnect' },
     });
-    if (e && typeof e === 'object') e.reopenQueried = true;
     return answer === ANSWERS.retry;
   }
 

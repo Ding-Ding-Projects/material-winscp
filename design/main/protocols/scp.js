@@ -675,10 +675,18 @@ class ScpAdapter extends Adapter {
     return dst;
   }
 
-  async copyRemote(from, to) {
+  async copyRemote(from, to, opts = {}) {
     const src = this.normalize(from);
     const dst = this.normalize(to);
-    await this._mustRun(`cp -a -- ${shellQuote(src)} ${shellQuote(dst)}`, `Copying ${src}`);
+    // Commander passes the resolved overwrite decision through the queue. SCP
+    // has no copy primitive with an overwrite flag, so remove the exact target
+    // first when overwrite was explicitly selected. Without this, `cp -a`
+    // treats an existing directory as a container and silently changes the
+    // destination name — a duplicate action that lies about where it landed.
+    const command = opts.overwrite
+      ? `rm -rf -- ${shellQuote(dst)} && cp -a -- ${shellQuote(src)} ${shellQuote(dst)}`
+      : `cp -a -- ${shellQuote(src)} ${shellQuote(dst)}`;
+    await this._mustRun(command, `Copying ${src}`);
     return dst;
   }
 

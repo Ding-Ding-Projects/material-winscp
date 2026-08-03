@@ -14,6 +14,15 @@ const G = require('../design/main/guitools');
 const M = require('../design/main/masks');
 const FS = require('../design/main/filesystems');
 
+test('display metrics use safe logical fallbacks', () => {
+  assert.deepStrictEqual(G.normalizeDisplayMetrics({ workArea: { width: 0, height: NaN } }), { scaleFactor: 1, workArea: { x: 0, y: 0, width: 1, height: 720 } });
+});
+
+test('restored window bounds remain usable and reachable', () => {
+  assert.deepStrictEqual(G.constrainWindowBounds({ x: -5000, y: 4000, width: 120, height: 100 }, { workArea: { x: 100, y: 50, width: 1200, height: 800 } }), { x: -652, y: 802, width: 800, height: 520 });
+  assert.deepStrictEqual(G.constrainWindowBounds({}, { workArea: { x: 0, y: 0, width: 600, height: 400 } }, { minWidth: 900, minHeight: 700 }), { x: 0, y: 0, width: 600, height: 400 });
+});
+
 // ---------------------------------------------------------------------------
 // Command splitting, quoting, formatting
 // ---------------------------------------------------------------------------

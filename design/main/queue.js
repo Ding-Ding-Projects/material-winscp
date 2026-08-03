@@ -1731,17 +1731,36 @@ class TransferQueue extends EventEmitter {
 
     // Make sure the file exists at full length before the writers seek into it.
     const seed = await dst.createWriteStream(writePath, { size, start: 0, flags: 'w' });
-    await new StreamWriter(seed).end();
+    const seedWriter = new StreamWriter(seed);
+    try {
+      await seedWriter.end();
+    } catch (err) {
+      seedWriter.destroy();
+      throw err;
+    }
 
     item.progress.bytes = item._bytesDone;
     let written = 0;
-    await Promise.all(ranges.map(async (range) => {
-      const rs = await src.createReadStream(entry.srcPath, { start: range.start, end: range.end });
-      const ws = await dst.createWriteStream(writePath, {
-        size, start: range.start, append: false, flags: 'r+',
-      });
-      const writer = new StreamWriter(ws);
+    const workers = new Set();
+    const abortWorkers = () => {
+      for (const worker of workers) worker.abort();
+    };
+    const run = async (range) => {
+      let rs = null;
+      let writer = null;
+      const worker = {
+        abort() {
+          if (writer) writer.destroy();
+          if (rs && typeof rs.destroy === 'function') rs.destroy();
+        },
+      };
+      workers.add(worker);
       try {
+        rs = await src.createReadStream(entry.srcPath, { start: range.start, end: range.end });
+        const ws = await dst.createWriteStream(writePath, {
+          size, start: range.start, append: false, flags: 'r+',
+        });
+        writer = new StreamWriter(ws);
         for await (const chunk of rs) {
           if (item._cancelled) throw new TransferCancelled();
           await this._waitRunnable(item);
@@ -1755,11 +1774,17 @@ class TransferQueue extends EventEmitter {
         }
         await writer.end();
       } catch (err) {
-        writer.destroy();
-        if (typeof rs.destroy === 'function') rs.destroy();
+        abortWorkers();
+        if (writer) writer.destroy();
+        if (rs && typeof rs.destroy === 'function') rs.destroy();
         throw err;
+      } finally {
+        workers.delete(worker);
       }
-    }));
+    };
+    const results = await Promise.allSettled(ranges.map(run));
+    const failure = results.find((result) => result.status === 'rejected');
+    if (failure) throw failure.reason;
     return written;
   }
 

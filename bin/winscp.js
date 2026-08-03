@@ -153,8 +153,12 @@ function resultValue(value) {
   throw new Error('--result expects copy, move, invalid, or none');
 }
 
-function printJson(io, value) {
-  io.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+function printJson(io, value, pretty = false) {
+  io.stdout.write(`${JSON.stringify(value, null, pretty ? 2 : 0)}\n`);
+}
+
+function outputIsPretty(options) {
+  return booleanOption(options, 'pretty', false);
 }
 
 function printError(io, error) {
@@ -366,15 +370,16 @@ async function runCli(argv = process.argv.slice(2), io = {}) {
   try {
     if (first === 'drag' || first === 'drop') {
       const subcommand = args[1] || (first === 'drop' ? 'classify' : 'plan');
-      if (subcommand === 'plan') printJson(streams, dragPlan(args.slice(2)));
-      else if (subcommand === 'classify') printJson(streams, classifyDrop(args.slice(2)));
-      else if (subcommand === 'stage') printJson(streams, await stageDrag(args.slice(2)));
+      const subcommandArgs = args.slice(2);
+      const { options } = parseOptions(subcommandArgs);
+      if (subcommand === 'plan') printJson(streams, dragPlan(subcommandArgs), outputIsPretty(options));
+      else if (subcommand === 'classify') printJson(streams, classifyDrop(subcommandArgs), outputIsPretty(options));
+      else if (subcommand === 'stage') printJson(streams, await stageDrag(subcommandArgs), outputIsPretty(options));
       else if (subcommand === 'extension-status') {
-        const { options } = parseOptions(args.slice(2));
         assertKnownOptions(options, new Set(['windows-build', 'json', 'pretty']), 'drag extension-status');
         printJson(streams, shell.dragExtensionStatus({
           windowsBuild: windowsBuildOption(options),
-        }));
+        }), outputIsPretty(options));
       }
       else throw new Error(`unknown ${first} subcommand ${JSON.stringify(subcommand)}`);
       return 0;

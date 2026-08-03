@@ -23,6 +23,9 @@ available answer; an empty answer set becomes cancellation. Security prompts
 that are refused or cancelled never schedule an automatic reconnect.
 Cancellation also wins if it arrives while the reconnect decision is displayed:
 the pending operation returns without starting another reconnect attempt.
+Concurrent fatal unwind paths share one reconnect decision per error object, so
+cleanup cannot open duplicate prompts or let nested callers choose different
+actions for the same dropped connection.
 
 ## Reconnect policy
 

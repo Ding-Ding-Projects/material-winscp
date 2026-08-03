@@ -1301,8 +1301,16 @@ function winscpDefaultCustomCommands() {
 /** TWinConfiguration::GetExtensionsPaths, expressed as {pathId: directory}. */
 function extensionsPaths(roots) {
   const r = roots || {};
-  const exeParent = r.appDir || process.cwd();
-  const userData = r.userDataDir || path.join(os.homedir(), '.winscp-material');
+  // WinSCP resolves configured roots before comparing them with discovered
+  // files.  Do the same here: portable launchers commonly pass a relative
+  // directory or a %VAR% path, and comparing that spelling with an absolute
+  // path otherwise makes extension IDs silently become "foreign".
+  const resolveRoot = (value, fallback) => {
+    const raw = expandEnvironmentVariables(String(value || fallback));
+    return path.resolve(raw);
+  };
+  const exeParent = resolveRoot(r.appDir, process.cwd());
+  const userData = resolveRoot(r.userDataDir, path.join(os.homedir(), '.winscp-material'));
   return [
     [EXTENSION_PATH_IDS.COMMON, exeParent],
     [EXTENSION_PATH_IDS.COMMON_EXT, path.join(exeParent, EXTENSIONS_SUBFOLDER)],

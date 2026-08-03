@@ -55,6 +55,10 @@ directory in a `finally` path even when staging fails; its output labels the
 deleted path `stagingDirectoryBeforeCleanup` so callers do not treat it as
 usable.
 
+JSON is compact by default for pipes and scripts. Pass `--pretty` to any
+simulation command for indented JSON intended for a terminal. `--json` remains
+accepted as an explicit synonym for the default machine-readable format.
+
 ## Failure modes
 
 | Situation | What the user sees | Recoverable |

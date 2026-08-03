@@ -31,6 +31,14 @@ Under **Site → Advanced → SCP/Shell**.
 | `notUtf` | `auto` | Treat filenames as non-UTF-8. |
 | `postLoginCommands` | `[]` | Commands run once after the shell opens. |
 
+Remote duplicate actions use the same `copyRemote` adapter capability as the
+Commander queue. When the user chooses overwrite, the adapter removes only the
+resolved destination path and then runs `cp -a`; otherwise it leaves the
+destination untouched so the server's existing-target failure is preserved.
+This keeps the action's target exact even when the destination already names a
+directory. The path is always shell-quoted, and the removal is never performed
+for a non-overwrite duplicate.
+
 ## Failure modes
 
 | Situation | What the user sees | Recoverable |
@@ -80,6 +88,8 @@ Under **Site → Advanced → SCP/Shell**.
   recursive truncation, permissions and error categories are covered by
   focused contract tests and the real SSH/SCP suite in `test/e2e-sftp.test.js`.
 - Timezone correction is tested with synthetic clock offsets.
+- Commander remote-copy command construction is tested for explicit overwrite
+  and default no-overwrite behavior in `test/scp-commander-parity.test.js`.
 
 Manual check: connect over SCP, open **Commands → Console**, run `echo $0`, and
 confirm the reported shell matches the `shell` option in effect.

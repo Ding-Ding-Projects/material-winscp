@@ -42,6 +42,10 @@ Under **Preferences → Transfer → Background**, stored in `PREF_DEFAULTS.queu
   cancellation arrives while a transfer is waiting for its speed-limit token,
   the delayed chunk is discarded before it reaches the destination. The same
   guard applies to the final text-conversion tail and parallel ranged writes.
+- **Parallel ranged writes fail as one operation.** If one ranged reader or
+  writer fails, the queue destroys the sibling streams and waits for every
+  range to settle before retrying or reporting the item error. This prevents a
+  late sibling chunk from writing after the item has moved into error handling.
 - **Progress never blocks a reply.** Long work pushes to `event:progress` with a
   correlation id; the IPC call that started it returns straight away.
 - **An item's settings are a snapshot.** See the note in the
@@ -128,8 +132,10 @@ Under **Preferences → Transfer → Background**, stored in `PREF_DEFAULTS.queu
   separately, because a listener that neither retries nor fails leaves the item
   awaiting a promise nothing can settle: the queue skips its own unsupervised
   backoff the moment anything subscribes.
-- Throughput and parallelism against real servers are checked manually; this
-  article does not claim automated coverage for them.
+- Parallelism is covered with ranged in-memory streams, including failure
+  containment: a failed range settles the whole operation and does not leave
+  sibling workers running. Throughput against real servers is still checked
+  manually.
 
 ## Suggested articles
 

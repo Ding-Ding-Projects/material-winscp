@@ -1750,6 +1750,29 @@ test('transfersLimit bounds how many items run at once', async () => {
   for (let i = 0; i < 5; i++) assert.ok(remote.read(`/r/f${i}.bin`), `f${i} missing`);
 });
 
+test('parallel chunk failure aborts and settles sibling streams', async () => {
+  const { local, remote } = makePair({ chunkSize: 1024, readDelayMs: 2 });
+  const payload = bigBuffer(65536);
+  local.put('/l/huge.bin', payload);
+  const createReadStream = local.createReadStream.bind(local);
+  local.createReadStream = async (...args) => {
+    local.failRead = { path: '/l/huge.bin', afterBytes: 0 };
+    return createReadStream(...args);
+  };
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0, maxReconnects: 1 });
+  const item = q.add({
+    side: 'upload', source: '/l/huge.bin', target: '/r/huge.bin',
+    sourceAdapter: local, targetAdapter: remote,
+    copyParam: { parallelTransfers: 4, parallelTransferThreshold: 16384, resumeSupport: 'off' },
+  });
+  await q.idle();
+
+  assert.equal(item.state, 'error');
+  assert.equal(item.error.code, 'ECONNRESET');
+  assert.ok(item.progress.bytes < payload.length, 'failed parallel copy must not report completion');
+});
+
 test('cancellation during throttling does not write the delayed chunk', async () => {
   const { local, remote } = makePair({ chunkSize: 4 });
   local.put('/l/a.bin', Buffer.from('abcdefgh'));

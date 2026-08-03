@@ -34,6 +34,22 @@ test('headless CLI prints help and version without opening the app', async () =>
   assert.equal(JSON.parse(extension.text()).brokenOnThisWindows, true);
 });
 
+test('simulation output is compact JSON by default and pretty JSON on request', async () => {
+  const compact = output();
+  assert.equal(await cli.runCli(['drag', 'plan', '--source', 'remote'], {
+    stdout: compact.stream, stderr: compact.stream,
+  }), 0);
+  assert.equal(compact.text().includes('\n  '), false);
+  assert.deepEqual(JSON.parse(compact.text()).source, 'remote');
+
+  const pretty = output();
+  assert.equal(await cli.runCli(['drag', 'plan', '--source', 'remote', '--pretty'], {
+    stdout: pretty.stream, stderr: pretty.stream,
+  }), 0);
+  assert.match(pretty.text(), /\n  "command":/);
+  assert.deepEqual(JSON.parse(pretty.text()).source, 'remote');
+});
+
 test('winscp-com prints help and version without starting the console runner', () => {
   const entry = path.join(__dirname, '..', 'bin', 'winscp-com.js');
   const help = spawnSync(process.execPath, [entry, '--help'], { encoding: 'utf8' });

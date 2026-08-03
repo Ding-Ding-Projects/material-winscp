@@ -786,6 +786,20 @@ test('a robust loop with no flag has no reconnect budget at all', async () => {
   assert.ok(!session.lines.some((l) => /Retry interval expired/.test(l)));
 });
 
+test('concurrent fatal paths share one reconnect prompt decision', async () => {
+  const { terminal, queries } = makeTerminal({ answers: [ANSWERS.retry] });
+  let release;
+  terminal.queryUserException = () => new Promise((resolve) => { release = resolve; });
+  const lost = new Error('read ECONNRESET'); lost.code = 'ECONNRESET';
+  const first = terminal.doQueryReopen(lost);
+  const second = terminal.doQueryReopen(lost);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(queries.length, 0, 'the injected prompt path should own the decision');
+  release(ANSWERS.retry);
+  assert.deepEqual(await Promise.all([first, second]), [true, true]);
+  assert.equal(lost.reopenQueried, true);
+});
+
 test('cancelling while the reconnect prompt is open does not reconnect', async () => {
   const { terminal, session, adapter, queries } = makeTerminal({ answers: [ANSWERS.retry] });
   adapter.connected = false;
