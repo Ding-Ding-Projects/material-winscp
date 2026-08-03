@@ -187,6 +187,30 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "6aee465", kind: 'commit', ref: "6aee465", oid: "6aee4650e0482aad834b4eed080021fbd75b6d86", date: "2026-08-03",
+    title: "Harden terminal, protocol, checklist, and WinApi boundaries",
+    changes: [
+      { category: "added", text: "English: Make batch remote copies transactional, expose RemoteFiles aliases, preserve S3 deletion errors except concurrent 404s, add WebDAV legacy-auth warnings, invert checklist selections accessibly, and provide injected clipboard text handling. Add focused regressions and documentation. The edge cases now wear tiny safety helmets instead of sprinting into traffic." },
+      { category: "fixed", text: "廣東話：令批次 remote copy 有 transaction、補返 RemoteFiles aliases、S3 只吞 concurrent 404、WebDAV legacy auth 顯示保安警告、checklist 有 accessibility 反選，同 WinApi 有 injected clipboard text。加埋 regression tests 同文件，啲 edge cases 終於戴返迷你安全帽，唔再衝出馬路。" },
+    ],
+  },
+  {
+    id: "c46bd62", kind: 'commit', ref: "c46bd62", oid: "c46bd621848ca83a381cc9e0a72300877ffcbce3", date: "2026-08-03",
+    title: "Refresh unit-porting handoff metadata",
+    changes: [
+      { category: "changed", text: "English: Record the verified 3,271/3,272 test result, 59.0% logic coverage, 114 remaining units, and the current porting checkpoint. The handoff now tells the truth before the next code archaeology expedition." },
+      { category: "changed", text: "廣東話：記低已驗證嘅 3,271/3,272 測試、59.0% logic coverage、剩低 114 個 units 同今次 porting checkpoint，交更紙講真話，下一輪考古少啲撞牆。" },
+    ],
+  },
+  {
+    id: "6e6f5e3", kind: 'commit', ref: "6e6f5e3", oid: "6e6f5e38610a1ce31ba5a2e5bf2ecbd1c227c9fb", date: "2026-08-03",
+    title: "Refresh in-app changelog for unit-porting wave",
+    changes: [
+      { category: "changed", text: "English: Record the Explorer, editor, preferences, queue, SFTP, and WinConfiguration slice in the in-app release history. The changelog keeps the code's diary so future archaeology needs fewer tiny shovels." },
+      { category: "changed", text: "廣東話：將 Explorer、editor、preferences、queue、SFTP 同 WinConfiguration 呢輪改動寫入 app 內置 changelog，等將來考古唔使拎住迷你鏟周圍掘。" },
+    ],
+  },
+  {
     id: "3e1d057", kind: 'commit', ref: "3e1d057", oid: "3e1d057e89a65af7802474eb3ad072dca92f1704", date: "2026-08-03",
     title: "Port Explorer, editor, preferences, queue, SFTP, and WinConfiguration slices",
     changes: [
@@ -724,85 +748,6 @@ export const DEVELOPMENT = [
     ],
     changesYue: [
       { category: "changed", text: "壞設定檔而家識得留低備份再安全起身；新增連線亦唔再玩捉迷藏，儲存站點、接上工作階段同冇開 Pageant 嘅密碼登入全部行得通。個 app 終於唔使再四圍借樣：同一個向量標誌包辦標題列、About、視窗同 Windows 圖示。" },
-    ],
-  },
-  {
-    id: "ef5f10f", kind: 'commit', ref: "ef5f10f", oid: "ef5f10f2d9ff746d41a40e0686cc6cbe6bf05868", date: "2026-08-02",
-    title: "Write the site's client application, which had never existed",
-    changes: [
-      { category: "added", text: "index.html referenced app.css and app.js; `git log --all --diff-filter=A` found no commit that had ever added either. So the documentation site fetched two 404s and rendered an empty <main> — one of the four reasons every path under the repository's advertised homepage came back empty, the root included. The stylesheet the page needed to look like anything, and the script that turns 58 generated articles into a site, were simply not in the tree." },
-      { category: "changed", text: "They are now: site/src/app.css, site/src/app.js and fourteen modules under site/src/lib/. Plain ES modules, loaded straight by the browser, no bundler and no build step beyond site/build.js. `node site/build.js --verify` goes from \"2 problems\" to VERIFY OK: 12 categories, 58 articles, 6 bundled images, 27 files, exit 0." },
-      { category: "fixed", text: "What it does, and the bug each part exists to avoid:" },
-      { category: "changed", text: "HASH ROUTER, not the History API, because Pages has no rewrite rule and /material-winscp/protocols/sftp is a request for a file that does not exist. Article ids and in-page anchors are ambiguous by shape — the builder emits #/cat/article-anchor and every slug has hyphens — so resolution is a lookup for the longest known id, not a parse." },
-      { category: "changed", text: "THE SKIP LINK IS NOT A ROUTE. href=\"#main\" is correct markup and also, on a hash-routed page, a navigation to \"/main\" that renders the 404. Intercepted." },
-      { category: "changed", text: "SEARCH with a regex builder ANCHORED BESIDE EVERY FIELD, never one global dialog applying to whichever field was touched last. Plain text is the default, regex is opt-in, and the two directions stay in sync. One predicate object serves a filter and its inverse, so \"containing\" and \"not containing\" cannot drift apart on casing or flags." },
-      { category: "changed", text: "CATASTROPHIC PATTERNS REFUSED BEFORE THEY RUN, including (a|aa)*b — which hangs exactly as hard as (a+)+$ and contains no nested quantifier at all. JavaScript has no regex timeout, so refusing the shape is the only defence." },
-      { category: "added", text: "MATERIAL 3 derived at runtime from one seed, light and dark, both shipped as a floor in CSS so the first paint is styled before any module runs. Tonal palettes in OKLab rather than a second copy of the app's CAM16 — said out loud in the docs, because the same seed lands a shade away from the desktop app's." },
-      { category: "changed", text: "AN INFINITE COLOUR PICKER, continuous field plus numeric entry, translating across fourteen notations. Every string it prints reads back as the same colour; that round trip is a test, not a promise." },
-      { category: "changed", text: "TABS with a real overflow surface. `flex: 0 0 auto` is load-bearing: as shrinkable flex items tabs squeeze to a sliver of ellipsis instead of overflowing, so the strip always \"fits\", the measurement has nothing to move, and every tab is on screen with none of them readable. Measured synchronously, because requestAnimationFrame does not fire in a page that is not painting — which is precisely when nobody is watching." },
-      { category: "changed", text: "THE INSTALLER BUTTON POINTS AT A PROVEN URL OR DOES NOT EXIST. site/build.js reads an optional release manifest (generated by pages.yml with `gh release view`, git-ignored, never committed) and drops any asset whose URL is not the immutable /releases/download/<tag>/ form. No manifest, no button, and a sentence saying the page will not guess. Exercised against the real v0.1.464 release: it rendered the actual Setup.exe URL at 125.9 MB." },
-      { category: "changed", text: "THREE LANGUAGE MODES AND TWO FUNNY SLIDERS, and the dim sum surprise at its advertised 10%, from the bundled catalog, with alt text that names the dish." },
-      { category: "fixed", text: "The verifier learned one thing too: a module import is a subresource. `import … from './lib/pages.js'` is a fetch that appears in no src=, href= or url(), and one missing lib/ file fails the whole module graph — a blank page, not a degraded one. That is the original bug one level down, so it is now a build failure with the importer named." },
-      { category: "fixed", text: "Four bugs the browser found, fixed rather than documented: the settings search spread its terms string into individual characters, so every multi-letter query matched nothing; Ctrl+Arrow reordering was swallowed by the plain-Arrow case in the same switch, advertising a shortcut that did nothing; the bulk-close field sat off-screen where nobody could type into it; and the inverse of \"contains X\" read \"does not contains X\" in a destructive confirmation." },
-      { category: "fixed", text: "Tests: test/site-app.test.js, 36 tests, all passing on Node 26.5.1 and Node 22.23.2. With site/src/lib/, app.js and app.css moved aside, 0 pass and 36 fail. test/site-build.test.js goes 22 to 31; the five release-manifest tests and the two module-import tests fail against the previous builder. One test there asserted the repository must STAY broken (--verify exits 1 because app.js is absent) — rewritten to assert the same property against a tree where the file is deliberately removed, plus a new test that the real repository verifies clean." },
-      { category: "changed", text: "Not done, and worth someone's time: no screenshots (the browser pane would not composite), the Pages workflow has still never run, Pages is still not enabled, tab groups are not implemented, and there is no command palette. HANDOFF.md was not regenerated because `node tools/handoff.js` runs the whole suite." },
-      { category: "changed", text: "---" },
-    ],
-    changesYue: [
-      { category: "changed", text: "粵語版：呢個網站個 client app 由頭到尾冇存在過" },
-      { category: "changed", text: "index.html 一直叫緊 app.css 同 app.js，但 `git log --all --diff-filter=A` 話你知， 呢兩個檔案由開天闢地到而家都未 commit 過。即係話個文件網站每次開，都係老老實實 去攞兩個 404 返嚟，然後畀你睇個空白 <main>。難怪 repo 個 homepage 寫住個網址， 入面每一條路徑都係 404，連個 root 都唔例外。" },
-      { category: "changed", text: "而家寫咗喇：app.css、app.js 加 lib/ 入面十四個 module，純 ES module，瀏覽器直接 load，除咗 site/build.js 之外冇第二個 build step。`node site/build.js --verify` 由「2 problems」變成 VERIFY OK——12 個分類、58 篇文章、6 張本地點心相、27 個檔案， exit 0。" },
-      { category: "changed", text: "每一忽都係為咗擋一個實會中招嘅 bug：" },
-      { category: "changed", text: "用 HASH ROUTER 唔用 History API，因為 Pages 冇 rewrite， /material-winscp/protocols/sftp 對佢嚟講就係一個唔存在嘅檔案。文章 id 同錨點 生得一模一樣（builder 出 #/cat/article-anchor，而每個 slug 都有橫線），所以要 「查最長嗰個 id」，唔可以靠 parse。" },
-      { category: "changed", text: "SKIP LINK 唔係一條 route。href=\"#main\" 係標準寫法，但喺 hash router 上面就係 navigate 去「/main」，直接彈 404 出嚟。攔咗佢。" },
-      { category: "changed", text: "每個搜尋框都有自己貼身嘅 REGEX 建構器，唔係一個全域 dialog 亂咁套落最後撳過 嗰個框。純文字做預設，regex 要自己開，兩邊即時同步。一個 predicate 物件同時 服務「有」同「冇」兩個動作，咁大細楷同 flag 就永遠拗唔到頸。" },
-      { category: "changed", text: "會爆嘅式樣行之前就拒絕，包括 (a|aa)*b——佢同 (a+)+$ 一樣咁掛得起成個 tab，但 入面連一個巢狀量詞都冇。JavaScript 冇 regex timeout，唔擋 shape 就冇得擋。" },
-      { category: "changed", text: "MATERIAL 3 由一隻種子色即時推出成套配色，深淺色都喺 CSS 度打底，所以未 load 完 module 個頁面都已經有樣。色階用 OKLab 而唔係抄多份 app 嗰套 CAM16——文件寫 明咗，因為同一隻種子色會同桌面版爭少少。" },
-      { category: "changed", text: "無限色彩選擇器：連續色域加數值輸入，十四種寫法互譯。佢寫出嚟嘅每一串字， 自己都讀得返同一隻色——呢個係測試，唔係口噏噏。" },
-      { category: "changed", text: "分頁有真正嘅 overflow。`flex: 0 0 auto` 唔係裝飾：如果可以縮，啲分頁會縮到淨返 三點省略號，個 strip 就永遠「啱曬位」，量度嗰段永遠冇嘢要搬，結果全部分頁都喺 screen 度但一個都睇唔到個名。量度改成同步做，因為個頁面唔畫 frame 嗰陣 requestAnimationFrame 根本唔會 call——而嗰陣正正就係冇人望住嘅時候。" },
-      { category: "changed", text: "安裝檔個掣要有真憑實據先出現：builder 讀一個可有可無嘅 release manifest （pages.yml 用 `gh release view` 生成、gitignore、永遠唔 commit），凡係唔係 /releases/download/<tag>/ 呢個不可變格式嘅 asset 一律唔要。冇 manifest 就冇掣， 仲要寫明「呢版唔會靠估」。實測過真 v0.1.464：出到真正個 Setup.exe 網址， 125.9 MB。" },
-      { category: "changed", text: "三種語言模式、兩支搞笑滑桿，仲有 10% 機會出現嘅點心驚喜，用本地相，alt text 叫得出隻點心個名。" },
-      { category: "changed", text: "Verifier 都學咗一嘢：module import 都係 subresource。`import … from './lib/pages.js'` 係瀏覽器真係會去攞嘅嘢，但佢唔會出現喺 src=、href= 或者 url() 入面，而少一個 lib/ 檔案就成個 module graph 死埋——白畫面，唔係「差少少」。即係 同一個 bug 低一層，所以而家會 build fail 兼指名道姓話你聽邊個 import。" },
-      { category: "changed", text: "用瀏覽器捉返嚟即場修好嘅四個 bug：設定搜尋將搜尋詞成串字串攤成一個一個字母， 搞到打多過一個字母就乜都搵唔到；Ctrl+方向鍵重新排序畀同一個 switch 入面嘅普通 方向鍵食咗，即係 menu 寫住個快捷鍵但撳極都冇反應；批次關閉個輸入框擺咗喺畫面 外面，冇人打得到字入去；仲有「contains X」倒轉之後變咗「does not contains X」， 而佢係出現喺一個刪嘢確認框度。" },
-      { category: "changed", text: "測試：test/site-app.test.js 36 個全過，Node 26.5.1 同 Node 22.23.2 都過。 將 site/src/lib/、app.js、app.css 搬走之後：0 過 36 敗。 test/site-build.test.js 由 22 變 31，五個 release manifest 測試同兩個 module import 測試喺舊 builder 上面全敗。嗰度本來有個測試堅持「呢個 repo 一定要壞」 （--verify 一定要 exit 1，因為 app.js 唔喺度）——改成喺一棵刻意抽走檔案嘅樹上面 驗同一件事，再加一個新測試驗真 repo 而家 verify 得乾乾淨淨。" },
-      { category: "changed", text: "未做嘅，唔呃你：冇 screenshot（個 browser pane 唔肯 composite）、Pages workflow 到而家一次都未行過、Pages 都仲未開、分頁群組未做、command palette 未做。 HANDOFF.md 冇重新生成，因為 `node tools/handoff.js` 要行成個測試套。" },
-    ],
-  },
-  {
-    id: "ccefc76", kind: 'commit', ref: "ccefc76", oid: "ccefc7678dcb9f105b85a249b585066640102526", date: "2026-08-02",
-    title: "Refresh the counts this repository states about itself, and stop typing them into prose",
-    changes: [
-      { category: "changed", text: "The line counter now measures authorship, so the two places that quote its numbers had to be brought in line — and one of them was quoting a figure from nine commits ago." },
-      { category: "added", text: "README: the size table said \"measured at 74a92c6\" and had drifted by roughly 4,400 lines. Regenerated from `--markdown` rather than retyped, so it cannot drift by transcription, and it now carries the authorship rows. It also says plainly what it is: a convenience copy, refreshed to match a published release, while the release notes are the record." },
-      { category: "changed", text: "docs/tooling.md: two file counts sat in the prose — \"the project (280 files)\" and \"everything the repository tracks (304 files)\". Both were already wrong, by one and by three, because commits landed after they were typed. That file opens by saying a number a person types is a number that quietly stops being true, and then demonstrated it four paragraphs later. The counts are gone; the names of the rows stay, and the tool prints the figures." },
-      { category: "changed", text: "The numbers, for the record: 281 files and 242,770 lines in the project, 307 and 250,006 tracked in total. Of the lines still here, 242,765 were written by an agent and 5 by a person — `.gitattributes` and `.gitmodules`, which is exactly what you would expect and is stated without spin in either direction. Attributed total equals counted total, on purpose; if they ever differ the split is withheld rather than published." },
-      { category: "changed", text: "60/60 across count-lines, autoupdate and changelog." },
-    ],
-    changesYue: [
-      { category: "changed", text: "個計數器而家識數邊個寫嘅，所以兩個引用佢數字嘅地方都要跟返 —— 其中一個仲要係喺 九個 commit 之前嘅數。" },
-      { category: "changed", text: "README 嗰個表寫住「喺 74a92c6 量度」，已經差咗成四千幾行。而家直接由 `--markdown` 生返出嚟，唔靠人手抄，順便加埋作者歸屬。仲寫明咗佢自己係乜：一份方便睇嘅副本， 以已發佈嘅 release 為準 —— 真正嘅紀錄喺 release notes 度。" },
-      { category: "changed", text: "`docs/tooling.md` 就更抵笑：入面寫死咗兩個檔案數目，兩個都已經唔啱（一個差一， 一個差三），因為之後又 commit 咗嘢。而嗰份文件開頭第一段就係話「人手打嘅數字， 遲早會靜靜雞變咗唔啱」—— 然後隔咗四段就親自示範咗一次。" },
-      { category: "changed", text: "數字放喺呢度作實：專案 281 個檔案、242,770 行；連埋所有 tracked 係 307 同 250,006。 仲喺度嘅行入面，242,765 行係 agent 寫，5 行係人寫（`.gitattributes` 同 `.gitmodules`）。 就係咁，唔往自己面上貼金，亦都唔使唱衰自己。" },
-    ],
-  },
-  {
-    id: "bfe5315", kind: 'commit', ref: "bfe5315", oid: "bfe5315278c67c24372a2f4d740e7b8c1ea7bb7b", date: "2026-08-02",
-    title: "Count the lines in CI, and name who wrote each one that survived",
-    changes: [
-      { category: "added", text: "Every release is supposed to state the project's line count, and CI is supposed to be what counts it. Neither half was true: tools/count-lines.js knew how big the project was but had no idea who wrote it, and .github/workflows/ci.yml never ran it at all, so v0.1.459 shipped release notes with no count anywhere in them." },
-      { category: "added", text: "Authorship is now attributed PER SURVIVING LINE with `git blame`, never by summing added lines out of `git log`. Churn is not authorship — a line written on Monday and deleted on Tuesday belongs to nobody, and a log-based tally hands the credit to whoever rewrote a file most often. A commit counts as agent-written under exactly two rules, both printed beside the numbers so the split can be re-derived by anyone who doubts it: the author is an automation identity, or the message carries a `Co-Authored-By:` trailer naming an agent. Lines not yet committed get their own row instead of being quietly filed under whoever last touched the file." },
-      { category: "changed", text: "Two ways the counter could have lied confidently, both now refused rather than guessed through:" },
-      { category: "fixed", text: "A SHALLOW CLONE. `git blame` does not fail on one. It exits 0 and credits every line of every file to the single grafted boundary commit, which on this repository prints a tidy and entirely fictional 100%. The counter detects it, prints no split, and says how to fix it." },
-      { category: "removed", text: "ITS OWN ARITHMETIC. The size table counts bytes; the authorship table counts what blame accounted for. Two numbers in one table that disagree destroy the credibility of both, so the split is withheld and the process exits non-zero — which fails the release step instead of publishing it. They currently agree exactly, and only because both drop the empty string after a file's trailing newline, which is the classic way this goes wrong." },
-      { category: "changed", text: "The table now also shows the excluded rows in the same table as the totals they are held out of, so \"the project\" (280 files) and \"everything the repository tracks\" (304 files) are two visible numbers rather than one number with a silent asterisk." },
-      { category: "changed", text: "CI runs the committed script over the tagged commit, before `npm version` dirties package.json, and build/release-notes.js embeds the result under \"How much code this is\" with the command a reader can reproduce it with. The existing release body is untouched otherwise; a missing measurement says so plainly rather than dropping the section, because an absent section looks exactly like a release that never had one." },
-      { category: "changed", text: "Performance: 280 files, ~1.6-2.4s at concurrency 8, against 7.7s serially — one `git blame --porcelain` per file through a small pool, because on Windows the process spawn costs more than the blame does. --porcelain rather than --line-porcelain: the latter repeats the full author header for every line, which on a 49,000-line generated file is ten times the output for information already known from its first occurrence." },
-      { category: "fixed", text: "Tests: test/count-lines.test.js, 9 tests, 0 passing before this change and 9 after, on both Node 26 and CI's Node 22. They cover the arithmetic identity (and its per-column form, so a bug that moves lines between scopes cannot cancel out), the trailing-newline rule, a content line that looks like a blame header, both agent rules plus a human co-author that must not be swept into the agent column, the shallow-clone refusal, the markdown rows and both totals summing to their own total, and the CI wiring end to end." },
-    ],
-    changesYue: [
-      { category: "changed", text: "點解要改：條數係要「數」出嚟嘅，唔係打字打出嚟嘅。以前 count-lines.js 淨係識講呢個 project 有幾大，完全唔識講邊個寫，而 CI 更加索性冇 run 過佢， 所以 v0.1.459 個 release notes 一個數字都冇。而家用 `git blame` 逐條「仲喺度」 嘅 line 去計 — 寫咗又刪咗嘅唔算數，唔可以邊個改得最多就當邊個寫。" },
-      { category: "changed", text: "兩個扮到好似好準嘅大話，而家一律唔講好過亂噏：shallow clone 嘅時候 blame 唔會炒，佢會笑笑口話你聽成個 repo 都係最尾嗰個 commit 寫嘅，靚仔 100%, 假到冇朋友 — 所以偵測到就唔出數，仲要話你知點救。第二個係佢自己同自己 對唔上數：一張表入面兩個數唔夾,兩個都信唔過,所以寧願唔出,而且直接 exit 1 拉 CI 落水。而家啱啱好對得住,全靠兩邊都記得唔好將檔案尾嗰個換行當一行。" },
-      { category: "changed", text: "依家 CI 會喺打 tag 嗰個 commit 度行埋支script,再由 release notes 貼入去, 連點樣自己再行一次都寫埋。280 個檔案 8 條線行 1.6 秒,自己一條線行要 7.7 秒 — Windows 開 process 比 blame 本身仲貴,呢個先係樽頸。" },
     ],
   },
 ];
