@@ -1357,9 +1357,16 @@ class ExplorerShell {
     }
 
     if (operation === OPERATIONS.setProperties) {
-      const panel = this.panel(SIDES.remote);
+      const panel = this.panel(resolved);
       if (panel) panel.saveSelectedNames();
-      const ok = await this._call('setProperties', resolved, files, param);
+      // SetProperties in CustomScpExplorer.cpp deliberately dispatches local
+      // files to the local view (where the OS properties menu owns the UI),
+      // while remote files go through the protocol properties dialog. Passing
+      // the resolved side through here is important in local-local workspaces;
+      // hard-coding the remote panel silently edits the wrong selection.
+      const context = this.setPropertiesContext(resolved, files, param);
+      const method = context.local ? 'setLocalProperties' : 'setProperties';
+      const ok = await this._call(method, resolved, files, context);
       return { ok: ok !== false };
     }
 
@@ -1387,6 +1394,52 @@ class ExplorerShell {
     }
 
     throw new NotSupportedError(`Unknown file operation "${operation}".`);
+  }
+
+  /**
+   * The non-visual half of SetProperties (CustomScpExplorer.cpp:4853).
+   *
+   * The dialog itself remains a renderer concern, but the form decides which
+   * fields and auxiliary lists it may offer from the live terminal caps. The
+   * bounded token collection mirrors WinSCP's first-100-directory-entry rule
+   * and supplements it with selected entries when the directory is larger.
+   */
+  setPropertiesContext(side, files, param) {
+    const resolved = this.getSide(side);
+    const local = this.isSideLocalBrowser(resolved);
+    if (local) return { ...(param || {}), local: true, side: resolved };
+
+    const session = this.session();
+    const caps = (session && session.caps) || {};
+    const capable = (name) => this.capable(name);
+    const entries = (this.panel(resolved) && this.panel(resolved).entries) || [];
+    const selected = Array.isArray(files) ? files : [];
+    const source = entries.slice(0, 100);
+    const seen = new Set(source.map((e) => String(e.name || '')));
+    for (const e of selected) {
+      const name = String((e && (e.name || e.path)) || '');
+      if (name && !seen.has(name)) { source.push(e); seen.add(name); }
+    }
+    const values = (field) => [...new Set(source.map((e) => e && e[field]).filter((v) => v !== undefined && v !== null && v !== ''))];
+    return {
+      ...(param || {}),
+      local: false,
+      side: resolved,
+      capabilities: {
+        mode: capable('modeChanging'),
+        acl: capable('aclChangingFiles') && !selected.some((e) => e && (e.isDirectory || e.type === 'dir')),
+        owner: capable('ownerChanging'),
+        group: capable('groupChanging'),
+        userGroupById: capable('groupOwnerChangingByID'),
+        tags: capable('tags'),
+      },
+      users: capable('ownerChanging') ? values('owner') : [],
+      groups: capable('groupChanging') ? values('group') : [],
+      checksum: this.canCalculateChecksum(),
+      // Keep this observable for adapters that need to distinguish a missing
+      // capability from an empty list; `caps` is intentionally not mutated.
+      declaredCapabilities: { ...caps },
+    };
   }
 
   /**

@@ -1274,6 +1274,40 @@ test('extension roots resolve portable relative and environment paths consistent
   }
 });
 
+test('configuration roots detect portable mode beside the application', () => {
+  const appRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'wc-portable-'));
+  const external = fs.mkdtempSync(path.join(os.tmpdir(), 'wc-user-'));
+  try {
+    fs.writeFileSync(path.join(appRoot, 'winscp.ini'), '[Sessions\\Portable]\n');
+    const roots = W.configurationRoots({ appDir: appRoot, defaultUserDataDir: external });
+    assert.equal(roots.portable, true);
+    assert.equal(roots.appRoot, path.resolve(appRoot));
+    assert.equal(roots.userRoot, path.resolve(appRoot));
+    assert.equal(W.configurationRoots({ appDir: appRoot, portable: false, defaultUserDataDir: external }).portable, false);
+    assert.equal(W.configurationRoots({ appDir: '%WC_PORTABLE_ROOT%', env: { WC_PORTABLE_ROOT: appRoot }, portable: true }).appRoot,
+      path.resolve(appRoot));
+  } finally {
+    fs.rmSync(appRoot, { recursive: true, force: true });
+    fs.rmSync(external, { recursive: true, force: true });
+  }
+});
+
+test('WinConfiguration exposes roots and flush/reload keeps persisted preferences', () => {
+  const { config, root, cleanup } = freshConfig();
+  try {
+    const win = new W.WinConfiguration(config, { appDir: root, userDataDir: root, portable: true }).load();
+    assert.equal(win.portableMode, true);
+    assert.equal(win.userDataRoot, path.resolve(root));
+    config.prefs.interface = 'explorer';
+    const files = win.flush();
+    assert.equal(files.config, path.join(root, 'winscp-material.json'));
+    assert.equal(fs.existsSync(files.config), true);
+    config.prefs.interface = 'commander';
+    win.reload();
+    assert.equal(win.interface, 'explorer');
+  } finally { cleanup(); }
+});
+
 test('the dark-theme tri-state resolves against the system only on auto', () => {
   const { config, cleanup } = freshConfig();
   try {

@@ -40,6 +40,7 @@ pending list; a control without one must appear there.
 | `beepOnFinish` | `design/main/queue.js` → `beep`; `design/main/ipc.js` → `shell.beep()` | Queue completion decides whether to emit the beep event. |
 | `beepOnFinishAfter` | `design/main/queue.js` → `_beepIfDue()` | The configured minimum duration is compared with the whole queue batch. |
 | `queue.keepDoneItemsFor` | `design/main/queue.js` → `pruneDoneItems()` | Completed rows are swept according to `0`, positive seconds, or `-1`. |
+| `tabs.truncateTitles` | `design/renderer/ui/tabs.js` → tab strip class and `components.css` | Tab labels use ellipsis by default and retain their full text when truncation is disabled; changes apply live. |
 
 The real-Electron regression changes another live queue preference through the
 Preferences surface: `queue.noConfirmations` is persisted by `config:setPref`
@@ -79,7 +80,6 @@ successful settings.
 | `security.randomSeedFile` | None |
 | `security.sessionReopenAutoStall` | None |
 | `showInaccessibleDirectories` | None |
-| `tabs.truncateTitles` | None |
 | `timeoutOnStartup` | None |
 | `updates.authenticationEmail` | None |
 | `versionHistory.snapshotSettings` | None |

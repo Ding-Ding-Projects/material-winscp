@@ -84,7 +84,7 @@ the channel.
 | Still unverified against a real server | Why |
 |---|---|
 | `expand-path@openssh.com`, `home-directory` | Implemented, and refused correctly when the server did not announce them, but no test drives their success path — they have no consumer in the adapter yet, so a test would assert only the module. |
-| `lsetstat@openssh.com` reaching a user | The request is implemented and covered end to end, but `setTimes()` and `setRights()` still use plain `SETSTAT`, which **follows a symbolic link**. Preserving a link's own timestamp therefore rewrites its target's instead. Routing those two through `lsetstat` when the path is a link, and only then, is adapter work that has to land with a test for the follow-vs-not-follow difference. |
+| `lsetstat@openssh.com` reaching a user | The request is implemented and covered end to end, and `setTimes()`/`setRights()` route links through it when available. |
 | `copyRemote()` reaching a user | The adapter method is implemented and covered, but `queue.js` still performs a remote copy by streaming the file down and back up; nothing calls `copyRemote()`. Until `queue.js` routes `side === 'remote-copy'` through it, `caps.copyRemote` only gates the command rather than changing how it runs. |
 | `security.tryFtpWhenSshFails` | `shouldSuggestFtp()` honours it and `SshTransport.ftpSuggestion()` passes the adapter's option bag, but `session.js` does not yet put the preference into that bag, so the option currently always reads as its default. |
 | The FTP suggestion reaching the user at all | `SshTransport.connect()` attaches the verdict to the thrown error as `error.ftpSuggestion`, and nothing anywhere reads it — not `session.js`, not the IPC layer, not the renderer. A user whose SSH port never answered is never asked "did you mean FTP?", however the preference is set. |
@@ -92,7 +92,7 @@ the channel.
 
 | Detected but not performed | Consequence today |
 |---|---|
-| **FTPShell Server's unsupported `SSH_FXP_LSTAT`** (`lstatUnsupported`) | WinSCP falls back to opening the directory and closing it again when `LSTAT` answers `SSH_FX_OP_UNSUPPORTED`. This port does not: `list()` and `stat()` send `LSTAT` unconditionally, so an FTPShell server cannot be browsed. The entry is kept in the workaround matrix so the detection is visible, but it is reported under `serverInfo.unhandledWorkarounds` rather than announced as an applied workaround — a session log that claims a fallback it does not perform is worse than one that says nothing. |
+| **FTPShell Server's unsupported `SSH_FXP_LSTAT`** (`lstatUnsupported`) | `stat()` now falls back to `STAT` after the server explicitly returns `SSH_FX_OP_UNSUPPORTED`, allowing read-only directory/file probes while honestly omitting symlink metadata that `STAT` cannot provide. Destructive operations retain `LSTAT` and therefore fail rather than risking a symlink-target mutation. |
 
 Also outside the run: proxies (HTTP / SOCKS4 / SOCKS5 / telnet / local command),
 SSH tunnelling, the SSH agent path (deliberately disabled so the suite never

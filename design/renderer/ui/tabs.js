@@ -36,6 +36,7 @@ import { createSearchBar, filterBy } from './searchbar.js';
 import { makePredicate } from './regexbuilder.js';
 import { colorSwatchButton } from './colorpicker.js';
 import { notify } from './notifications.js';
+import { readPref } from './commands.js';
 
 /* ================================================================== */
 /* model                                                               */
@@ -192,10 +193,17 @@ export function createTabStrip(opts = {}) {
   h('div', { class: 'tabstrip-tools' }, overflowBtn, searchBtn, groupsBtn, newBtn));
 
   bindText(root, 'openedTabs', { attr: 'aria-label' });
+  root.classList.toggle('tabs-no-title-truncation', readPref('tabs.truncateTitles', true) === false);
   appearanceTarget(root, `tab-strip-${id}`, 'Session tab strip');
   container.appendChild(root);
 
   const roving = rovingFocus(root, '[role="tab"]', { orientation: 'horizontal', loop: true });
+  const offPrefs = bus.on('prefs:changed', (event) => {
+    const path = event && (event.path || event.key);
+    if (path === 'tabs.truncateTitles') {
+      root.classList.toggle('tabs-no-title-truncation', event.value === false);
+    }
+  });
 
   /* ---------------- helpers ---------------- */
 
@@ -1372,6 +1380,7 @@ export function createTabStrip(opts = {}) {
     entries: () => entriesForStrip(strip),
     destroy() {
       window.removeEventListener('keydown', onGlobalKey);
+      offPrefs();
       roving.dispose();
       strips.delete(id);
       root.remove();

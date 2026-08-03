@@ -16,6 +16,7 @@ files any of it applies to.
 | [command-line.md](command-line.md) | The `/` and `-` switch parser shared by startup and second-instance launches. |
 | [cli.md](cli.md) | The headless `winscp` entry point, console-compatible commands, and drag/drop simulation. |
 | [command-palette.md](command-palette.md) | The persisted keyboard palette: every registered command, Preferences destinations, regex search and exact setting teleport. |
+| [explorer-properties-dispatch.md](explorer-properties-dispatch.md) | Explorer-side dispatch and capability context for local and remote file properties. |
 
 ## Postman
 

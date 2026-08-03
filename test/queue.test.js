@@ -2181,3 +2181,29 @@ test('the beep clock runs from the start of the batch, not the last file', async
   assert.strictEqual(beeps.length, 1);
   assert.ok(beeps[0].elapsedMs >= 2000, `measured only ${beeps[0].elapsedMs}ms`);
 });
+
+test('retry starts a clean attempt while preserving resumable progress', async () => {
+  const { local, remote } = makePair({ chunkSize: 128 });
+  local.put('/l/a.bin', bigBuffer(1000));
+  remote.createWriteStream = async () => { throw new Error('temporary failure'); };
+  const q = new TransferQueue({ prefs: prefs({ queue: { keepDoneItemsFor: -1 } }), progressMs: 0 });
+  const retries = [];
+  q.on('item-retry', (event) => retries.push(event));
+  const item = q.add({ source: '/l/a.bin', target: '/r/a.bin', sourceAdapter: local, targetAdapter: remote });
+  await q.idle();
+  assert.strictEqual(item.state, 'error');
+  item.progress.cps = 99;
+  item.progress.eta = 12;
+  item.progress.currentFile = '/l/a.bin';
+  remote.createWriteStream = MemoryAdapter.prototype.createWriteStream.bind(remote);
+  assert.strictEqual(q.retry(item.id), true);
+  await q.idle();
+  assert.strictEqual(item.state, 'done');
+  assert.strictEqual(item.retryCount, 1);
+  assert.deepStrictEqual(retries.map((r) => r.attempt), [1]);
+  assert.strictEqual(retries[0].item.retryCount, 1);
+  assert.strictEqual(retries[0].item.progress.cps, 0);
+  assert.strictEqual(retries[0].item.progress.eta, null);
+  assert.strictEqual(retries[0].item.progress.currentFile, '');
+  assert.strictEqual(remote.read('/r/a.bin').length, 1000);
+});

@@ -1388,7 +1388,6 @@ export const PENDING_KEYS = new Set([
   // describes behaviour that does not exist.
   'security.sessionReopenAutoStall',
   'showInaccessibleDirectories',
-  'tabs.truncateTitles',
   'timeoutOnStartup',
   'updates.authenticationEmail',
   'versionHistory.snapshotSettings',

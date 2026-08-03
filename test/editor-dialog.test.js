@@ -23,3 +23,15 @@ test('editor save failure still releases the in-flight save guard', async () => 
   assert.ok(saveStart >= 0 && conflictStart > saveStart);
   assert.match(source.slice(saveStart, conflictStart), /finally \{\s*savePromise = null;/);
 });
+
+test('editor exposes selection-aware clipboard editing with read-only guards', async () => {
+  const source = await fs.readFile(sourcePath, 'utf8');
+  assert.match(source, /async function cutSelection\(\)/);
+  assert.match(source, /async function pasteClipboard\(\)/);
+  assert.match(source, /function deleteSelection\(\)/);
+  assert.match(source, /if \(state\.readOnly\) return false;/);
+  assert.match(source, /app\.clipboardRead/);
+  assert.match(source, /Ctrl\+S/);
+  assert.match(source, /document\.execCommand\('undo'\)/);
+  assert.match(source, /document\.execCommand\('redo'\)/);
+});

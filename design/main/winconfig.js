@@ -1280,6 +1280,21 @@ function normalizePathForCompare(p) {
 }
 
 /**
+ * Resolve the two roots used by WinConfiguration before any child path is
+ * compared.  Portable mode deliberately makes user data beside the app;
+ * callers may still override either root for tests and embedded launchers.
+ */
+function configurationRoots(options) {
+  const o = options || {};
+  const appRoot = path.resolve(expandEnvironmentVariables(String(o.appDir || process.cwd()), o.env));
+  const portable = o.portable === true || (o.portable !== false && fs.existsSync(path.join(appRoot, 'winscp.ini')));
+  const userRoot = o.userDataDir
+    ? path.resolve(expandEnvironmentVariables(String(o.userDataDir), o.env))
+    : (portable ? appRoot : path.resolve(expandEnvironmentVariables(String(o.defaultUserDataDir || path.join(os.homedir(), '.winscp-material')), o.env)));
+  return { appRoot, userRoot, portable };
+}
+
+/**
  * TWinConfiguration::DefaultLocalized's custom commands, exactly as WinSCP
  * seeds them. Kept here as the reference the "are these still the defaults?"
  * check compares against, since a user who never touched the list must not be
@@ -2551,6 +2566,9 @@ class WinConfiguration {
     this.workArea = o.workArea || { width: 1280, height: 800 };
     this.roots = o.roots || {};
     this.env = o.env;
+    this.configurationRoots = configurationRoots({ ...this.roots, appDir: o.appDir || this.roots.appDir,
+      userDataDir: o.userDataDir || this.roots.userDataDir, portable: o.portable, env: this.env,
+      defaultUserDataDir: o.defaultUserDataDir });
     this.defaultPresets = o.defaultPresets || [];
     this.defaultCustomCommands = o.defaultCustomCommands || [];
     this.migrationsApplied = [];
@@ -2558,6 +2576,28 @@ class WinConfiguration {
 
   get prefs() { return this.config.prefs; }
   get compoundVersion() { return strToCompoundVersion(this.appVersion); }
+
+  /** The resolved roots are immutable for a running configuration instance. */
+  get portableMode() { return this.configurationRoots.portable; }
+  get appRoot() { return this.configurationRoots.appRoot; }
+  get userDataRoot() { return this.configurationRoots.userRoot; }
+
+  /** Persist the current store immediately, returning the durable file paths. */
+  flush() {
+    this.config.flush();
+    return { config: path.join(this.userDataRoot, 'winscp-material.json'),
+      hostKeys: path.join(this.userDataRoot, 'hostkeys.json') };
+  }
+
+  /** Re-read persisted state after an external editor/import changed the file. */
+  reload() {
+    this.config.load();
+    this._editorList = null;
+    this._customCommandList = null;
+    this._copyParamList = null;
+    this._bookmarks = null;
+    return this.load();
+  }
 
   /**
    * Bring a just-loaded store up to the current shape and fill in anything the
@@ -2828,6 +2868,7 @@ module.exports = {
   parseExtension, parseExtensionOption, loadExtensionList, extensionListState,
   extensionIdOfFileName, extensionIdOfPath, provisionaryExtensionId, uniqueExtensionName,
   extensionsPaths, extensionBaseName, winscpDefaultCustomCommands,
+  configurationRoots,
   paramsFromBits, paramsToBits, cutTokens,
   normalizeShortCut, shortCutToText, textToShortCut, shortCutCode, shortCutText,
   isCustomShortCutCode, normalizeCustomShortCutCode,

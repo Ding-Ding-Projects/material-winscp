@@ -36,6 +36,12 @@ The internal editor's find bar carries the
 surface — `findByMask` additionally allows a [file mask](file-masks.md) as the
 search term.
 
+The editor also provides selection-aware cut, copy, paste, delete, select-all,
+undo and redo actions from its context menu and keyboard shortcuts. Paste reads
+text through the application clipboard bridge, with the browser clipboard as a
+fallback; read-only viewer windows disable mutating actions. Copy requires an
+actual selection, so it never unexpectedly copies an entire file.
+
 ## Behaviour worth knowing
 
 - **Temporary files live under the app's own data tree** (`paths.js`), never in
@@ -106,6 +112,8 @@ search term.
 - Orphan recovery is tested by leaving temporaries behind and restarting.
 - Renderer save lifecycle invariants are tested for serialization, snapshot
   ownership, and release of the in-flight guard after failure.
+- Renderer editor action wiring is tested for clipboard operations, read-only
+  guards, and undo/redo exposure.
 
 ## Suggested articles
 

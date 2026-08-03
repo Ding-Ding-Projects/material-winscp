@@ -89,6 +89,13 @@ Under **Preferences → Transfer → Background**, stored in `PREF_DEFAULTS.queu
   cap for an embedder that wants one. It defaults to `0` (off), because it has
   no counterpart in `Queue.cpp` and nothing in the app sets it.
 
+## Retry attempts
+
+`retry()` starts a new attempt over the same queue item. It preserves the plan,
+completed-byte/file counters and any resumable partial, while clearing the
+failed attempt's throughput, ETA and current-file display. Snapshots expose
+`retryCount`, and `item-retry` identifies the attempt for progress consumers.
+
 ## Failure modes
 
 | Situation | What the user sees | Recoverable |

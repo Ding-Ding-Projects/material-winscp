@@ -384,6 +384,7 @@ class TransferQueue extends EventEmitter {
       addedAt: Date.now(),
       startedAt: 0,
       finishedAt: 0,
+      retryCount: 0,
       progress: {
         bytes: 0, total: 0, cps: 0, eta: null,
         filesDone: 0, filesTotal: 0, currentFile: '',
@@ -444,6 +445,7 @@ class TransferQueue extends EventEmitter {
       addedAt: item.addedAt,
       startedAt: item.startedAt,
       finishedAt: item.finishedAt,
+      retryCount: item.retryCount,
       progress: { ...item.progress },
       skipped: item.skipped.slice(),
     };
@@ -650,8 +652,16 @@ class TransferQueue extends EventEmitter {
     item._pendingAppendOrResume = null;
     item._cpsWindow = [];
     item._lastProgressAt = 0;
+    // A retry is a new attempt, not a new transfer: retain bytes/files already
+    // committed so resume remains accurate, but discard attempt-local rate and
+    // current-file state so stale ETA/copy speed cannot survive a failure.
+    item.retryCount += 1;
+    item.progress.cps = 0;
+    item.progress.eta = null;
+    item.progress.currentFile = '';
     item._gate.open();
     this._setState(item, 'queued');
+    this.emit('item-retry', { item: this.view(item), attempt: item.retryCount });
     this._pump();
     return true;
   }

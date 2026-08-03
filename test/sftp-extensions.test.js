@@ -1759,11 +1759,10 @@ test('the workaround log only claims what the code really does', async (t) => {
     const bugs = ext.resolveSftpBugs({ implementation: 'openssh', ident: 'OpenSSH_9.6', version: 3 });
     const activeIds = bugs.active.map((b) => b.id);
     const documentedIds = bugs.documented.map((b) => b.id);
-    // The FTPShell opendir fallback is not implemented: list() and stat() still
-    // send SSH_FXP_LSTAT. Announcing it in the session log would be a false
-    // statement about our own behaviour on every single connection.
-    assert.ok(!activeIds.includes('lstatUnsupported'));
-    assert.ok(documentedIds.includes('lstatUnsupported'));
+    // stat() falls back to STAT for FTPShell, while mutating operations remain
+    // deliberately strict about LSTAT so a symlink target cannot be touched.
+    assert.ok(activeIds.includes('lstatUnsupported'));
+    assert.ok(!documentedIds.includes('lstatUnsupported'));
     // The two SSH_FXP_STATUS tolerances belong to the SSH library's parser.
     assert.ok(!activeIds.includes('statusMessageOmitted'));
     assert.ok(!activeIds.includes('languageTagOmitted'));
@@ -1779,10 +1778,37 @@ test('the workaround log only claims what the code really does', async (t) => {
       'copyFileCannotOverwrite',
       'hardlinkArgumentOrderReversed',
       'limitedPacketSize',
+      'lstatUnsupported',
       'signedTimestamps',
       'spaceAvailableAllocationUnitIs16Bit',
       'symlinkArgumentOrderReversed',
       'versionsExtensionIsStruct',
     ]);
+  });
+});
+
+test('SFTP stat falls back from unsupported lstat without fabricating link metadata', async (t) => {
+  const adapter = new SftpAdapter({});
+  adapter.bugs = { lstatUnsupported: true };
+  const calls = [];
+  adapter._call = async (method, path) => {
+    calls.push([method, path]);
+    if (method === 'lstat') {
+      const error = new Error('unsupported');
+      error.code = 8; // SSH_FX_OP_UNSUPPORTED
+      throw error;
+    }
+    return { mode: 0o040755, size: 0, mtime: 1700000000, atime: 1700000000, uid: 7, gid: 9 };
+  };
+  const row = await adapter.stat('/traverse-only');
+  assert.equal(row.type, 'dir');
+  assert.equal(row.isSymlink, false);
+  assert.equal(row.raw.lstatFallback, true);
+  assert.deepEqual(calls, [['lstat', '/traverse-only'], ['stat', '/traverse-only']]);
+  await t.test('an unrelated lstat failure is not downgraded', async () => {
+    const other = new SftpAdapter({});
+    other.bugs = { lstatUnsupported: true };
+    other._call = async () => { const e = new Error('permission denied'); e.code = 3; throw e; };
+    await assert.rejects(() => other.stat('/private'), /permission denied/);
   });
 });

@@ -712,6 +712,20 @@ test('every unavailable preference has a bilingual read-only explanation', async
   assert.match(schema.pendingMessage('both'), /唯讀/);
 });
 
+test('tab title truncation is a live preference consumer', async () => {
+  const { schema } = await load();
+  assert.equal(schema.PENDING_KEYS.has('tabs.truncateTitles'), false,
+    'the tab strip now reads this preference');
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const tabs = fs.readFileSync(path.join(repoRoot, 'design', 'renderer', 'ui', 'tabs.js'), 'utf8');
+  const css = fs.readFileSync(path.join(repoRoot, 'design', 'renderer', 'styles', 'components.css'), 'utf8');
+  assert.match(tabs, /readPref\('tabs\.truncateTitles', true\)/);
+  assert.match(tabs, /tabs-no-title-truncation/);
+  assert.match(tabs, /event\.value === false/);
+  assert.match(css, /\.tabs-no-title-truncation \.tab-label/);
+});
+
 test('the control renderer mirrors disabled state onto native and composite controls', async () => {
   const fs = require('node:fs');
   const path = require('node:path');

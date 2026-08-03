@@ -106,6 +106,40 @@ function makeShell(over) {
   return shell;
 }
 
+test('SetProperties dispatches local-local workspaces to the focused local panel', async () => {
+  const calls = [];
+  const local = panel({ side: 'local', local: true, entries: [{ name: 'note.txt' }], selected: ['note.txt'] });
+  const shell = makeShell({
+    panels: { local },
+    ops: {
+      setLocalProperties: (...args) => { calls.push(args); return true; },
+    },
+    shell: { localBrowserMode: true, currentSide: 'local' },
+  });
+  const result = await shell.executeFileOperation('setProperties', 'current', [{ name: 'note.txt' }]);
+  assert.equal(result.ok, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], 'local');
+  assert.equal(calls[0][2].local, true);
+});
+
+test('SetProperties builds capability context and selected tokens beyond the first 100 entries', () => {
+  const entries = Array.from({ length: 101 }, (_, i) => ({ name: `f${i}`, owner: `owner${i}`, group: `group${i}` }));
+  const shell = makeShell({
+    panels: { remote: panel({ side: 'remote', entries }) },
+    session: fakeSession({ caps: {
+      ...fakeSession().caps, ownerChanging: true, groupChanging: true,
+      modeChanging: true, aclChangingFiles: true, groupOwnerChangingByID: true, tags: true,
+    } }),
+  });
+  const context = shell.setPropertiesContext('remote', [{ name: 'selected', owner: 'picked', group: 'picked-group' }]);
+  assert.equal(context.local, false);
+  assert.equal(context.capabilities.owner, true);
+  assert.equal(context.capabilities.group, true);
+  assert.ok(context.users.includes('picked'));
+  assert.ok(context.groups.includes('picked-group'));
+});
+
 const ENTRIES = [
   { name: '..' },
   { name: 'alpha.txt', size: 10 },

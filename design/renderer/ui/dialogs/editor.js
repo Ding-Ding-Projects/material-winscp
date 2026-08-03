@@ -108,6 +108,10 @@ const STR = {
   edOrphansShow: ['Show in folder', '喺資料夾度顯示'],
   edOrphansDiscarded: ['{0} temporary file(s) removed.', '刪咗 {0} 個暫存檔。'],
   edReplacedNone: ['Nothing matched, so nothing was replaced.', '冇嘢符合，所以冇取代過。'],
+  edCut: ['Cut', '剪下'], edPaste: ['Paste', '貼上'], edUndo: ['Undo', '撤銷'],
+  edRedo: ['Redo', '重做'], edSelectAll: ['Select all', '全選'],
+  edDeleteSelection: ['Delete selection', '刪除選取內容'],
+  edClipboardEmpty: ['The clipboard has no text to paste.', '剪貼簿冇文字可以貼。'],
 };
 
 function strIn(language, key, ...params) {
@@ -794,6 +798,37 @@ export function createEditorWindow(record, initial, opts = {}) {
     updateStatus();
   }
 
+  function selectedText() { return state.text.slice(textarea.selectionStart, textarea.selectionEnd); }
+  async function copySelection() {
+    const text = selectedText();
+    if (!text) return false;
+    return copyText(text);
+  }
+  async function cutSelection() {
+    if (state.readOnly) return false;
+    const start = textarea.selectionStart, end = textarea.selectionEnd;
+    if (start === end || !await copySelection()) return false;
+    setText(`${state.text.slice(0, start)}${state.text.slice(end)}`, start);
+    return true;
+  }
+  async function pasteClipboard() {
+    if (state.readOnly) return false;
+    let text = '';
+    try { text = String(await callMain('app.clipboardRead') || ''); }
+    catch { try { text = String(await navigator.clipboard.readText() || ''); } catch { text = ''; } }
+    if (!text) { notify.info(s('edPaste'), s('edClipboardEmpty')); return false; }
+    const start = textarea.selectionStart, end = textarea.selectionEnd;
+    setText(`${state.text.slice(0, start)}${text}${state.text.slice(end)}`, start + text.length);
+    return true;
+  }
+  function deleteSelection() {
+    if (state.readOnly) return false;
+    const start = textarea.selectionStart, end = textarea.selectionEnd;
+    if (start === end) return false;
+    setText(`${state.text.slice(0, start)}${state.text.slice(end)}`, start);
+    return true;
+  }
+
   const onEdit = debounce(() => { paintGutter(); updateStatus(); refreshHits(); }, 40);
   textarea.addEventListener('input', () => { state.text = textarea.value; onEdit(); });
   for (const evt of ['click', 'keyup', 'select']) {
@@ -1023,14 +1058,14 @@ export function createEditorWindow(record, initial, opts = {}) {
     { label: t('saveFile'), icon: 'download', shortcut: 'Ctrl+S', disabled: state.readOnly, onSelect: () => save(false) },
     { label: s('edReload'), icon: 'refresh', onSelect: () => reload() },
     SEPARATOR,
-    {
-      label: t('copyClip'),
-      icon: 'content_copy',
-      onSelect: () => {
-        const sel = state.text.slice(textarea.selectionStart, textarea.selectionEnd) || state.text;
-        copyText(sel);
-      },
-    },
+    { label: t('copyClip'), icon: 'content_copy', onSelect: () => copySelection() },
+    { label: s('edCut'), icon: 'content_cut', disabled: state.readOnly, onSelect: () => cutSelection() },
+    { label: s('edPaste'), icon: 'content_paste', disabled: state.readOnly, onSelect: () => pasteClipboard() },
+    { label: s('edDeleteSelection'), icon: 'backspace', disabled: state.readOnly, onSelect: () => deleteSelection() },
+    SEPARATOR,
+    { label: s('edSelectAll'), icon: 'select_all', onSelect: () => { textarea.focus(); textarea.select(); updateStatus(); refreshHits(); } },
+    { label: s('edUndo'), icon: 'undo', onSelect: () => { textarea.focus(); document.execCommand('undo'); } },
+    { label: s('edRedo'), icon: 'redo', onSelect: () => { textarea.focus(); document.execCommand('redo'); } },
   ]);
 
   function confirmClose() {
@@ -1071,6 +1106,10 @@ export function createEditorWindow(record, initial, opts = {}) {
     if (!win.element.contains(document.activeElement)) return;
     const ctrl = e.ctrlKey || e.metaKey;
     if (ctrl && e.key.toLowerCase() === 's') { e.preventDefault(); save(false); }
+    else if (ctrl && e.key.toLowerCase() === 'x') { e.preventDefault(); cutSelection(); }
+    else if (ctrl && e.key.toLowerCase() === 'c') { e.preventDefault(); copySelection(); }
+    else if (ctrl && e.key.toLowerCase() === 'v') { e.preventDefault(); pasteClipboard(); }
+    else if (ctrl && e.key.toLowerCase() === 'a') { e.preventDefault(); textarea.select(); updateStatus(); refreshHits(); }
     else if (ctrl && e.key.toLowerCase() === 'f') { e.preventDefault(); find.focus(); }
     else if (ctrl && e.key.toLowerCase() === 'g') { e.preventDefault(); goToInput.focus(); goToInput.select(); }
     else if (e.key === 'F3') { e.preventDefault(); findNext(e.shiftKey ? -1 : 1); }

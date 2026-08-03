@@ -1683,7 +1683,30 @@ class SftpAdapter extends Adapter {
 
   async stat(p) {
     const target = this.normalize(p);
-    const lst = await this._call('lstat', target);
+    let lst;
+    try {
+      lst = await this._call('lstat', target);
+    } catch (e) {
+      // FTPShell Server rejects LSTAT outright.  STAT is a safe compatibility
+      // fallback for this read-only probe, but it follows links, so do not
+      // pretend the result contains link metadata we could not obtain.
+      if (!this.bugs || !this.bugs.lstatUnsupported || !ext.isOperationUnsupported(e)) throw e;
+      this._log('debug', `lstat(${target}) is unsupported; using stat() fallback`);
+      const followed = await this._call('stat', target);
+      const mode = followed.mode || 0;
+      return entry({
+        name: this.basename(target),
+        type: (mode & S_IFMT) === S_IFDIR ? 'dir' : 'file',
+        size: Number(followed.size) || 0,
+        mtime: this._seconds(followed.mtime) * 1000,
+        rights: rightsFromMode(mode),
+        owner: followed.uid === undefined ? '' : String(followed.uid),
+        group: followed.gid === undefined ? '' : String(followed.gid),
+        hidden: this.basename(target).startsWith('.'),
+        readOnly: !(mode & 0o200),
+        raw: { path: target, mode, uid: followed.uid, gid: followed.gid, atime: this._seconds(followed.atime) * 1000, lstatFallback: true },
+      });
+    }
     const mode = lst.mode || 0;
     const isSymlink = (mode & S_IFMT) === S_IFLNK;
     let type = isSymlink ? 'link' : ((mode & S_IFMT) === S_IFDIR ? 'dir' : 'file');

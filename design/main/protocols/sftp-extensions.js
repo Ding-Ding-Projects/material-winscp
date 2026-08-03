@@ -802,11 +802,10 @@ const SFTP_BUGS = [
     symptom: 'SSH_FXP_LSTAT is answered with SSH_FX_OP_UNSUPPORTED, so a directory cannot be probed before entering it.',
     workaround: 'Fall back to opening the directory and closing it again — which then cannot enter a traverse-only (chmod 110) directory.',
     applies: () => true,
-    // NOT implemented here: list() and stat() still send SSH_FXP_LSTAT, so this
-    // server is not actually usable. Recorded so the gap is visible rather than
-    // forgotten, and kept out of `active` so the session log does not claim a
-    // workaround the code does not perform. See docs/protocol-gaps.md.
-    enforced: false,
+    // The adapter's read-only stat() probe falls back to STAT when this status
+    // is observed. Destructive operations intentionally keep LSTAT so a
+    // symlink cannot be mistaken for its target.
+    enforced: true,
   },
   {
     id: 'statusMessageOmitted',

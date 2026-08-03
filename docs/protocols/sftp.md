@@ -65,6 +65,7 @@ behaviour, and only then apply it.
 | Server ignores `chmod` | The operation is reported as failed rather than assumed to have worked. `ignorePermErrors` in the transfer settings can downgrade it to a warning for bulk transfers. | Yes |
 | Transfer interrupted | The queue item records the byte offset and moves to `failed`. Resume restarts from that offset if `resumeSupport` permits. | Yes |
 | SSH handshake, host-key or authentication failure | Any partially opened SSH socket, channel, or tunnel listener is closed before the classified error is returned. The transport remains retryable unless the classification says otherwise. | Yes, when the classification is retriable |
+| Server rejects `SSH_FXP_LSTAT` | A read-only `stat()` probe retries with `STAT` only when the detected workaround applies. Symlink identity is not guessed; mutating operations continue to require `LSTAT`. | Yes for ordinary files/directories |
 | Rekey during a large transfer | Handled by the transport; the transfer pauses for a few hundred milliseconds. No user action. | n/a |
 | `sftpDownloadQueue` or `sftpUploadQueue` too high for the server | Stalls or resets. Lower it to 8 or 16. Values above 256 are clamped and logged; the server may still need a smaller value. | Yes |
 
@@ -103,6 +104,9 @@ behaviour, and only then apply it.
 - Explicit unusable cipher, KEX and host-key policies are verified against a
   TCP listener: each fails before any SSH bytes or authentication can occur,
   and its error is classified as non-retriable.
+- The FTPShell `LSTAT` compatibility path is unit-tested for its supported
+  status code, its normalized directory result, and its refusal to downgrade
+  unrelated errors.
 
 To check a real connection by hand: connect, run **Commands → Server/protocol
 information**, and confirm the negotiated SFTP version and extension list match

@@ -275,6 +275,7 @@ textarea.field-input { padding: 8px 12px; resize: vertical; }
 .tab.drop-after { box-shadow: inset -3px 0 0 var(--p); }
 .tab-dot { width: 8px; height: 8px; border-radius: var(--shape-full); flex: 0 0 auto; }
 .tab-label { font-size: var(--type-label-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tabs-no-title-truncation .tab-label { overflow: visible; text-overflow: clip; white-space: normal; }
 .tab-dirty-dot { width: 6px; height: 6px; border-radius: var(--shape-full); background: var(--ter); flex: 0 0 auto; }
 .tab-close { width: calc(20px * var(--den)); height: calc(20px * var(--den)); min-width: 20px; min-height: 20px; color: inherit; }
 .tab-close:hover { background: color-mix(in srgb, var(--onsfc) 16%, transparent); }
