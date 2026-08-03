@@ -29,7 +29,8 @@ The same advanced calendar control the
 
 The actions are **derived from the history itself**, not a hard-coded list that
 drifts from what the app actually records: created, updated, deleted, restored,
-undone, imported, settings changed — plus anything else the history contains.
+undone, imported, discarded, settings changed — plus anything else the history
+contains.
 
 - **Counts beside each action**, so an empty one is visibly empty rather than
   mysteriously absent.
@@ -48,6 +49,9 @@ default, regex an explicit opt-in.
 
 An honest no-match message **naming what was filtered out** — "no revisions
 between 1 and 7 March with action Deleted matching 'prod'" — not a blank panel.
+When the history is genuinely empty, the panel also names unsaved-document
+discard as a source of the first revision, so the empty state does not imply
+that only configuration changes are recorded.
 
 ## What a row shows
 
@@ -97,8 +101,8 @@ value changed, never the value.
   locale-format and ISO typed input, and for preserving partial input while
   reporting it.
 - Action derivation is tested by seeding a history with each action type and
-  asserting the filter list and counts match exactly — including zero-count
-  actions remaining visible.
+  asserting the filter list and counts match exactly — including discarded
+  documents and zero-count actions remaining visible.
 - Filter composition is tested for all combinations of date, action and text,
   asserting none overrides another.
 - The empty state is asserted to name every active filter.

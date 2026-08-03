@@ -1063,6 +1063,8 @@ test('inside the remote panel the default is move, and Ctrl means copy', () => {
   const base = { effect: 1, fromRemotePanel: true, ontoDirView: true, fromDirView: true, dropTarget: 'sub' };
   assert.strictEqual(shell.chooseDropEffect(base), 2);                       // MOVE
   assert.strictEqual(shell.chooseDropEffect({ ...base, ctrl: true }), 1);    // COPY
+  assert.strictEqual(shell.chooseDropEffect({ ...base, allowMove: false }), 1); // preference disables MOVE
+  assert.strictEqual(shell.chooseDropEffect({ ...base, effect: 2, allowMove: false }), 1);
 });
 
 test('a protocol that cannot move falls back to copy rather than doing nothing', () => {
@@ -1130,6 +1132,18 @@ test('a queue drop is refused when its download target is blank', () => {
     const target = shell.ddGetTarget({ ontoQueueView: true, defaultDownloadTarget });
     assert.strictEqual(target.ok, false, `blank target ${String(defaultDownloadTarget)} must be refused`);
     assert.strictEqual(target.counterName, 'DownloadsDragDropQueueTargetUnknown');
+  }
+});
+
+test('a drop target must be an absolute local path', () => {
+  const shell = makeShell({});
+  for (const spec of [
+    { ontoQueueView: true, defaultDownloadTarget: 'downloads' },
+    { fakeFileDropTarget: 'report.txt' },
+    { externalDropDirectory: 'downloads' },
+  ]) {
+    const target = shell.ddGetTarget(spec);
+    assert.equal(target.ok, false, `relative target ${JSON.stringify(spec)} must be refused`);
   }
 });
 

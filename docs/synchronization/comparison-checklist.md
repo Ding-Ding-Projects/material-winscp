@@ -49,6 +49,7 @@ as an explicit opt-in, with the builder anchored beside the field.
 | A file changes on disk between comparison and execution | The comparison is a snapshot, but there is no changed-since-comparison guard in this surface; re-run the comparison when the list may be stale. | Yes, re-compare |
 | A row is overridden into an impossible action | The renderer gates missing sources, missing deletion targets, type mismatches, and timestamp-only reversals. Protocol capability failures still return from the engine when the action is applied. | Yes, choose another action or re-compare |
 | Delete files is enabled | Remote-only/local-only target rows appear in the checklist with the engine's deletion policy, and the destructive confirmation repeats the count. | Yes, untick or cancel |
+| The authoritative source has no visible files under the current hidden-file or mask filters | The comparison marks the source as empty, and the destructive confirmation says that the selected target files will be deleted under the active filter. | Yes, cancel, adjust the filter, or re-compare |
 | Everything is skipped | The confirmation says "nothing to do" instead of running an empty transfer. | n/a |
 | Comparison ran with a mask, then the mask is changed | The checklist remains the snapshot produced by the original request; changing dialog settings requires a new comparison. | Yes |
 | The session drops while the checklist is open | The list survives; executing it prompts to reconnect first. | Yes |
@@ -90,6 +91,9 @@ as an explicit opt-in, with the builder anchored beside the field.
   rows still offers the action.
 - The remote deletion size and the comparison request's hidden-file policy are
   covered by the renderer transfer-dialog tests.
+- Empty authoritative sources are carried as comparison safety metadata and
+  are named in deletion confirmations, including when a mask or hidden-file
+  filter made the visible source empty.
 - The engine tests cover timestamp-only application, case-preserving targets,
   option validation, watcher startup, native-event coalescing, queue-error
   races, and removal of queued items.

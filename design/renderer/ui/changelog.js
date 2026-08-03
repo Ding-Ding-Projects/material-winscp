@@ -187,6 +187,14 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "cbd2066", kind: 'commit', ref: "cbd2066", oid: "cbd2066f65d56458e4f2954d0f5dd0246cdd7404", date: "2026-08-03",
+    title: "Make dialog contract tests line-ending neutral",
+    changes: [
+      { category: "changed", text: "English: Normalize fixture text before source-contract assertions so the Windows CI checkout tests the dialog behavior rather than its CRLF spelling. The test now stops arguing with the checkout format." },
+      { category: "changed", text: "廣東話：先統一 fixture 換行，再做 dialog contract assertion，Windows CI 唔會因為 CRLF 同 LF 拗交。測試而家查行為，唔再同換行格式鬥氣。" },
+    ],
+  },
+  {
     id: "3636cfb", kind: 'commit', ref: "3636cfb", oid: "3636cfbe55ce856b1853a3235088afd7bef86518", date: "2026-08-03",
     title: "Harden session, configuration, preferences, and dialogs",
     changes: [
@@ -662,13 +670,6 @@ export const DEVELOPMENT = [
     title: "Harden CLI drop classification and progress accessibility",
     changes: [
       { category: "added", text: "Reject missing-only drop classifications instead of handing an empty parcel to the transfer engine, and name progress bars with their visible labels for assistive technology. Add focused regressions and documentation. The CLI now refuses to serve imaginary files, and the progress bar finally knows who its label is.\\n\\n廣東話：空手 drop 唔再扮有貨，progress bar 亦終於認得自己個 label；兩邊都唔使再玩猜謎遊戲。" },
-    ],
-  },
-  {
-    id: "b03c84f", kind: 'commit', ref: "b03c84f", oid: "b03c84feea4cb89f7bfc211f63a4f1e8a61e7d9f", date: "2026-08-03",
-    title: "Cancel pending queue prompts on removal",
-    changes: [
-      { category: "fixed", text: "Resolve a queued item's credential prompt when its row is removed, so the transfer and idle lifecycle cannot remain blocked on a response from a vanished UI. Add a focused regression test and document the cancellation behavior. The queue no longer waits for a ghost password prompt, laah." },
     ],
   },
 ];

@@ -40,6 +40,13 @@ malformed values become unlimited before the item snapshot and throttle see
 them. Unsafe partial-file suffixes are replaced with `.filepart` at the queue
 boundary so a headless caller cannot turn the temporary file into another path.
 
+Copy-policy values are canonicalized at the same boundary as well. Headless
+CLI/IPC callers get the same safe defaults as the Copy Parameters dialog for
+transfer mode, filename case, overwrite policy, completion action, resume
+support, resume threshold, and speed limit. Invalid values are not allowed to
+silently become an engine-specific policy; they fall back to the documented
+default before planning or throttling begins.
+
 The View → Queue → Show command saves `view=show` and reopens the current queue
 surface immediately. It does not create a second queue or duplicate transfer
 controller.
@@ -74,10 +81,12 @@ controller.
 - **An item's settings are a snapshot.** See the note in the
   [category index](README.md) — this is intentional.
 - **Headless speed limits are canonicalized at the queue boundary.** A numeric
-  string such as `"2048"` becomes `2048`; negative, non-finite, and malformed
-  `cpsLimit` values become `0` before the item snapshot, public view, or
-  throttle sees them. GUI validation remains useful, but IPC and CLI callers
-  cannot poison queue state.
+- **Headless copy parameters are canonicalized at the queue boundary.** A
+  numeric string such as `"2048"` becomes `2048`; negative, non-finite,
+  over-limit, and malformed `cpsLimit` values become `0`, while invalid policy
+  names and thresholds fall back to the same defaults as the Copy Parameters
+  dialog. The item snapshot, public view, and throttle therefore agree across
+  GUI, IPC, and CLI/headless paths.
 - **Empty-directory planning agrees across transfer paths.** With
   `excludeEmptyDirectories` enabled, queued local uploads descend into local
   directory symlinks the same way as the foreground engine. Remote-source

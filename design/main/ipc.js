@@ -1614,7 +1614,7 @@ class Ipc {
       // Bound the memory: a user comparing all afternoon must not accumulate
       // every checklist they looked at.
       if (this._checklists.size > 16) this._checklists.delete(this._checklists.keys().next().value);
-      return { token, items: result.items, counts: result.counts };
+      return { token, items: result.items, counts: result.counts, safety: result.safety };
     });
 
     this.handle('sync:apply', async (req) => {

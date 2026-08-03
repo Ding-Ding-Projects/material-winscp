@@ -80,6 +80,33 @@ test('discard waits for the main-process audit and avoids a duplicate close', as
   assert.match(source.slice(confirmStart, confirmEnd), /state\.closedInMain = true/);
 });
 
+test('orphan notices state recovery and audit availability, and the list refreshes after removal', async () => {
+  const source = await fs.readFile(sourcePath, 'utf8');
+  const { orphanNotice } = await import('../design/renderer/ui/dialogs/editor.js');
+  const unavailable = orphanNotice('notes.txt', {
+    recoveryAvailable: false,
+    discardAudit: { status: 'not-recorded' },
+    localPath: 'C:/tmp/notes.txt',
+  });
+  assert.match(unavailable, /no recovery copy is available/i);
+  assert.match(unavailable, /could not be recorded in version history/i);
+  const recorded = orphanNotice('notes.txt', {
+    recoveryAvailable: true,
+    discardAudit: { status: 'recorded' },
+    localPath: 'C:/tmp/notes.txt',
+  });
+  assert.match(recorded, /temporary file has been kept at C:\/tmp\/notes\.txt/i);
+  assert.match(recorded, /was recorded in version history/i);
+  assert.match(source, /export function orphanNotice\(fileName, event = \{\}\)/);
+  assert.match(source, /event\.recoveryAvailable === false/);
+  assert.match(source, /event\.discardAudit\.status === 'recorded'/);
+  const discardStart = source.indexOf("callMain('editor.discardOrphans', chosen)");
+  const discardEnd = source.indexOf('\n          } catch', discardStart);
+  assert.ok(discardStart >= 0 && discardEnd > discardStart);
+  assert.match(source.slice(discardStart, discardEnd), /await load\(\)/);
+  assert.match(source, /clear\(listEl\);\s*boxes\.clear\(\);/);
+});
+
 test('modeless editor resize and keyboard growth stay inside the viewport', async () => {
   const source = await fs.readFile(sourcePath, 'utf8');
   assert.match(source, /const w = clamp\(opts\.width \|\| 880, minWidth, Math\.max\(minWidth, vw - 8\)\)/);

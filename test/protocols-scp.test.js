@@ -7,6 +7,7 @@ const fsp = fs.promises;
 const os = require('os');
 const path = require('path');
 const { Duplex, PassThrough } = require('stream');
+const { EventEmitter } = require('events');
 
 const {
   ScpAdapter,
@@ -25,6 +26,28 @@ function ackReader() {
     readLine: async () => '',
   };
 }
+
+test('SCP startup failure disconnects an owned transport and remains disconnected', async () => {
+  const transport = new EventEmitter();
+  transport.connected = true;
+  transport.exec = async () => ({ code: 1, stdout: '', stderr: 'startup failed' });
+  let disconnects = 0;
+  transport.disconnect = async () => { disconnects++; transport.connected = false; };
+  const adapter = new ScpAdapter({}, { transport });
+  adapter._ownsTransport = true;
+
+  await assert.rejects(() => adapter.connect(), /startup failed/);
+  assert.equal(disconnects, 1);
+  assert.equal(adapter.connected, false);
+  assert.equal(adapter.transport, null);
+});
+
+test('SCP connect is idempotent after a successful setup', async () => {
+  const adapter = new ScpAdapter({});
+  adapter.connected = true;
+  adapter.serverInfo = { protocol: 'SCP', home: '/home/test' };
+  assert.deepEqual(await adapter.connect(), adapter.serverInfo);
+});
 
 function serverChannel() {
   const channel = new Duplex({

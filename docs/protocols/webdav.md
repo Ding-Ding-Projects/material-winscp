@@ -62,6 +62,12 @@ trusted endpoint, preferably over HTTPS.
 | A streamed PUT loses its socket while backpressured | The write callback fails immediately and the request is destroyed; it does not leave the transfer hanging until timeout. | Yes |
 | The site uses an IPv6 literal | The URL uses bracketed IPv6 authority syntax, including a non-default port. | Yes |
 
+`COPY` and `MOVE` are fail-closed operations. The adapter clears their capability
+flags when the server's `OPTIONS` response does not advertise the method, and a
+direct protocol-layer call is rejected before an HTTP request is sent. This keeps
+headless callers consistent with the UI's disabled command state and avoids
+assuming that a server will reject an operation safely.
+
 ## Security considerations
 
 - **By default, WebDAV waits for a `401` challenge before sending credentials.**

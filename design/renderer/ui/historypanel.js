@@ -53,8 +53,8 @@ const STR = {
     'Nothing in the history matches {0}.',
     '歷史入面冇嘢符合{0}。'],
   hpNoHistory: [
-    'No revisions have been recorded yet. A revision appears here the first time a site, a setting or a workspace changes.',
-    '暫時未錄到任何版本。第一次改站點、設定或者工作區嗰陣就會有嘢喺度出現。'],
+    'No revisions have been recorded yet. A revision appears here the first time a site, a setting or a workspace changes, or an unsaved document is discarded.',
+    '暫時未錄到任何版本。第一次改站點、設定、工作區，或者捨棄未儲存文件嗰陣就會有嘢喺度出現。'],
   hpUnavailable: [
     'The version history is not reachable: {0}',
     '讀唔到版本歷史：{0}'],
@@ -110,6 +110,7 @@ const STR = {
   actRestored: ['Restored', '還原'],
   actUndone: ['Undone', '撤銷'],
   actImported: ['Imported', '匯入'],
+  actDiscarded: ['Discarded', '捨棄'],
   actSettings: ['Settings changed', '改設定'],
 };
 
@@ -174,9 +175,10 @@ function paragraphs(key, ...params) {
 const ACTION_LABELS = {
   created: 'actCreated', updated: 'actUpdated', deleted: 'actDeleted',
   restored: 'actRestored', undone: 'actUndone', imported: 'actImported',
+  discarded: 'actDiscarded',
   settings: 'actSettings',
 };
-function actionLabel(action, L = s) {
+export function actionLabel(action, L = s) {
   const key = ACTION_LABELS[action];
   return key ? L(key) : String(action);
 }

@@ -14,7 +14,7 @@ the concrete editor inside the row, and flashes the exact control briefly. Safe
 primitive settings (`check`, `text`, `path`, `number`, `select` and `slider`) also
 render their live control inline. Those controls use the same schema renderer,
 range normalization, mask validation and configuration writer as Preferences;
-secret and multi-step controls remain destination-only.
+secret, dangerous, unavailable and multi-step controls remain destination-only.
 
 ## Search and selection
 
@@ -29,6 +29,10 @@ secret and multi-step controls remain destination-only.
   `Enter` runs it, and `Escape` closes the surface and restores focus. While
   focus is inside an inline editor, its native keys remain its own; Escape from
   a non-empty palette query clears the query before the palette closes.
+- Enter commits a focused text, path or number control before leaving the row;
+  closing while one is dirty commits it too, matching Preferences' immediate
+  write behaviour. A successful write restores the edited control and caret
+  after the live palette inventory refreshes.
 - If the palette closes before its initial focus runs, that deferred focus is
   canceled and never targets the detached search field.
 - Changing the query resets the active option to the first matching result, so
@@ -49,8 +53,8 @@ focus, and clamp their layout for narrow windows and high display scale.
 ## Honest boundary
 
 Inline editing is deliberately limited to schema controls whose existing
-renderer can be mounted safely in a compact row. Pending capabilities, secret
-values, master-password flows and custom editors remain destination-only: their
+renderer can be mounted safely in a compact row. Pending capabilities, secret,
+dangerous values, master-password flows and custom editors remain destination-only: their
 row is labelled unavailable or protected and opens the exact Preferences control,
 where the canonical explanation and multi-step validation live. Site-properties
 and appearance-editor property destinations remain separate roadmap work.

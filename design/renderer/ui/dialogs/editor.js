@@ -87,6 +87,15 @@ const STR = {
   edOrphan: [
     'The edit to {0} was not uploaded. The temporary file has been kept at {1}.',
     '{0} 嘅改動冇上載到。暫存檔留咗喺 {1}。'],
+  edOrphanNoRecovery: [
+    'The edit to {0} was not uploaded, and no recovery copy is available.',
+    '{0} 嘅改動冇上載到，而家冇可用嘅復原副本。'],
+  edOrphanAuditRecorded: [
+    'The discard was recorded in version history.',
+    '捨棄動作已經記入版本歷史。'],
+  edOrphanAuditNotRecorded: [
+    'The discard could not be recorded in version history.',
+    '捨棄動作記唔入版本歷史。'],
   edBinary: [
     '{0} contains bytes that are not text. The internal editor will not open it, because displaying and re-saving it would mangle the file.',
     '{0} 入面有啲唔係文字嘅位元組。內建編輯器唔會開佢，因為顯示完再儲存會整壞個檔案。'],
@@ -128,6 +137,19 @@ function s(key, ...params) {
   const en = strIn('en', key, ...params);
   const yue = strIn('yue', key, ...params);
   return en === yue ? en : `${en} · ${yue}`;
+}
+
+/** Keep recovery and audit claims aligned with the main-process event. */
+export function orphanNotice(fileName, event = {}) {
+  const recovery = event.recoveryAvailable === false
+    ? s('edOrphanNoRecovery', fileName)
+    : s('edOrphan', fileName, event.localPath || '');
+  const audit = event.discardAudit && event.discardAudit.status === 'recorded'
+    ? s('edOrphanAuditRecorded')
+    : event.discardAudit
+      ? s('edOrphanAuditNotRecorded')
+      : '';
+  return [recovery, audit].filter(Boolean).join(' ');
 }
 
 /**
@@ -1223,7 +1245,7 @@ export function createEditorWindow(record, initial, opts = {}) {
     // still only in the renderer. save() advances state.saved only after its
     // own response is tied back to the snapshot it sent.
     else if (e.type === 'uploaded') { updateStatus(); }
-    else if (e.type === 'orphan') notify.warning(t('editorTitle'), s('edOrphan', record.fileName, e.localPath));
+    else if (e.type === 'orphan') notify.warning(t('editorTitle'), orphanNotice(record.fileName, e));
     else if (e.type === 'error') notify.error(t('editorTitle'), e.message);
     else if (e.type === 'focus') win.focus();
   });
@@ -1373,6 +1395,7 @@ function orphansDialog() {
 
   async function load() {
     clear(listEl);
+    boxes.clear();
     let items = [];
     try { items = await callMain('editor.orphans'); }
     catch (err) { listEl.appendChild(h('div', { class: 'prose' }, err.message)); return; }
@@ -1408,6 +1431,7 @@ function orphansDialog() {
           try {
             const n = await callMain('editor.discardOrphans', chosen);
             notify.success(s('edOrphansTitle'), s('edOrphansDiscarded', n));
+            await load();
           } catch (err) { notify.error(s('edOrphansTitle'), err.message); }
         },
       },

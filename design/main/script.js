@@ -280,6 +280,18 @@ function isLetter(c) {
   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
 
+/**
+ * TryStrToInt: script values are decimal integers, not JavaScript's broader
+ * numeric language.  In particular, `parseInt('12oops', 10)` and
+ * `Number('0x10')` would accept values that WinSCP rejects.
+ */
+function tryStrToInt(value) {
+  const text = String(value === undefined || value === null ? '' : value).trim();
+  if (!/^[+-]?\d+$/.test(text)) return null;
+  const number = Number(text);
+  return Number.isSafeInteger(number) ? number : null;
+}
+
 /** A parsed command line: an ordered mix of switches and positional params. */
 class Options {
   constructor(source) {
@@ -422,8 +434,8 @@ class Options {
     const r = this.locateSwitch(name, caseSensitive);
     if (!r.found) return null;
     let count = r.paramsCount;
-    const asInt = Number(r.value);
-    if (r.value !== '' && Number.isInteger(asInt) && asInt < count) count = asInt;
+    const asInt = tryStrToInt(r.value);
+    if (asInt !== null && asInt < count) count = asInt;
     if (paramsMax >= 0 && count > paramsMax) count = paramsMax;
     const out = [];
     for (let i = 0; i < count; i++) out.push(this.param(r.paramsStart + i));
@@ -467,8 +479,8 @@ class Options {
         j++;
       }
       let count = following.length;
-      const asInt = Number(option.value);
-      if (option.value !== '' && Number.isInteger(asInt) && asInt < count) count = asInt;
+      const asInt = tryStrToInt(option.value);
+      if (asInt !== null && asInt < count) count = asInt;
       if (paramsMax >= 0 && count > paramsMax) count = paramsMax;
       for (let k = 0; k < following.length; k++) {
         if (k < count) {
@@ -499,8 +511,8 @@ class Options {
     if (r.value === '') return def;
     if (/^on$/i.test(r.value)) return true;
     if (/^off$/i.test(r.value)) return false;
-    const n = Number(r.value);
-    if (Number.isInteger(n)) return n !== 0;
+    const n = tryStrToInt(r.value);
+    if (n !== null) return n !== 0;
     throw new ScriptError(`Value '${r.value}' is not a valid boolean.`);
   }
 
@@ -1367,8 +1379,8 @@ class Script {
       let cps;
       if (r.value === '') cps = 0;
       else {
-        const n = parseInt(r.value, 10);
-        if (!Number.isFinite(n)) throw new ScriptError(MSG.VALUE_UNKNOWN(r.value, 'speed'));
+        const n = tryStrToInt(r.value);
+        if (n === null) throw new ScriptError(MSG.VALUE_UNKNOWN(r.value, 'speed'));
         cps = n * 1024;
         if (cps < 0) cps = 0;
       }
@@ -2363,8 +2375,8 @@ class ManagementScript extends Script {
   }
 
   findSession(index) {
-    const i = parseInt(index, 10);
-    if (!Number.isFinite(i) || i <= 0 || i > this.terminals.length) {
+    const i = tryStrToInt(index);
+    if (i === null || i <= 0 || i > this.terminals.length) {
       throw new ScriptError(MSG.SESSION_INDEX_INVALID(index));
     }
     return this.terminals[i - 1];
@@ -2887,7 +2899,11 @@ function applyOpenSwitches(data, options, portNumberDefined) {
     data.changePassword = true;
   }
   const timeout = take('timeout');
-  if (timeout !== undefined) data.timeout = Number(timeout) || 0;
+  if (timeout !== undefined) {
+    const value = tryStrToInt(timeout);
+    if (value === null) throw new ScriptError(MSG.VALUE_UNKNOWN(timeout, 'timeout'));
+    data.timeout = value;
+  }
 
   // -hostkey and -certificate are the SAME assignment in the original, and both
   // set FOverrideCachedHostKey — without it a fingerprint pinned on the command

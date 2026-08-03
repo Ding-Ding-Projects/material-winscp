@@ -7,6 +7,8 @@ const {
   entriesForDragPaths,
   normalizePanelDragPayload,
   panelDropMoveRequested,
+  panelDropEffectSpec,
+  negotiatePanelDropEffect,
 } = require('../design/renderer/ui/panels.js');
 
 function adapter(commands) {
@@ -88,4 +90,35 @@ test('Commander drag/drop move preference honours default move and Ctrl copy', (
   assert.equal(panelDropMoveRequested({ allowMove: true, startAsMove: true, ctrlKey: true }), false);
   assert.equal(panelDropMoveRequested({ allowMove: true, shiftKey: true }), true);
   assert.equal(panelDropMoveRequested({ allowMove: false, startAsMove: true }), false);
+});
+
+test('Commander panel drops describe the same target/effect policy as main', () => {
+  assert.deepEqual(panelDropEffectSpec({
+    sourceSide: 'remote', targetSide: 'local', sessionId: 'session-1',
+    dropTarget: 'C:\\Downloads', effect: 2, ctrlKey: false, allowMove: true,
+  }), {
+    effect: 2, fromRemotePanel: true, ontoDirView: true, fromDirView: true,
+    ontoRemotePanel: false, dropTarget: 'C:\\Downloads', ctrl: false,
+    allowMove: true, sessionId: 'session-1',
+  });
+});
+
+test('Commander panel drops fail closed when main rejects or cannot negotiate', async () => {
+  const calls = [];
+  const bridge = {
+    present: true,
+    explorer: async (name, spec) => { calls.push([name, spec]); return 2; },
+  };
+  assert.equal(await negotiatePanelDropEffect(bridge, {
+    effect: 1, sessionId: 'session-1', ontoRemotePanel: true,
+  }, 1), 2);
+  assert.deepEqual(calls.map(([name]) => name), ['setPanels', 'dropEffect']);
+
+  assert.equal(await negotiatePanelDropEffect({
+    present: true, explorer: async () => 0,
+  }, { effect: 1 }, 1), 0);
+  assert.equal(await negotiatePanelDropEffect({
+    present: true, explorer: async () => { throw new Error('bridge closed'); },
+  }, { effect: 1 }, 2), 0);
+  assert.equal(await negotiatePanelDropEffect({ present: false }, { effect: 2 }, 2), 2);
 });

@@ -73,6 +73,13 @@ behaviour, and only then apply it.
 
 ## Failure modes
 
+If SFTP channel negotiation or the initial home-directory probe fails after
+SSH authentication, the adapter closes the channel and disconnects a transport
+it created before returning the error. A caller-supplied transport remains the
+caller’s responsibility, but the adapter never reports a failed setup as a
+connected session. Reconnecting an already-connected adapter is idempotent and
+does not add duplicate close or log listeners.
+
 | Situation | What the user sees | Recoverable |
 | --- | --- | --- |
 | Host key does not match the cached one | A **blocking** dialog — this is a decision the user must make before continuing, so it is deliberately modal. It shows both fingerprints and refuses to default to "accept". | Yes, by re-verifying out of band |

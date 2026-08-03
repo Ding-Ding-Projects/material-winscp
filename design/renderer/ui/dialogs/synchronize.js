@@ -518,6 +518,7 @@ export function openSynchronizeDialog(props = {}) {
         localPath: context.localPath,
         remotePath: context.remotePath,
         copyParam: compareRequest(options, context).copyParam,
+        safety: result.safety,
         onApplied: () => queueModel.refresh(),
       });
     } catch (err) {

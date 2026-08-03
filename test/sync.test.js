@@ -659,6 +659,38 @@ test('apply respects the checked flag', async () => {
   assert.strictEqual(remote.has('/r/onlylocal.txt'), false, 'unticked items stay unticked');
 });
 
+test('comparison reports when a one-way delete source has no visible files', async () => {
+  const local = new MemoryAdapter('local');
+  const remote = new MemoryAdapter('remote');
+  local.putDir('/l'); remote.putDir('/r');
+  remote.put('/r/old.txt', 'stale', T);
+
+  const result = await sync.compare(local, '/l', remote, '/r', {
+    direction: 'remote', criteria: 'time', deleteFiles: true,
+  });
+  assert.deepEqual(result.safety, {
+    sourceEmpty: true,
+    sourcePath: '/l',
+    visibleFiles: { local: 0, remote: 1 },
+  });
+  assert.equal(result.items.find((item) => item.action === 'deleteRemote').checked, true);
+});
+
+test('comparison safety treats a fully filtered source as empty', async () => {
+  const local = new MemoryAdapter('local');
+  const remote = new MemoryAdapter('remote');
+  local.putDir('/l'); remote.putDir('/r');
+  local.put('/l/.hidden.txt', 'ignored', T);
+  remote.put('/r/old.txt', 'stale', T);
+
+  const result = await sync.compare(local, '/l', remote, '/r', {
+    direction: 'remote', criteria: 'time', deleteFiles: true,
+    excludeHiddenFiles: true,
+  });
+  assert.equal(result.safety.sourceEmpty, true);
+  assert.equal(result.safety.visibleFiles.local, 0);
+});
+
 test('apply keeps checklist filtering and timestamp preservation authoritative', async () => {
   const local = new MemoryAdapter('local');
   const remote = new MemoryAdapter('remote');

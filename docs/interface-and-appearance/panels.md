@@ -111,6 +111,7 @@ move/copy preference and keyboard alternatives.
 | Panel comparison with clock skew | Uses the same time correction as [synchronization](../synchronization/synchronize.md). | Yes |
 | Extremely long filename | Truncated in the middle, so both the beginning and the extension stay visible, with the full name in the tooltip and the accessible name. | n/a |
 | Overlapping directory loads | Only the newest requested path is applied; a slower response for an older path is discarded, preserving the current listing and selection. | Yes — navigate again or refresh. |
+| Remote panel or drive tree without a session | Says that no session is open; it does not call the state an empty directory or recurse while trying to reveal a remote root. | Yes — open a real connection. |
 
 ## Security considerations
 
@@ -150,6 +151,8 @@ The bridge contract is covered by the focused interface IPC tests.
   response cannot replace a newer path or reset its selection.
 - Commander/Explorer action-state tests cover hidden Commander panel headers,
   disconnected cross-panel navigation, and UNC-aware Root routing.
+- The remote drive tree distinguishes no session from a connected empty
+  directory and stops refreshing until a session exists.
 
 ## Suggested articles
 

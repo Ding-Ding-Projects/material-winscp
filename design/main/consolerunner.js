@@ -27,6 +27,23 @@ const { SessionLog, xmlEscape } = require('./logging');
 const RESULT_SUCCESS = 0;
 const RESULT_ANY_ERROR = 1;
 
+/** Parse `/loglevel` without accepting JavaScript-only numeric spellings. */
+function parseLogLevel(value) {
+  const text = String(value === undefined || value === null ? '' : value).trim();
+  if (text === '') return 0;
+
+  // WinSCP also accepts the historical `*` sensitive-logging marker (and the
+  // `*-` redaction marker). The port never enables sensitive output, but it
+  // still validates and consumes the syntax instead of truncating it with
+  // parseInt and silently changing an invalid value into level 0.
+  const match = /^(-?\d+)(?:\*-?)?$/.exec(text);
+  const level = match ? Number(match[1]) : NaN;
+  if (!match || !Number.isSafeInteger(level) || level < -1) {
+    throw new Error(`Unknown value '${value}' of option 'loglevel'.`);
+  }
+  return level;
+}
+
 /** Console capability flags — TConsoleFlag in console/Console.h. */
 const CF = {
   INTERACTIVE: 'interactive',
@@ -963,6 +980,17 @@ async function runConsole(argv = [], deps = {}) {
   }
   const noInteractiveInput = params.findSwitch('nointeractiveinput') || stdInMode !== STDINOUT.OFF;
 
+  const logLevel = params.locateSwitch('loglevel');
+  let logLevelValue;
+  try {
+    logLevelValue = logLevel.found ? parseLogLevel(logLevel.value) : 0;
+  } catch (error) {
+    const message = error && error.message ? error.message : String(error);
+    const output = deps.stderr || deps.stdout;
+    if (output && typeof output.write === 'function') output.write(`${message}\n`);
+    return RESULT_ANY_ERROR;
+  }
+
   let consoleInstance = deps.console;
   if (!consoleInstance) {
     if (params.findSwitch('console') || process.stdout.isTTY) {
@@ -992,8 +1020,6 @@ async function runConsole(argv = [], deps = {}) {
   }
 
   const logSwitch = params.locateSwitch('log');
-  const logLevel = params.locateSwitch('loglevel');
-  const logLevelValue = logLevel.found ? (parseInt(logLevel.value, 10) || 0) : 0;
   const scriptFileLog = safe && logSwitch.found && logSwitch.value !== ''
     ? createScriptFileLog(logSwitch.value, logLevelValue) : null;
   const scriptLog = deps.log;
@@ -1073,6 +1099,7 @@ module.exports = {
   relativeTime,
   splitCommandArgument,
   removeEmptyLines,
+  parseLogLevel,
   RESULT_SUCCESS,
   RESULT_ANY_ERROR,
   CF,

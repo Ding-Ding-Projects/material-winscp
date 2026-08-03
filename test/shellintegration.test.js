@@ -1065,10 +1065,10 @@ test('a move onto another session is downgraded to a copy', () => {
     'a disconnected session tab accepts nothing');
 });
 
-test('a drop on a remote panel follows the drop effect exactly', () => {
+test('a drop on a remote panel accepts only an exact copy or move effect', () => {
   assert.equal(SI.remoteDropOperation(SI.DROPEFFECT.MOVE, {}), 'remoteMove');
   assert.equal(SI.remoteDropOperation(SI.DROPEFFECT.COPY, {}), 'remoteCopy');
-  assert.equal(SI.remoteDropOperation(SI.DROPEFFECT.COPY | SI.DROPEFFECT.MOVE, {}), 'remoteMove');
+  assert.equal(SI.remoteDropOperation(SI.DROPEFFECT.COPY | SI.DROPEFFECT.MOVE, {}), null);
   assert.equal(SI.remoteDropOperation(SI.DROPEFFECT.NONE, {}), null);
   assert.equal(SI.remoteDropOperation(SI.DROPEFFECT.LINK, {}), null);
 });
@@ -1291,6 +1291,24 @@ test('a drag does not expose a transfer that explicitly reports incomplete', asy
   await assert.rejects(() => drag.stage({}), (error) => error.code === 'DRAG_TRANSFER_INCOMPLETE');
   assert.equal(drag.staged, false);
   drag.abort();
+});
+
+test('a drag refuses a partially staged payload', async () => {
+  const root = tempRoot();
+  const drag = new SI.DragOut({
+    tempRoot: root,
+    download: async ({ items, targetDir }) => {
+      fs.writeFileSync(path.join(targetDir, items[0].localName), 'only the first file arrived');
+    },
+  });
+  drag.begin();
+  drag.add({ name: 'first.txt', size: 1 });
+  drag.add({ name: 'second.txt', size: 1 });
+  await assert.rejects(() => drag.stage({}), (error) => error.code === 'DRAG_TRANSFER_INCOMPLETE');
+  assert.equal(drag.staged, false);
+  assert.deepEqual(drag.payload(), [], 'Explorer must never receive a partial file list');
+  drag.abort();
+  fs.rmSync(root, { recursive: true, force: true });
 });
 
 test('a drag needs an icon and a drag source, and says so', async () => {

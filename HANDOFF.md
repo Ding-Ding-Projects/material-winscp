@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `ad59ee8`** — Keep generated report commits out of the app changelog
+**At commit `cbd2066`** — Make dialog contract tests line-ending neutral
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **60.5%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 71.5% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3677 run, **3676 pass, 0 fail**, 1 skipped |
-| Hand-written code | 228,353 lines across 449 files |
-| Commits | 262 on `main` |
-| Working tree | clean |
-| Remote | `origin/main` at `077decf` — **differs from HEAD** |
+| Tests | 3699 run, **3698 pass, 0 fail**, 1 skipped |
+| Hand-written code | 229,078 lines across 449 files |
+| Commits | 264 on `main` |
+| Working tree | **46 uncommitted change(s)** |
+| Remote | `origin/main` at `cbd2066` — in sync |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `cbd2066` | 2026-08-03 | Make dialog contract tests line-ending neutral |
+| `4f0a36c` | 2026-08-03 | Refresh handoff after changelog tooling fix |
 | `ad59ee8` | 2026-08-03 | Keep generated report commits out of the app changelog |
 | `4eea6f6` | 2026-08-03 | Refresh handoff after lifecycle and dialog fixes |
 | `b754414` | 2026-08-03 | Refresh in-app changelog for lifecycle and dialog fixes |
 | `3636cfb` | 2026-08-03 | Harden session, configuration, preferences, and dialogs |
 | `9f07ff2` | 2026-08-03 | Refresh handoff after changelog verification |
 | `077decf` | 2026-08-03 | Refresh changelog after protocol queue fixes |
-| `1af12e3` | 2026-08-03 | Refresh handoff after protocol queue fixes |
-| `64e0cc2` | 2026-08-03 | Harden protocol queue and sync boundaries |
 
 ## Notes from whoever worked on this last
 

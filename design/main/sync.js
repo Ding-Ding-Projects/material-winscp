@@ -229,6 +229,7 @@ async function compare(localAdapter, localPath, remoteAdapter, remotePath, optio
   // here so an explicitly excluded subtree remains excluded.
   const hasDirectoryRules = mask.parsed.dirInclude.length > 0 || mask.parsed.dirExclude.length > 0;
   const items = [];
+  const visibleFiles = { local: 0, remote: 0 };
 
   const key = (name) => (o.caseSensitive ? name : name.toLowerCase());
 
@@ -270,6 +271,7 @@ async function compare(localAdapter, localPath, remoteAdapter, remotePath, optio
           + 'Enable case-sensitive comparison or rename one entry before synchronizing.');
       }
       out.set(normalized, fileInfo(adapter, path, e, mtime));
+      if (!isDir) visibleFiles[isRemote ? 'remote' : 'local'] += 1;
     }
     return out;
   };
@@ -354,6 +356,12 @@ async function compare(localAdapter, localPath, remoteAdapter, remotePath, optio
   return {
     items,
     counts,
+    safety: {
+      sourceEmpty: dir === 'remote' ? visibleFiles.local === 0
+        : dir === 'local' ? visibleFiles.remote === 0 : false,
+      sourcePath: dir === 'remote' ? localPath : dir === 'local' ? remotePath : null,
+      visibleFiles,
+    },
     context: {
       localAdapter, remoteAdapter, localPath, remotePath, options: o,
     },

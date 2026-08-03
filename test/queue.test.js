@@ -823,6 +823,33 @@ test('queue canonicalizes headless cpsLimit values before exposing the item', ()
   assert.strictEqual(invalid.cpsLimit, 0);
 });
 
+test('queue canonicalizes headless copy policies to the copy-dialog contract', () => {
+  const { local, remote } = makePair();
+  const q = new TransferQueue({ prefs: prefs({ queue: { enabledByDefault: false } }), progressMs: 0 });
+  const item = q.add({
+    side: 'upload', source: '/l/a.txt', target: '/r/a.txt',
+    sourceAdapter: local, targetAdapter: remote,
+    copyParam: {
+      cpsLimit: '1048577',
+      resumeThreshold: '-3',
+      transferMode: 'surprise',
+      fileNameCase: 'sideways',
+      overwriteMode: 'delete-everything',
+      onceDoneOperation: 'explode',
+      resumeSupport: 'maybe',
+    },
+  });
+
+  assert.equal(item.copyParam.cpsLimit, 0);
+  assert.equal(item.copyParam.resumeThreshold, 102400);
+  assert.equal(item.copyParam.transferMode, 'binary');
+  assert.equal(item.copyParam.fileNameCase, 'noChange');
+  assert.equal(item.copyParam.overwriteMode, 'overwrite');
+  assert.equal(item.copyParam.onceDoneOperation, 'none');
+  assert.equal(item.copyParam.resumeSupport, 'smart');
+  assert.deepEqual(q.view(item).copyParam, item.copyParam);
+});
+
 test('setSpeedLimit immediately replaces an active bucket schedule', async () => {
   const { local, remote } = makePair({ chunkSize: 1024 });
   local.put('/l/a.bin', bigBuffer(4096));

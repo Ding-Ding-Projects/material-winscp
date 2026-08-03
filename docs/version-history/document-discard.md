@@ -22,11 +22,14 @@ blocks the requested close.
 
 If the history write fails, the editor still closes, emits the orphan event and
 keeps the temporary file. That event explicitly reports `discardAudit.status:
-not-recorded` (and the failure reason), so the UI or another consumer cannot
-mistake a close for a durable audit. A successful write reports `recorded` and
-the history action is categorized as `discarded`. If writing the latest buffer
-fails, the close still completes and `recoveryAvailable` is false; the audit is
-not overstated.
+not-recorded` (and the failure reason), and the editor notification says that
+the audit was not recorded, so the UI cannot mistake a close for a durable
+audit. A successful write reports `recorded`, the notification says so, and the
+history action is categorized and localized as `discarded`. If writing the
+latest buffer fails, the close still completes and `recoveryAvailable` is
+false; the notification says that no recovery copy is available rather than
+claiming that a path was kept. The temporary-file dialog refreshes after a
+selected recovery copy is removed, so its empty state is current immediately.
 
 ## Security considerations
 

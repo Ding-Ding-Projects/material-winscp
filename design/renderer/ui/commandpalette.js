@@ -100,15 +100,16 @@ function safeRead(read, key) {
 
 const INLINE_CONTROL_TYPES = new Set(['check', 'number', 'path', 'select', 'slider', 'text']);
 
-/** Primitive controls can safely share the Preferences renderer in this row. */
+/** Primitive, durable controls can safely share the Preferences renderer in this row. */
 export function canInlinePreference(control) {
   return !!control && INLINE_CONTROL_TYPES.has(control.type)
-    && !control.secret && !control.actionId;
+    && !control.secret && !control.actionId && !control.danger && !isPending(control.key);
 }
 
 /** The palette must not steal keys from a nested editor or a clearing search. */
-export function shouldHandlePaletteKey({ key, inRegexBuilder = false, inInlineControl = false, searchHasValue = false } = {}) {
+export function shouldHandlePaletteKey({ key, inRegexBuilder = false, inInlineControl = false, inPaletteButton = false, searchHasValue = false } = {}) {
   if (inRegexBuilder) return false;
+  if (inPaletteButton && key !== 'Escape') return false;
   if (inInlineControl && key !== 'Escape') return false;
   if (key === 'Escape' && searchHasValue) return false;
   return true;
@@ -136,7 +137,18 @@ function inlineNodeFor(entry) {
   node.classList.add('cmdp-inline-control');
   const focusables = node.matches?.('input,select,textarea,button')
     ? [node] : Array.from(node.querySelectorAll?.('input,select,textarea,button') || []);
-  for (const control of focusables) control.setAttribute('aria-label', localized(entry.control.label));
+  for (const control of focusables) {
+    control.setAttribute('aria-label', localized(entry.control.label));
+    if (['number', 'path', 'text'].includes(entry.control.type)
+      && control.tagName === 'INPUT' && control.type !== 'range') {
+      control.dataset.cmdpCommitOnClose = entry.control.key;
+      control.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        control.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    }
+  }
   return node;
 }
 
@@ -312,6 +324,14 @@ export function openCommandPalette() {
 
   function close() {
     if (!openHandle) return;
+    const active = document.activeElement;
+    if (active?.matches?.('[data-cmdp-commit-on-close]')) {
+      const key = active.dataset.cmdpCommitOnClose;
+      const stored = readPref(key);
+      if (String(active.value ?? '') !== String(stored ?? '')) {
+        active.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
     closed = true;
     if (focusFrame !== null && typeof cancelAnimationFrame === 'function') {
       cancelAnimationFrame(focusFrame);
@@ -359,7 +379,37 @@ export function openCommandPalette() {
     } else search.input.removeAttribute('aria-activedescendant');
   }
 
+  function captureListFocus() {
+    const active = document.activeElement;
+    const row = active?.closest?.('.cmdp-row');
+    if (!row || !list.contains(row)) return null;
+    if (active === row) return { id: row.dataset.cmdpEntryId || '', index: -1 };
+    const controls = Array.from(row.querySelectorAll('input, select, textarea, button'));
+    const index = controls.indexOf(active);
+    if (index < 0) return null;
+    return {
+      id: row.dataset.cmdpEntryId || '', index,
+      start: active.selectionStart, end: active.selectionEnd,
+    };
+  }
+
+  function restoreListFocus(mark) {
+    if (!mark) return;
+    const escaped = typeof CSS !== 'undefined' && CSS.escape
+      ? CSS.escape(mark.id) : String(mark.id).replace(/["\\]/g, '\\$&');
+    const row = list.querySelector(`[data-cmdp-entry-id="${escaped}"]`);
+    if (!row) return;
+    const controls = Array.from(row.querySelectorAll('input, select, textarea, button'));
+    const target = mark.index < 0 ? row : controls[mark.index];
+    if (!target) return;
+    target.focus({ preventScroll: true });
+    if (mark.start != null && 'setSelectionRange' in target) {
+      try { target.setSelectionRange(mark.start, mark.end ?? mark.start); } catch { /* not a text field */ }
+    }
+  }
+
   function render() {
+    const focusMark = captureListFocus();
     entries = paletteEntries();
     results = filterPaletteEntries(entries, search.predicate, search.isActive);
     activeIndex = Math.max(0, Math.min(activeIndex, Math.max(0, results.length - 1)));
@@ -386,6 +436,7 @@ export function openCommandPalette() {
         tabindex: inline ? '0' : undefined,
         'aria-current': String(index === currentIndex()),
         'aria-label': `${entryLabel(entry)} — ${detail}`,
+        'data-cmdp-entry-id': entry.id,
         'data-cmdp-key': entry.key || undefined,
         'data-cmdp-inline': inline ? 'true' : 'false',
         class: `cmdp-row${inline ? ' is-setting' : ''}`,
@@ -411,6 +462,7 @@ export function openCommandPalette() {
       list.appendChild(h('div', { class: 'cmdp-item', role: 'listitem' }, row));
     });
     paintActive();
+    restoreListFocus(focusMark);
   }
 
   function onKey(e) {
@@ -418,6 +470,7 @@ export function openCommandPalette() {
       key: e.key,
       inRegexBuilder: !!e.target?.closest?.('.rb-popover'),
       inInlineControl: !!e.target?.closest?.('.cmdp-inline-control'),
+      inPaletteButton: !!e.target?.closest?.('.cmdp-size, .cmdp-close, .cmdp-search button'),
       searchHasValue: e.target === search.input && !!search.input.value,
     })) return;
     if (e.key === 'Escape') { e.preventDefault(); close(); return; }

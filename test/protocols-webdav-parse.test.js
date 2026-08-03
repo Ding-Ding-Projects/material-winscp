@@ -709,6 +709,18 @@ test('connect withdraws server-side operation capabilities when OPTIONS omits Al
   }
 });
 
+test('MOVE and COPY fail closed when the server does not advertise them', async () => {
+  const adapter = new WebDavAdapter({ hostName: 'dav.example.test', ftps: 'none' });
+  adapter.caps.nativeMove = false;
+  adapter.caps.rename = false;
+  adapter.caps.move = false;
+  adapter.caps.copyRemote = false;
+  adapter.request = async () => { throw new Error('request must not be reached'); };
+
+  await assert.rejects(() => adapter.rename('/from', '/to'), /does not advertise MOVE/i);
+  await assert.rejects(() => adapter.copy('/from', '/to'), /does not advertise COPY/i);
+});
+
 test('invalid WebDAV timeouts fall back to the safe default', () => {
   for (const timeout of [undefined, '', 'not-a-number', 0, -1, Infinity, NaN]) {
     const adapter = new WebDavAdapter({ hostName: 'dav.example.test', timeout });

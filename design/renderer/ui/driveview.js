@@ -86,6 +86,12 @@ function chainTo(side, path) {
   return out;
 }
 
+/** Describe the tree's empty state without conflating no-session with empty. */
+export function driveEmptyState({ side = 'remote', hasSession = true, itemCount = 0 } = {}) {
+  if (side !== 'local' && !hasSession) return 'notConnected';
+  return itemCount ? null : 'emptyDir';
+}
+
 /* ------------------------------------------------------------------ */
 /* the tree                                                            */
 /* ------------------------------------------------------------------ */
@@ -183,8 +189,13 @@ export function createDriveView(opts = {}) {
       const items = await listChildren(node ? node.path : '');
       status.textContent = '';
       while (container.firstChild) container.removeChild(container.firstChild);
-      if (!items.length) {
-        container.appendChild(h('div', { class: 'dv-empty muted' }, t('emptyDir')));
+      const emptyState = driveEmptyState({
+        side,
+        hasSession: side === 'local' || !!sessionId(),
+        itemCount: items.length,
+      });
+      if (emptyState) {
+        container.appendChild(h('div', { class: 'dv-empty muted' }, t(emptyState)));
         return;
       }
       for (const it of items) container.appendChild(makeNode(it, node ? node.level + 1 : 0).el);
@@ -273,6 +284,9 @@ export function createDriveView(opts = {}) {
         root.appendChild(makeNode({ name: uncRoot, path: uncRoot, drive: true }, 0).el);
       }
     }
+    // A disconnected remote tree has no root node to reveal. Returning here
+    // also prevents setPath('/') from recursively refreshing an empty tree.
+    if (side !== 'local' && !sessionId()) return;
     if (currentPath) await setPath(currentPath);
   }
 

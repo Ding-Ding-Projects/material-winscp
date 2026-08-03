@@ -110,6 +110,12 @@ console runner, including `/script`, `/command`, `/parameter`, `/log`,
 legacy executable name. It also supports `winscp-com --help` and
 `winscp-com --version` without starting the console runner.
 
+The console boundary validates numeric values before it starts work. Transfer
+speed, `open -timeout`, session numbers, and `/loglevel` reject partial or
+non-decimal values rather than truncating them or silently selecting a default;
+the runner returns its normal non-zero script status and does not start the
+affected operation.
+
 The console `open` command shares the app's session URL handling. It accepts
 the bare and registered-handler URL forms documented in [Script runner](script-runner.md),
 applies client-certificate and raw-setting switches to the session, and keeps

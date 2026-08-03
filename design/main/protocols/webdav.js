@@ -1198,6 +1198,10 @@ class WebDavAdapter extends Adapter {
   }
 
   async _moveOrCopy(method, from, to, opts) {
+    const capability = method === 'COPY' ? 'copyRemote' : 'nativeMove';
+    if (!this.caps[capability]) {
+      throw new Error(`WebDAV server does not advertise ${method}; operation is unsupported`);
+    }
     const src = this.normalize(from);
     const dst = this.normalize(to);
     const res = await this.request(method, src, {

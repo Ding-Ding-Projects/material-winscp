@@ -13,6 +13,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const net = require('net');
+const { EventEmitter } = require('events');
 
 const { Server, utils, Client } = require('ssh2');
 const ext = require('../design/main/protocols/sftp-extensions');
@@ -34,6 +35,29 @@ test('SFTP custom server commands fail closed instead of opening the default sub
     return true;
   });
   assert.equal(adapter.transport, null, 'the refusal happens before an SSH transport is opened');
+});
+
+test('SFTP setup failure cleans up an owned transport and stays retryable', async () => {
+  const transport = new EventEmitter();
+  transport.connected = true;
+  transport.sftp = async () => { throw new Error('subsystem refused'); };
+  let disconnects = 0;
+  transport.disconnect = async () => { disconnects++; transport.connected = false; };
+  const adapter = new SftpAdapter({}, { transport });
+  adapter._ownsTransport = true;
+
+  await assert.rejects(() => adapter.connect(), /subsystem refused/);
+  assert.equal(disconnects, 1);
+  assert.equal(adapter.connected, false);
+  assert.equal(adapter.sftp, null);
+  assert.equal(adapter.transport, null);
+});
+
+test('SFTP connect is idempotent after a successful setup', async () => {
+  const adapter = new SftpAdapter({});
+  adapter.connected = true;
+  adapter.serverInfo = { protocol: 'SFTP', home: '/home/test' };
+  assert.deepEqual(await adapter.connect(), adapter.serverInfo);
 });
 
 const P = ext.SFTP_PACKET;

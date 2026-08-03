@@ -489,6 +489,19 @@ class ScpAdapter extends Adapter {
 
   // ---- lifecycle -------------------------------------------------------
   async connect() {
+    if (this.connected) return this.serverInfo;
+    try {
+      return await this._connect();
+    } catch (error) {
+      if (this._ownsTransport && this.transport) {
+        try { await this.transport.disconnect(); } finally { this.transport = null; }
+      }
+      this.connected = false;
+      throw error;
+    }
+  }
+
+  async _connect() {
     if (!this.transport) {
       this.transport = new SshTransport(this.session, this.options);
       this._ownsTransport = true;

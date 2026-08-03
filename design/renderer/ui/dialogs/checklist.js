@@ -37,6 +37,7 @@ defineStrings({
   txClTitle: ['Synchronization checklist', '同步清單'],
   txClWhatHappens: ['What will happen when you press {0}', '撳「{0}」之後會發生咩事'],
   txClNothing: ['Nothing is ticked, so nothing will happen.', '一個都冇剔，所以乜都唔會做。'],
+  txClEmptySourceDelete: ['The source has no visible files under the current filter. Confirming will delete the selected target files.', '來源喺目前篩選之下冇可見檔案。確認後會刪除已選嘅目標檔案。'],
   txClUploads: ['{0} item(s) will be uploaded to the remote side ({1}).', '{0} 個項目會上載去遠端（{1}）。'],
   txClDownloads: ['{0} item(s) will be downloaded to the local side ({1}).', '{0} 個項目會下載落本機（{1}）。'],
   txClTimestamps: ['{0} item(s) will have only their modification time changed. No file contents are transferred.', '{0} 個項目淨係改修改時間，唔會傳輸內容。'],
@@ -285,13 +286,15 @@ export function summarizeChecklist(items, options = {}) {
     if (item.action === 'upload') bytes.upload += Number(item.local?.size) || 0;
     if (item.action === 'download') bytes.download += Number(item.remote?.size) || 0;
   }
-  return {
+  const summary = {
     counts,
     bytes,
     acted,
     deletions: counts.deleteLocal + counts.deleteRemote,
     total: (items || []).length,
   };
+  if (options.sourceEmpty && summary.deletions > 0) summary.emptySource = true;
+  return summary;
 }
 
 /**
@@ -329,6 +332,7 @@ export function describeChecklist(summary) {
   if (c.deleteLocal) lines.push({ key: 'txClDeleteLocal', params: [c.deleteLocal] });
   if (c.deleteRemote) lines.push({ key: 'txClDeleteRemote', params: [c.deleteRemote] });
   if (summary.deletions) lines.push({ key: 'txClDeleteWarn', params: [] });
+  if (summary.emptySource) lines.push({ key: 'txClEmptySourceDelete', params: [] });
   return lines;
 }
 
@@ -737,7 +741,10 @@ export function openChecklistDialog(result = {}) {
   });
 
   function confirmAndApply(close) {
-    const summary = summarizeChecklist(rows, { onlyChecked: true });
+    const summary = summarizeChecklist(rows, {
+      onlyChecked: true,
+      sourceEmpty: result.safety?.sourceEmpty,
+    });
     if (!summary.acted) { notify.info(t('txClTitle'), t('txClNothing')); return; }
     const lines = describeChecklist(summary).map((l) => t(l.key, ...l.params)).join('\n');
     if (!summary.deletions) { close(); apply(); return; }

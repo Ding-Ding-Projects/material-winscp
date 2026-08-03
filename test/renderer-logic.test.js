@@ -16,6 +16,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs/promises');
 const { Worker } = require('node:worker_threads');
 
 const loadRegex = () => import('../design/renderer/ui/regexbuilder.js');
@@ -23,6 +24,17 @@ const loadSearch = () => import('../design/renderer/ui/searchbar.js');
 const loadColor = () => import('../design/renderer/ui/colorpicker.js');
 const loadData = () => import('../design/winscp-data.js');
 const loadPanels = () => import('../design/renderer/ui/panels.js');
+const loadDrive = () => import('../design/renderer/ui/driveview.js');
+
+test('remote drive trees distinguish no session from an empty directory', async () => {
+  const { driveEmptyState } = await loadDrive();
+  assert.equal(driveEmptyState({ side: 'remote', hasSession: false, itemCount: 0 }), 'notConnected');
+  assert.equal(driveEmptyState({ side: 'remote', hasSession: true, itemCount: 0 }), 'emptyDir');
+  assert.equal(driveEmptyState({ side: 'local', hasSession: false, itemCount: 0 }), 'emptyDir');
+  assert.equal(driveEmptyState({ side: 'remote', hasSession: false, itemCount: 2 }), 'notConnected');
+  const source = await fs.readFile(require.resolve('../design/renderer/ui/driveview.js'), 'utf8');
+  assert.match(source, /if \(side !== 'local' && !sessionId\(\)\) return;/);
+});
 
 test('panel listings reject malformed rows without turning them into a fake empty state', async () => {
   const { normalizePanelEntries } = await loadPanels();

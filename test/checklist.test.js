@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  calculateChecklist, isInDirectory, partitionForApply, reverseAction, sortChecklistItems,
+  calculateChecklist, describeChecklist, isInDirectory, partitionForApply, reverseAction,
+  sortChecklistItems, summarizeChecklist,
 } from '../design/renderer/ui/dialogs/checklist.js';
 
 test('reversing a Do nothing row is gated with a direction-specific reason', () => {
@@ -71,6 +72,14 @@ test('Calculate summarizes only checked rows without mutating the checklist', ()
     total: 3,
   });
   assert.deepEqual(rows, before);
+});
+
+test('deletion summaries name an empty filtered source without changing ordinary summaries', () => {
+  const rows = [{ action: 'deleteRemote', checked: true, remote: { exists: true, size: 4 } }];
+  const summary = summarizeChecklist(rows, { sourceEmpty: true });
+  assert.equal(summary.emptySource, true);
+  assert.ok(describeChecklist(summary).some((line) => line.key === 'txClEmptySourceDelete'));
+  assert.equal(summarizeChecklist(rows).emptySource, undefined);
 });
 
 test('sorting keeps selection and overrides attached to their original rows', () => {

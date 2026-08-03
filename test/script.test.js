@@ -447,6 +447,17 @@ test('findSwitchParams honours a numeric count in the switch value', () => {
   assert.equal(o.paramCount, 1);
 });
 
+test('switch counts and booleans reject JavaScript-only numeric spellings', () => {
+  const count = new Options();
+  count.parse('-command=0x1 first second');
+  assert.deepEqual(count.findSwitchParams('command'), ['first', 'second'],
+    'a non-decimal count must not silently cap the following parameters');
+
+  const boolean = new Options();
+  boolean.parse('-xmlgroups=0x1');
+  assert.throws(() => boolean.switchValueBool('xmlgroups', false), /not a valid boolean/);
+});
+
 test('findAllSwitchParams consumes repeated variadic switches in order', () => {
   const o = new Options();
   o.parse('/command echo-one /parameter first /command echo-two exit /parameter second');
@@ -1295,6 +1306,15 @@ test('-speed sets a per-item limit in bytes per second', async () => {
   assert.equal(queue.list()[0].copyParam.cpsLimit, 64 * 1024);
 });
 
+test('-speed rejects a partial integer before starting a transfer', async () => {
+  const { h, dir, queue } = await transferFixture('speed-invalid');
+  fs.writeFileSync(nodePath.join(dir, 'a.txt'), 'x');
+  await assert.rejects(
+    () => h.script.command(`put -speed=64oops ${nodePath.join(dir, 'a.txt')}`),
+    /Unknown value '64oops' of option 'speed'\./);
+  assert.equal(queue.list().length, 0);
+});
+
 test('-transfer picks the mode and refuses an unknown one', async () => {
   const { h, dir, queue } = await transferFixture('transfer-switch');
   fs.writeFileSync(nodePath.join(dir, 'a.txt'), 'x');
@@ -1588,6 +1608,14 @@ test('an out-of-range session number is refused', async () => {
   await assert.rejects(() => h.script.command('close 0'), /Invalid session number '0'\./);
 });
 
+test('a partial session number is refused instead of selecting a session', async () => {
+  const { openTerminal } = openable();
+  const h = makeScript({ openTerminal });
+  await h.script.command('open sftp://a.example.com');
+  await assert.rejects(() => h.script.command('session 1oops'), /Invalid session number '1oops'\./);
+  assert.equal(h.script.terminal.name, 'a.example.com');
+});
+
 test('close drops the session; the active one is only re-announced when it went', async () => {
   const { openTerminal } = openable();
   const h = makeScript({ openTerminal });
@@ -1816,6 +1844,12 @@ test('parseOpenUrl applies the documented open switches', () => {
   assert.equal(d.userName, 'u');
   assert.equal(d.password, 'p');
   assert.equal(d.ftps, 'implicit');
+});
+
+test('parseOpenUrl rejects a partial timeout before connecting', () => {
+  const options = new Options().parse('-timeout=30oops');
+  assert.throws(() => parseOpenUrl('sftp://example.com', options),
+    /Unknown value '30oops' of option 'timeout'\./);
 });
 
 test('parseOpenUrl collects -rawsettings key=value pairs', () => {
@@ -2175,6 +2209,19 @@ test('runConsole writes a redacted text log for /log=FILE', async () => {
   assert.match(log, /Script: Exit code: 1/);
   assert.equal(log.includes('hunter2'), false);
   assert.equal(log.includes('second-secret'), false);
+});
+
+test('runConsole rejects malformed loglevel values without running commands', async () => {
+  const c = new CR.BufferConsole({});
+  let errorOutput = '';
+  const code = await CR.runConsole(['/loglevel=2oops', '/command', 'echo should-not-run'], {
+    console: c,
+    stderr: { write(chunk) { errorOutput += String(chunk); } },
+    env: {},
+  });
+  assert.equal(code, CR.RESULT_ANY_ERROR);
+  assert.equal(errorOutput, "Unknown value '2oops' of option 'loglevel'.\n");
+  assert.equal(c.output.includes('should-not-run'), false);
 });
 
 test('the runner closes every session it opened', async () => {

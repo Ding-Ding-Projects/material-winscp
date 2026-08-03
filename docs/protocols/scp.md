@@ -66,6 +66,12 @@ opening the SCP channel; such a name cannot be represented safely on the wire.
 
 ## Failure modes
 
+If startup probing (`:`, `pwd`, `uname`, or a post-login command) fails after
+SSH authentication, an SCP adapter disconnects the transport it created before
+returning the error. A caller-supplied transport is not disconnected by the
+adapter. Reconnecting an already-connected adapter returns its existing server
+information instead of opening a second shell session.
+
 | Situation | What the user sees | Recoverable |
 | --- | --- | --- |
 | The login shell prints a banner or MOTD | Listing parsing fails on the first attempt; the adapter retries after consuming the banner and reports what it discarded. | Usually |

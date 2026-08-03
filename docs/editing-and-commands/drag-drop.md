@@ -19,6 +19,11 @@ selection, move semantics and protocol capability checks in one place; the
 renderer does not silently turn a requested move into an unconditional queue
 copy.
 
+In-app panel drops also negotiate through `explorer:dropEffect` immediately
+before choosing the renderer action. The target session is selected first, and
+a refused or unavailable negotiation stops the drop instead of letting the
+renderer’s optimistic drag-over preview start a move.
+
 ## Targets and safety
 
 - A drop onto the queue is forced into the background and uses the configured
@@ -39,6 +44,8 @@ copy.
 - Refused, cancelled, and unknown effects never become uploads. Ambiguous
   drag-out results prefer copy unless the Windows effect explicitly contains
   move, protecting the remote source from accidental deletion.
+- Combined or unknown final effects are refused; only an exact COPY or MOVE
+  effect can select a remote operation.
 - Malformed in-app payloads, missing source panels, missing targets,
   disconnected sessions and explicit protocol refusals are reported before any
   transfer begins.
@@ -47,6 +54,9 @@ copy.
   IPC boundary as absolute local paths; malformed `allowMove` and `dragDrop`
   flags are refused instead of being coerced into a potentially destructive
   move.
+- Queue, fake-file, and external-extension drop targets must be absolute local
+  paths. Relative targets are refused before they can resolve against the
+  application process directory.
 
 Clipboard paste uses the same ExplorerShell decision path. Windows Explorer's
 `FileNameW`/`FileName` clipboard formats are decoded into absolute paths before

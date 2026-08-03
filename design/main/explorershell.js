@@ -324,6 +324,10 @@ function excludeTrailingBackslash(p) {
   return s;
 }
 
+function isAbsoluteLocalPath(value) {
+  return nodePath.win32.isAbsolute(value) || nodePath.posix.isAbsolute(value);
+}
+
 /** Case-insensitive local path comparison — SamePaths(). */
 function sameLocalPath(a, b) {
   return excludeTrailingBackslash(String(a || '')).replace(/\//g, '\\').toLowerCase()
@@ -700,16 +704,24 @@ function resolveDropTarget(spec) {
   const s = spec || {};
   if (s.ontoQueueView) {
     const directory = String(s.defaultDownloadTarget || '').trim();
-    if (!directory) return { ok: false, forceQueue: false, counterName: 'DownloadsDragDropQueueTargetUnknown' };
+    if (!directory || !isAbsoluteLocalPath(directory)) {
+      return { ok: false, forceQueue: false, counterName: 'DownloadsDragDropQueueTargetUnknown' };
+    }
     return { ok: true, directory, forceQueue: true, counterName: 'DownloadsDragDropQueue' };
   }
   const fakeFileTarget = String(s.fakeFileDropTarget || '').trim();
-  if (fakeFileTarget) return {
-    ok: true, directory: excludeTrailingBackslash(nodePath.win32.dirname(fakeFileTarget)),
-    forceQueue: false, counterName: 'DownloadsDragDropFakeFile',
-  };
+  if (fakeFileTarget) {
+    const directory = nodePath.win32.dirname(fakeFileTarget);
+    if (!isAbsoluteLocalPath(fakeFileTarget) || !isAbsoluteLocalPath(directory)) {
+      return { ok: false, forceQueue: false, counterName: 'DownloadsDragDropExternalExtTargetUnknown' };
+    }
+    return {
+      ok: true, directory: excludeTrailingBackslash(directory),
+      forceQueue: false, counterName: 'DownloadsDragDropFakeFile',
+    };
+  }
   const externalDirectory = String(s.externalDropDirectory || '').trim();
-  if (externalDirectory) return {
+  if (externalDirectory && isAbsoluteLocalPath(externalDirectory)) return {
     ok: true, directory: excludeTrailingBackslash(externalDirectory),
     forceQueue: false, counterName: 'DownloadsDragDropExternalExt',
   };
@@ -2056,16 +2068,18 @@ class ExplorerShell {
     if (!s.fromRemotePanel) return effect;
     if (!this.hasAvailableTerminal()) return DROPEFFECT.NONE;
 
-    if (s.ontoDirView && s.fromDirView && !s.dropTarget) return DROPEFFECT.NONE;
+    const ontoRemotePanel = s.ontoRemotePanel === undefined ? !!s.ontoDirView : s.ontoRemotePanel === true;
+    if (s.ontoDirView && s.fromDirView && ontoRemotePanel && !s.dropTarget) return DROPEFFECT.NONE;
     // A drop back onto the directory being displayed is a self-drop, not a
     // meaningful move. Refuse it before effect negotiation can turn it into a
     // server-side rename/copy; child directories remain valid targets.
-    if (s.ontoDirView && s.fromDirView && s.dropTarget
+    if (s.ontoDirView && s.fromDirView && ontoRemotePanel && s.dropTarget
         && sameUnixPath(s.dropTarget, this.panel(SIDES.remote)?.path)) {
       return DROPEFFECT.NONE;
     }
 
     const moveCapable = this.capable('remoteMove');
+    const allowMove = s.allowMove !== false;
     // WinSCP's comment: "currently we support copying always (at least via
     // temporary directory)". The temporary-directory route is implemented in
     // remoteTransferFiles, so this stays true here too.
@@ -2075,10 +2089,10 @@ class ExplorerShell {
     // The shell can report MOVE directly, without first passing through the
     // COPY negotiation branch below. Never let that effect bypass the session
     // capability check and turn into a delete-on-success.
-    if (effect === DROPEFFECT.MOVE) return moveCapable ? DROPEFFECT.MOVE : DROPEFFECT.COPY;
+    if (effect === DROPEFFECT.MOVE) return moveCapable && allowMove ? DROPEFFECT.MOVE : DROPEFFECT.COPY;
     if (effect !== DROPEFFECT.COPY) return DROPEFFECT.NONE;
 
-    if (!s.ctrl) return moveCapable ? DROPEFFECT.MOVE : DROPEFFECT.COPY;
+    if (!s.ctrl) return moveCapable && allowMove ? DROPEFFECT.MOVE : DROPEFFECT.COPY;
     return copyCapable ? DROPEFFECT.COPY : DROPEFFECT.NONE;
   }
 

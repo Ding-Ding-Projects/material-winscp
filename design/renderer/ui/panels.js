@@ -232,6 +232,42 @@ export function panelDropMoveRequested({ shiftKey = false, ctrlKey = false, allo
   return allowMove === true && !ctrlKey && (shiftKey || startAsMove);
 }
 
+/** Build the main-process effect request for an in-app panel drop. */
+export function panelDropEffectSpec({
+  sourceSide = 'local', targetSide = 'remote', sessionId = null, dropTarget = '',
+  effect = 1, ctrlKey = false, allowMove = false,
+} = {}) {
+  return {
+    effect: effect === 2 ? 2 : 1,
+    fromRemotePanel: sourceSide === 'remote',
+    ontoDirView: true,
+    fromDirView: true,
+    ontoRemotePanel: targetSide === 'remote',
+    dropTarget: String(dropTarget || ''),
+    ctrl: ctrlKey === true,
+    allowMove: allowMove === true,
+    sessionId: sessionId == null ? null : sessionId,
+  };
+}
+
+/** The real window and the browser preview share one fail-closed drop result. */
+export async function negotiatePanelDropEffect(bridge, spec, fallbackEffect = 1) {
+  const fallback = fallbackEffect === 2 ? 2 : 1;
+  if (!bridge || bridge.present !== true || typeof bridge.explorer !== 'function') return fallback;
+  try {
+    if (spec && spec.sessionId != null) {
+      await bridge.explorer('setPanels', {
+        currentSide: spec.ontoRemotePanel === true ? 'remote' : 'local',
+        sessionId: spec.sessionId,
+      });
+    }
+    const result = await bridge.explorer('dropEffect', spec);
+    return result === 1 || result === 2 ? result : 0;
+  } catch {
+    return 0;
+  }
+}
+
 /** Only the most recently requested directory may update panel state. */
 export function isCurrentPanelLoad(requestId, currentRequestId) {
   return requestId === currentRequestId;
@@ -1121,12 +1157,13 @@ export function createFilePanel(opts = {}) {
         notify.info(t('transferSettingsShort'), 'The dragged items came from this panel, so the drop was not started.');
         return;
       }
-      await acceptPanelDrop(data, panelDropMoveRequested({
+      const dropOptions = {
         shiftKey: e.shiftKey,
         ctrlKey: e.ctrlKey || e.metaKey,
         allowMove: readPref('dDAllowMove', false) === true,
         startAsMove: data.preferredEffect === 'move' || readPref('dDAllowMoveInit', false) === true,
-      }));
+      };
+      await acceptPanelDrop(data, panelDropMoveRequested(dropOptions), dropOptions);
       return;
     }
     if (e.dataTransfer.files && e.dataTransfer.files.length) {
@@ -1140,15 +1177,30 @@ export function createFilePanel(opts = {}) {
     }
   });
 
-  async function acceptPanelDrop(data, move) {
+  async function acceptPanelDrop(data, move, dropOptions = {}) {
     if (data.side === side) {
       notify.info(t('transferSettingsShort'), 'Both panels are on the same side, so there is nothing to transfer.');
       return;
     }
+    const requestedEffect = move ? 2 : 1;
+    const effect = await negotiatePanelDropEffect(backend, panelDropEffectSpec({
+      sourceSide: data.side,
+      targetSide: side,
+      sessionId: data.sessionId || sessionId(),
+      dropTarget: path,
+      effect: requestedEffect,
+      ctrlKey: dropOptions.ctrlKey === true,
+      allowMove: dropOptions.allowMove === true,
+    }), requestedEffect);
+    if (effect === 0) {
+      notify.warning(t('transferSettingsShort'), 'The drop target or effect was refused before transfer started.');
+      return;
+    }
+    const effectiveMove = effect === 2;
     const direction = isLocal ? 'download' : 'upload';
     const action = direction === 'download'
-      ? (move ? 'RemoteMoveAction' : 'RemoteCopyAction')
-      : (move ? 'LocalMoveAction' : 'LocalCopyAction');
+      ? (effectiveMove ? 'RemoteMoveAction' : 'RemoteCopyAction')
+      : (effectiveMove ? 'LocalMoveAction' : 'LocalCopyAction');
     // The drop targets THIS panel's directory, so the command runs against the
     // source panel with an explicit target.
     const sourcePanel = workspace ? workspace.panel(data.side) : null;
@@ -1158,10 +1210,10 @@ export function createFilePanel(opts = {}) {
     }
     if (readPref('dDTransferConfirmation', true) !== false) {
       const ok = await confirm({
-        title: move ? t('moveDots') : (direction === 'download' ? t('downloadTitle') : t('uploadTitle')),
+        title: effectiveMove ? t('moveDots') : (direction === 'download' ? t('downloadTitle') : t('uploadTitle')),
         body: `${data.paths.length} ${data.paths.length === 1 ? 'item' : 'items'} → ${path}`,
-        confirmLabel: move ? t('move_') : t('copy_'),
-        danger: move,
+        confirmLabel: effectiveMove ? t('move_') : t('copy_'),
+        danger: effectiveMove,
       });
       if (!ok) return;
     }

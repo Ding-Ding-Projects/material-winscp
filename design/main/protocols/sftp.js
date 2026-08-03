@@ -1476,6 +1476,7 @@ class SftpAdapter extends Adapter {
     super(session);
     this.options = options;
     this.transport = options.transport || null;
+    this._ownsTransport = false;
     this.sftp = null;
     this._streams = new Set();
     this._streamChannelError = null;
@@ -1526,6 +1527,34 @@ class SftpAdapter extends Adapter {
 
   // ---- lifecycle -------------------------------------------------------
   async connect() {
+    if (this.connected) return this.serverInfo;
+    try {
+      return await this._connect();
+    } catch (error) {
+      await this._cleanupFailedConnect();
+      throw error;
+    }
+  }
+
+  async _cleanupFailedConnect() {
+    const channel = this.sftp;
+    if (channel && this._streamChannelError) channel.removeListener('error', this._streamChannelError);
+    if (channel && this._streamChannelClose) {
+      channel.removeListener('close', this._streamChannelClose);
+      channel.removeListener('end', this._streamChannelClose);
+    }
+    this._streamChannelError = null;
+    this._streamChannelClose = null;
+    this._failStreams(new Error('SFTP connection setup failed'));
+    try { if (channel) channel.end(); } catch { /* already down */ }
+    this.sftp = null;
+    this.connected = false;
+    if (this._ownsTransport && this.transport) {
+      try { await this.transport.disconnect(); } finally { this.transport = null; }
+    }
+  }
+
+  async _connect() {
     // ssh2's public SFTP entry point always requests the literal `sftp`
     // subsystem. It has no safe hook for WinSCP's custom SFTP server command,
     // so silently proceeding here would run the wrong remote program while

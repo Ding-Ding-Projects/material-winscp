@@ -116,7 +116,7 @@ available through the visible Up and Down buttons for pointer users.
 | Very large file | Above a threshold the internal editor declines and suggests downloading; it does not attempt to load it entirely into memory. | Yes |
 | Session lost while editing | The temporary survives. Reconnecting offers to upload it. | Yes |
 | Watcher upload fails temporarily | The edit remains dirty; a later `editor:fileChanged` notification retries the same bytes even if the file was not modified again. | Yes |
-| Orphaned temporaries from a crash | With `warnOrphans`, a startup notification listing them with an option to recover or discard. | Yes |
+| Orphaned temporaries from a crash | With `warnOrphans`, a startup notification lists them with an option to recover or discard. The editor states whether the recovery copy exists and whether the discard reached version history; removing selected copies refreshes the list immediately. | Yes |
 | `maxEditors` reached | Refused with a count, rather than opening an editor that cannot be tracked. | Yes |
 | Remote download or temporary-file preparation fails | Any partial temporary copy and empty folders are removed before the error returns; no untracked editor or orphan is published. | Yes |
 

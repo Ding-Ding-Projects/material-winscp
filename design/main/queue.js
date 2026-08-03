@@ -303,7 +303,14 @@ function useTextMode(copyParam, name, params, asciiMask) {
  */
 function normalizeCpsLimit(value) {
   const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  // Keep this identical to CopyParams validation: a headless caller must not
+  // be able to bypass the UI's upper bound or inject Infinity into a throttle.
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1048576 ? parsed : 0;
+}
+
+function normalizeNonNegative(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 /**
@@ -319,6 +326,35 @@ function isSafePartialFileExt(value) {
 
 function normalizePartialFileExt(value) {
   return isSafePartialFileExt(value) ? value : COPY_PARAM_DEFAULTS.partialFileExt;
+}
+
+/**
+ * CopyParams validation also runs at the queue boundary. GUI validation is a
+ * useful explanation for a person, but CLI/IPC callers can reach queue:add
+ * without opening that dialog. Keep both paths on the same safe defaults.
+ */
+function normalizeCopyParam(value) {
+  const copyParam = { ...COPY_PARAM_DEFAULTS, ...(value || {}) };
+  if (!['text', 'binary', 'automatic'].includes(copyParam.transferMode)) {
+    copyParam.transferMode = COPY_PARAM_DEFAULTS.transferMode;
+  }
+  if (!['noChange', 'upper', 'lower', 'firstUpper'].includes(copyParam.fileNameCase)) {
+    copyParam.fileNameCase = COPY_PARAM_DEFAULTS.fileNameCase;
+  }
+  if (!['overwrite', 'resume', 'append'].includes(copyParam.overwriteMode)) {
+    copyParam.overwriteMode = COPY_PARAM_DEFAULTS.overwriteMode;
+  }
+  if (!['none', 'disconnect', 'suspend', 'shutdown'].includes(copyParam.onceDoneOperation)) {
+    copyParam.onceDoneOperation = COPY_PARAM_DEFAULTS.onceDoneOperation;
+  }
+  if (!['off', 'on', 'smart'].includes(copyParam.resumeSupport)) {
+    copyParam.resumeSupport = COPY_PARAM_DEFAULTS.resumeSupport;
+  }
+  copyParam.cpsLimit = normalizeCpsLimit(copyParam.cpsLimit);
+  copyParam.resumeThreshold = normalizeNonNegative(
+    copyParam.resumeThreshold, COPY_PARAM_DEFAULTS.resumeThreshold);
+  copyParam.partialFileExt = normalizePartialFileExt(copyParam.partialFileExt);
+  return copyParam;
 }
 
 // ---------------------------------------------------------------------------
@@ -391,9 +427,7 @@ class TransferQueue extends EventEmitter {
    *   session        opaque handle passed back on 'reconnect'
    */
   add(spec) {
-    const copyParam = { ...COPY_PARAM_DEFAULTS, ...(spec.copyParam || {}) };
-    copyParam.cpsLimit = normalizeCpsLimit(copyParam.cpsLimit);
-    copyParam.partialFileExt = normalizePartialFileExt(copyParam.partialFileExt);
+    const copyParam = normalizeCopyParam(spec.copyParam);
     const item = {
       id: spec.id || newId(),
       side: spec.side || 'upload',
@@ -1694,9 +1728,7 @@ class TransferQueue extends EventEmitter {
     if (!p.sourceAdapter || !p.targetAdapter) {
       throw new Error('A transfer plan needs a source adapter and a target adapter.');
     }
-    const copyParam = { ...COPY_PARAM_DEFAULTS, ...(p.copyParam || {}) };
-    copyParam.cpsLimit = normalizeCpsLimit(copyParam.cpsLimit);
-    copyParam.partialFileExt = normalizePartialFileExt(copyParam.partialFileExt);
+    const copyParam = normalizeCopyParam(p.copyParam);
     // A plan may arrive from a session transfer that has no queue item behind
     // it. Everything the streaming loop reads off an item is supplied here, so
     // one implementation serves both callers rather than two that agree today.

@@ -57,24 +57,30 @@ test('unavailable settings remain keyboard-reachable destinations', () => {
   assert.equal(typeof pending.value, 'string');
 });
 
-test('safe primitive settings expose inline controls without exposing protected flows', () => {
+test('safe primitive settings expose inline controls without exposing protected or unavailable flows', () => {
   const settings = P.preferenceDestinations(() => false);
   const inline = settings.filter((entry) => entry.type === 'setting' && entry.inline);
   assert.ok(inline.length > 0, 'the palette should expose at least one live primitive control');
   assert.ok(inline.some((entry) => entry.control.type === 'check'));
   assert.ok(inline.some((entry) => entry.control.type === 'number'));
-  assert.ok(inline.every((entry) => entry.control && !entry.control.secret && !entry.control.actionId));
+  assert.ok(inline.every((entry) => entry.control && !entry.control.secret && !entry.control.actionId
+    && !entry.control.danger && !entry.pending));
 
   const master = settings.find((entry) => entry.key === 'security.useMasterPassword');
   if (master) assert.equal(master.inline, false, 'master-password changes need the Preferences flow');
   assert.equal(P.canInlinePreference({ type: 'text', secret: true }), false);
   assert.equal(P.canInlinePreference({ type: 'text', actionId: 'masterPassword' }), false);
+  assert.equal(P.canInlinePreference({ type: 'check', key: 'logging.logSensitive', danger: true }), false);
+  assert.equal(P.canInlinePreference({ type: 'check', key: 'timeoutOnStartup' }), false);
   assert.equal(P.canInlinePreference({ type: 'select' }), true);
 });
 
-test('palette keyboard ownership leaves nested editors and clearing queries alone', () => {
+test('palette keyboard ownership leaves nested editors, palette buttons and clearing queries alone', () => {
   assert.equal(P.shouldHandlePaletteKey({ key: 'ArrowDown', inRegexBuilder: true }), false);
   assert.equal(P.shouldHandlePaletteKey({ key: 'Enter', inInlineControl: true }), false);
+  assert.equal(P.shouldHandlePaletteKey({ key: 'Enter', inPaletteButton: true }), false);
+  assert.equal(P.shouldHandlePaletteKey({ key: 'ArrowDown', inPaletteButton: true }), false);
+  assert.equal(P.shouldHandlePaletteKey({ key: 'Escape', inPaletteButton: true }), true);
   assert.equal(P.shouldHandlePaletteKey({ key: 'Escape', inInlineControl: true }), true);
   assert.equal(P.shouldHandlePaletteKey({ key: 'Escape', searchHasValue: true }), false);
   assert.equal(P.shouldHandlePaletteKey({ key: 'ArrowDown' }), true);

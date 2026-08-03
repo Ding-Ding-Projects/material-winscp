@@ -175,11 +175,12 @@ function remoteDropOperation(lastDropEffect, opts) {
   const effect = Number(lastDropEffect);
   if (o.ontoSessionTab) {
     if (!o.targetAvailable) return null;
-    return ((effect & DROPEFFECT.MOVE) && o.sameSession) ? 'remoteMove' :
-      ((effect & (DROPEFFECT.COPY | DROPEFFECT.MOVE)) ? 'remoteCopy' : null);
+    return effect === DROPEFFECT.MOVE
+      ? (o.sameSession ? 'remoteMove' : 'remoteCopy')
+      : (effect === DROPEFFECT.COPY ? 'remoteCopy' : null);
   }
-  if (effect & DROPEFFECT.MOVE) return 'remoteMove';
-  if (effect & DROPEFFECT.COPY) return 'remoteCopy';
+  if (effect === DROPEFFECT.MOVE) return 'remoteMove';
+  if (effect === DROPEFFECT.COPY) return 'remoteCopy';
   return null;
 }
 
@@ -454,14 +455,18 @@ class DragOut {
       throw new DragError('The drag transfer did not complete, so no files were offered to Windows Explorer.',
         'DRAG_TRANSFER_INCOMPLETE');
     }
+    if (!this.items.every((item) => this.exists(item.localPath))) {
+      throw new DragError('The drag transfer did not produce every requested file.', 'DRAG_TRANSFER_INCOMPLETE');
+    }
     this.staged = true;
     return this.items.map((i) => i.localPath);
   }
 
-  /** The paths handed to the shell. Only files that really exist are offered. */
+  /** The paths handed to the shell. A partial payload is never offered. */
   payload() {
     if (!this.staged) return [];
-    return this.items.map((i) => i.localPath).filter((p) => this.exists(p));
+    if (!this.items.every((item) => this.exists(item.localPath))) return [];
+    return this.items.map((i) => i.localPath);
   }
 
   /**

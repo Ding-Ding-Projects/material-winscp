@@ -233,22 +233,97 @@ test.describe('the application boots and stays usable', () => {
     assert.equal(inventory.regexBuilder, true, 'the palette search must carry its anchored regex-builder button');
     assert.equal(inventory.card, true, 'the default palette surface must be the bounded card');
 
+    const builderKeyboard = await app.evaluate(`(() => {
+      const button = document.querySelector('.cmdp-search .sb-rb');
+      if (!button) return { found: false };
+      button.focus();
+      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      button.dispatchEvent(event);
+      if (!event.defaultPrevented) button.click();
+      return {
+        found: true,
+        prevented: event.defaultPrevented,
+        palette: !!document.querySelector('.cmdp-surface'),
+        builder: !!document.querySelector('.rb-popover'),
+      };
+    })()`);
+    assert.deepEqual(builderKeyboard, { found: true, prevented: false, palette: true, builder: true },
+      'Enter on the palette search builder must belong to the builder button');
+    await app.evaluate(`document.querySelector('.rb-pattern')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))`);
+    await waitFor(() => app.evaluate('!document.querySelector(".rb-popover")'), 8000,
+      'the palette regex builder to close');
+
+    await app.evaluate(`(() => {
+      const input = document.querySelector('[data-search-id="command-palette"] input');
+      input.value = 'queue.transfersLimit';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    })()`);
+    await waitFor(() => app.evaluate('document.querySelectorAll(".cmdp-row").length === 1'), 8000,
+      'the inline preference result');
+    const inlineEnter = await app.evaluate(`(() => {
+      const input = document.querySelector('.cmdp-row input[type="number"]');
+      if (!input) return { found: false };
+      input.focus();
+      input.value = '7';
+      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      input.dispatchEvent(event);
+      return { found: true, prevented: event.defaultPrevented, palette: !!document.querySelector('.cmdp-surface') };
+    })()`);
+    assert.deepEqual(inlineEnter, { found: true, prevented: true, palette: true },
+      'Enter in an inline number control must commit without selecting the row');
+    await waitFor(() => app.ok('config.getPref', 'queue.transfersLimit').then((value) => value === 7), 8000,
+      'the inline number write');
+    await waitFor(() => app.evaluate('document.activeElement?.matches(".cmdp-row input[type=number]")'), 8000,
+      'focus to return to the refreshed inline number control');
+
+    const inlineEscape = await app.evaluate(`(() => {
+      const input = document.querySelector('.cmdp-row input[type="number"]');
+      if (!input) return { found: false };
+      input.focus();
+      input.value = '8';
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      return { found: true, palette: !!document.querySelector('.cmdp-surface') };
+    })()`);
+    assert.deepEqual(inlineEscape, { found: true, palette: false },
+      'closing from an edited inline control must still flush its value');
+    await waitFor(() => app.ok('config.getPref', 'queue.transfersLimit').then((value) => value === 8), 8000,
+      'the inline value flushed during palette close');
+
+    await app.resize(420, 260);
+    await app.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, shiftKey: true, bubbles: true }))`);
+    await waitFor(() => app.evaluate('!!document.querySelector(".cmdp-surface")'), 8000,
+      'the palette to reopen in a narrow viewport');
+    const narrow = await app.evaluate(`(() => {
+      const v = { width: innerWidth, height: innerHeight };
+      const r = document.querySelector('.cmdp-surface')?.getBoundingClientRect();
+      return r ? { ...v, left: r.left, top: r.top, right: r.right, bottom: r.bottom } : null;
+    })()`);
+    assert.ok(narrow && narrow.left >= 0 && narrow.top >= 0
+      && narrow.right <= narrow.width && narrow.bottom <= narrow.height,
+    `the palette escaped the narrow viewport: ${JSON.stringify(narrow)}`);
+    await app.evaluate('document.querySelector(".cmdp-close")?.click()');
+    await app.resize(1200, 800);
+
+    await app.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, shiftKey: true, bubbles: true }))`);
+    await waitFor(() => app.evaluate('!!document.querySelector(".cmdp-surface")'), 8000,
+      'the palette to reopen after the narrow-layout check');
+    assert.equal(await app.evaluate('document.querySelector("[data-search-id=\\"command-palette\\"] input")?.value'),
+      'queue.transfersLimit', 'the palette search must survive its close and reopen');
+
     await app.evaluate(`(() => {
       const input = document.querySelector('[data-search-id="command-palette"] input');
       input.value = 'scpCommander.currentPanel';
       input.dispatchEvent(new Event('input', { bubbles: true }));
     })()`);
-    await waitFor(() => app.evaluate('document.querySelectorAll(".cmdp-row").length === 1'), 8000,
+    await waitFor(() => app.evaluate('document.querySelector(".cmdp-row[data-cmdp-key=\\"scpCommander.currentPanel\\"]") && document.querySelectorAll(".cmdp-row").length === 1'), 8000,
       'the exact setting search result');
     await app.evaluate(`(() => {
       const row = document.querySelector('.cmdp-row');
       row?.click();
       return !!row;
     })()`);
-    await waitFor(() => app.evaluate('!!document.querySelector(".prefs")'), 8000,
-      'Preferences to open from the setting destination');
-    await waitFor(() => app.evaluate('!!document.querySelector("[data-pref-key=\\"scpCommander.currentPanel\\"].is-hit")'), 8000,
-      'the exact Preferences control to be highlighted');
+    await waitFor(() => app.evaluate('!!document.querySelector(".prefs") && !!document.querySelector("[data-pref-key=\\"scpCommander.currentPanel\\"].is-hit")'), 8000,
+      'Preferences to open with the exact control highlighted');
 
     // Close the settings surface, reopen the palette and exercise its persisted
     // size choice. Click the real Preferences close action so this smoke does
