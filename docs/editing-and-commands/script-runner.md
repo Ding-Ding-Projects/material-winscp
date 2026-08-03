@@ -37,6 +37,7 @@ do not share a script transcript or XML log without reviewing it.
 | A command fails in batch-abort mode | Later script lines are skipped and the runner returns `1`. |
 | A command fails in batch-continue mode | Later lines run, but the runner still returns `1`. |
 | `/xmllog` is requested with `/xmlgroups` | Each group name is XML-escaped and command credentials are redacted. |
+| `/stdin` or `/stdout` has an unknown mode | The in-process runner prints the parser error and returns `1`, matching the console front end's process boundary. |
 | No script and no standard input | The non-interactive runner exits `0` without hanging. |
 
 Focused coverage lives in `test/script.test.js`, including the `/script` and

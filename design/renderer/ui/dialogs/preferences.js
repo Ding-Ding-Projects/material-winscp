@@ -539,6 +539,17 @@ export function maskField(input) {
   return h('span', { class: 'pref-inline' }, input, status);
 }
 
+/** Return the next visible page index for the Preferences tree keyboard model. */
+export function preferenceTreeIndex(key, index, count) {
+  if (!Number.isInteger(count) || count < 1) return -1;
+  const current = Math.min(Math.max(Number.isInteger(index) ? index : 0, 0), count - 1);
+  if (key === 'Home') return 0;
+  if (key === 'End') return count - 1;
+  if (key === 'ArrowDown') return (current + 1) % count;
+  if (key === 'ArrowUp') return (current - 1 + count) % count;
+  return current;
+}
+
 /* ================================================================== */
 /* the dialog                                                          */
 /* ================================================================== */
@@ -561,6 +572,18 @@ export function createPreferences(opts = {}) {
 
   const navList = h('div', { class: 'prefs-tree', role: 'tree', 'aria-label': 'Preference pages' });
   const mainEl = h('main', { class: 'prefs-main', tabindex: '-1' });
+
+  navList.addEventListener('keydown', (event) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    const items = Array.from(navList.querySelectorAll('[role="treeitem"]'));
+    if (!items.length) return;
+    const index = Math.max(0, items.indexOf(document.activeElement));
+    const next = preferenceTreeIndex(event.key, index, items.length);
+    if (next < 0) return;
+    event.preventDefault();
+    items[next].focus();
+    items[next].click();
+  });
 
   const allBar = createSearchBar({
     id: 'preferences-all',
@@ -599,6 +622,7 @@ export function createPreferences(opts = {}) {
         type: 'button', role: 'treeitem',
         class: `prefs-nav-item${page.id === currentPageId ? ' is-active' : ''}`,
         'aria-selected': String(page.id === currentPageId),
+        'aria-current': page.id === currentPageId ? 'page' : null,
         'aria-level': String(page.depth + 1),
         dataset: { depth: String(page.depth), pageId: page.id },
         onclick: () => goTo(page.id),

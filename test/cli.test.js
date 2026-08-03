@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const { test } = require('node:test');
 
 const cli = require('../bin/winscp');
@@ -31,6 +32,19 @@ test('headless CLI prints help and version without opening the app', async () =>
     'drag', 'extension-status', '--windows-build', '17134', '--json',
   ], { stdout: extension.stream, stderr: extension.stream }), 0);
   assert.equal(JSON.parse(extension.text()).brokenOnThisWindows, true);
+});
+
+test('winscp-com prints help and version without starting the console runner', () => {
+  const entry = path.join(__dirname, '..', 'bin', 'winscp-com.js');
+  const help = spawnSync(process.execPath, [entry, '--help'], { encoding: 'utf8' });
+  assert.equal(help.status, 0);
+  assert.match(help.stdout, /console-compatible WinSCP command line/);
+  assert.equal(help.stderr, '');
+
+  const version = spawnSync(process.execPath, [entry, '--version'], { encoding: 'utf8' });
+  assert.equal(version.status, 0);
+  assert.equal(version.stdout, `${require('../package.json').version}\n`);
+  assert.equal(version.stderr, '');
 });
 
 test('convenience commands translate to the existing console runner switches', () => {

@@ -1,5 +1,14 @@
 # Preferences: consumer audit and unavailable capabilities
 
+## Keyboard navigation
+
+The page tree is fully keyboard reachable. With focus on a page, `Arrow Up` and
+`Arrow Down` move between visible pages (wrapping at either end); `Home` and
+`End` jump to the first and last visible page. The selected page is exposed to
+assistive technology with `aria-current="page"` as well as the tree selection
+state. Filtering changes the visible set, so keyboard movement always stays
+inside the current search results.
+
 The Preferences dialog is generated from [`prefpages.js`](../../design/renderer/ui/dialogs/prefpages.js), and every control points at a real path in [`defaults.js`](../../design/main/defaults.js). A normal edit goes through the real preload bridge:
 
 ```text

@@ -19,7 +19,30 @@
 // declaration is left to whoever owns it.
 'use strict';
 
+const packageInfo = require('../package.json');
 const { runConsoleFrontEnd } = require('../design/main/console');
+
+const HELP = `winscp-com ${packageInfo.version} — console-compatible WinSCP command line
+
+Usage:
+  winscp-com /script=FILE [switches]
+  winscp-com /command COMMAND... [switches]
+  winscp-com /console < script.txt
+
+Use winscp --help for the headless drag/drop simulation and convenience commands.
+`;
+
+const first = process.argv[2];
+if (first === '--help' || first === '-h' || first === 'help') {
+  process.stdout.write(HELP);
+  process.exitCode = 0;
+  return;
+}
+if (first === '--version' || first === '-v' || first === 'version') {
+  process.stdout.write(`${packageInfo.version}\n`);
+  process.exitCode = 0;
+  return;
+}
 
 runConsoleFrontEnd(process.argv.slice(2)).then(
   (code) => { finish(code); },

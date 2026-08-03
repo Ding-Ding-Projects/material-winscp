@@ -541,6 +541,11 @@ class SshTransport extends EventEmitter {
         knownHostKey: s.hostKey,
       }, sock);
     } catch (e) {
+      // A failed handshake/authentication must not leave a live socket or
+      // tunnel channel behind.  Apart from leaking resources, ssh2 may emit
+      // a later channel error into a session that is already retrying.  Keep
+      // `_closing` false here so a caller may safely retry this transport.
+      this._abortConnection();
       // `error.ssh` is what the session layer reads to decide whether
       // reconnecting could help and whether asking for the password again is
       // worth anything at all.
@@ -557,6 +562,19 @@ class SshTransport extends EventEmitter {
     this._authenticating = false;
     this._startRekeyPolicy();
     return this;
+  }
+
+  /** Tear down a partially opened connection without making retry look cancelled. */
+  _abortConnection() {
+    try { if (this.client) this.client.end(); } catch { /* already down */ }
+    try { if (this.tunnelClient) this.tunnelClient.end(); } catch { /* already down */ }
+    try { if (this.tunnelServer) this.tunnelServer.close(); } catch { /* already down */ }
+    try { if (this.socket) this.socket.destroy(); } catch { /* already down */ }
+    this.connected = false;
+    this.client = null;
+    this.tunnelClient = null;
+    this.tunnelServer = null;
+    this.socket = null;
   }
 
   /**

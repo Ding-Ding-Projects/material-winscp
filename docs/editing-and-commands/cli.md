@@ -31,7 +31,8 @@ The direct `winscp run` form accepts every switch understood by the existing
 console runner, including `/script`, `/command`, `/parameter`, `/log`,
 `/xmllog`, `/stdout`, `/stdin`, `/nointeractiveinput` and `/unsafe`.
 `winscp-com` remains available for scripts that explicitly require that
-legacy executable name.
+legacy executable name. It also supports `winscp-com --help` and
+`winscp-com --version` without starting the console runner.
 
 ## Configuration
 
@@ -84,6 +85,8 @@ usable.
 
 - `test/cli.test.js` covers help/version, console-argument translation, drag
   decisions, real-path classification, temporary staging and cleanup.
+- The `winscp-com --help` and `winscp-com --version` wrapper paths are covered
+  with process-level smoke tests; neither starts the console runner.
 - `node --check bin/winscp.js` checks the executable syntax.
 - `node bin/winscp.js drag plan --source remote --result invalid --last-effect move`
   is a smoke check for the safe MOVE branch.

@@ -14,6 +14,8 @@ the transfer or panel walk calculates `calculatedSize`. A file list's
 `totalSize` therefore counts regular files and does not mistake directory
 metadata or the `..` navigation row for payload bytes. Empty directories are
 represented by no content rows; a visible `..` row is navigation, not content.
+Rows with no file name are rejected as malformed, and duplicate names are
+rejected so an ambiguous path is never exposed as a selectable transfer target.
 
 Permission columns support full POSIX modes, setuid/setgid/sticky bits,
 Windows OpenSSH's `*` unset marker and partially-known selections. Owner and

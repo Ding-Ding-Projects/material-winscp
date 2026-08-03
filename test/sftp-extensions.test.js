@@ -1446,6 +1446,20 @@ test('the transport reports why a connection failed', async (t) => {
     } finally { await srv.close(); }
   });
 
+  await t.test('failed host-key verification aborts the socket and leaves retry state clean', async () => {
+    const srv = await startRawSftpServer({ extensions: [] });
+    try {
+      const transport = new SshTransport({
+        hostName: '127.0.0.1', portNumber: srv.port, userName: 'x', password: 'wrong', timeout: 5,
+      }, { hostKeyVerifier: () => false });
+      await assert.rejects(() => transport.connect());
+      assert.equal(transport.socket, null);
+      assert.equal(transport.client, null);
+      assert.equal(transport.tunnelClient, null);
+      assert.equal(transport._closing, false);
+    } finally { await srv.close(); }
+  });
+
   await t.test('the banner is reported with the decision about showing it', async () => {
     const key = hostKey();
     const banner = 'Authorised users only.\n';

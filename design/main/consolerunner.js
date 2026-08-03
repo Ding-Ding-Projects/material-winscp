@@ -908,8 +908,21 @@ async function runConsole(argv = [], deps = {}) {
   // one file ended and the next began. design/main/console.js owns the parse,
   // including that refusal, so it is used here rather than re-derived.
   const { parseStdInOutMode, STDINOUT } = require('./console');
-  const stdOutMode = parseStdInOutMode(params, 'stdout', true);
-  const stdInMode = parseStdInOutMode(params, 'stdin', false);
+  let stdOutMode;
+  let stdInMode;
+  try {
+    stdOutMode = parseStdInOutMode(params, 'stdout', true);
+    stdInMode = parseStdInOutMode(params, 'stdin', false);
+  } catch (error) {
+    // Keep the in-process runner's contract identical to winscp.com's outer
+    // catch: malformed stream switches are a process failure, not a rejected
+    // promise that callers cannot use as an exit code. The front-end catches
+    // this too, but runConsole is also a public project-owned entry point.
+    const message = error && error.message ? error.message : String(error);
+    const output = deps.stderr || deps.stdout;
+    if (output && typeof output.write === 'function') output.write(`${message}\n`);
+    return RESULT_ANY_ERROR;
+  }
   const noInteractiveInput = params.findSwitch('nointeractiveinput') || stdInMode !== STDINOUT.OFF;
 
   let consoleInstance = deps.console;

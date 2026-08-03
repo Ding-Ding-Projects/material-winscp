@@ -1621,6 +1621,7 @@ class TRemoteFile {
             }
           }
           this.fileName = unixExtractFileName(line);
+          if (this.fileName === '') throw new Error('missing file name');
         }
       }
     } catch (e) {
@@ -1824,6 +1825,7 @@ class TRemoteFileList {
   }
 
   addFile(file) {
+    if (!(file instanceof TRemoteFile) || this.findFile(file.fileName) !== null) return false;
     this.files.push(file);
     file.directory = this;
     return true;
@@ -1914,7 +1916,7 @@ class TRemoteDirectory extends TRemoteFileList {
 
   /** Returns false for the '.' entry, which is dropped rather than listed. */
   addFile(file) {
-    if (file.isThisDirectory) return false;
+    if (!(file instanceof TRemoteFile) || file.isThisDirectory) return false;
     if (file.isParentDirectory) this.parentDirectory = file;
     if (!file.isParentDirectory || this._includeParentDirectory) {
       super.addFile(file);

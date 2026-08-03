@@ -14,6 +14,7 @@ const assert = require('node:assert');
 const { Readable } = require('stream');
 
 const C = require('../design/main/console');
+const CR = require('../design/main/consolerunner');
 
 const {
   PROTOCOL, EVENT, STDINOUT, FILE_TYPE, LIMITS, RESULT, MSG,
@@ -1184,6 +1185,16 @@ test('a bad /stdout value stops the run before anything is transferred', async (
   const code = await runConsoleFrontEnd(['/stdout=base64', '/command', 'exit'], deps);
   assert.strictEqual(code, RESULT.PROCESSING_ERROR);
   assert.match(deps.stdout.text, /Unknown value 'base64' of option 'stdout'/);
+});
+
+test('the in-process ConsoleRunner returns an exit code for a bad stream mode', async () => {
+  const stdout = new FakeStream();
+  const code = await CR.runConsole(['/stdout=base64', '/command', 'exit'], {
+    stdout,
+    console: new CR.BufferConsole({ input: [] }),
+  });
+  assert.strictEqual(code, CR.RESULT_ANY_ERROR);
+  assert.match(stdout.text, /Unknown value 'base64' of option 'stdout'/);
 });
 
 test('an unusable product version stops the front-end with a global error', async () => {

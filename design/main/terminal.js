@@ -1332,10 +1332,14 @@ class Terminal extends EventEmitter {
   async queryReopen(e, params, progress) {
     if (progress) progress.suspend(this._now());
     try {
+      // Cancellation may be requested while the reconnect decision is on
+      // screen. Do not turn that cancellation into a fresh network attempt.
+      if (progress && progress.cancel !== CANCEL.continue) return false;
       let result = await this.doQueryReopen(e);
       if (!result) return false;
       const start = this._now();
       do {
+        if (progress && progress.cancel !== CANCEL.continue) return false;
         try {
           await this.reopen(params);
         } catch (reopenError) {

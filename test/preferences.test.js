@@ -24,6 +24,17 @@ const { PREF_DEFAULTS, COPY_PARAM_DEFAULTS } = require('../design/main/defaults'
 const mainCustomCmd = require('../design/main/customcmd');
 const { DEFAULT_PRESETS, DEFAULT_CUSTOM_COMMANDS } = require('../design/main/config');
 
+test('Preferences tree keyboard navigation wraps and supports Home/End', async () => {
+  const { preferenceTreeIndex } = await import('../design/renderer/ui/dialogs/preferences.js');
+  assert.equal(preferenceTreeIndex('ArrowDown', 0, 3), 1);
+  assert.equal(preferenceTreeIndex('ArrowDown', 2, 3), 0);
+  assert.equal(preferenceTreeIndex('ArrowUp', 0, 3), 2);
+  assert.equal(preferenceTreeIndex('Home', 2, 3), 0);
+  assert.equal(preferenceTreeIndex('End', 0, 3), 2);
+  assert.equal(preferenceTreeIndex('PageDown', 1, 3), 1);
+  assert.equal(preferenceTreeIndex('ArrowDown', 0, 0), -1);
+});
+
 const load = async () => ({
   schema: await import('../design/renderer/ui/dialogs/prefpages.js'),
   copy: await import('../design/renderer/ui/dialogs/copyparams.js'),

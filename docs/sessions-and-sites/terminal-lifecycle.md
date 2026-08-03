@@ -21,6 +21,8 @@ remains separate and uses the queue item id.
 Prompts are refusal-safe. A dismissed or malformed answer chooses the safest
 available answer; an empty answer set becomes cancellation. Security prompts
 that are refused or cancelled never schedule an automatic reconnect.
+Cancellation also wins if it arrives while the reconnect decision is displayed:
+the pending operation returns without starting another reconnect attempt.
 
 ## Reconnect policy
 

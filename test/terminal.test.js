@@ -786,6 +786,22 @@ test('a robust loop with no flag has no reconnect budget at all', async () => {
   assert.ok(!session.lines.some((l) => /Retry interval expired/.test(l)));
 });
 
+test('cancelling while the reconnect prompt is open does not reconnect', async () => {
+  const { terminal, session, adapter, queries } = makeTerminal({ answers: [ANSWERS.retry] });
+  adapter.connected = false;
+  const progress = new OperationProgress();
+  progress.start(OPERATIONS.copy, SIDES.remote, 1);
+  terminal._queryUser = async (q) => {
+    queries.push(q);
+    progress.setCancel(CANCEL.cancel);
+    return ANSWERS.retry;
+  };
+  const lost = new FatalError('Connection lost');
+  const result = await terminal.queryReopen(lost, 0, progress);
+  assert.strictEqual(result, false);
+  assert.strictEqual(session.reconnects, 0);
+});
+
 test('retryOnFatal reconnects before retrying the command', async () => {
   const { terminal, adapter, session } = makeTerminal({ answers: [ANSWERS.retry] });
   let attempts = 0;

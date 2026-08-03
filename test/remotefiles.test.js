@@ -700,6 +700,10 @@ test('a line that fits no known shape is refused, not guessed at', () => {
   assert.match(err.message, /Unexpected directory listing line/);
 });
 
+test('a metadata-only listing row is refused as malformed', () => {
+  assert.throws(() => parse('-rw-r--r-- 1 u g 5 Jun 15 12:34 '), R.ListLineError);
+});
+
 test('tabs are treated as column separators', () => {
   const f = parse('-rw-r--r--\t1\tmartin\tusers\t1234\tJun 15 12:34\ttabs.txt');
   assert.equal(f.fileName, 'tabs.txt');
@@ -1128,6 +1132,15 @@ test('a directory drops the . entry and can hide the .. entry', () => {
   const next = new R.TRemoteDirectory(terminal, dir);
   assert.equal(next.includeParentDirectory, false);
   assert.equal(next.loaded, false, 'an unread directory is not loaded');
+});
+
+test('a list rejects malformed objects and duplicate names', () => {
+  const list = new R.TRemoteFileList();
+  const first = fileNamed('same.txt', false, 1);
+  assert.equal(list.addFile(first), true);
+  assert.equal(list.addFile({ fileName: 'bad.txt' }), false);
+  assert.equal(list.addFile(fileNamed('same.txt', false, 2)), false);
+  assert.equal(list.count, 1);
 });
 
 test('reset detaches old entries and forgets a hidden parent', () => {
