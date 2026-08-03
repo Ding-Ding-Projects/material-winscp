@@ -187,6 +187,32 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "c95cd9d", kind: 'commit', ref: "c95cd9d", oid: "c95cd9d45a09042bd3528e38457f5b1464a2c68b", date: "2026-08-03",
+    title: "Harden editor, session, sync, auth, and workspace lifecycles",
+    changes: [
+      { category: "added", text: "English: Roll back failed external editor launches, preserve stored-site URL parameters, cancel invalid watchers safely, persist copy presets, expose a secret-free authentication log, and enforce the last local browser floor. Add focused tests and documentation. The lifecycle code now cleans up after its own plot twists instead of leaving props on stage." },
+      { category: "security", text: "廣東話：失敗 external editor launch 會 rollback、stored-site URL 唔再食錯 remote path、壞 watcher 會安全停、copy preset 會記住、authentication log 唔掂 secrets，同埋最後一個 local browser 唔畀亂關。加埋 tests 同 docs，lifecycle code 終於識得收拾道具，唔使劇完仲留低一地 props。" },
+    ],
+  },
+  {
+    id: "f114157", kind: 'commit', ref: "f114157", oid: "f1141574877ebfe57b8b83b93a928285dd3fb4fd", date: "2026-08-03",
+    title: "Refresh boundary-hardening handoff metadata",
+    changes: [
+      { category: "changed", text: "English: Record the verified 3,279/3,280 test result, unchanged 59.0% logic coverage, 114 remaining units, and the current pushed-wave checkpoint. The handoff keeps the archaeology map honest, even when the treasure is still buried." },
+    ],
+    changesYue: [
+      { category: "changed", text: "廣東話：記低已驗證嘅 3,279/3,280 測試、仍然 59.0% logic coverage、剩低 114 個 units 同今次 checkpoint。張交更紙繼續講真話，寶藏未掘到就唔扮有金光。" },
+    ],
+  },
+  {
+    id: "d85b97c", kind: 'commit', ref: "d85b97c", oid: "d85b97ce2fd3b23c84a71a5619b5ee2f462eb1f3", date: "2026-08-03",
+    title: "Refresh in-app changelog for boundary hardening",
+    changes: [
+      { category: "changed", text: "English: Record the terminal, protocol, checklist, and WinApi hardening wave in the in-app release history. The changelog remains the app's small diary, now with fewer plot holes." },
+      { category: "changed", text: "廣東話：記低 terminal、protocol、checklist 同 WinApi hardening 呢輪改動，app 嘅細本日記少咗幾個劇情漏洞，讀者唔使估邊個角色突然消失。" },
+    ],
+  },
+  {
     id: "6aee465", kind: 'commit', ref: "6aee465", oid: "6aee4650e0482aad834b4eed080021fbd75b6d86", date: "2026-08-03",
     title: "Harden terminal, protocol, checklist, and WinApi boundaries",
     changes: [
@@ -709,45 +735,6 @@ export const DEVELOPMENT = [
       { category: "changed", text: "#29 個原文係話「個 repo 賣廣告嗰條網址，每一頁都係 404」。而家唔係喇。呢張相影嘅 係**線上真嘅網站**，唔係本機 server，同「之前」嗰張用返一模一樣嘅方法同尺寸。" },
       { category: "changed", text: "Pages workflow 第一次行就綠，而且 configure-pages 自己開咗 Pages —— 呢一步之前 係冇人驗證得到嘅。" },
       { category: "changed", text: "個下載掣先係要查嘅嘢，唔係影完就算。規矩係：要用可驗證嘅 release asset 真 URL, 唔係就唔好出個掣。本機 build 示範咗後半（冇 manifest 就冇掣，仲寫明點解）；線上 示範咗前半 —— 抓真嗰個檔案返嚟，206、MZ 開頭、130,823,168 bytes，即係 124.8 MB, 同個掣上面寫嘅一個字都唔差。" },
-    ],
-  },
-  {
-    id: "867c17c", kind: 'commit', ref: "867c17c", oid: "867c17c1aaabd4f9656d22d81b2459ed20056926", date: "2026-08-02",
-    title: "Capture the site rendering for the first time, and record what is still not done",
-    refs: ["#29"],
-    changes: [
-      { category: "changed", text: "The \"after\" half of #29, taken through the same headless harness at the same 1400x1000 as the \"before\", so the pair is comparable rather than merely adjacent." },
-      { category: "added", text: "Home renders 58 articles across 12 category cards in Material Design 3. Settings renders five sub-tabs with theme, accent, contrast, density, three font controls and a per-row \"Reset this\". Opening Settings adds a second tab to the strip, which is how you can tell the tab strip is real and not a picture of one." },
-      { category: "changed", text: "Verified here rather than taken on trust — the wave's two adversarial verifiers never ran, so this stands in for them:" },
-      { category: "changed", text: "node site/build.js --verify VERIFY OK, 27 files, exit 0 test/site-build.test.js + test/site-app.test.js 67/67 independent grep of the built output for remote subresources none" },
-      { category: "changed", text: "The 36 app tests are not decoration either: catastrophic regex shapes refused before they run, zero-width matches advancing instead of spinning, every colour notation reading back as the same colour, real WCAG contrast, the two funny levels proven independent, and the dim sum draw pinned to its advertised chance." },
-      { category: "changed", text: "Two things the screenshots show that are correct rather than missing:" },
-      { category: "changed", text: "No installer button. The page links only a release asset it can verify, and there is no release manifest yet, so it says so instead of guessing a URL." },
-      { category: "changed", text: "\"Settings are stored in this browser only\" — said out loud rather than implied." },
-      { category: "changed", text: "STILL NOT DONE, and none of it is bundled into a claim that it is: Pages is not enabled, pages.yml has never run, and the site is therefore still 404 in production. The infra agent flagged that `configure-pages` may lack the scope to enable Pages on its own. #29 stays open until a deploy is green." },
-    ],
-    changesYue: [
-      { category: "changed", text: "呢個係 #29 嘅「之後」，用返同一套 headless 工具、同一個 1400x1000 影，所以兩張先 至叫得上係一對可以比較嘅圖。" },
-      { category: "changed", text: "首頁出到 58 篇文、12 張分類卡，正正經經嘅 Material 3。設定頁有五個子分頁、主題、 主色、對比、密度、三個字體控制，逐行仲有「Reset this」。㩒入設定會喺分頁列多開一 個分頁 —— 咁你就知嗰條分頁列係真嘅，唔係影出嚟嘅。" },
-      { category: "changed", text: "因為嗰浪兩個反駁員一個都冇跑到（撞正 session limit），所以呢度係我自己驗： `--verify` 綠、67/67 測試過、獨立 grep 過 build 出嚟嘅嘢冇任何遠端資源。" },
-      { category: "changed", text: "有兩樣嘢張相「冇」，但係啱嘅：冇安裝檔掣（因為未有可驗證嘅 release，佢寧願講明都 唔會作條 URL 出嚟）；同埋佢自己講明「設定淨係存喺你部瀏覽器」。" },
-      { category: "changed", text: "**未搞掂嘅照講**：Pages 未開、`pages.yml` 一次都未行過，所以線上仲係 404。#29 唔會 喺呢度收，要等真係部署到綠先算。" },
-    ],
-  },
-  {
-    id: "8132450", kind: 'commit', ref: "8132450", oid: "8132450d0d9edbd4294bac86166b2d8d5841af55", date: "2026-08-02",
-    title: "Merge branch 'worktree-wf_7340eadd-163-2'",
-    changes: [
-    ],
-  },
-  {
-    id: "b9061ef", kind: 'commit', ref: "b9061ef", oid: "b9061efbfc953a552c9274be79c5b03f72a6da01", date: "2026-08-02",
-    title: "Restore connection creation and introduce a proper app mark",
-    changes: [
-      { category: "added", text: "The app now recovers from malformed configuration, exposes New connection through every desktop route, refreshes saved sites, attaches successful sessions, and lets password authentication proceed when Pageant is absent. The old identity crisis is also over: one vector mark now drives the title bar, About view, BrowserWindow, and deterministic Windows icon." },
-    ],
-    changesYue: [
-      { category: "changed", text: "壞設定檔而家識得留低備份再安全起身；新增連線亦唔再玩捉迷藏，儲存站點、接上工作階段同冇開 Pageant 嘅密碼登入全部行得通。個 app 終於唔使再四圍借樣：同一個向量標誌包辦標題列、About、視窗同 Windows 圖示。" },
     ],
   },
 ];
