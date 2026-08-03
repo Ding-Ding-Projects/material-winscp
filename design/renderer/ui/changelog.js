@@ -187,6 +187,30 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "0dcc3f4", kind: 'commit', ref: "0dcc3f4", oid: "0dcc3f41b1328058596dad3bc6c23099f1317ae1", date: "2026-08-03",
+    title: "Harden preferences, actions, sync, dialogs, and packaging",
+    changes: [
+      { category: "changed", text: "The remaining slice now validates numeric preferences, removes an inert SiteAdvanced toggle, validates directory names, gates hidden-file state, reports case collisions, and rejects incomplete Squirrel artifacts in CI." },
+      { category: "changed", text: "今輪補實 Preferences range、SiteAdvanced、Create Directory、hidden files、sync collision 同 Squirrel artifact gate；啲設定唔再有假掣，啲 package 唔再靠運氣出街。" },
+    ],
+  },
+  {
+    id: "e7ae918", kind: 'commit', ref: "e7ae918", oid: "e7ae918552e947e50100c03d1c5398971564ad62", date: "2026-08-03",
+    title: "Record the current security and lifecycle wave in handoff",
+    changes: [
+      { category: "changed", text: "HANDOFF.md now reflects the 3,387-pass baseline and the synchronized 9148a21 origin/main tip." },
+      { category: "changed", text: "HANDOFF.md 而家記低 3387 pass，同埋已同步嘅 9148a21 origin/main；舊 pointer 可以正式退休。" },
+    ],
+  },
+  {
+    id: "9148a21", kind: 'commit', ref: "9148a21", oid: "9148a21acff58a3877390b66fc0cfe26cc69c98b", date: "2026-08-03",
+    title: "Update the in-app changelog for security and lifecycle fixes",
+    changes: [
+      { category: "fixed", text: "The history now records the verified security, config, S3, queue, session, and accessibility fixes with validated commit links." },
+      { category: "security", text: "App 入面嘅 changelog 而家記低 security、config、S3、queue、session 同 accessibility 修正；每條 link 都驗過，唔畀死 link 偷雞。" },
+    ],
+  },
+  {
     id: "e81083b", kind: 'commit', ref: "e81083b", oid: "e81083b8a200ada03fa467229bb7f2848f5c85b6", date: "2026-08-03",
     title: "Harden security, config, S3, queue, and session edges",
     changes: [
@@ -634,32 +658,6 @@ export const DEVELOPMENT = [
     changes: [
       { category: "added", text: "English: Roll back failed external editor launches, preserve stored-site URL parameters, cancel invalid watchers safely, persist copy presets, expose a secret-free authentication log, and enforce the last local browser floor. Add focused tests and documentation. The lifecycle code now cleans up after its own plot twists instead of leaving props on stage." },
       { category: "security", text: "廣東話：失敗 external editor launch 會 rollback、stored-site URL 唔再食錯 remote path、壞 watcher 會安全停、copy preset 會記住、authentication log 唔掂 secrets，同埋最後一個 local browser 唔畀亂關。加埋 tests 同 docs，lifecycle code 終於識得收拾道具，唔使劇完仲留低一地 props。" },
-    ],
-  },
-  {
-    id: "f114157", kind: 'commit', ref: "f114157", oid: "f1141574877ebfe57b8b83b93a928285dd3fb4fd", date: "2026-08-03",
-    title: "Refresh boundary-hardening handoff metadata",
-    changes: [
-      { category: "changed", text: "English: Record the verified 3,279/3,280 test result, unchanged 59.0% logic coverage, 114 remaining units, and the current pushed-wave checkpoint. The handoff keeps the archaeology map honest, even when the treasure is still buried." },
-    ],
-    changesYue: [
-      { category: "changed", text: "廣東話：記低已驗證嘅 3,279/3,280 測試、仍然 59.0% logic coverage、剩低 114 個 units 同今次 checkpoint。張交更紙繼續講真話，寶藏未掘到就唔扮有金光。" },
-    ],
-  },
-  {
-    id: "d85b97c", kind: 'commit', ref: "d85b97c", oid: "d85b97ce2fd3b23c84a71a5619b5ee2f462eb1f3", date: "2026-08-03",
-    title: "Refresh in-app changelog for boundary hardening",
-    changes: [
-      { category: "changed", text: "English: Record the terminal, protocol, checklist, and WinApi hardening wave in the in-app release history. The changelog remains the app's small diary, now with fewer plot holes." },
-      { category: "changed", text: "廣東話：記低 terminal、protocol、checklist 同 WinApi hardening 呢輪改動，app 嘅細本日記少咗幾個劇情漏洞，讀者唔使估邊個角色突然消失。" },
-    ],
-  },
-  {
-    id: "6aee465", kind: 'commit', ref: "6aee465", oid: "6aee4650e0482aad834b4eed080021fbd75b6d86", date: "2026-08-03",
-    title: "Harden terminal, protocol, checklist, and WinApi boundaries",
-    changes: [
-      { category: "added", text: "English: Make batch remote copies transactional, expose RemoteFiles aliases, preserve S3 deletion errors except concurrent 404s, add WebDAV legacy-auth warnings, invert checklist selections accessibly, and provide injected clipboard text handling. Add focused regressions and documentation. The edge cases now wear tiny safety helmets instead of sprinting into traffic." },
-      { category: "fixed", text: "廣東話：令批次 remote copy 有 transaction、補返 RemoteFiles aliases、S3 只吞 concurrent 404、WebDAV legacy auth 顯示保安警告、checklist 有 accessibility 反選，同 WinApi 有 injected clipboard text。加埋 regression tests 同文件，啲 edge cases 終於戴返迷你安全帽，唔再衝出馬路。" },
     ],
   },
 ];
