@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `0f499cf`** — Cover delayed passive FTPS transfers
+**At commit `ca67b21`** — Document sorted checklist identity preservation
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **60.5%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 71.5% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3516 run, **3515 pass, 0 fail**, 1 skipped |
-| Hand-written code | 222,696 lines across 443 files |
-| Commits | 231 on `main` |
+| Tests | 3521 run, **3520 pass, 0 fail**, 1 skipped |
+| Hand-written code | 222,879 lines across 443 files |
+| Commits | 235 on `main` |
 | Working tree | clean |
-| Remote | `origin/main` at `0f499cf` — in sync |
+| Remote | `origin/main` at `ca67b21` — in sync |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `ca67b21` | 2026-08-03 | Document sorted checklist identity preservation |
+| `fc7938a` | 2026-08-03 | Fix reconnect and sorted checklist identity |
+| `485a1d0` | 2026-08-03 | Harden SCP WebDAV and foreground queue paths |
+| `a855217` | 2026-08-03 | Refresh handoff after FTPS coverage |
 | `0f499cf` | 2026-08-03 | Cover delayed passive FTPS transfers |
 | `1230182` | 2026-08-03 | Refresh handoff after CLI checkpoint |
 | `4d78e05` | 2026-08-03 | Fix CLI edges and protocol transfer races |
 | `c0209f5` | 2026-08-03 | Refresh handoff after SFTP checkpoint |
-| `2facf09` | 2026-08-03 | Close SFTP size preference and checklist gaps |
-| `7fa152f` | 2026-08-03 | Refresh handoff after roadmap checkpoint |
-| `a95dc72` | 2026-08-03 | Harden reconnect queue WebDAV and menu parity |
-| `e840449` | 2026-08-03 | Wire editor refresh, preference shortcut, and S3 listing guards |
 
 ## Notes from whoever worked on this last
 
