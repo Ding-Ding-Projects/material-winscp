@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `ae34762`** — Update the in-app changelog for the roadmap wave
+**At commit `9148a21`** — Update the in-app changelog for security and lifecycle fixes
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3383 run, **3382 pass, 0 fail**, 1 skipped |
-| Hand-written code | 218,563 lines across 407 files |
-| Commits | 163 on `main` |
+| Tests | 3388 run, **3387 pass, 0 fail**, 1 skipped |
+| Hand-written code | 218,761 lines across 412 files |
+| Commits | 166 on `main` |
 | Working tree | **1 uncommitted change(s)** |
-| Remote | `origin/main` at `ae34762` — in sync |
+| Remote | `origin/main` at `9148a21` — in sync |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `9148a21` | 2026-08-03 | Update the in-app changelog for security and lifecycle fixes |
+| `e81083b` | 2026-08-03 | Harden security, config, S3, queue, and session edges |
+| `e40a62b` | 2026-08-03 | Record the current pushed roadmap wave in handoff |
 | `ae34762` | 2026-08-03 | Update the in-app changelog for the roadmap wave |
 | `e91bd48` | 2026-08-03 | Fix CLI, drag-drop, menu, overlay, and history edges |
 | `7c9fe53` | 2026-08-03 | Record the verified pushed head in handoff |
 | `d85484b` | 2026-08-03 | Refresh handoff for the second verified wave |
 | `88d55a8` | 2026-08-03 | Update the in-app changelog |
-| `bcc1fd8` | 2026-08-03 | Fix workspace, search, session, and SFTP edge cases |
-| `09b1239` | 2026-08-03 | Refresh handoff for the verified CLI wave |
-| `33d884f` | 2026-08-03 | Record the expanded CLI and protocol fixes |
 
 ## Notes from whoever worked on this last
 
