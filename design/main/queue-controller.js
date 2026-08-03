@@ -221,7 +221,10 @@ class QueueController extends EventEmitter {
   async _invoke(action, fn) {
     if (typeof fn !== 'function') throw new QueueControllerError('ACTION_UNAVAILABLE', `The queue cannot perform "${action}".`);
     const result = await fn();
-    if (result === false) throw new QueueControllerError('ACTION_FAILED', `The queue rejected "${action}".`);
+    // Bulk removals return a count. A stale renderer can still advertise a
+    // completed row after the queue swept it, so zero is a rejected no-op just
+    // like false is for the boolean actions.
+    if (result === false || result === 0) throw new QueueControllerError('ACTION_FAILED', `The queue rejected "${action}".`);
     return this.reconcile({ reason: action });
   }
 

@@ -165,7 +165,12 @@ export function compareRequest(options, context) {
     deleteFiles: !!options.deleteFiles,
     existingOnly: !!options.existingOnly,
     caseSensitive: !!options.caseSensitive,
+    excludeHiddenFiles: !!options.excludeHidden,
     fileMask: options.fileMask || undefined,
+    timeTolerance: options.timeTolerance,
+    dSTMode: options.dSTMode,
+    timeDifference: options.timeDifference,
+    followDirectorySymlinks: options.followDirectorySymlinks,
     transferMode: options.transferMode,
     copyParam: {
       transferMode: options.transferMode,
@@ -667,6 +672,8 @@ export function openKeepUpToDateDialog(props = {}) {
       const res = unwrapSync(await b.sync.keepUpToDate({
         ...compareRequest(options, context),
         direction: 'remote',
+        syncOnStart: !!options.syncOnStart,
+        continueOnError: !!options.continueOnError,
       }));
       watcherId = res?.id || null;
       if (watcherId) watchers.set(watcherId, { localPath: context.localPath, remotePath: context.remotePath });

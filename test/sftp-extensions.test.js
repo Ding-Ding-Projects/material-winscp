@@ -121,6 +121,68 @@ test('SFTP listing recovers omitted directory-entry metadata with lstat', async 
   assert.equal(row.group, '34');
 });
 
+test('SFTP stat preserves special-file types and recursive removal ignores navigation records', async () => {
+  const adapter = new SftpAdapter({ sftpListingQueue: 2 });
+  const calls = [];
+  adapter.sftp = {};
+  adapter._call = async (method, path) => {
+    calls.push([method, path]);
+    if (method === 'lstat' && path === '/device') return { mode: 0o020600 };
+    if (method === 'lstat' && path === '/root') return { mode: 0o40755 };
+    if (method === 'readdir' && path === '/root') {
+      return [
+        { filename: '.', attrs: { mode: 0o40755 } },
+        { filename: '..', attrs: { mode: 0o40755 } },
+        { filename: 'child', attrs: { mode: 0o40755 } },
+      ];
+    }
+    if (method === 'readdir' && path === '/root/child') return [];
+    return undefined;
+  };
+
+  const row = await adapter.stat('/device');
+  assert.equal(row.type, 'special');
+  await adapter.remove('/root', { recursive: true });
+  assert.deepEqual(calls.filter(([, path]) => path === '/root/.' || path === '/root/..'), []);
+  assert.deepEqual(calls.slice(-4), [
+    ['readdir', '/root'],
+    ['readdir', '/root/child'],
+    ['rmdir', '/root/child'],
+    ['rmdir', '/root'],
+  ]);
+});
+
+test('SFTP recursive operations reject a server-supplied path separator', async () => {
+  const adapter = new SftpAdapter({});
+  adapter.sftp = {};
+  adapter._call = async (method, path) => {
+    if (method === 'lstat' && path === '/root') return { mode: 0o40755 };
+    if (method === 'readdir') return [{ filename: '../outside', attrs: { mode: 0o100600 } }];
+    throw new Error(`unexpected ${method}`);
+  };
+  await assert.rejects(() => adapter.remove('/root', { recursive: true }), /unsafe directory entry name/);
+});
+
+test('SFTP free-space reporting preserves a zero user quota', async () => {
+  const adapter = new SftpAdapter({});
+  adapter.caps.spaceInfo = true;
+  adapter.serverCaps = { statVfsV2: false };
+  adapter.ext = {
+    supports: () => true,
+    spaceAvailable: async () => ({
+      bytesOnDevice: 1000,
+      unusedBytesOnDevice: 600,
+      bytesAvailableToUser: 0,
+      unusedBytesAvailableToUser: 0,
+      bytesPerAllocationUnit: 512,
+    }),
+  };
+  const space = await adapter.spaceInfo('/quota');
+  assert.equal(space.free, 0);
+  assert.equal(space.quotaTotal, 0);
+  assert.equal(space.quotaFree, 0);
+});
+
 // ------------------------------------------------------------- test server
 
 let HOST_KEY = null;
@@ -520,6 +582,14 @@ test('SSH_FXP_VERSION extension parsing', async (t) => {
     assert.equal(ext.supportsExtension(caps, 'posix-rename@openssh.com'), true);
   });
 
+  await t.test('does not trust a lossy decoded binary extension value', () => {
+    const logs = [];
+    const caps = ext.parseServerExtensions({ 'vendor-id': '�' }, { log: (level, message) => logs.push({ level, message }) });
+    assert.deepEqual(caps.names, ['vendor-id']);
+    assert.equal(caps.vendor, null);
+    assert.ok(logs.some((event) => /Skipped lossy vendor-id/.test(event.message)));
+  });
+
   await t.test('parses a real VERSION packet body byte for byte', () => {
     const body = Buffer.concat([
       Buffer.from([P.VERSION]), u32(3),
@@ -596,8 +666,8 @@ test('capability resolution', async (t) => {
     assert.equal(a.loadingAdditionalProperties, false);
   });
 
-  await t.test('hard links come from either SFTP 6 or the OpenSSH extension', () => {
-    assert.equal(ext.resolveCapabilities({ caps: capsFrom([]), version: 6 }).hardLink, true);
+  await t.test('hard links require the extension this adapter can actually send', () => {
+    assert.equal(ext.resolveCapabilities({ caps: capsFrom([]), version: 6 }).hardLink, false);
     assert.equal(ext.resolveCapabilities({ caps: capsFrom(['hardlink@openssh.com']), version: 3 }).hardLink, true);
   });
 

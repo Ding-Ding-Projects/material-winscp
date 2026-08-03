@@ -87,6 +87,7 @@ defineStrings({
   txClNoDeleteLocal: ['There is nothing on the local side to delete.', '本機冇嘢可以刪。'],
   txClNoDeleteRemote: ['There is nothing on the remote side to delete.', '遠端冇嘢可以刪。'],
   txClNoDeleteTimestamp: ['Timestamp mode never deletes anything.', '時間戳模式永遠唔會刪嘢。'],
+  txClNoTimestampReverse: ['A timestamp-only row can keep its proposed direction or be skipped; reversing it would transfer file contents.', '淨係改時間戳嘅一行可以照原定方向做，或者跳過；調轉方向會變成傳輸檔案內容。'],
   txClNoTypeMismatch: ['A directory on one side and a file on the other is never resolved automatically. Fix it by hand.', '一邊目錄一邊檔案，永遠唔會自動處理，要自己手動搞掂。'],
   txClNoReverse: ['This row cannot be reversed: {0}', '呢一行調轉唔到：{0}'],
   txClNoReverseNothing: ['A row set to Do nothing has no direction to reverse.', '設定咗唔做嘢嘅一行冇方向可以調轉。'],
@@ -153,6 +154,14 @@ export function canOverride(item, action) {
 
   const localExists = !!item?.local?.exists;
   const remoteExists = !!item?.remote?.exists;
+
+  // sync.js applies timestamp-only rows with setTimes(), while this renderer's
+  // direct override path only has byte-transfer primitives. Refuse a reversal
+  // instead of silently turning a metadata-only choice into a file transfer.
+  if (item?.timestampOnly && (action === 'upload' || action === 'download')
+      && action !== item.action) {
+    return { ok: false, reasonKey: 'txClNoTimestampReverse' };
+  }
 
   if (action === 'upload') {
     return localExists ? { ok: true, reasonKey: '' } : { ok: false, reasonKey: 'txClNoUpload' };
@@ -360,6 +369,13 @@ export function rowDirectory(item) {
   return item?.local?.directory || item?.remote?.directory || '';
 }
 
+/** Size shown in the checklist: use the side that supplies or loses the row. */
+export function rowSize(item) {
+  if (item?.isDirectory) return null;
+  if (item?.action === 'download' || item?.action === 'deleteRemote') return item?.remote?.size;
+  return item?.local?.size;
+}
+
 /** Rows grouped by directory, insertion-ordered. */
 export function groupByDirectory(items) {
   const map = new Map();
@@ -503,7 +519,7 @@ export function openChecklistDialog(result = {}) {
     const index = rows.indexOf(item);
     const cbId = uid('tx-cl-cb');
     const name = item.local?.name || item.remote?.name || item.local?.path || item.remote?.path || '';
-    const size = item.action === 'download' ? item.remote?.size : item.local?.size;
+    const size = rowSize(item);
     const directory = rowDirectory(item);
 
     const checkbox = h('input', {
@@ -788,6 +804,7 @@ async function applyOverride(item, context) {
   const b = bridge();
   const sessionId = context.sessionId;
   if (item.action === 'upload' || item.action === 'download') {
+    if (item.timestampOnly) throw new Error(t('txClNoTimestampReverse'));
     if (!b?.queue?.add) throw new Error(t('txClNoBridge'));
     const upload = item.action === 'upload';
     unwrapSync(await b.queue.add({

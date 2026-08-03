@@ -82,6 +82,18 @@ test('formatBytes never invents a number for a non-number', () => {
   assert.equal(Q.formatBytes('nonsense'), '—');
 });
 
+test('queue idle events expose their once-done action without an undefined handler', () => {
+  assert.equal(Q.queueIdleAction({ type: 'idle', item: { onceDone: 'disconnect' } }), 'disconnect');
+  assert.equal(Q.queueIdleAction({ type: 'idle', onceDone: 'shutdown' }), 'shutdown');
+  assert.equal(Q.queueIdleAction({ type: 'idle' }), 'none');
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'design', 'renderer', 'ui', 'queue.js'), 'utf8'), /function handleIdle\(payload\)/);
+});
+
+test('queue-updated events carry authoritative renderer queue flags', () => {
+  assert.deepEqual(Q.queueStatePatch({ type: 'queue-updated', item: { enabled: false, paused: true } }), { enabled: false, paused: true });
+  assert.deepEqual(Q.queueStatePatch({ type: 'item-updated', item: { enabled: false } }), {});
+});
+
 test('groupDigits is locale-independent', () => {
   assert.equal(Q.groupDigits(1), '1');
   assert.equal(Q.groupDigits(1000), '1 000');
@@ -508,10 +520,22 @@ test('timestamp mode never offers a deletion', () => {
     reason: 'local-newer',
     remote: { name: 'a.txt', directory: '/remote', path: '/remote/a.txt', size: 100, mtime: NOW - 5000, exists: true },
   });
-  assert.deepEqual(CL.allowedActions(it), ['upload', 'download', 'nothing']);
+  assert.deepEqual(CL.allowedActions(it), ['upload', 'nothing']);
   const refused = CL.canOverride(it, 'deleteRemote');
   assert.equal(refused.ok, false);
   assert.equal(refused.reasonKey, 'txClNoDeleteTimestamp');
+  const reversed = CL.reverseAction(it);
+  assert.equal(reversed.ok, false);
+  assert.equal(reversed.reasonKey, 'txClNoTimestampReverse');
+});
+
+test('a remote deletion displays the remote file size', () => {
+  const it = item({
+    action: 'deleteRemote',
+    local: { name: 'a.txt', directory: '/local', path: '/local/a.txt', size: 0, mtime: 0, exists: false },
+    remote: { name: 'a.txt', directory: '/remote', path: '/remote/a.txt', size: 4096, mtime: NOW, exists: true },
+  });
+  assert.equal(CL.rowSize(it), 4096);
 });
 
 test('a type mismatch offers nothing but "do nothing"', () => {
@@ -829,6 +853,7 @@ test('the compare request carries destructive and creation policy through ipc', 
   assert.equal(req.fileMask, '*.txt');
   assert.equal(req.deleteFiles, true, 'the engine must be allowed to include deletion rows');
   assert.equal(req.existingOnly, true, 'the engine must be allowed to suppress new-file rows');
+  assert.equal(req.excludeHiddenFiles, false, 'the hidden-file policy must reach comparison, not only copy parameters');
   assert.equal(req.copyParam.preserveTime, true);
 });
 

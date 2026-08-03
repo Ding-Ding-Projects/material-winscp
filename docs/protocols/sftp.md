@@ -3,14 +3,18 @@
 ## What it does
 
 SFTP is the default protocol and the most complete adapter. It runs over an SSH
-transport (`ssh2`), speaks SFTP protocol versions 3 through 6, and supports
-every capability the contract defines except arbitrary shell execution — for
-that, see [SCP](scp.md).
+transport (`ssh2`) and currently negotiates the SFTP v3 wire dialect. The stored
+v4–v6 preference is retained for compatibility, but this build does not yet
+provide a version-capable SFTP engine; see the limitation in the configuration
+table below. Remote shell execution is a separate optional SSH channel and may
+be unavailable for SFTP-only accounts — for the shell-first protocol, see
+[SCP](scp.md).
 
 Concretely it provides: directory listing with full POSIX metadata, streaming
-upload and download with resume, `chmod`, `utime`, symbolic and hard links,
-server-side copy where the server implements it, remote checksums, a recycle
-bin, and bounded request pipelining that makes resumable SFTP fast over long
+upload and download with resume, `chmod`, `utime`, symbolic and hard links when
+the server advertises a supported route, server-side copy where the server
+implements it, remote checksums, and bounded request pipelining that makes
+resumable SFTP fast over long
 links without allowing a large hand-edited queue value to grow memory without
 limit.
 
@@ -49,7 +53,7 @@ under **Site → Advanced → SSH** and **→ SFTP**.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `sftpMaxVersion` | `6` | Stored for session compatibility, but not effective in this build: `ssh2` sends and parses SFTP version 3 only. Versions 4–6 are a documented gap. |
+| `sftpMaxVersion` | `6` | Stored for session compatibility, but not effective in this build: `ssh2` sends and parses SFTP version 3 only. Versions 4–6, including native v6 hard links, are a documented gap. |
 | `sftpMinPacketSize` | `0` | Stored for compatibility, but not consumed by the reachable adapter. It does not change transfer requests. |
 | `sftpMaxPacketSize` | `0` (auto) | Sets the stream read/write chunk high-water mark; zero uses the server/engine ceiling when one is known. |
 | `sftpDownloadQueue` / `sftpUploadQueue` | `32` | Outstanding READ/WRITE requests in flight. Raising this helps on high-latency links; lowering it helps on servers with small buffers. The adapter clamps each direction to 256 requests. |
@@ -82,7 +86,9 @@ behaviour, and only then apply it.
 | SSH handshake, host-key or authentication failure | Any partially opened SSH socket, channel, or tunnel listener is closed before the classified error is returned. The transport remains retryable unless the classification says otherwise. | Yes, when the classification is retriable |
 | Server rejects `SSH_FXP_LSTAT` | A read-only `stat()` probe retries with `STAT` only when the detected workaround applies. Symlink identity is not guessed, and the followed result keeps its `file`, `dir`, or `special` type; mutating operations continue to require `LSTAT`. | Yes for ordinary files/directories |
 | Directory entries omit SFTP attributes | The listing performs an `LSTAT` for that entry so size, times, ownership, permissions, and symlink identity are not fabricated from zero values. If the probe fails, the partial directory row is retained. | Yes, when the server permits `LSTAT` |
+| Server returns a special file or navigation/path-like directory name | `stat()` preserves the `special` type, and recursive listing/removal rejects unsafe names instead of following a server-supplied path. | No — use a trustworthy server |
 | Server offers only `md5-hash` | The checksum action stays enabled and the adapter uses the extension for MD5 instead of hiding the feature behind shell access. | Yes |
+| Free-space extension reports zero bytes available to this user | The reported free space remains zero; physical free space is not substituted for a quota-limited result. | Yes, when the quota changes |
 | Rekey during a large transfer | Handled by the transport; the transfer pauses for a few hundred milliseconds. No user action. | n/a |
 | `sftpDownloadQueue` or `sftpUploadQueue` too high for the server | Stalls or resets. Lower it to 8 or 16. Values above 256 are clamped and logged; the server may still need a smaller value. | Yes |
 
@@ -131,6 +137,13 @@ behaviour, and only then apply it.
 - Directory listing is also tested with omitted entry attributes; it
   `lstat`-probes the child and reports its actual size, timestamps, ownership,
   permissions, and type instead of silently presenting a zero-metadata file.
+- Special-file `stat()` results stay `special`, recursive removal ignores the
+  protocol's `.`/`..` navigation records, and server-supplied path separators
+  are rejected before a child path is constructed.
+- A zero `space-available` user quota stays zero rather than falling back to
+  the filesystem-wide free-space value.
+- The `ssh2` decoded-extension fallback is not trusted for binary values after
+  UTF-8 replacement has destroyed their bytes.
 - Capacity probing tolerates servers that advertise `statvfs@openssh.com` but
   refuse the request for the current account or filesystem; it reports space
   information as unavailable rather than failing the surrounding operation.

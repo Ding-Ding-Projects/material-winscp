@@ -60,7 +60,9 @@ visible.
 Listing and stat timestamps apply the stored `timeDifference` in seconds,
 matching the session store and synchronizer. Recursive downloads reject `.`,
 `..`, and path separators in remote record names before constructing a local
-path, so a malformed peer cannot escape the selected destination.
+path, so a malformed peer cannot escape the selected destination. Uploads reject
+local names containing control-record separators (`CR`, `LF`, or NUL) before
+opening the SCP channel; such a name cannot be represented safely on the wire.
 
 ## Failure modes
 
@@ -77,6 +79,7 @@ path, so a malformed peer cannot escape the selected destination.
 | Transfer interrupted | SCP has no resume. The queue item fails with the whole file to redo — `caps.resume` is `false`, so the UI never offers Resume. | Partially |
 | A malformed or truncated SCP stream | The operation fails with a protocol error; a recursive download is never reported complete merely because its SSH channel closed. | No — retry the transfer |
 | A recursive record contains `.`/`..` or a path separator | The operation fails before creating a local path from that record. | No — retry with a trustworthy server |
+| A local upload name contains `CR`, `LF`, or NUL | The upload is rejected before the channel opens; SCP cannot encode that name as one control record. | Yes — rename it or use SFTP |
 | The declared upload size is wrong | The upload fails validation before it can send an overlong payload, or after an incomplete payload, and the queue receives a bounded error. | Yes, retry with the real size |
 
 ## Security considerations
@@ -117,6 +120,8 @@ path, so a malformed peer cannot escape the selected destination.
   and recursive record names are tested for local path traversal.
 - Listing-size validation is tested so an oversized remote `ls` value becomes an
   honest unknown size instead of a rounded byte count.
+- Invalid numeric permission modes are rejected, and local control-record names
+  containing line separators are refused before `scp -t` starts.
 - Commander remote-copy command construction is tested for explicit overwrite
   and default no-overwrite behavior in `test/scp-commander-parity.test.js`.
 - SHA checksum fallback to `shasum -a N` is tested with an in-process shell

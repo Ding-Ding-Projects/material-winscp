@@ -90,6 +90,31 @@ function isIpLiteral(host) {
   return /^\d{1,3}(\.\d{1,3}){3}$/.test(bare) || bare.includes(':');
 }
 
+function bareHost(host) {
+  return String(host || '').replace(/^\[|\]$/g, '');
+}
+
+function hostHeader(host, port, secure) {
+  const bare = bareHost(host);
+  const name = bare.includes(':') ? `[${bare}]` : bare;
+  const defaultPort = secure ? 443 : 80;
+  return port !== defaultPort ? `${name}:${port}` : name;
+}
+
+function rangeOffset(value, label, defaultValue) {
+  if (value === undefined || value === null) return defaultValue;
+  const offset = Number(value);
+  if (!Number.isSafeInteger(offset) || offset < 0) {
+    throw new Error(`S3 ${label} must be a non-negative integer`);
+  }
+  return offset;
+}
+
+function objectSize(value) {
+  const size = Number(value);
+  return Number.isSafeInteger(size) && size >= 0 ? size : 0;
+}
+
 /** `2020-03-03T09:22:00Z` → `20200303T092200Z`, the only date format SigV4 uses. */
 function amzDate(date) {
   return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
@@ -404,6 +429,7 @@ class S3UploadStream extends Writable {
       }
       if (this.buffered > 0) await this._flushPart();
       this.result = await this.adapter._completeMultipartUpload(this.bucket, this.key, this.uploadId, this.parts);
+      this.uploadId = null;
     };
     finish().then(() => cb(), async (err) => {
       if (this.uploadId) {
@@ -414,7 +440,7 @@ class S3UploadStream extends Writable {
   }
 
   _destroy(err, cb) {
-    if (err && this.uploadId) {
+    if (this.uploadId) {
       this._abortMultipartUpload()
         .finally(() => cb(err));
       return;
@@ -640,7 +666,9 @@ class S3Adapter extends Adapter {
     // virtual-host style, so those buckets always fall back to path style.
     const dnsSafe = bucket && /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket) && !bucket.includes('.');
     if (!bucket) return { host: endpoint, prefix: '' };
-    if (style === 'virtualhost' && dnsSafe) return { host: `${bucket}.${endpoint}`, prefix: '' };
+    if (style === 'virtualhost' && dnsSafe && !isIpLiteral(endpoint)) {
+      return { host: `${bucket}.${endpoint}`, prefix: '' };
+    }
     return { host: endpoint, prefix: `/${bucket}` };
   }
 
@@ -656,6 +684,7 @@ class S3Adapter extends Adapter {
 
   async _verifyCertificate(host, port) {
     if (!this.secure || !this.options.certVerifier) return;
+    host = bareHost(host);
     const socket = await new Promise((res, rej) => {
       // SNI must be omitted for an IP literal; TLS has no name to send.
       const s = tls.connect({
@@ -680,6 +709,7 @@ class S3Adapter extends Adapter {
   }
 
   _makeAgent() {
+    if (this._agent && this._agent.destroy) this._agent.destroy();
     const common = { keepAlive: true, maxSockets: 16 };
     this._agent = this.secure
       // Verification stays on unless the user explicitly accepted a certificate
@@ -717,7 +747,7 @@ class S3Adapter extends Adapter {
     const date = new Date();
     const outHeaders = {
       ...headers,
-      host: (secure ? port !== 443 : port !== 80) ? `${host}:${port}` : host,
+      host: hostHeader(host, port, secure),
       'x-amz-date': amzDate(date),
       'x-amz-content-sha256': payloadHash || (body ? sha256hex(body) : EMPTY_SHA256),
     };
@@ -747,12 +777,12 @@ class S3Adapter extends Adapter {
       if (signal && signal.aborted) { reject(new Error('S3 request cancelled')); return; }
       const req = lib.request({
         method,
-        hostname: host,
+         hostname: bareHost(host),
         port,
         path: fullPath,
         headers: signed.headers,
         agent: host === this._agentHost ? this._agent : undefined,
-        servername: secure && !isIpLiteral(host) ? host : undefined,
+         servername: secure && !isIpLiteral(host) ? bareHost(host) : undefined,
         timeout: Math.max(1, Number(this.session.timeout || 15)) * 1000,
       }, (res) => {
         if (stream && res.statusCode < 300) {
@@ -844,6 +874,7 @@ class S3Adapter extends Adapter {
 
   async connect() {
     await this._resolveCredentials();
+    this._bucketRegions.clear();
     const endpoint = this._defaultEndpoint();
     if (!this.secure) {
       // Running unencrypted is legitimate for a MinIO box on a private network
@@ -864,6 +895,10 @@ class S3Adapter extends Adapter {
       const buckets = await this._listBuckets();
       this.serverInfo.buckets = buckets.length;
     } catch (e) {
+      // A bucket-scoped credential commonly receives 403 here, but transport
+      // and TLS failures must still fail the connection instead of being
+      // misreported as a legitimate scoped account.
+      if (!e || ![401, 403].includes(e.status)) throw e;
       this._log('warning', `Could not list buckets (${e.message}); the account may be scoped to a single bucket`);
     }
 
@@ -930,7 +965,7 @@ class S3Adapter extends Adapter {
 
       const page = kids(result, 'Contents').map((c) => ({
         key: textOf(c, 'Key'),
-        size: Number(textOf(c, 'Size')) || 0,
+        size: objectSize(textOf(c, 'Size')),
         mtime: Date.parse(textOf(c, 'LastModified')) || 0,
         etag: textOf(c, 'ETag').replace(/^"|"$/g, ''),
         storageClass: textOf(c, 'StorageClass'),
@@ -1027,7 +1062,7 @@ class S3Adapter extends Adapter {
       return entry({
         name: this.basename(p),
         type: 'file',
-        size: Number(res.headers['content-length']) || 0,
+        size: objectSize(res.headers['content-length']),
         mtime: Date.parse(res.headers['last-modified']) || 0,
         raw: {
           etag: String(res.headers.etag || '').replace(/^"|"$/g, ''),
@@ -1199,6 +1234,7 @@ class S3Adapter extends Adapter {
         });
         const doc = parseXml(res.body.toString('utf8'));
         const etag = textOf(kid(doc, 'CopyPartResult'), 'ETag').replace(/^"|"$/g, '');
+        if (!etag) throw new Error(`UploadPartCopy ${n} returned no ETag`);
         parts.push({ partNumber: n, etag });
         offset = end + 1;
       }
@@ -1263,12 +1299,17 @@ class S3Adapter extends Adapter {
   async createReadStream(p, opts = {}) {
     const { bucket, key } = this._split(p);
     if (!bucket || !key) throw new Error(`Not a file: ${p}`);
-    const start = Number(opts.start || 0);
+    const start = rangeOffset(opts.start, 'range start', 0);
+    const end = rangeOffset(opts.end, 'range end', null);
+    if (end !== null && end < start) {
+      throw new Error('S3 range end must be an integer at or after the start');
+    }
     const headers = {};
-    if (start > 0) headers.range = opts.end ? `bytes=${start}-${opts.end}` : `bytes=${start}-`;
+    const ranged = start > 0 || end !== null;
+    if (ranged) headers.range = end === null ? `bytes=${start}-` : `bytes=${start}-${end}`;
 
     const res = await this._s3('GET', bucket, key, { headers, stream: true, signal: opts.signal });
-    if (start > 0 && res.status !== 206) {
+    if (ranged && res.status !== 206) {
       if (res.stream) res.stream.destroy();
       throw new Error(`Server ignored the Range header (answered ${res.status}); resume is not possible`);
     }
@@ -1318,6 +1359,7 @@ module.exports = {
   canonicalQuery,
   canonicalHeaders,
   uriEncode,
+  hostHeader,
   amzDate,
   sha256hex,
   parseXml,

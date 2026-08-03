@@ -42,7 +42,9 @@ function decodeEntities(s) {
       const code = body[1] === 'x' || body[1] === 'X'
         ? parseInt(body.slice(2), 16)
         : parseInt(body.slice(1), 10);
-      return Number.isFinite(code) ? String.fromCodePoint(code) : whole;
+      const validCodePoint = Number.isInteger(code) && code >= 0 && code <= 0x10FFFF
+        && !(code >= 0xD800 && code <= 0xDFFF);
+      return validCodePoint ? String.fromCodePoint(code) : whole;
     }
     const named = ENTITIES[body];
     return named === undefined ? whole : named;
@@ -181,6 +183,19 @@ function statusCodeOf(text) {
   return m ? Number(m[1]) : 0;
 }
 
+function remoteSize(value) {
+  const size = Number(value);
+  return Number.isSafeInteger(size) && size >= 0 ? size : 0;
+}
+
+function remoteQuota(value) {
+  if (value === '') return null;
+  const size = Number(value);
+  // Nextcloud uses -3 as the documented "unlimited" sentinel.
+  if (size === -3) return size;
+  return Number.isSafeInteger(size) && size >= 0 ? size : null;
+}
+
 /**
  * Parse a `207 Multi-Status` body into one record per `<response>`.
  *
@@ -255,15 +270,15 @@ function parseMultistatus(xml, opts = {}) {
       displayName,
       type: isCollection ? 'dir' : 'file',
       isCollection,
-      size: lengthText === '' ? 0 : Number(lengthText) || 0,
+      size: remoteSize(lengthText),
       mtime: lastMod ? (Date.parse(lastMod) || 0) : 0,
       ctime: created ? (Date.parse(created) || 0) : 0,
       etag: textOf('getetag').replace(/^W\//, '').replace(/^"|"$/g, ''),
       contentType: textOf('getcontenttype'),
       status,
       quota: {
-        available: textOf('quota-available-bytes') ? Number(textOf('quota-available-bytes')) : null,
-        used: textOf('quota-used-bytes') ? Number(textOf('quota-used-bytes')) : null,
+        available: remoteQuota(textOf('quota-available-bytes')),
+        used: remoteQuota(textOf('quota-used-bytes')),
       },
       props,
     });
@@ -300,6 +315,12 @@ function encodeSegment(seg, liberal) {
 
 function encodePath(p, liberal) {
   return String(p).split('/').map((s) => encodeSegment(s, liberal)).join('/');
+}
+
+function urlHost(host) {
+  const value = String(host || '');
+  if (value.startsWith('[') && value.endsWith(']')) return value;
+  return value.includes(':') ? `[${value}]` : value;
 }
 
 // ---------------------------------------------------------------------------
@@ -479,7 +500,7 @@ class PutStream extends Writable {
     this.done = new Promise((resolve, reject) => {
       req.on('response', async (res) => {
         const text = (await WebDavAdapter.readBody(res)).toString('utf8');
-        if (res.statusCode >= 400) {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
           const err = new Error(`PUT ${this.path} failed: ${res.statusCode} ${res.statusMessage}${this.adapter._explain(text)}`);
           err.status = res.statusCode;
           reject(err);
@@ -509,9 +530,28 @@ class PutStream extends Writable {
         `PUT ${this.path}: the body is longer than the ${this.contentLength} bytes announced to the server`));
     }
     this.sent += chunk.length;
-    return new Promise((resolve) => {
-      if (this.req.write(chunk)) resolve();
-      else this.req.once('drain', resolve);
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (fn, value) => {
+        if (settled) return;
+        settled = true;
+        this.req.removeListener('drain', onDrain);
+        this.req.removeListener('error', onError);
+        this.req.removeListener('close', onClose);
+        fn(value);
+      };
+      const onDrain = () => finish(resolve);
+      const onError = (error) => finish(reject, error);
+      const onClose = () => finish(reject, this.failure
+        || new Error(`PUT ${this.path}: request closed before it drained`));
+      this.req.once('drain', onDrain);
+      this.req.once('error', onError);
+      this.req.once('close', onClose);
+      try {
+        if (this.req.write(chunk)) finish(resolve);
+      } catch (error) {
+        finish(reject, error);
+      }
     });
   }
 
@@ -555,7 +595,9 @@ class PutStream extends Writable {
   }
 
   _destroy(err, cb) {
-    if (err && this.req) this.req.destroy(err);
+    if (this.req && !this.req.destroyed && typeof this.req.destroy === 'function') {
+      this.req.destroy(err || new Error(`PUT ${this.path} cancelled`));
+    }
     cb(err);
   }
 }
@@ -583,7 +625,7 @@ class WebDavAdapter extends Adapter {
     this.secure = session.ftps && session.ftps !== 'none';
     this.host = session.hostName;
     this.port = Number(session.portNumber) || (this.secure ? 443 : 80);
-    this.base = `${this.secure ? 'https' : 'http'}://${this.host}:${this.port}`;
+    this.base = `${this.secure ? 'https' : 'http'}://${urlHost(this.host)}:${this.port}`;
     this.davClasses = [];
     this.allowed = [];
     this._challenge = null;      // the Digest challenge we are answering
@@ -976,10 +1018,13 @@ class WebDavAdapter extends Adapter {
     // new OPTIONS probe so a missing/failed Allow header cannot leave stale
     // commands enabled.
     this.allowed = [];
+    this.davClasses = [];
     this.caps.copyRemote = false;
     this.caps.nativeMove = false;
     this.caps.rename = false;
     this.caps.move = false;
+    this.caps.spaceInfo = false;
+    this.rangeReads = false;
 
     const root = this.session.remoteDirectory && this.session.remoteDirectory !== ''
       ? this.normalize(this.session.remoteDirectory)
@@ -1228,6 +1273,7 @@ class WebDavAdapter extends Adapter {
 
 module.exports = {
   WebDavAdapter,
+  PutStream,
   parseMultistatus,
   parseXml,
   findAll,

@@ -11,9 +11,10 @@ const test = require('node:test');
 const assert = require('node:assert');
 const crypto = require('node:crypto');
 const http = require('node:http');
+const { EventEmitter } = require('node:events');
 const { Readable } = require('node:stream');
 const {
-  WebDavAdapter, parseMultistatus, parseXml, findAll, parseAuthenticate,
+  WebDavAdapter, PutStream, parseMultistatus, parseXml, findAll, parseAuthenticate,
   buildDigestHeader, encodePath, encodeSegment,
 } = require('../design/main/protocols/webdav');
 
@@ -299,6 +300,27 @@ test('parseXml exposes attributes and resolves nested prefix redefinitions', () 
   assert.strictEqual(findAll(doc, 'DAV:', 'x').length, 1);
 });
 
+test('WebDAV XML preserves invalid Unicode scalar entities instead of throwing', () => {
+  assert.doesNotThrow(() => parseXml('<D:r xmlns:D="DAV:"><D:x>&#x110000;</D:x></D:r>'));
+  const doc = parseXml('<D:r xmlns:D="DAV:"><D:x>&#x110000; &#xD800; &#x41;</D:x></D:r>');
+  assert.strictEqual(findAll(doc, 'DAV:', 'x')[0].text, '&#x110000; &#xD800; A');
+});
+
+test('WebDAV listings reject unsafe remote sizes and quota values', () => {
+  const xml = `<D:multistatus xmlns:D="DAV:"><D:response><D:href>/bad</D:href>
+    <D:propstat><D:prop><D:getcontentlength>Infinity</D:getcontentlength>
+      <D:quota-available-bytes>-1</D:quota-available-bytes>
+      <D:quota-used-bytes>9007199254740992</D:quota-used-bytes></D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response></D:multistatus>`;
+  const item = parseMultistatus(xml)[0];
+  assert.deepEqual([item.size, item.quota.available, item.quota.used], [0, null, null]);
+});
+
+test('WebDAV URL construction brackets IPv6 hosts', () => {
+  const adapter = new WebDavAdapter({ hostName: '2001:db8::1', portNumber: 8080, ftps: 'none' });
+  assert.strictEqual(adapter._url('/folder/file.txt'), 'http://[2001:db8::1]:8080/folder/file.txt');
+});
+
 // --- path escaping ---------------------------------------------------------
 
 test('path escaping: default keeps sub-delimiters, liberal escapes them', () => {
@@ -557,6 +579,33 @@ test('the response safety limit allows an exact-size body', async () => {
   assert.strictEqual(body.toString(), '12345');
 });
 
+test('a backpressured WebDAV PUT reports a request error instead of hanging', async () => {
+  class BrokenRequest extends EventEmitter {
+    constructor() {
+      super();
+      this.destroyed = false;
+    }
+
+    write() { return false; }
+
+    destroy(error) {
+      this.destroyed = true;
+      this.emit('close');
+    }
+  }
+
+  const request = new BrokenRequest();
+  const stream = new PutStream({ _send: async () => ({ req: request }) }, '/broken.bin', { size: 1 });
+  await stream._open(1);
+  const failed = new Promise((resolve) => stream.once('error', resolve));
+  const callbackError = await new Promise((resolve) => {
+    stream.write(Buffer.from('x'), resolve);
+    request.emit('error', new Error('socket broke'));
+  });
+  assert.match(callbackError.message, /socket broke/);
+  assert.match((await failed).message, /socket broke/);
+});
+
 test('HTTPS redirects cannot downgrade a WebDAV session to HTTP', async () => {
   const adapter = new WebDavAdapter({
     hostName: 'dav.example.test',
@@ -622,6 +671,7 @@ test('rebuilding a WebDAV connection destroys the previous agent pool', () => {
 test('connect withdraws server-side operation capabilities when OPTIONS omits Allow', async () => {
   let allow = null;
   const adapter = new WebDavAdapter({ hostName: 'dav.example.test', ftps: 'none' });
+  adapter.caps.spaceInfo = true;
   adapter._propfind = async () => [];
   adapter.request = async (method) => {
     if (method === 'OPTIONS') {
@@ -639,6 +689,7 @@ test('connect withdraws server-side operation capabilities when OPTIONS omits Al
       [adapter.caps.copyRemote, adapter.caps.nativeMove, adapter.caps.rename, adapter.caps.move],
       [false, false, false, false],
     );
+    assert.equal(adapter.caps.spaceInfo, false);
 
     allow = 'OPTIONS, GET, HEAD, COPY, MOVE';
     await adapter.connect();

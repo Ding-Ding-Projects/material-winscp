@@ -136,6 +136,15 @@ test('controller awaits asynchronous bulk cancellation results', async () => {
   controller.close();
 });
 
+test('controller rejects a stale clear-done no-op instead of claiming success', async () => {
+  const queue = new FakeQueue([item('a', 'done')]);
+  queue.removeDone = () => 0;
+  const controller = new QueueController(queue);
+
+  await assert.rejects(() => controller.dispatch('clear-done'), { code: 'ACTION_FAILED' });
+  controller.close();
+});
+
 test('controller serializes concurrent pause commands', async () => {
   const queue = new FakeQueue([item('a', 'active')]);
   let pauseCalls = 0;

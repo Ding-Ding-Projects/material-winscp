@@ -774,6 +774,35 @@ test('setSpeedLimit changes the limit of an item already queued', async () => {
   assert.strictEqual(item.state, 'done');
 });
 
+test('setSpeedLimit canonicalizes headless values and updates the copy snapshot', () => {
+  const { local, remote } = makePair();
+  const q = new TransferQueue({ prefs: prefs({ queue: { enabledByDefault: false } }), progressMs: 0 });
+  const item = q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote,
+  });
+
+  assert.equal(q.setSpeedLimit(item.id, '2048'), true);
+  assert.equal(item.cpsLimit, 2048);
+  assert.equal(item.copyParam.cpsLimit, 2048);
+  assert.equal(q.view(item).cpsLimit, 2048);
+
+  q.setSpeedLimit(item.id, 'not-a-rate');
+  assert.equal(item.cpsLimit, 0);
+  assert.equal(item.copyParam.cpsLimit, 0);
+});
+
+test('queue replaces an unsafe partial-file suffix before planning a target', () => {
+  const { local, remote } = makePair();
+  const q = new TransferQueue({ prefs: prefs({ queue: { enabledByDefault: false } }), progressMs: 0 });
+  const item = q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote,
+    copyParam: { partialFileExt: '/outside' },
+  });
+  assert.equal(item.copyParam.partialFileExt, '.filepart');
+});
+
 test('queue canonicalizes headless cpsLimit values before exposing the item', () => {
   const { local, remote } = makePair();
   const q = new TransferQueue({ prefs: prefs({ queue: { enabledByDefault: false } }), progressMs: 0 });

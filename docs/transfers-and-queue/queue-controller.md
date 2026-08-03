@@ -27,8 +27,9 @@ active item cannot be duplicated by pressing retry.
 revision, and the last once-done request. The controller listens to queue
 updates and emits `changed` after reconciling from `queue.list()`, rather than
 trusting a stale event payload. `dispatch()` waits for the real queue method,
-rejects a false result or missing method, then reconciles again. It never emits
-a success result for a no-op or an unavailable command.
+rejects a false or zero result or missing method, then reconciles again. It
+never emits a success result for a no-op or an unavailable command; the zero
+case matters for `clear-done`, whose queue method returns the number removed.
 
 Commands are serialized in submission order. This matters for IPC clients that
 can deliver two clicks before the first queue operation completes: the second

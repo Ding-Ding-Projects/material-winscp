@@ -52,6 +52,15 @@ Drag plan options:
   --read-only --no-upload --no-mkdir Model remote capability refusals
   --queue                            Force the resulting transfer into the queue
 
+Drop simulation options:
+  --last-effect copy|move|none|link  Model the effect reported by the shell
+  --allow-move=false                 Downgrade an incoming MOVE to COPY
+  --read-only --no-upload --no-mkdir Model remote capability refusals
+  --queue                            Use the queue as the target
+  --default-download-target PATH     Model the configured download directory
+  --fake-file-target PATH            Model a file-system drop target
+  --external-drop-directory PATH     Model an installed extension target
+
 Stage options:
   --file PATH                        Add a path (repeatable; positional paths work too)
   --move                             Simulate a move rather than a copy

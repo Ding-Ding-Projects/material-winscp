@@ -614,6 +614,16 @@ test('CopyParams validates inherited defaults and rejects unsafe edits', async (
   assert.deepEqual(copy.validateCopyParam({ cpsLimit: null, resumeThreshold: '' }), ['cpsLimit', 'resumeThreshold']);
   assert.deepEqual(copy.validateCopyParam({ cpsLimit: false, resumeThreshold: true }), ['cpsLimit', 'resumeThreshold']);
   assert.deepEqual(copy.validateCopyParam({ preserveRights: true, rights: 'rw-r--r--' }), []);
+  assert.ok(copy.validateCopyParam({ partialFileExt: '/outside' }).includes('partialFileExt'));
+  assert.ok(copy.validateCopyParam({ partialFileExt: '.part' }).every((key) => key !== 'partialFileExt'));
+});
+
+test('CopyParams frame includes the editable resume controls', async () => {
+  const { copy } = await load();
+  const fields = copy.copyParamFrameControls().map((control) => control.key);
+  assert.ok(fields.includes('copyParam.resumeSupport'));
+  assert.ok(fields.includes('copyParam.resumeThreshold'));
+  assert.ok(fields.includes('copyParam.partialFileExt'));
 });
 
 test('remembering transfer options saves the settings but consumes the one-shot instruction', async () => {

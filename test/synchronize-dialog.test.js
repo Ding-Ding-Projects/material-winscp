@@ -46,6 +46,26 @@ test('keep-up-to-date tolerates queue errors without an item', async () => {
   assert.deepEqual(errors, []);
 });
 
+test('keep-up-to-date stops on an item error when continue-on-error is off', async () => {
+  const { Watcher } = require('../design/main/sync');
+  const { EventEmitter } = require('node:events');
+  const queue = new EventEmitter();
+  const adapter = { normalize: (p) => p, join: (a, b) => `${a}/${b}`, list: async () => [] };
+  const watcher = new Watcher(adapter, '/local', adapter, '/remote', queue, {
+    intervalMs: 1000, continueOnError: false,
+  });
+  const errors = [];
+  const events = [];
+  watcher.on('error', (error) => { errors.push(error); events.push('error'); });
+  watcher.on('stopped', () => events.push('stopped'));
+  watcher.start();
+  const failure = new Error('upload failed');
+  queue.emit('item-error', { item: { source: '/local/a.txt' }, error: failure });
+  assert.equal(watcher.running, false);
+  assert.deepEqual(errors, [failure]);
+  assert.deepEqual(events, ['error', 'stopped'], 'the error is emitted before stopped clears the UI watcher state');
+});
+
 test('watcher reports an initial connection error after the caller subscribes', async () => {
   const { Watcher } = require('../design/main/sync');
   const { EventEmitter } = require('node:events');

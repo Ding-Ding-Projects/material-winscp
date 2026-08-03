@@ -24,7 +24,7 @@ Under **Site → Advanced → FTP** and **→ TLS/SSL**.
 | `ftpForcePasvIp` | `auto` | `auto` uses basic-ftp's NAT-aware replacement for private PASV addresses; `on` always reuses the control connection's address; `off` honours the server's advertised address. |
 | `ftpUseMlsd` | `auto` | Prefer `MLSD` (machine-readable) over `LIST` (human-readable, ambiguous). |
 | `ftpAccount` | `''` | The `ACCT` value, for the rare servers that want one. |
-| `ftpPingInterval` / `ftpPingType` | `30` / `dummy` | Keepalive on the control channel: `off`, `dummy` (`NOOP`), or `directory` (`PWD`). |
+| `ftpPingInterval` / `ftpPingType` | `30` / `dummy` | Keepalive on the control channel: `off`, `dummy` (`NOOP`), or `directory` (a directory listing). |
 | `ftpTransferActiveImmediately` | `auto` | Passive transfer ordering: `on` sends `RETR`/`STOR` before opening the data socket, `off` opens the socket during normal preparation, and `auto` enables the delayed-connect mode only for an Idea FTP Server welcome banner. Active mode already sends the command before the server dials the listening socket. |
 | `ftpListAll` | `auto` | Try `LIST -a` to reveal dot-files, falling back if the server treats `-a` as a filename. |
 | `ftpHost` | `auto` | Send `HOST` for virtual-host servers. |
@@ -50,7 +50,9 @@ Under **Site → Advanced → FTP** and **→ TLS/SSL**.
 | Username, password or ACCT contains a line break | Login is rejected before any credential command is sent. FTP has no escaping for command record separators, so accepting one could send an unintended command. | Yes — correct the saved site value |
 | A post-login command contains a line break | The command is rejected before it reaches the control connection. FTP has no escaping for command record separators, so accepting one could append an unintended command. | Yes — correct the saved command |
 | A listing reports an unsafe or overflowing size | The entry is retained with size `0` (unknown) rather than propagating an inaccurate `Infinity` or rounded byte count into transfers and comparisons. | Yes — enable MLSD or fix the server listing |
+| A Unix character-device listing contains `major, minor` fields | The special entry keeps its owner and group, and its byte size is `0` because device numbers are not file length. | n/a |
 | A `SIZE` reply is unsafe or overflowing | `stat()` retains the file with size `0` (unknown) rather than trusting an unsafe JavaScript number returned by the FTP library. | Yes — enable MLST or fix the server response |
+| A remote path contains a line break | The command is rejected before it reaches the control connection; FTP has no path escaping for record separators. | Yes — rename the path without a line break |
 | Server expects a different passive command/data ordering | `on` sends the transfer command before opening the data socket; `off` uses basic-ftp's normal pre-opened socket; `auto` detects Idea FTP Server from its welcome banner. Active mode always sends the command before accepting the server connection. | Yes — choose the ordering required by the server |
 | Consumer or data-pipeline failure during a delayed passive transfer | The transfer fails closed: the data socket and control session are closed before another queued FTP command can race a late `226` response. | Yes — reconnect and retry |
 | Active data connection or FTPS data handshake stalls | The active accept/TLS handshake is bounded by the site timeout; a timeout or handshake error rejects the transfer and closes the control session. | Yes — fix the firewall/server or retry |
@@ -96,6 +98,9 @@ control connection is public.
   control-session cleanup after a failed login.
 - The focused FTPS unit test proves that a data certificate must match the
   control certificate fingerprint before a data socket is accepted.
+- Path validation and stat-directory restoration are covered by
+  `test/ftp-adapter-options.test.js`; character-device parsing is covered by
+  `test/protocols-ftp-parse.test.js`.
 
 Manual check: connect, open the session log at debug level 1, and confirm the
 `FEAT` response matches the capabilities the UI has enabled.

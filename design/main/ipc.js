@@ -1578,12 +1578,16 @@ class Ipc {
       recursive: r.recursive === undefined ? undefined : bool(r.recursive, 'recursive'),
       deleteFiles: r.deleteFiles === undefined ? undefined : bool(r.deleteFiles, 'deleteFiles'),
       existingOnly: r.existingOnly === undefined ? undefined : bool(r.existingOnly, 'existingOnly'),
+      excludeHiddenFiles: r.excludeHiddenFiles === undefined ? undefined : bool(r.excludeHiddenFiles, 'excludeHiddenFiles'),
       fileMask: optStr(r.fileMask, 'fileMask', LIMITS.small) || undefined,
       caseSensitive: r.caseSensitive === undefined ? undefined : bool(r.caseSensitive, 'caseSensitive'),
+      syncOnStart: r.syncOnStart === undefined ? undefined : bool(r.syncOnStart, 'syncOnStart'),
+      continueOnError: r.continueOnError === undefined ? undefined : bool(r.continueOnError, 'continueOnError'),
+      followDirectorySymlinks: r.followDirectorySymlinks === undefined ? undefined : bool(r.followDirectorySymlinks, 'followDirectorySymlinks'),
       transferMode: optStr(r.transferMode, 'transferMode', 32) || undefined,
       copyParam: optObj(r.copyParam, 'copyParam'),
       timeTolerance: r.timeTolerance === undefined ? undefined : num(r.timeTolerance, 'timeTolerance', 0, 86400000),
-      dstMode: optStr(r.dstMode, 'dstMode', 16) || undefined,
+      dSTMode: optStr(r.dSTMode === undefined ? r.dstMode : r.dSTMode, 'dSTMode', 16) || undefined,
       timeDifference: r.timeDifference === undefined ? undefined : num(r.timeDifference, 'timeDifference', -86400, 86400),
     });
 

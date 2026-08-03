@@ -170,6 +170,10 @@ test.describe('SCP adapter contract', () => {
     assert.equal(transferMode({ mode: 0o644 }, { dirMode: '0644' }, true), 0o755);
     assert.equal(transferMode({ mode: 0o644 }, { dirMode: '0644', addXToDirectories: false }, true), 0o644);
 
+    const rightsAdapter = new ScpAdapter({});
+    await assert.rejects(() => rightsAdapter.setRights('/file', -1), /permission string or mode/);
+    await assert.rejects(() => rightsAdapter.setRights('/file', 0o10000), /permission string or mode/);
+
     const source = new PassThrough();
     const reader = new ByteReader(source, 1024, 8);
     source.end('123456789\n');
@@ -230,6 +234,18 @@ test.describe('SCP adapter contract', () => {
       }),
       (error) => error.code === 'INVALID_INPUT' && /exceeded its declared size/.test(error.message),
     );
+  });
+
+  test('rejects local names that would break an SCP control record before opening a channel', async () => {
+    let opened = false;
+    const adapter = new ScpAdapter({}, { transport: {
+      execRaw: async () => { opened = true; return new PassThrough(); },
+    } });
+    await assert.rejects(
+      () => adapter.createWriteStream('/bad\nname', { size: 0 }),
+      (error) => error.code === 'INVALID_INPUT' && /control record/.test(error.message),
+    );
+    assert.equal(opened, false);
   });
 
   test('does not report a truncated recursive download as successful', async () => {

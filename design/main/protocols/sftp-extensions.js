@@ -557,73 +557,85 @@ function parseServerExtensions(pairs, opts = {}) {
   // versions have no such field and the bytes would be someone else's.
   if (version < 3) return result;
 
-  for (const { name, value } of list) {
+  const structured = new Set([
+    EXT.NEWLINE, EXT.SUPPORTED, EXT.SUPPORTED2, EXT.FSROOTS, EXT.VENDOR_ID,
+    EXT.VERSIONS, EXT.STATVFS, EXT.HARDLINK, EXT.LIMITS,
+  ]);
+  for (const { name, value, lossy } of list) {
     const display = displayableStr(value);
 
-    if (name === EXT.NEWLINE) {
-      const eol = value.toString('latin1');
-      log('info', `Server requests EOL sequence ${display}.`);
-      if (eol.length < 1 || eol.length > 2) {
-        throw new Error(`Server requires unsupported end-of-line sequence (${display}).`);
-      }
-      result.eol = eol;
-      result.eolFromServer = true;
-    } else if ((name === EXT.SUPPORTED && !result.support.loaded) || name === EXT.SUPPORTED2) {
-      // "supported" must never overwrite "supported2": Bitvise sends both, and
-      // only the second carries the extension list we act on.
-      try {
-        result.support = parseSupport(value, name);
-        for (const e of result.support.extensions) result.supported.add(e);
-        log('debug',
-          `Server support information (${name}): attribute mask ${hex(result.support.attributeMask)}, `
-          + `attribute bits ${hex(result.support.attributeBits)}, open flags ${hex(result.support.openFlags)}, `
-          + `access mask ${hex(result.support.accessMask)}, open block vector ${hex(result.support.openBlockVector)}, `
-          + `block vector ${hex(result.support.blockVector)}, max read size ${result.support.maxReadSize}`);
-        if (result.support.attribExtensions.length) {
-          log('debug', `  Attribute extensions (${result.support.attribExtensions.length}): ${result.support.attribExtensions.join(', ')}`);
-        }
-        if (result.support.extensions.length) {
-          log('debug', `  Extensions (${result.support.extensions.length}): ${result.support.extensions.join(', ')}`);
-        }
-      } catch (e) {
-        log('warn', `Failed to decode ${name} extension: ${e.message}`);
-      }
-    } else if (name === EXT.VENDOR_ID) {
-      try {
-        result.vendor = parseVendorId(value);
-        log('info', `Server software: ${result.vendor.productName} ${result.vendor.productVersion} (${result.vendor.productBuildNumber}) by ${result.vendor.vendorName}`);
-      } catch (e) {
-        log('warn', `Failed to decode ${name} extension: ${e.message}`);
-      }
-    } else if (name === EXT.FSROOTS) {
-      const parsed = parseFsRoots(value);
-      if (parsed.failed) log('warn', `Failed to decode ${name} extension`);
-      result.fixedPaths = parsed.roots;
-      if (parsed.roots.length) log('info', `File system roots: ${parsed.roots.join(', ')}`);
-    } else if (name === EXT.VERSIONS) {
-      const parsed = parseVersions(value);
-      result.versions = parsed.versions;
-      log('info', parsed.format === 'vshell'
-        ? `SFTP versions supported by the server (VShell format): ${parsed.versions}`
-        : `SFTP versions supported by the server: ${parsed.versions}`);
-    } else if (name === EXT.STATVFS) {
-      const v = value.toString('latin1');
-      if (v === '2') { result.statVfsV2 = true; log('debug', `Supports ${name} extension version ${v}`); }
-      else log('debug', `Unsupported ${name} extension version ${v}`);
-    } else if (name === EXT.HARDLINK) {
-      const v = value.toString('latin1');
-      if (v === '1') { result.hardlinkV1 = true; log('debug', `Supports ${name} extension version ${v}`); }
-      else log('debug', `Unsupported ${name} extension version ${v}`);
-    } else if (name === EXT.LIMITS) {
-      const v = value.toString('latin1');
-      if (v === '1') { result.limitsV1 = true; log('debug', `Supports ${name} extension version ${v}`); }
-      else log('debug', `Unsupported ${name} extension version ${v}`);
-    } else if (name === EXT.COPY_FILE || name === EXT.COPY_DATA
-      || name === EXT.SPACE_AVAILABLE || name === EXT.CHECK_FILE || name === EXT.POSIX_RENAME) {
-      log('debug', `Supports extension ${name}=${display}`);
+    // ssh2's fallback extension object has already decoded the value as UTF-8.
+    // A replacement character means a binary field was lost; capability
+    // decisions must not be made from the reconstructed bytes.
+    if (lossy && structured.has(name)) {
+      log('warn', `Skipped lossy ${name} extension value from ssh2's decoded fallback.`);
     } else {
-      result.unknown.push(name);
-      log('debug', `Unknown server extension ${name}=${display}`);
+
+      if (name === EXT.NEWLINE) {
+        const eol = value.toString('latin1');
+        log('info', `Server requests EOL sequence ${display}.`);
+        if (eol.length < 1 || eol.length > 2) {
+          throw new Error(`Server requires unsupported end-of-line sequence (${display}).`);
+        }
+        result.eol = eol;
+        result.eolFromServer = true;
+      } else if ((name === EXT.SUPPORTED && !result.support.loaded) || name === EXT.SUPPORTED2) {
+        // "supported" must never overwrite "supported2": Bitvise sends both, and
+        // only the second carries the extension list we act on.
+        try {
+          result.support = parseSupport(value, name);
+          for (const e of result.support.extensions) result.supported.add(e);
+          log('debug',
+            `Server support information (${name}): attribute mask ${hex(result.support.attributeMask)}, `
+            + `attribute bits ${hex(result.support.attributeBits)}, open flags ${hex(result.support.openFlags)}, `
+            + `access mask ${hex(result.support.accessMask)}, open block vector ${hex(result.support.openBlockVector)}, `
+            + `block vector ${hex(result.support.blockVector)}, max read size ${result.support.maxReadSize}`);
+          if (result.support.attribExtensions.length) {
+            log('debug', `  Attribute extensions (${result.support.attribExtensions.length}): ${result.support.attribExtensions.join(', ')}`);
+          }
+          if (result.support.extensions.length) {
+            log('debug', `  Extensions (${result.support.extensions.length}): ${result.support.extensions.join(', ')}`);
+          }
+        } catch (e) {
+          log('warn', `Failed to decode ${name} extension: ${e.message}`);
+        }
+      } else if (name === EXT.VENDOR_ID) {
+        try {
+          result.vendor = parseVendorId(value);
+          log('info', `Server software: ${result.vendor.productName} ${result.vendor.productVersion} (${result.vendor.productBuildNumber}) by ${result.vendor.vendorName}`);
+        } catch (e) {
+          log('warn', `Failed to decode ${name} extension: ${e.message}`);
+        }
+      } else if (name === EXT.FSROOTS) {
+        const parsed = parseFsRoots(value);
+        if (parsed.failed) log('warn', `Failed to decode ${name} extension`);
+        result.fixedPaths = parsed.roots;
+        if (parsed.roots.length) log('info', `File system roots: ${parsed.roots.join(', ')}`);
+      } else if (name === EXT.VERSIONS) {
+        const parsed = parseVersions(value);
+        result.versions = parsed.versions;
+        log('info', parsed.format === 'vshell'
+          ? `SFTP versions supported by the server (VShell format): ${parsed.versions}`
+          : `SFTP versions supported by the server: ${parsed.versions}`);
+      } else if (name === EXT.STATVFS) {
+        const v = value.toString('latin1');
+        if (v === '2') { result.statVfsV2 = true; log('debug', `Supports ${name} extension version ${v}`); }
+        else log('debug', `Unsupported ${name} extension version ${v}`);
+      } else if (name === EXT.HARDLINK) {
+        const v = value.toString('latin1');
+        if (v === '1') { result.hardlinkV1 = true; log('debug', `Supports ${name} extension version ${v}`); }
+        else log('debug', `Unsupported ${name} extension version ${v}`);
+      } else if (name === EXT.LIMITS) {
+        const v = value.toString('latin1');
+        if (v === '1') { result.limitsV1 = true; log('debug', `Supports ${name} extension version ${v}`); }
+        else log('debug', `Unsupported ${name} extension version ${v}`);
+      } else if (name === EXT.COPY_FILE || name === EXT.COPY_DATA
+        || name === EXT.SPACE_AVAILABLE || name === EXT.CHECK_FILE || name === EXT.POSIX_RENAME) {
+        log('debug', `Supports extension ${name}=${display}`);
+      } else {
+        result.unknown.push(name);
+        log('debug', `Unknown server extension ${name}=${display}`);
+      }
     }
 
     result.names.push(name);
@@ -723,7 +735,10 @@ function resolveCapabilities(ctx = {}) {
     calculatingChecksum: !encrypting
       && (has(EXT.CHECK_FILE) || has(EXT.CHECK_FILE_NAME) || bitvise),
     remoteCopy: has(EXT.COPY_FILE) || has(EXT.COPY_DATA) || bitvise,
-    hardLink: version >= 6 || caps.hardlinkV1,
+    // Native SSH_FXP_LINK is not emitted by the current ssh2-backed adapter;
+    // advertising it for a hypothetical v6 negotiation would expose a menu
+    // action that still calls the v1 OpenSSH extension and then fails closed.
+    hardLink: caps.hardlinkV1,
     changePassword: canChangePassword(impl),
     posixRename: has(EXT.POSIX_RENAME),
     fsync: has(EXT.FSYNC),

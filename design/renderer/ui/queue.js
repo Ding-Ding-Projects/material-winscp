@@ -539,6 +539,20 @@ export function formatSpeedLimit(bytesPerSecond) {
   return `${formatBytes(n)}/s`;
 }
 
+/** Read the action carried by the main-process queue idle event. */
+export function queueIdleAction(payload = {}) {
+  return payload?.item?.onceDone || payload?.onceDone || 'none';
+}
+
+/** Extract authoritative queue flags from the IPC event wrapper. */
+export function queueStatePatch(payload = {}) {
+  if (payload?.type !== 'queue-updated' || !payload.item || typeof payload.item !== 'object') return {};
+  const patch = {};
+  if (typeof payload.item.enabled === 'boolean') patch.enabled = payload.item.enabled;
+  if (typeof payload.item.paused === 'boolean') patch.paused = payload.item.paused;
+  return patch;
+}
+
 /* ================================================================== */
 /* the bridge to main                                                  */
 /* ================================================================== */
@@ -657,6 +671,7 @@ export async function setTransferPref(dotted, value, label) {
 /* ================================================================== */
 
 const REST_STATES = new Set(['done', 'error']);
+let idleDisconnectHandled = false;
 
 /**
  * A mirror of the main-process queue.
@@ -671,7 +686,8 @@ function createQueueModel() {
   const items = new Map();                 // id -> view
   const subscribers = new Set();
   const throughput = new Map();            // id -> series, for the progress graph
-  let queueState = { enabled: true, paused: false };
+  let queueState = { enabled: transferPref('queue.enabledByDefault', true) !== false, paused: false };
+  let queueStateSeen = false;
   let timer = 0;
   let started = false;
   let lastError = null;
@@ -741,6 +757,11 @@ function createQueueModel() {
     if (started) return;
     started = true;
     onMainEvent('event:queue', (payload) => {
+      const patch = queueStatePatch(payload);
+      if (Object.keys(patch).length) {
+        queueState = { ...queueState, ...patch };
+        queueStateSeen = true;
+      }
       if (payload?.type === 'idle') handleIdle(payload);
       // WinSCP's queue.autoPopup: the progress window comes up by itself when
       // an item starts moving, so a transfer the user started is visible
@@ -767,7 +788,24 @@ function createQueueModel() {
         openQueueCredentialPrompt(p);
       }
     });
+    loadTransferPrefs().then(() => {
+      if (!queueStateSeen) {
+        queueState = { ...queueState, enabled: transferPref('queue.enabledByDefault', true) !== false };
+        emit();
+      }
+    });
     refresh();
+  }
+
+  function handleIdle(payload) {
+    const action = queueIdleAction(payload);
+    if (action !== 'disconnect') idleDisconnectHandled = false;
+    if (action === 'disconnect') {
+      idleDisconnectHandled = true;
+      void disconnectAllSessions();
+    } else if (action === 'suspend' || action === 'shutdown') {
+      notify.warning(t('queueOnceEmpty'), t('txPowerUnsupported'));
+    }
   }
 
   return {
@@ -792,17 +830,17 @@ function createQueueModel() {
       schedule();
       return () => { subscribers.delete(fn); if (!subscribers.size) clearTimeout(timer); };
     },
-    setQueueState(patch) { queueState = { ...queueState, ...patch }; emit(); },
+    setQueueState(patch) { queueStateSeen = true; queueState = { ...queueState, ...patch }; emit(); },
 
     // ---- commands, each one a real call into the engine ----
     async pauseItem(id) { await callQueue('pause', id); await refresh(); },
     async resumeItem(id) { await callQueue('resume', id); await refresh(); },
-    async pauseAll() { await callQueue('pause'); queueState = { ...queueState, paused: true }; await refresh(); },
-    async resumeAll() { await callQueue('resume'); queueState = { ...queueState, paused: false }; await refresh(); },
+    async pauseAll() { await callQueue('pause'); queueStateSeen = true; queueState = { ...queueState, paused: true }; await refresh(); },
+    async resumeAll() { await callQueue('resume'); queueStateSeen = true; queueState = { ...queueState, paused: false }; await refresh(); },
     async cancel(id) { await callQueue('cancel', id); await refresh(); },
     async move(id, delta) { await callQueue('move', id, delta); await refresh(); },
     async clearDone() { const n = await callQueue('clear'); await refresh(); return n; },
-    async setEnabled(on) { await callQueue('setEnabled', !!on); queueState = { ...queueState, enabled: !!on }; await refresh(); },
+    async setEnabled(on) { await callQueue('setEnabled', !!on); queueStateSeen = true; queueState = { ...queueState, enabled: !!on }; await refresh(); },
     async setLimit(n) { await callQueue('setLimit', n); await refresh(); },
     async setSpeed(id, bps) { await callQueue('setSpeed', id, bps); await refresh(); },
     async answerQuery(id, answer, options) { await callQueue('answerQuery', id, answer, options); await refresh(); },
@@ -1496,7 +1534,12 @@ export function createQueuePanel(opts = {}) {
 
   function onQueueDrained() {
     notify.success(t('queueTitle'), t('queueDone'));
-    if (onceEmptyValue() === 'disconnect') disconnectAllSessions();
+    // Keep the renderer preference fallback for a preference changed while a
+    // batch was already running; the main queue deliberately leaves runtime
+    // once-done state unchanged on preference refresh. The idle event path
+    // wins when it carried a per-item or already-snapshotted disconnect.
+    if (!idleDisconnectHandled && onceEmptyValue() === 'disconnect') disconnectAllSessions();
+    idleDisconnectHandled = false;
   }
 
   registerContextMenu(root, (ctx) => (ctx?.target && ctx.target.closest('.tx-q-row') ? [] : [

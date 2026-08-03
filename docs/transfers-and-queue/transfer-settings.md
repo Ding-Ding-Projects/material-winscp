@@ -9,7 +9,8 @@ preset** so a routine job is one click rather than eight checkboxes.
 
 ## Configuration
 
-Under **Transfer settings** (in any transfer dialog) and
+Under **Transfer settings** (in any transfer dialog, including the resume
+controls) and
 **Preferences → Transfer**.
 
 The dialog resolves the site/default settings and any supplied preset into a
@@ -63,7 +64,7 @@ queued.
 | `cpsLimit` | `0` | Bytes per second, `0` = unlimited. See [speed limits](speed-limits.md). |
 | `calculateSize` | `true` | Measure the total before starting, so progress is a percentage rather than a byte count. |
 | `onceDoneOperation` | `none` | `disconnect`, `suspend`, `shutdown` when this transfer finishes. |
-| `resumeSupport`, `resumeThreshold`, `partialFileExt`, `overwriteMode` | see [resume](resume.md) | |
+| `resumeSupport`, `resumeThreshold`, `partialFileExt`, `overwriteMode` | see [resume](resume.md) | The first three are editable in the shared transfer-settings frame; `overwriteMode` controls the existing-target decision. |
 | `encryptNewFiles` | `true` | Apply the site's at-rest encryption to newly uploaded files. |
 | `saveTransferOptions` | `false` | Make the current settings the new default after this transfer. This is a one-shot command instruction: after saving, the checkbox is cleared in the stored defaults so later transfers do not keep rewriting their settings. |
 
@@ -99,7 +100,8 @@ Presets are ordinary user-managed records, so they are covered by
 | `preserveRights` on a protocol without permissions | The option is greyed out; `caps.permissions` decides. | n/a |
 | `preserveTimeDirs` on a protocol that cannot set directory times | Silently skipped for directories, reported once per transfer rather than per directory. | n/a |
 | `fileNameCase` collides two names | The second transfer hits the overwrite rule. The confirmation names the case change as the cause. | Yes |
-| Symlink loop with `followDirectorySymlinks` on | Depth-bounded; the transfer stops and names the loop. | Yes |
+| A partial-file suffix contains a path separator or is empty | The setting is rejected in the dialog; headless queue callers fall back to `.filepart`, so the temporary path cannot escape the target. | Yes |
+| Symlink loop with `followDirectorySymlinks` on | The queue follows the adapter's directory walk and does not invent a second path policy; avoid enabling it for cyclic links. | Yes |
 | `onceDoneOperation: shutdown` and the transfer fails | The action does not run. | n/a |
 | Cancellation arrives after overwrite planning but before the byte mover starts | The transfer exits as cancelled without opening a write or creating a target. | Yes, start it again |
 | Cancellation arrives after the byte mover stops at a safe point | A resumable `.filepart` is not renamed into the destination; the transfer remains cancelled. | Yes, start it again |

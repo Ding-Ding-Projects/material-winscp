@@ -23,8 +23,8 @@ The synchronize dialog carries these choices. They are remembered per site.
 
 | Mode | Effect |
 | --- | --- |
-| **Synchronize files** | Transfer the differences. |
-| **Mirror files** | Also remove files on the target that do not exist on the source. |
+| **Synchronize files** | Transfer the differences. With **Delete files** enabled in a one-way direction, also remove target-only files. |
+| **Mirror files** | Make the selected source side authoritative, including its newer-file rule; target-only deletion still requires **Delete files**. |
 | **Synchronize timestamps only** | Touch matching files so their times agree, transferring nothing. |
 
 ### Comparison criteria
@@ -34,22 +34,25 @@ The synchronize dialog carries these choices. They are remembered per site.
 | **Modification time** | Default. Requires trustworthy clocks — see failure modes. |
 | **File size** | Cheap and coarse: a same-size edit is invisible to it. |
 | **Both** | Differ in either respect. |
-| **Either / none** | For timestamp-only runs and forced transfers. |
+| **None** | Only missing files are considered by the engine; the dialog refuses this as a no-criteria request. |
 
 ### Options
 
 | Option | Default | Meaning |
 | --- | --- | --- |
 | Preview changes | on | Show the checklist. Turning it off is possible and warned about. |
-| Delete files | off | Enables the destructive half of Mirror. |
+| Delete files | off | In a one-way direction, includes target-only deletion rows. It is refused in timestamp mode and is never inferred for **Both**. |
 | Existing files only | off | Never create anything new; update files present on both sides, while an explicitly enabled delete policy may still remove an extra target file. |
 | Selected files only | off | Restrict to the current panel selection. |
 | Recurse subdirectories | on | |
+| Include hidden files | on | When cleared, hidden entries are excluded from comparison and from the resulting checklist. |
 | Use same options next time | off | |
 | File mask | empty | An [include/exclude mask](../editing-and-commands/file-masks.md). |
 
-Time tolerance comes from the site's `timeDifference` / `timeDifferenceAuto`, so
-a server in another timezone does not make every file look changed.
+The engine accepts an explicit `timeTolerance` (milliseconds), `timeDifference`
+(seconds), and `dSTMode` (`unix`, `keep`, or `win`) in the comparison request.
+When they are not supplied, the engine uses its two-second tolerance, zero clock
+correction, and `unix` interpretation.
 
 ## Failure modes
 
@@ -60,14 +63,14 @@ all files appear newer, older, or unchanged.
 
 | Situation | What the user sees | Recoverable |
 | --- | --- | --- |
-| Server clock skew | Everything appears newer on one side. `timeDifferenceAuto` measures the offset at connect; when it cannot, the checklist shows the raw times side by side so the pattern is obvious. | Yes |
+| Server clock skew | Everything appears newer on one side. Supply an explicit `timeDifference` when the site clocks are known to differ; otherwise the checklist compares the engine's adjusted metadata. | Yes |
 | Filesystem timestamp granularity (FAT's 2 seconds, some servers' 1 minute) | Spurious differences. A tolerance is applied per protocol; below it, times are considered equal. | Yes |
 | DST transition | A one-hour shift on the whole tree. `dSTMode` (`unix`, `keep`, `win`) selects the interpretation. | Yes |
-| Mirror with delete, wrong direction | The checklist shows deletions in a distinct destructive style with a count, and the confirmation states the count again. Both are shown before anything happens. | **Only from a backup** |
+| Delete files with the wrong direction | A one-way run shows target-only deletion rows in the checklist and repeats the count in the confirmation. **Both** never guesses a deletion direction. | **Only from a backup** |
 | Case-insensitive comparison with different spelling | Names such as `File.txt` and `file.txt` are one pair by default; an update preserves the existing target spelling. Enable case-sensitive comparison to treat them as separate files. | Yes |
 | Symlinks | Compared as links unless `followDirectorySymlinks` is on. A link and a real file with the same name are a conflict, not a match. | Yes |
 | Connection lost mid-run | Completed items stand; the rest return to the checklist marked pending. No partial state is hidden. | Yes |
-| Queue reports an error before an item exists | The watcher keeps running and surfaces the original connection/transport error; cleanup does not replace it with a secondary missing-item error. The visible error row is an assertive alert so assistive technology announces it immediately, while ordinary activity remains a polite status update. | Yes |
+| Queue reports an error before an item exists | The watcher keeps running and surfaces the original connection/transport error; cleanup does not replace it with a secondary missing-item error. An item-specific error stops the watcher when **Continue after an error** is off. | Yes |
 | Empty local directory, Mirror to remote with delete | Would delete everything remote. The confirmation states the count and the fact that the source is empty, in those words. | **Only from a backup** |
 
 ## Security considerations
@@ -88,8 +91,8 @@ all files appear newer, older, or unchanged.
   such as `node_modules/` still exclude that subtree.
 - **Timestamp-only mode writes metadata to both sides.** It is not read-only,
   despite feeling like it.
-- **Comparison reads names and metadata, never content**, unless a checksum
-  criterion is explicitly chosen. Nothing is uploaded to compare.
+- **Comparison reads names and metadata, never content.** The current criteria
+  do not calculate checksums, so nothing is uploaded to compare.
 
 ## Verification
 
@@ -97,8 +100,8 @@ all files appear newer, older, or unchanged.
   on each side, equal, size-only differences, time-only differences, missing on
   each side, case collisions, symlink/file conflicts and mask exclusion.
 - Clock-offset and DST handling are tested with fixed synthetic offsets.
-- Deletion gating is tested to assert that no delete is emitted unless both the
-  Mirror mode and the delete option are set.
+- Deletion gating is tested to assert that a one-way delete requires the delete
+  option, while **Both** never guesses a deletion direction.
 - Interruption is tested by failing the adapter mid-run and asserting that
   completed and pending items are reported accurately.
 - Case-insensitive updates are tested to preserve the existing target spelling,

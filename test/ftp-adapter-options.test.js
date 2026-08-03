@@ -42,3 +42,29 @@ test('FTPS data sockets must match the already accepted control certificate', ()
     /data certificate does not match the control certificate/);
   assert.doesNotThrow(() => adapter._verifyDataPeer(socket('AA:AA')));
 });
+
+test('FTP remote paths reject command record separators before a command is sent', async () => {
+  const adapter = new FtpAdapter({ hostName: 'ftp.example.test' });
+  assert.throws(() => adapter._path('/safe\r\nDELE important.txt'), /path contains a line break/);
+  await assert.rejects(
+    () => adapter.rename('/safe.txt', '/new\nDELE important.txt'),
+    /path contains a line break/,
+  );
+});
+
+test('FTP stat restores the previous directory before returning success', async () => {
+  const adapter = new FtpAdapter({ hostName: 'ftp.example.test' });
+  adapter.cwd = '/home';
+  const calls = [];
+  adapter.client = {
+    lastMod: async () => new Date(0),
+    cd: async (path) => {
+      calls.push(path);
+      if (path === '/home') throw new Error('directory disappeared');
+    },
+    size: async () => 1,
+  };
+
+  await assert.rejects(() => adapter.stat('/remote-dir'), /Could not restore FTP directory \/home/);
+  assert.deepEqual(calls, ['/remote-dir', '/home']);
+});

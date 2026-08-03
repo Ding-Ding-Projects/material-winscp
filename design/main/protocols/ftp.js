@@ -98,7 +98,7 @@ function parseUnixLine(line, now) {
     // links [owner [group ...]] size — size is always last and always numeric
     // (character devices print `major, minor`, which we score as size 0).
     const last = middle[middle.length - 1];
-    if (!/^\d+$/.test(last) && !/^\d+,$/.test(last)) return null;
+    if (!/^\d[\d,]*$/.test(last) && !/^\d+,$/.test(last)) return null;
     return middle;
   };
 
@@ -144,8 +144,14 @@ function parseUnixLine(line, now) {
   if (!middle) return null;
 
   const sizeTok = middle[middle.length - 1];
-  const size = /^\d+$/.test(sizeTok) ? listingSize(sizeTok) : 0;
-  const names = middle.slice(1, -1);
+  // Character-device listings use two fields (`major, minor`) where a regular
+  // file has one byte-size field. Treat both as a size of zero and keep the
+  // owner/group columns out of the rendered metadata.
+  const deviceSize = middle.length >= 2
+    && /^\d+,$/.test(middle[middle.length - 2])
+    && /^\d+$/.test(sizeTok);
+  const size = deviceSize ? 0 : listingSize(sizeTok);
+  const names = middle.slice(1, deviceSize ? -2 : -1);
   const owner = names[0] || '';
   const group = names[1] || '';
 
@@ -605,6 +611,13 @@ class FtpAdapter extends Adapter {
 
   get protocolName() { return this.session.ftps && this.session.ftps !== 'none' ? 'FTPS' : 'FTP'; }
 
+  /** Normalize a remote path and reject FTP command record separators. */
+  _path(p) {
+    const path = this.normalize(p);
+    assertSafeFtpArgument(path, 'path');
+    return path;
+  }
+
   // -- serialization -------------------------------------------------------
 
   /**
@@ -841,6 +854,7 @@ class FtpAdapter extends Adapter {
     // on servers that accept the command without supporting this site.
     if (mode !== 'on') return;
     if (!s.hostName) return;
+    assertSafeFtpArgument(s.hostName, 'HOST argument');
     // WinSCP's HOST setting is a server-side selector, not a proxy. We only
     // exercise the command when the site asks for it explicitly. The host
     // name itself is the selector the original dialog stores.
@@ -1178,6 +1192,7 @@ class FtpAdapter extends Adapter {
    * a server that treats `-a` as a filename; it just returns nothing).
    */
   async _rawList(dir) {
+    const safeDir = this._path(dir);
     const candidates = this._listCommand ? [this._listCommand] : this._listCandidates();
     let raw = '';
     let lastErr = null;
@@ -1186,7 +1201,7 @@ class FtpAdapter extends Adapter {
       raw = '';
       try {
         if (this.session.ftpPasvMode === false) {
-          const path = dir && dir !== '/' ? ` ${dir}` : '';
+           const path = safeDir && safeDir !== '/' ? ` ${safeDir}` : '';
           const chunks = [];
           await this._activeTransfer(`${cmd}${path}`, [], (sock) => new Promise((res, rej) => {
             sock.on('data', (c) => chunks.push(c));
@@ -1197,7 +1212,7 @@ class FtpAdapter extends Adapter {
         } else {
           this.client.parseList = (text) => { raw = text; return []; };
           this.client.availableListCommands = [cmd];
-          await this.client.list(dir);
+          await this.client.list(safeDir);
         }
       } catch (e) {
         lastErr = e;
@@ -1218,7 +1233,7 @@ class FtpAdapter extends Adapter {
   }
 
   async list(dir) {
-    const path = this.normalize(dir || this.cwd);
+    const path = this._path(dir || this.cwd);
     return this._run(async () => {
       const raw = await this._rawList(path);
       return parseListing(raw, { trimVmsVersions: this.session.trimVMSVersions !== false });
@@ -1226,7 +1241,7 @@ class FtpAdapter extends Adapter {
   }
 
   async stat(p) {
-    const path = this.normalize(p);
+    const path = this._path(p);
     if (path === '/') return entry({ name: '/', type: 'dir' });
     return this._run(async () => {
       // MLST is the only command that answers "what is this path" precisely.
@@ -1254,11 +1269,21 @@ class FtpAdapter extends Adapter {
       try { mtime = (await this.client.lastMod(path)).getTime(); } catch { mtime = 0; }
 
       const back = this.cwd;
+      let isDirectory = false;
       try {
         await this.client.cd(path);
-        await this.client.cd(back);
-        return entry({ name: this.basename(path), type: 'dir', mtime });
-      } catch { /* not a directory; try the file probes */ }
+        isDirectory = true;
+      } catch {
+        // Not a directory; try the file probes below.
+      }
+      if (isDirectory) {
+        try {
+          await this.client.cd(back);
+          return entry({ name: this.basename(path), type: 'dir', mtime });
+        } catch (restoreError) {
+          throw new Error(`Could not restore FTP directory ${back}: ${restoreError.message}`);
+        }
+      }
 
       let size = null;
       try { size = await this.client.size(path); } catch { size = null; }
@@ -1278,15 +1303,21 @@ class FtpAdapter extends Adapter {
   }
 
   async realpath(p) {
-    const path = this.normalize(p);
+    const path = this._path(p);
     return this._run(async () => {
       const back = this.cwd;
+      let changed = false;
       try {
         await this.client.cd(path);
+        changed = true;
         const real = await this.client.pwd();
         await this.client.cd(back);
+        changed = false;
         return real;
       } catch {
+        if (changed) {
+          try { await this.client.cd(back); } catch { /* preserve the fallback path */ }
+        }
         return path;
       }
     });
@@ -1295,7 +1326,7 @@ class FtpAdapter extends Adapter {
   /** `cd` is not part of the contract but the panel keeps a current directory
    *  so relative commands (and the 'directory' keepalive) stay cheap. */
   async chdir(p) {
-    const path = this.normalize(p);
+    const path = this._path(p);
     return this._run(async () => {
       await this.client.cd(path);
       this.cwd = await this.client.pwd();
@@ -1306,7 +1337,7 @@ class FtpAdapter extends Adapter {
   // -- writing -------------------------------------------------------------
 
   async mkdir(p, opts = {}) {
-    const path = this.normalize(p);
+    const path = this._path(p);
     return this._run(async () => {
       if (opts.recursive) {
         const parts = path.split('/').filter(Boolean);
@@ -1326,7 +1357,7 @@ class FtpAdapter extends Adapter {
   }
 
   async remove(p, opts = {}) {
-    const path = this.normalize(p);
+    const path = this._path(p);
     const info = await this.stat(path).catch(() => null);
     const isDir = info ? info.type === 'dir' : false;
     // Recursion is opt-in, exactly as it is for the local and SFTP backends.
@@ -1346,8 +1377,8 @@ class FtpAdapter extends Adapter {
   }
 
   async rename(from, to) {
-    const a = this.normalize(from);
-    const b = this.normalize(to);
+    const a = this._path(from);
+    const b = this._path(to);
     return this._run(() => this.client.rename(a, b));
   }
 
@@ -1364,7 +1395,7 @@ class FtpAdapter extends Adapter {
    * than refused; MFMT sets the modification time and nothing else.
    */
   async setTimes(p, mtime, atime) {
-    const path = this.normalize(p);
+    const path = this._path(p);
     const when = normalizeTimes(mtime, atime).mtime;
     const stamp = ftpTimestamp(when);
     return this._run(async () => {
@@ -1381,7 +1412,7 @@ class FtpAdapter extends Adapter {
 
   async setRights(p, rights) {
     if (!this._siteChmod) throw new Error('Server does not advertise SITE CHMOD');
-    const path = this.normalize(p);
+    const path = this._path(p);
     const octal = rightsToOctal(rights);
     return this._run(() => this.client.send(`SITE CHMOD ${octal} ${path}`));
   }
@@ -1560,7 +1591,7 @@ class FtpAdapter extends Adapter {
   // -- streaming -----------------------------------------------------------
 
   async createReadStream(p, opts = {}) {
-    const path = this.normalize(p);
+    const path = this._path(p);
     const start = resumeOffset(opts.start);
     if (start > 0 && !this.caps.resume) throw new Error('Server does not support REST; cannot resume');
     const out = new PassThrough();
@@ -1588,7 +1619,7 @@ class FtpAdapter extends Adapter {
   }
 
   async createWriteStream(p, opts = {}) {
-    const path = this.normalize(p);
+    const path = this._path(p);
     const start = resumeOffset(opts.start);
     if (start > 0 && !this.caps.resume) throw new Error('Server does not support REST; cannot resume');
     const src = new FtpUploadStream();
@@ -1626,7 +1657,7 @@ class FtpAdapter extends Adapter {
   // -- optional ------------------------------------------------------------
 
   async checksum(p, algorithm = 'sha-1') {
-    const path = this.normalize(p);
+    const path = this._path(p);
     const key = normalizeChecksumAlg(algorithm);
     const alg = CHECKSUM_ALGS[key];
     if (!alg) {

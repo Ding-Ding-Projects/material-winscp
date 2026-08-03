@@ -113,6 +113,10 @@ const OPTION_DEFAULTS = {
   timeDifference: 0,        // seconds, per-site clock correction
   followDirectorySymlinks: false,
   copyParam: null,
+  // Keep watching after a queue item fails unless the caller explicitly asks
+  // for the WinSCP-style stop-on-error behaviour.
+  continueOnError: true,
+  syncOnStart: true,
 };
 
 /**
@@ -129,6 +133,10 @@ function validateOptions(o) {
   }
   if (!['time', 'size', 'either', 'none'].includes(o.criteria)) {
     throw new SyncOptionError(`Unknown criteria "${o.criteria}". Expected time, size, either or none.`);
+  }
+  const dSTMode = o.dSTMode === undefined ? 'unix' : o.dSTMode;
+  if (!['unix', 'keep', 'win'].includes(dSTMode)) {
+    throw new SyncOptionError(`Unknown dSTMode "${dSTMode}". Expected unix, keep or win.`);
   }
   const timeTolerance = o.timeTolerance === undefined ? DEFAULT_TIME_TOLERANCE : o.timeTolerance;
   const timeDifference = o.timeDifference === undefined ? 0 : o.timeDifference;
@@ -441,6 +449,11 @@ async function apply(checklist, queue, options = {}) {
     includeFileMask: '',      // the checklist is already filtered
     ...(o.copyParam || {}),
     ...(options.copyParam || {}),
+    // A checklist already made the comparison decisions and time criteria
+    // depend on timestamps travelling with the file. Caller-supplied copy
+    // parameters must not undo those two invariants.
+    preserveTime: o.criteria !== 'none',
+    includeFileMask: '',
   };
 
   const created = [];
@@ -537,6 +550,7 @@ class Watcher extends EventEmitter {
     // watcher is stopped, so a late result cannot enqueue new work.
     this._generation = 0;
     this._native = null;
+    this._nativeTimer = null;
     this.lastError = null;
     // Paths already handed to the queue and not yet finished, so a slow upload
     // is not queued again on the next tick.
@@ -547,7 +561,9 @@ class Watcher extends EventEmitter {
     if (this.running) return this;
     this.running = true;
 
-    this._onDone = (view) => this._inFlight.delete(view.source);
+    this._onDone = (view) => {
+      if (view?.source) this._inFlight.delete(view.source);
+    };
     // Queue error payloads can be transport-level failures without an item
     // (for example a connection drop before a queue item is materialized).
     // Do not let cleanup throw while handling that error, or the watcher can
@@ -555,9 +571,17 @@ class Watcher extends EventEmitter {
     this._onError = (e) => {
       const source = e && e.item && e.item.source;
       if (source) this._inFlight.delete(source);
+      if (source && this.options.continueOnError === false) {
+        this._reportError(e.error || e);
+        this.stop();
+      }
+    };
+    this._onUpdated = (view) => {
+      if (view?.state === 'removed' && view.source) this._inFlight.delete(view.source);
     };
     this.queue.on('item-done', this._onDone);
     this.queue.on('item-error', this._onError);
+    this.queue.on('item-updated', this._onUpdated);
 
     // Watch the side whose changes are authoritative.  With direction
     // "remote" that is the local tree (uploads); with direction "local" it
@@ -574,13 +598,14 @@ class Watcher extends EventEmitter {
           // A monitor can become invalid (for example when its watched
           // directory disappears).  Treat an Error callback as a terminal
           // change-source failure, like SynchronizeInvalid does upstream.
-          // Stop first so a late callback cannot start another comparison.
+          // Report before stopping so the renderer sees the useful error before
+          // its stopped event clears the watcher from the session UI.
           if (event instanceof Error) {
-            this.stop();
             this._reportError(event);
+            this.stop();
             return;
           }
-          this.tick();
+          this._scheduleNativeTick();
         });
       } catch (err) {
         this._native = null;
@@ -596,8 +621,20 @@ class Watcher extends EventEmitter {
     // IPC starts the watcher and subscribes in two separate synchronous steps;
     // running here made a connection error become an unhandled EventEmitter
     // error before the bridge could forward it.
-    queueMicrotask(() => { if (this.running) this.tick(); });
+    if (this.options.syncOnStart !== false) {
+      queueMicrotask(() => { if (this.running) this.tick(); });
+    }
     return this;
+  }
+
+  _scheduleNativeTick() {
+    if (!this.running) return;
+    if (this._nativeTimer) clearTimeout(this._nativeTimer);
+    this._nativeTimer = setTimeout(() => {
+      this._nativeTimer = null;
+      if (this.running) this.tick();
+    }, 100);
+    if (this._nativeTimer.unref) this._nativeTimer.unref();
   }
 
   _reportError(error) {
@@ -610,6 +647,7 @@ class Watcher extends EventEmitter {
     this.running = false;
     this._generation += 1;
     if (this._timer) { clearInterval(this._timer); this._timer = null; }
+    if (this._nativeTimer) { clearTimeout(this._nativeTimer); this._nativeTimer = null; }
     if (this._native) {
       if (typeof this._native.close === 'function') this._native.close();
       else if (typeof this._native === 'function') this._native();
@@ -617,6 +655,7 @@ class Watcher extends EventEmitter {
     }
     this.queue.removeListener('item-done', this._onDone);
     this.queue.removeListener('item-error', this._onError);
+    this.queue.removeListener('item-updated', this._onUpdated);
     this.emit('stopped');
     return this;
   }
@@ -644,18 +683,34 @@ class Watcher extends EventEmitter {
       const checklist = await compare(
         this.localAdapter, this.localPath, this.remoteAdapter, this.remotePath, this.options);
       if (!this.running || generation !== this._generation) return null;
+      const reservable = new Set();
       const fresh = {
         ...checklist,
         items: checklist.items.filter((i) => {
           const src = i.action === 'upload' ? i.local.path : i.remote.path;
           if (i.action === 'upload' || i.action === 'download') {
             if (this._inFlight.has(src)) return false;
+            if (!i.timestampOnly && i.checked) reservable.add(src);
           }
           return true;
         }),
       };
-      const applied = await apply(fresh, this.queue, {});
-      for (const it of applied.items) this._inFlight.add(it.source);
+      for (const source of reservable) this._inFlight.add(source);
+      let applied;
+      try {
+        applied = await apply(fresh, this.queue, {});
+      } catch (err) {
+        for (const source of reservable) this._inFlight.delete(source);
+        throw err;
+      }
+      const queuedSources = new Set(applied.items.map((it) => it.source));
+      for (const source of reservable) {
+        if (!queuedSources.has(source)) this._inFlight.delete(source);
+      }
+      if (this.options.continueOnError === false && applied.errors.length) {
+        this._reportError(applied.errors[0].error);
+        this.stop();
+      }
       if (applied.items.length || applied.deletions.length) {
         this.emit('changes', { items: applied.items, deletions: applied.deletions });
       }

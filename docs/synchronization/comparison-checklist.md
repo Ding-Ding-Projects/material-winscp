@@ -7,18 +7,17 @@ lists every difference the engine found, one row per file, with the action
 proposed for it — and lets the user change or drop any of them before anything
 happens.
 
-It is a full tabbed surface, not a modal preview: it can be searched, sorted,
-filtered and left open while you look at the panels behind it.
+It is a modal review surface. It can be searched, grouped, sorted and copied
+before the user confirms the action; closing it leaves the comparison unapplied.
 
 ## The columns
 
 | Column | Meaning |
 | --- | --- |
-| Action | Upload, download, delete local, delete remote, or skip. Editable per row. |
-| Local file | Name, size, timestamp. Blank when the file exists only remotely. |
-| Direction | An arrow that also encodes destructiveness in shape, not colour alone. |
-| Remote file | The counterpart. |
-| Reason | Why the row exists: newer, size differs, missing on one side, mask forced. |
+| File | The available local or remote name. Hovering the name exposes both full paths. |
+| Reason | Why the row exists: newer, size differs, missing on one side, or a directory/type condition. |
+| Size | The source size for a transfer, or the target size for a deletion. Directories show an em dash. |
+| Action | Upload, download, delete local, delete remote, or do nothing. Editable when the row has the required source/target. |
 
 Rows are grouped by displayed directory, and the group headers carry the
 directory path — so a whole local or remote folder can be selected from its
@@ -29,14 +28,15 @@ row context menu without scrolling through unrelated directories.
 | Control | Effect |
 | --- | --- |
 | Per-row action override | Change one file's fate without re-running the comparison. |
+| Timestamp-only row | Keep its proposed upload/download direction to change metadata only, or choose Do nothing. Reversing it is disabled because the direct override path transfers bytes. |
 | Delete files / existing files only | These policies travel with the comparison request. Deletion rows are present when requested; `Existing files only` suppresses new transfers but does not suppress deleting an extra target file. |
 | Select/deselect all in group | Drop an entire class of change. The row context menu checks or unticks every actionable row in the selected directory and its descendants; similarly named sibling directories are excluded. Rows whose action is `Do nothing` remain unticked. |
 | Check/uncheck all | The toolbar and its context menu tick every actionable row or clear every row. `Do nothing` rows remain unticked. Keyboard users can use <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>A</kbd> to check all and <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> to uncheck all. Shortcuts do not intercept typing in controls. |
 | Invert selection | Flip checked/unticked state for every actionable row. Rows whose action is `Do nothing` remain unticked, so inversion cannot create a ticked no-op. |
-| Search | Filter rows by name or reason. Wired to the [regex builder](../search-and-regex/regex-builder.md) like every search bar here. |
-| Sort | By any column; sorting is presentation-only and stable, so selection and action overrides stay attached to the same file and equal-key rows keep their order. |
+| Search | Filter rows by local/remote path, name, or action through the shared search surface. Plain text is the default; regex is explicit. |
+| Sort | Cycle through name, action, and directory; sorting is presentation-only and stable, so selection and action overrides stay attached to the same file. |
 | Calculate | Recompute the checked outcome on demand and announce the resulting transfers and deletions; it does not execute anything. |
-| Save checklist | Export the list as text for review before committing. |
+| Copy checklist | Copy tab-separated checked state, action, both paths, and reason to the clipboard. |
 
 The checklist search bar is a full search surface: plain text by default, regex
 as an explicit opt-in, with the builder anchored beside the field.
@@ -45,12 +45,12 @@ as an explicit opt-in, with the builder anchored beside the field.
 
 | Situation | What the user sees | Recoverable |
 | --- | --- | --- |
-| Very large checklist (100,000+ rows) | The list virtualizes; group counts are computed up front so the destructive total is never hidden behind lazy loading. | n/a |
-| A file changes on disk between comparison and execution | Detected at transfer time; the item fails with "changed since comparison" rather than acting on stale information. | Yes, re-compare |
-| A row is overridden into an impossible action | Actions the protocol cannot perform are not offered for that row — the same `caps` rule as everywhere else. A `Do nothing` row has no direction, so Reverse is gated with a direction-specific explanation rather than a misleading type-mismatch warning. | n/a |
+| Very large checklist | The dialog renders the rows it receives; it is not virtualized, so very large comparisons can be expensive to display. | Yes, narrow the mask or scope |
+| A file changes on disk between comparison and execution | The comparison is a snapshot, but there is no changed-since-comparison guard in this surface; re-run the comparison when the list may be stale. | Yes, re-compare |
+| A row is overridden into an impossible action | The renderer gates missing sources, missing deletion targets, type mismatches, and timestamp-only reversals. Protocol capability failures still return from the engine when the action is applied. | Yes, choose another action or re-compare |
 | Delete files is enabled | Remote-only/local-only target rows appear in the checklist with the engine's deletion policy, and the destructive confirmation repeats the count. | Yes, untick or cancel |
 | Everything is skipped | The confirmation says "nothing to do" instead of running an empty transfer. | n/a |
-| Comparison ran with a mask, then the mask is changed | The checklist does not silently update. It states the mask it was computed under, and offers Re-compare. | Yes |
+| Comparison ran with a mask, then the mask is changed | The checklist remains the snapshot produced by the original request; changing dialog settings requires a new comparison. | Yes |
 | The session drops while the checklist is open | The list survives; executing it prompts to reconnect first. | Yes |
 
 ## Security considerations
@@ -58,14 +58,11 @@ as an explicit opt-in, with the builder anchored beside the field.
 - **Deletions are visually distinct by shape and label, not colour alone.** A
   user with a colour-vision deficiency, or in high-contrast mode, must be able to
   see which rows destroy data.
-- **Counts appear twice** — in the group header and in the final confirmation —
-  because a mis-set direction is the realistic disaster here and one glance
-  should be enough to catch it.
-- **The checklist is a snapshot.** Acting on a stale list is exactly how a
-  synchronize deletes something recreated in the meantime, which is why the
-  changed-since-comparison check fails rather than proceeds.
-- **Exported checklists contain full paths**, which can be sensitive. The export
-  goes where the user chooses, with no default to a shared location.
+- **The checklist is a snapshot.** It keeps the engine's original paths and
+  actions; re-compare before applying if the files or options may have changed.
+- **Copied checklists contain full paths**, which can be sensitive. Clipboard
+  contents stay under the user's control and are not written to a file by this
+  dialog.
 - **No content is read to build the list.** Names, sizes and times only.
 
 ## Verification
@@ -75,8 +72,8 @@ as an explicit opt-in, with the builder anchored beside the field.
 - The renderer request boundary is tested to keep `deleteFiles` and
   `existingOnly` intact across `sync:compare`; the engine tests then assert the
   resulting deletion and new-file rows.
-- Per-row override is tested for not disturbing other rows and for respecting
-  protocol capabilities.
+- Per-row override is tested for not disturbing other rows and refusing
+  timestamp-only reversals.
 - Reverse on a `Do nothing` row is tested to remain gated with the correct
   no-direction reason.
 - Calculate is tested to count only checked rows, report transfer bytes and
@@ -91,17 +88,15 @@ as an explicit opt-in, with the builder anchored beside the field.
   siblings, and never ticking `Do nothing`. The context-menu availability check
   uses that same subtree boundary, so a parent directory with only descendant
   rows still offers the action.
-- Changed-since-comparison detection is tested by mutating a file between
-  comparison and execution.
-- The search field is covered by the shared search-surface tests: plain-text
-  default, regex opt-in, bidirectional synchronization with the builder, and an
-  honest no-match state.
-- Virtualization is tested with a synthetic 200,000-row list, asserting group
-  counts are exact rather than estimated.
+- The remote deletion size and the comparison request's hidden-file policy are
+  covered by the renderer transfer-dialog tests.
+- The engine tests cover timestamp-only application, case-preserving targets,
+  option validation, watcher startup, native-event coalescing, queue-error
+  races, and removal of queued items.
 
 ## Suggested articles
 
 - [Synchronize](synchronize.md) — what produces this list.
-- [Keep remote directory up to date](keep-up-to-date.md) — the continuous mode, which shows a running checklist instead.
+- [Keep remote directory up to date](keep-up-to-date.md) — the continuous mode.
 - [The regex builder](../search-and-regex/regex-builder.md) — the builder anchored to this search bar.
 - [Tabs and navigation](../tabs-and-navigation/) — the checklist is a tab, with everything that implies.

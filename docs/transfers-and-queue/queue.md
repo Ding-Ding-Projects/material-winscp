@@ -18,11 +18,10 @@ Under **Preferences → Transfer → Background**, stored in `PREF_DEFAULTS.queu
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `transfersLimit` | `2` | Concurrent transfers. Raising it helps on high-latency links and hurts on saturated ones. |
-
-The runtime concurrency limit accepts finite positive values without 32-bit
-integer wraparound; invalid values fall back to one active transfer.
 | `enabledByDefault` | `true` | Whether new transfers start queued rather than waiting. |
-| `parallelDuplicateTransfers` | `true` | Split one large file across several connections when the protocol supports it. |
+| `parallelDuplicateTransfers` | `true` | Allow the same file in several queue items. Splitting one large file is controlled by `parallelTransfers` and `parallelTransferThreshold`. |
+| `parallelTransfers` | `1` | Connections used for one large file; `1` disables ranged splitting. |
+| `parallelTransferThreshold` | `10 MiB` | Split only files at or above this size, and only when the protocol supports offsets. |
 | `individualTransfers` | `false` | Treat a folder as many items rather than one, so progress is per file. |
 | `keepDoneItemsFor` | `15` | Seconds a completed item stays visible. `-1` keeps them forever, `0` removes them immediately. |
 | `autoPopup` | `true` | Show the queue panel when work starts. |
@@ -33,6 +32,13 @@ integer wraparound; invalid values fall back to one active transfer.
 | `autoPopupPrompts` | `true` | Bring a genuinely blocking prompt to the front rather than leaving it buried. |
 | `onceEmpty` | `none` | `none`, `disconnect`, `suspend`, `shutdown`, `idle` when the queue drains. |
 | `disconnectOnceEmpty` | `false` | Shorthand for the `disconnect` action. |
+
+The runtime concurrency limit accepts finite positive values without 32-bit
+integer wraparound; invalid values fall back to one active transfer. Public
+speed-limit changes are canonicalized too: numeric strings become numbers and
+malformed values become unlimited before the item snapshot and throttle see
+them. Unsafe partial-file suffixes are replaced with `.filepart` at the queue
+boundary so a headless caller cannot turn the temporary file into another path.
 
 The View → Queue → Show command saves `view=show` and reopens the current queue
 surface immediately. It does not create a second queue or duplicate transfer

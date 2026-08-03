@@ -373,6 +373,14 @@ function safeRecordName(name) {
   return text;
 }
 
+function outboundRecordName(name) {
+  const text = String(name);
+  if (!text || text === '.' || text === '..' || /[\0\r\n]/.test(text)) {
+    throw scpValidationError(`The local name cannot be represented in an SCP control record: ${text}`, 'upload');
+  }
+  return text;
+}
+
 function modeString(mode) {
   const n = checkedMode(mode);
   return n.toString(8).padStart(4, '0');
@@ -740,7 +748,9 @@ class ScpAdapter extends Adapter {
 
   async setRights(p, rights, opts = {}) {
     const mode = typeof rights === 'number' ? rights : parseRights(rights);
-    if (mode === null) throw new Error(`"${rights}" is not a permission string or mode`);
+    if (mode === null || !Number.isSafeInteger(mode) || mode < 0 || mode > 0o7777) {
+      throw new Error(`"${rights}" is not a permission string or mode`);
+    }
     const octal = (mode & 0o7777).toString(8);
     await this._mustRun(`chmod ${opts.recursive ? '-R ' : ''}${octal} -- ${shellQuote(this.normalize(p))}`, 'Changing permissions');
   }
@@ -842,6 +852,7 @@ class ScpAdapter extends Adapter {
     const start = checkedOffset(opts.start, 'upload');
     if (start > 0) throw scpValidationError('SCP cannot resume a partial upload; transfer the file again from the start or use SFTP.', 'upload');
     const target = this.normalize(p);
+    const recordName = outboundRecordName(this.basename(target));
     const preserve = opts.mtime !== undefined && opts.mtime !== null;
     const flags = ['-t'];
     if (preserve) flags.push('-p');
@@ -857,7 +868,7 @@ class ScpAdapter extends Adapter {
         await expectAck(reader);
       }
       const mode = opts.mode === undefined ? 0o644 : opts.mode;
-      channel.write(`C${modeString(mode)} ${size} ${this.basename(target)}\n`);
+      channel.write(`C${modeString(mode)} ${size} ${recordName}\n`);
       await expectAck(reader);
     } catch (e) {
       try { channel.destroy(); } catch { /* gone */ }
@@ -942,6 +953,7 @@ class ScpAdapter extends Adapter {
   /** Recursive upload: the mirror image, emitting D/C/E for the local tree. */
   async uploadDirectory(localDir, remoteDir, opts = {}) {
     const target = this.normalize(remoteDir);
+    const rootName = outboundRecordName(nodePath.basename(localDir));
     const preserve = opts.preserveTime !== false;
     const flags = ['-t', '-r'];
     if (preserve) flags.push('-p');
@@ -955,10 +967,11 @@ class ScpAdapter extends Adapter {
       await expectAck(reader);
     };
 
-    const walk = async (dir) => {
+    const walk = async (dir, knownName) => {
       const st = await fsp.stat(dir);
+      const directoryName = knownName || outboundRecordName(nodePath.basename(dir));
       await sendTimes(st);
-      channel.write(`D${modeString(transferMode(st, opts, true))} 0 ${nodePath.basename(dir)}\n`);
+      channel.write(`D${modeString(transferMode(st, opts, true))} 0 ${directoryName}\n`);
       await expectAck(reader);
       stats.dirs++;
 
@@ -971,8 +984,9 @@ class ScpAdapter extends Adapter {
         const cst = await fsp.lstat(child);
         if (cst.isDirectory()) { subdirs.push(child); continue; }
         if (!cst.isFile()) continue;             // sockets and devices have no SCP record
+        const fileName = outboundRecordName(name);
         await sendTimes(cst);
-        channel.write(`C${modeString(transferMode(cst, opts, false))} ${cst.size} ${name}\n`);
+        channel.write(`C${modeString(transferMode(cst, opts, false))} ${cst.size} ${fileName}\n`);
         await expectAck(reader);
         const rs = fs.createReadStream(child);
         for await (const chunk of rs) {
@@ -992,7 +1006,7 @@ class ScpAdapter extends Adapter {
 
     try {
       await expectAck(reader);
-      await walk(localDir);
+      await walk(localDir, rootName);
       channel.end();
     } catch (e) {
       try { channel.destroy(); } catch { /* gone */ }

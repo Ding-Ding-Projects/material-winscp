@@ -1060,6 +1060,22 @@ function rightsFromMode(mode) {
   return s.join('');
 }
 
+function typeFromMode(mode) {
+  const fmt = (Number(mode) || 0) & S_IFMT;
+  if (fmt === S_IFLNK) return 'link';
+  if (fmt === S_IFDIR) return 'dir';
+  if (fmt === S_IFREG || fmt === 0) return 'file';
+  return 'special';
+}
+
+function remoteEntryName(name) {
+  const text = String(name);
+  if (!text || text === '.' || text === '..' || /[\\/\0]/.test(text)) {
+    throw new Error(`The SFTP server returned an unsafe directory entry name: ${text}`);
+  }
+  return text;
+}
+
 function parseRights(rights) {
   const s = String(rights || '').trim();
   if (/^0?[0-7]{3,4}$/.test(s)) return parseInt(s, 8);
@@ -1700,7 +1716,9 @@ class SftpAdapter extends Adapter {
     const concurrency = this._listingConcurrency();
 
     // '.' and '..' are navigation, not content; the panel synthesizes its own.
-    const visible = rows.filter((row) => row.filename !== '.' && row.filename !== '..');
+    const visible = rows
+      .filter((row) => row.filename !== '.' && row.filename !== '..')
+      .map((row) => ({ ...row, filename: remoteEntryName(row.filename) }));
 
     const out = await mapWithConcurrency(visible, concurrency, async (row) => {
       let a = row.attrs || {};
@@ -1711,12 +1729,8 @@ class SftpAdapter extends Adapter {
         try { a = await this._call('lstat', this.join(target, row.filename)); } catch { /* keep the partial listing row */ }
       }
       const mode = a.mode || 0;
-      const fmt = mode & S_IFMT;
-      const isSymlink = fmt === S_IFLNK;
-      let type = 'special';
-      if (isSymlink) type = 'link';
-      else if (fmt === S_IFDIR) type = 'dir';
-      else if (fmt === S_IFREG || fmt === 0) type = 'file';
+      const isSymlink = typeFromMode(mode) === 'link';
+      let type = typeFromMode(mode);
 
       let linkTarget = '';
       if (isSymlink && resolveLinks) {
@@ -1724,7 +1738,8 @@ class SftpAdapter extends Adapter {
         try { linkTarget = await this._call('readlink', full); } catch { /* dangling link */ }
         try {
           const st = await this._call('stat', full);
-          type = (st.mode & S_IFMT) === S_IFDIR ? 'dir' : 'file';
+          type = typeFromMode(st.mode);
+          if (type === 'link') type = 'special';
         } catch { type = 'link'; }
       }
 
@@ -1770,9 +1785,7 @@ class SftpAdapter extends Adapter {
       this._log('debug', `lstat(${target}) is unsupported; using stat() fallback`);
       const followed = await this._call('stat', target);
       const mode = followed.mode || 0;
-      const followedType = (mode & S_IFMT) === S_IFDIR
-        ? 'dir'
-        : (mode & S_IFMT) === S_IFREG || (mode & S_IFMT) === 0 ? 'file' : 'special';
+      const followedType = typeFromMode(mode);
       return entry({
         name: this.basename(target),
         type: followedType,
@@ -1787,15 +1800,16 @@ class SftpAdapter extends Adapter {
       });
     }
     const mode = lst.mode || 0;
-    const isSymlink = (mode & S_IFMT) === S_IFLNK;
-    let type = isSymlink ? 'link' : ((mode & S_IFMT) === S_IFDIR ? 'dir' : 'file');
+    const isSymlink = typeFromMode(mode) === 'link';
+    let type = typeFromMode(mode);
     let size = Number(lst.size) || 0;
     let linkTarget = '';
     if (isSymlink) {
       try { linkTarget = await this._call('readlink', target); } catch { /* dangling */ }
       try {
         const st = await this._call('stat', target);
-        type = (st.mode & S_IFMT) === S_IFDIR ? 'dir' : 'file';
+        type = typeFromMode(st.mode);
+        if (type === 'link') type = 'special';
         size = Number(st.size) || 0;
       } catch { type = 'link'; }
     }
@@ -1859,9 +1873,10 @@ class SftpAdapter extends Adapter {
     while (stack.length) {
       const dir = stack.pop();
       dirs.push(dir);
-      const rows = await this._call('readdir', dir);
+      const rows = (await this._call('readdir', dir))
+        .filter((row) => row.filename !== '.' && row.filename !== '..');
       const withAttrs = await mapWithConcurrency(rows, this._listingConcurrency(), async (row) => {
-        const child = this.join(dir, row.filename);
+        const child = this.join(dir, remoteEntryName(row.filename));
         let mode = (row.attrs && row.attrs.mode) || 0;
         // SFTP permits servers to omit attributes from directory entries. In
         // that case, do an lstat rather than guessing from a zero mode. Using
@@ -2015,7 +2030,9 @@ class SftpAdapter extends Adapter {
 
   async setRights(p, rights) {
     const mode = typeof rights === 'number' ? rights : parseRights(rights);
-    if (mode === null) throw new Error(`"${rights}" is not a permission string or mode`);
+    if (mode === null || !Number.isSafeInteger(mode) || mode < 0 || mode > 0o7777) {
+      throw new Error(`"${rights}" is not a permission string or mode`);
+    }
     if (await this._applyToLink(p, { mode })) return;
     await this._call('chmod', this.normalize(p), mode);
   }
@@ -2044,7 +2061,13 @@ class SftpAdapter extends Adapter {
   }
 
   async setOwner(p, uid, gid) {
-    await this._call('chown', this.normalize(p), Number(uid), Number(gid));
+    const owner = Number(uid);
+    const group = Number(gid);
+    if (!Number.isSafeInteger(owner) || owner < 0 || owner > 0xffffffff
+      || !Number.isSafeInteger(group) || group < 0 || group > 0xffffffff) {
+      throw new Error('SFTP owner and group ids must be non-negative 32-bit integers');
+    }
+    await this._call('chown', this.normalize(p), owner, group);
   }
 
   /** Epoch milliseconds in, POSIX seconds on the wire. Both call shapes are
@@ -2225,7 +2248,7 @@ class SftpAdapter extends Adapter {
         return {
           path: target,
           total: s.bytesOnDevice,
-          free: s.unusedBytesAvailableToUser || s.unusedBytesOnDevice,
+          free: s.unusedBytesAvailableToUser ?? s.unusedBytesOnDevice,
           used: s.bytesOnDevice - s.unusedBytesOnDevice,
           blockSize: s.bytesPerAllocationUnit,
           files: 0,

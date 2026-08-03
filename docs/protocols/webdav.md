@@ -48,6 +48,8 @@ trusted endpoint, preferably over HTTPS.
 | Situation | What the user sees | Recoverable |
 | --- | --- | --- |
 | Server returns HTML for `PROPFIND` (a login page, a proxy interstitial) | The listing fails with "the server did not return WebDAV XML", quoting the first line of what it did return. Guessing is deliberately not attempted. | Yes |
+| Server returns a malformed numeric XML entity | The entity is preserved as text rather than crashing the response parser, so the surrounding WebDAV error or listing remains reportable. | Yes |
+| A listing or quota property reports an unsafe numeric value | The file size becomes `0` (unknown) and the invalid quota field is omitted instead of propagating a negative, rounded or non-finite byte count into the panel and transfers. | Yes |
 | Server returns an empty `resourcetype` for a collection | A trailing slash in the response `href` is used as the collection signal, so the directory is not shown as a file. | Yes |
 | `401` on every request with `webDavAuthLegacy` off | The adapter waits for a challenge by default. Some servers never issue one, or require streamed PUTs to be authenticated before the body starts; turning the option on fixes those cases — with the caveat below. | Yes |
 | Paths containing `+`, `#`, `%` or non-ASCII | Servers disagree about encoding. `webDavLiberalEscaping` widens the escaping set. | Usually |
@@ -57,6 +59,8 @@ trusted endpoint, preferably over HTTPS.
 | Locking (`LOCK`/`UNLOCK`) | Not implemented. Concurrent edits are last-write-wins, and the editor warns when a file's ETag changed under it. | Partially |
 | No resume support | `caps.resume` is false; interrupted uploads restart. Range `GET` is not used for resumed downloads because servers report support inconsistently. | n/a |
 | Certificate untrusted | The same blocking trust dialog as FTPS, with the same fingerprint pinning. | Yes |
+| A streamed PUT loses its socket while backpressured | The write callback fails immediately and the request is destroyed; it does not leave the transfer hanging until timeout. | Yes |
+| The site uses an IPv6 literal | The URL uses bracketed IPv6 authority syntax, including a non-default port. | Yes |
 
 ## Security considerations
 
@@ -78,6 +82,10 @@ trusted endpoint, preferably over HTTPS.
   declarations are ignored. Non-streaming response bodies, including
   `PROPFIND` XML and error explanations, are capped at 16 MiB before parsing;
   streamed file transfers are not subject to this XML-response cap.
+- Numeric XML entities are accepted only when they name Unicode scalar values;
+  invalid values stay literal and cannot turn an untrusted response into a parser
+  exception. Streamed PUTs also reject non-2xx responses because they cannot be
+  replayed safely after a redirect.
 - **ETags are the only concurrency signal available.** The editor compares them
   before writing back; when the server does not send one, the editor says the
   file could not be checked rather than implying it was.
@@ -101,6 +109,9 @@ trusted endpoint, preferably over HTTPS.
   no `Authorization` header and the retry carries the negotiated credentials.
 - Upload offset validation is tested for negative, non-finite and unsafe values
   before a PUT stream is created.
+- Invalid Unicode entities, unsafe numeric properties, IPv6 URL authorities,
+  stale quota capabilities on reconnect, and backpressured PUT request errors
+  have focused regressions.
 
 Manual check: connect over HTTPS, open the session log, and confirm the
 `PROPFIND` for the root directory returns `207 Multi-Status` with a `D:multistatus`

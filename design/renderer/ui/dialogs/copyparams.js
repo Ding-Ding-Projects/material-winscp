@@ -70,6 +70,11 @@ export function validateCopyParam(value = {}) {
   const resumeThreshold = numeric(cp.resumeThreshold);
   if (!Number.isFinite(cpsLimit) || cpsLimit < 0 || cpsLimit > 1048576) errors.push('cpsLimit');
   if (!Number.isFinite(resumeThreshold) || resumeThreshold < 0) errors.push('resumeThreshold');
+  if (typeof cp.partialFileExt !== 'string' || cp.partialFileExt.length <= 1
+    || cp.partialFileExt.length > 64 || !cp.partialFileExt.startsWith('.')
+    || cp.partialFileExt === '..' || /[\\/\0]/.test(cp.partialFileExt)) {
+    errors.push('partialFileExt');
+  }
   if (cp.preserveRights && !/^[-r][-w][-xsS][-r][-w][-xsS][-r][-w][-xtT]$/.test(String(cp.rights))) errors.push('rights');
   if (cp.replaceInvalidChars && [...String(cp.invalidCharsReplacement ?? '')].length !== 1) errors.push('invalidCharsReplacement');
   return errors;
@@ -86,6 +91,16 @@ export function rememberedCopyParam(value = {}) {
 
 /** Short field name from a dotted schema key. */
 const fieldOf = (key) => key.slice(key.indexOf('.') + 1);
+
+/** The editable transfer frame includes the resume controls from Endurance. */
+export function copyParamFrameControls() {
+  const endurance = PAGES.find((page) => page.id === 'endurance')
+    ?.sections.find((section) => section.id === 'resume');
+  return [
+    ...COPY_PARAM_SECTIONS.flatMap((section) => section.controls),
+    ...(endurance?.controls || []),
+  ];
+}
 
 /**
  * WinSCP's file-mask matching, reduced to what an autoselection rule needs:
@@ -200,7 +215,11 @@ export function createCopyParamsFrame(opts = {}) {
   const root = h('div', { class: 'cp-frame' });
   appearanceTarget(root, 'transfer-settings-frame', 'Transfer settings');
 
-  const entries = COPY_PARAM_SECTIONS.flatMap((section) =>
+  const frameSections = [
+    ...COPY_PARAM_SECTIONS,
+    ...(PAGES.find((page) => page.id === 'endurance')?.sections.filter((section) => section.id === 'resume') || []),
+  ];
+  const entries = frameSections.flatMap((section) =>
     section.controls.map((control) => ({
       pageId: 'transfer', pageTitle: { en: 'Transfer', yue: '傳輸' },
       sectionId: section.id, sectionTitle: section.title, control,
@@ -241,7 +260,7 @@ export function createCopyParamsFrame(opts = {}) {
       : null;
     let shown = 0;
 
-    for (const section of COPY_PARAM_SECTIONS) {
+    for (const section of frameSections) {
       const visible = matched ? section.controls.filter((c) => matched.has(c)) : section.controls;
       if (!visible.length) continue;
       const group = h('div', { class: 'cp-frame-group' },
@@ -717,13 +736,27 @@ export function installCopyParams() {
       value: props.value || readPref('copyParam') || {},
       showSearch: true, searchId: 'transfer-settings-registered',
     });
+    const error = h('p', { class: 'pref-hint is-danger', hidden: true, role: 'alert' });
     return {
       title: props.title || t('transferSettingsShort'),
-      content: frame.element,
+      content: h('div', { class: 'stack dlg-widest' }, frame.element, error),
       onClose: () => frame.destroy(),
       actions: [
         { label: t('cancel'), kind: 'text' },
-        { label: t('ok'), kind: 'filled', autofocus: true, onSelect: () => { props.onApply?.(frame.value); close(); } },
+        {
+          label: t('ok'), kind: 'filled', autofocus: true,
+          onSelect: () => {
+            const invalid = validateCopyParam(frame.value);
+            if (invalid.length) {
+              error.textContent = tx('Correct the highlighted transfer settings before applying.', '請先改正有問題嘅傳輸設定先可以套用。');
+              error.hidden = false;
+              return true;
+            }
+            props.onApply?.(frame.value);
+            close();
+            return true;
+          },
+        },
       ],
     };
   });

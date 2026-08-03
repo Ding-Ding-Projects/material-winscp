@@ -66,7 +66,9 @@ decision. It never copies, deletes, uploads, or creates a target directory;
 the command is intended for CI and adapter tests that need to exercise the
 whole local-drop boundary in one call. A `MOVE` with `--allow-move=false` is
 reported as a safe `COPY`; `NONE`, `LINK`, and other non-transfer effects are
-refused.
+refused. Its target options are `--queue --default-download-target PATH`,
+`--fake-file-target PATH`, and `--external-drop-directory PATH`; `--target` is
+the descriptive target label for `drag plan`, not a filesystem destination.
 
 `capabilities` is a machine-readable discovery endpoint. It lists the two
 console executables, every console switch accepted by the headless wrapper,

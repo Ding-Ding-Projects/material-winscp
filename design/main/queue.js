@@ -306,6 +306,21 @@ function normalizeCpsLimit(value) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 }
 
+/**
+ * The partial-file suffix is appended directly to a target path. Keep it a
+ * suffix rather than allowing a headless caller to turn it into another path
+ * (or into the target itself) by supplying a separator or an empty string.
+ */
+function isSafePartialFileExt(value) {
+  const ext = typeof value === 'string' ? value : '';
+  return ext.length > 1 && ext.length <= 64 && ext.startsWith('.')
+    && ext !== '..' && !/[\\/\0]/.test(ext);
+}
+
+function normalizePartialFileExt(value) {
+  return isSafePartialFileExt(value) ? value : COPY_PARAM_DEFAULTS.partialFileExt;
+}
+
 // ---------------------------------------------------------------------------
 // the queue
 // ---------------------------------------------------------------------------
@@ -378,6 +393,7 @@ class TransferQueue extends EventEmitter {
   add(spec) {
     const copyParam = { ...COPY_PARAM_DEFAULTS, ...(spec.copyParam || {}) };
     copyParam.cpsLimit = normalizeCpsLimit(copyParam.cpsLimit);
+    copyParam.partialFileExt = normalizePartialFileExt(copyParam.partialFileExt);
     const item = {
       id: spec.id || newId(),
       side: spec.side || 'upload',
@@ -618,7 +634,8 @@ class TransferQueue extends EventEmitter {
   setSpeedLimit(id, cps) {
     const item = this.get(id);
     if (!item) return false;
-    item.cpsLimit = cps > 0 ? cps : 0;
+    item.cpsLimit = normalizeCpsLimit(cps);
+    item.copyParam.cpsLimit = item.cpsLimit;
     item._throttle.setRate(item.cpsLimit);
     this.emit('item-updated', this.view(item));
     return true;
@@ -1679,6 +1696,7 @@ class TransferQueue extends EventEmitter {
     }
     const copyParam = { ...COPY_PARAM_DEFAULTS, ...(p.copyParam || {}) };
     copyParam.cpsLimit = normalizeCpsLimit(copyParam.cpsLimit);
+    copyParam.partialFileExt = normalizePartialFileExt(copyParam.partialFileExt);
     // A plan may arrive from a session transfer that has no queue item behind
     // it. Everything the streaming loop reads off an item is supplied here, so
     // one implementation serves both callers rather than two that agree today.

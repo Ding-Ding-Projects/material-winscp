@@ -36,9 +36,9 @@ never your files.
 
 ## Behaviour worth knowing
 
-- **The watcher is debounced.** Editors write files in bursts — truncate, write,
-  rename — and uploading each step would send garbage. Changes settle for a short
-  interval before being queued.
+- **Native change bursts are debounced.** Editors write files in bursts —
+  truncate, write, rename — and the watcher waits briefly before comparing.
+  Adapters without a native watcher use the polling interval instead.
 - **Uploads go through the ordinary queue**, so speed limits, transfer settings
   and the queue panel all apply.
 - **A running watcher is always visible.** The session tab shows a watching
@@ -51,9 +51,9 @@ never your files.
 
 | Situation | What the user sees | Recoverable |
 | --- | --- | --- |
-| Editor writes via a temporary file and rename | Debouncing plus mask exclusion handle the common patterns (`*.tmp`, `*~`, `.#*`). A stray temporary that slips through is uploaded and then deleted, which is noise rather than damage. | Yes |
-| A build tool rewrites thousands of files | The queue fills. The watcher applies backpressure rather than queueing unboundedly, and says so. | Yes |
-| Connection drops | Watching pauses, changes accumulate as pending, and a reconnect runs a full comparison so nothing missed while offline is lost. | Yes |
+| Editor writes via a temporary file and rename | Native-event coalescing reduces duplicate comparisons; use a file mask when temporary names must never be considered. | Yes |
+| A build tool rewrites thousands of files | The watcher suppresses a duplicate source path while its queue item is active or queued, but distinct paths can still add queue items. Narrow the mask for a large tree. | Yes |
+| Connection drops | The watcher reports the comparison or queue error. It continues after recoverable errors when configured to continue; a native monitor error stops the watcher. A later poll or native event runs a full comparison. | Yes |
 | Delete-remote enabled and a local directory is moved | Reads as delete-then-create: the remote copy is removed and re-uploaded. Costly, and briefly missing on the server. | Yes |
 | Delete-remote enabled and local files are lost | The loss propagates. This is why it is off by default and why enabling it warns explicitly. | **Only from a backup** |
 | Watch limit exceeded (very large tree) | The OS caps watches. The error names the limit and suggests narrowing the directory or the mask, rather than silently watching part of the tree. | Yes |
@@ -68,9 +68,8 @@ never your files.
   are the defence, and the start dialog suggests them.
 - **Delete-remote is destruction driven by local events.** Off by default, warned
   when enabled, and never enabled by a preset.
-- **`.git/` is excluded by default** — uploading a repository's object store is
-  slow, usually unwanted, and can publish history that was never meant to leave
-  the machine.
+- The watcher does not add a hidden default mask. Add `.git/`, `.env`, `*.pem`,
+  or other sensitive paths to the file mask before starting it.
 - **The watcher survives the dialog closing**, so it must remain visible in the
   session tab. An invisible uploader is a security problem, not just a usability
   one.
@@ -80,13 +79,14 @@ never your files.
 
 ## Verification
 
-- Debouncing is tested with a synthetic write burst matching common editor
-  save patterns, asserting exactly one upload results.
-- Backpressure is tested by generating changes faster than the queue drains.
-- Reconnect-triggers-full-comparison is tested by dropping the adapter and
-  restoring it.
-- Mask exclusion is tested to confirm an excluded file's *deletion* is also
-  ignored — the safety property that makes masks trustworthy.
+- Native-event debouncing is tested with three synthetic notifications and a
+  single comparison.
+- The initial-pass switch is tested to ensure `syncOnStart: false` waits for an
+  event.
+- In-flight cleanup is tested for synchronous queue errors and removed queue
+  rows, so a failed or cancelled item can be reconsidered.
+- The ordinary comparison tests cover mask exclusion, including recursive
+  directories and target-only rows.
 - Synchronized browsing is tested for path mapping, including the case where
   only one side has the directory.
 

@@ -187,6 +187,29 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "2e23e4f", kind: 'commit', ref: "2e23e4f", oid: "2e23e4f012dd393287115fcf45a43a0ce5d62a37", date: "2026-08-03",
+    title: "Fail closed on credential and identity gaps",
+    refs: ["#13"],
+    changes: [
+      { category: "security", text: "English: Refuse unprotected credential writes, require SHA-256 identities for trust prompts, and clear decrypted session secrets on permanent close; security code now shuts the door before the draught starts.\\n\\nCantonese: 無保護就唔寫 credential、trust prompt 一定要有 SHA-256 identity，永久 close 就清走解密 secret；security 門而家早閂，唔畀風入嚟開 party。\\n\\nRefs #13" },
+    ],
+  },
+  {
+    id: "52bda17", kind: 'commit', ref: "52bda17", oid: "52bda17dbe285abf3e6c1b8429e1179958d09523", date: "2026-08-03",
+    title: "Refresh handoff after editor site fixes",
+    changes: [
+      { category: "security", text: "English: Record the pushed editor, site, panel, and security wave with its verified test and coverage state; the handoff now counts the crumbs instead of pretending the biscuit is whole.\\n\\nCantonese: 記低 editor、site、panel 同 security 呢輪已推送嘅實況，同埋 verified test 同 coverage；handoff 而家數清麵包屑，唔再扮塊餅完整。" },
+    ],
+  },
+  {
+    id: "c98cf01", kind: 'commit', ref: "c98cf01", oid: "c98cf01f05c2cf29f44f91d66338da2e29f3de7e", date: "2026-08-03",
+    title: "Harden editor site and panel parity",
+    refs: ["#9", "#11", "#12", "#13"],
+    changes: [
+      { category: "security", text: "English: Close the remaining editor, Advanced Site, Commander, and master-password edge cases; keep the UI honest when state is incomplete instead of letting the code perform interpretive dance.\\n\\nCantonese: 收口 editor、Advanced Site、Commander 同 master-password 嘅邊角位；資料未齊就老實停低，唔好再畀 code 跳 interpretive dance。\\n\\nRefs #9, #11, #12, #13" },
+    ],
+  },
+  {
     id: "d3f2003", kind: 'commit', ref: "d3f2003", oid: "d3f2003468289809a25aabf4acf396dd0a048050", date: "2026-08-03",
     title: "Refresh handoff after packaging audit",
     changes: [
@@ -628,36 +651,6 @@ export const DEVELOPMENT = [
     changes: [
       { category: "removed", text: "English: Stop late console failures from notifying released waits, remove externally stopped watchers from the synchronization registry, and await every asynchronous queue cancellation before reporting success. Ghost callbacks and phantom queue wins have been shown the exit." },
       { category: "changed", text: "粵語：Console 等候放手之後唔再畀幽靈 error 嚇人，sync watcher 停咗會清走自己，queue cancel 亦會等齊 IPC 先報喜；假勝利同殘影 callback 而家一齊收工。" },
-    ],
-  },
-  {
-    id: "1e60445", kind: 'commit', ref: "1e60445", oid: "1e60445b8683634125f38c689088c31e5eb39cdf", date: "2026-08-03",
-    title: "Refresh handoff and changelog evidence",
-    changes: [
-      { category: "fixed", text: "English: Record the verified CLI, transfer-boundary, reconnect, checklist, Squirrel, and panel fixes in the handoff and in-app changelog. The paperwork now follows the code instead of wandering off for dim sum." },
-    ],
-    changesYue: [
-      { category: "changed", text: "粵語：CLI、拖放、重連、清單、Squirrel 同面板修正而家有齊晒證據；handoff 同 changelog 唔再自己去飲茶，會跟實個 code。" },
-    ],
-  },
-  {
-    id: "f0b7bc1", kind: 'commit', ref: "f0b7bc1", oid: "f0b7bc1717e513c2d659d761380885c3836d94c2", date: "2026-08-03",
-    title: "Harden CLI and session UI boundaries",
-    changes: [
-      { category: "changed", text: "English: Reject inert drag plans, fail closed on reconnect and numeric input, keep local and remote panels honest, scope checklist actions through descendants, repair WOW64 and remote-extension edge cases, and make Squirrel completion headless and once-only. The code was trying to look helpful while quietly doing nothing; now it says no thanks, mate." },
-    ],
-    changesYue: [
-      { category: "changed", text: "粵語：拖放亂入嘅字眼、負數重連同亂碼數值而家唔再扮乖；本地面板、清單、Squirrel 同遠端副檔名各自守返條界線，個 code 終於識講『唔好亂嚟喎』。" },
-    ],
-  },
-  {
-    id: "44ab74d", kind: 'commit', ref: "44ab74d", oid: "44ab74dfe95a73a4eb115f1085058ccba4ec42ca", date: "2026-08-03",
-    title: "Fix remote extension extraction",
-    changes: [
-      { category: "removed", text: "English: Keep RemoteFiles extension sorting focused on the basename; the path no longer photobombs the suffix." },
-    ],
-    changesYue: [
-      { category: "changed", text: "粵語: RemoteFiles 而家只睇檔名尾巴，唔會畀上層路徑亂入，個 extension 終於唔再食錯位。" },
     ],
   },
 ];

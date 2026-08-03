@@ -110,6 +110,14 @@ test('unix: setuid/sticky bits and non-regular file types survive', () => {
   assert.strictEqual(sock.type, 'special');
 });
 
+test('unix: character-device major/minor fields are not ownership or byte size', () => {
+  const device = parseUnixLine('crw-rw-rw- 1 root root 1, 3 Jan  1 2024 console', NOW);
+  assert.strictEqual(device.type, 'special');
+  assert.strictEqual(device.owner, 'root');
+  assert.strictEqual(device.group, 'root');
+  assert.strictEqual(device.size, 0);
+});
+
 test('DOS/IIS: <DIR> markers, 12-hour clocks and two- and four-digit years', () => {
   const raw = [
     '04-27-00  09:09PM       <DIR>          licensed',

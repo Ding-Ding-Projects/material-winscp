@@ -659,6 +659,28 @@ test('apply respects the checked flag', async () => {
   assert.strictEqual(remote.has('/r/onlylocal.txt'), false, 'unticked items stay unticked');
 });
 
+test('apply keeps checklist filtering and timestamp preservation authoritative', async () => {
+  const local = new MemoryAdapter('local');
+  const remote = new MemoryAdapter('remote');
+  local.putDir('/l'); remote.putDir('/r');
+  local.put('/l/a.txt', 'new', T + MIN);
+  remote.put('/r/a.txt', 'old', T);
+  const checklist = await sync.compare(local, '/l', remote, '/r', {
+    direction: 'remote', criteria: 'time',
+  });
+
+  const q = makeQueue();
+  const { items } = await sync.apply(checklist, q, {
+    copyParam: { preserveTime: false, includeFileMask: '*.never-match' },
+  });
+  assert.equal(items.length, 1);
+  assert.equal(items[0].copyParam.preserveTime, true,
+    'a time comparison must carry the source timestamp into the transfer');
+  assert.equal(items[0].copyParam.includeFileMask, '',
+    'the already-filtered checklist must not be filtered a second time');
+  await q.idle();
+});
+
 // ---------------------------------------------------------------------------
 // keep remote directory up to date
 // ---------------------------------------------------------------------------
@@ -716,6 +738,101 @@ test('the watcher uses a native adapter watch when one is offered', async () => 
   assert.strictEqual(closed, true, 'the native watcher is closed on stop');
 });
 
+test('syncOnStart false waits for a native change before comparing', async () => {
+  const local = new MemoryAdapter('local');
+  const remote = new MemoryAdapter('remote');
+  local.putDir('/l'); remote.putDir('/r');
+  local.put('/l/already-there.txt', 'one', T);
+  let fire;
+  local.watch = (path, cb) => { fire = cb; return { close() {} }; };
+
+  const q = makeQueue();
+  const watcher = sync.startWatch(local, '/l', remote, '/r', q, {
+    direction: 'remote', criteria: 'time', syncOnStart: false,
+  });
+  try {
+    await sleep(30);
+    assert.equal(remote.has('/r/already-there.txt'), false,
+      'disabling the initial comparison must not silently run it anyway');
+    fire();
+    await waitFor(() => remote.has('/r/already-there.txt'), 4000, 'the event-triggered upload');
+  } finally {
+    sync.stopWatch(watcher);
+  }
+});
+
+test('native change bursts are coalesced into one comparison', async () => {
+  const local = new MemoryAdapter('local');
+  const remote = new MemoryAdapter('remote');
+  local.putDir('/l'); remote.putDir('/r');
+  local.put('/l/burst.txt', 'burst', T);
+  let fire;
+  let localLists = 0;
+  const originalList = local.list.bind(local);
+  local.list = async (...args) => { localLists += 1; return originalList(...args); };
+  local.watch = (path, cb) => { fire = cb; return { close() {} }; };
+
+  const q = makeQueue();
+  const watcher = sync.startWatch(local, '/l', remote, '/r', q, {
+    direction: 'remote', criteria: 'time', syncOnStart: false,
+  });
+  try {
+    fire(); fire(); fire();
+    await waitFor(() => remote.has('/r/burst.txt'), 4000, 'the coalesced upload');
+    assert.equal(localLists, 1, 'three native notifications should schedule one comparison');
+  } finally {
+    sync.stopWatch(watcher);
+  }
+});
+
+test('an item error emitted during queue.add does not leave a stale in-flight path', async () => {
+  const { EventEmitter } = require('node:events');
+  const local = new MemoryAdapter('local');
+  const remote = new MemoryAdapter('remote');
+  local.putDir('/l'); remote.putDir('/r');
+  local.put('/l/fails.txt', 'fails', T);
+  const queue = new EventEmitter();
+  queue.add = (spec) => {
+    const view = { source: spec.source };
+    queue.emit('item-error', { item: view, error: new Error('queue rejected item') });
+    return view;
+  };
+
+  const watcher = sync.startWatch(local, '/l', remote, '/r', queue, {
+    direction: 'remote', criteria: 'time', syncOnStart: false,
+  });
+  try {
+    await watcher.tick();
+    assert.equal(watcher._inFlight.has('/l/fails.txt'), false,
+      'cleanup that races queue.add must win over reservation bookkeeping');
+  } finally {
+    sync.stopWatch(watcher);
+  }
+});
+
+test('removing a queued item releases the watcher in-flight guard', async () => {
+  const local = new MemoryAdapter('local');
+  const remote = new MemoryAdapter('remote');
+  local.putDir('/l'); remote.putDir('/r');
+  local.put('/l/retry.txt', 'retry', T);
+  const q = makeQueue();
+  q.pauseAll();
+  const watcher = sync.startWatch(local, '/l', remote, '/r', q, {
+    direction: 'remote', criteria: 'time', syncOnStart: false,
+  });
+  try {
+    await watcher.tick();
+    assert.equal(q.items.length, 1);
+    assert.equal(watcher._inFlight.has('/l/retry.txt'), true);
+    q.remove(q.items[0].id);
+    await watcher.tick();
+    assert.equal(q.items.length, 1,
+      'the same changed file may be queued again after its previous row is removed');
+  } finally {
+    sync.stopWatch(watcher);
+  }
+});
+
 test('a local-direction watcher uses the remote native change source', async () => {
   const local = new MemoryAdapter('local');
   const remote = new MemoryAdapter('remote');
@@ -756,6 +873,19 @@ test('a file mask does not prune directories before filtering their children', a
     direction: 'remote', criteria: 'time', recursive: true, fileMask: '*.txt',
   });
   assert.deepStrictEqual(summarize(c), [U('keep.txt')]);
+});
+
+test('excludeHiddenFiles removes hidden entries before they become checklist rows', async () => {
+  const local = new MemoryAdapter('local');
+  const remote = new MemoryAdapter('remote');
+  local.putDir('/l'); remote.putDir('/r');
+  local.put('/l/.secret', 'secret', T);
+  local.put('/l/visible.txt', 'visible', T);
+
+  const hidden = await sync.compare(local, '/l', remote, '/r', {
+    direction: 'remote', criteria: 'time', excludeHiddenFiles: true,
+  });
+  assert.deepEqual(hidden.items.map((item) => item.local.name), ['visible.txt']);
 });
 
 test('relative path masks are evaluated from each comparison root', async () => {
@@ -877,4 +1007,10 @@ test('validateOptions refuses unsafe non-finite or negative clock settings', () 
   assert.doesNotThrow(() => sync.validateOptions({
     ...sync.OPTION_DEFAULTS, timeTolerance: 0, timeDifference: -3600,
   }));
+});
+
+test('validateOptions refuses an unknown daylight-saving interpretation', () => {
+  assert.throws(() => sync.validateOptions({
+    ...sync.OPTION_DEFAULTS, dSTMode: 'mystery',
+  }), /Unknown dSTMode/);
 });

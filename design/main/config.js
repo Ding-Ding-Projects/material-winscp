@@ -119,9 +119,9 @@ function isIniConfiguration(file, text) {
 }
 
 /** Refuse a secret write when no protected representation is available. */
-function protectSecret(value, field) {
+function protectSecret(value, field, required = false) {
   const protectedValue = crypt.protect(value);
-  if (value && !protectedValue) {
+  if (required && value && !protectedValue) {
     const error = new Error(`The ${field} could not be protected and was not saved.`);
     error.code = 'SECRET_PROTECTION_UNAVAILABLE';
     throw error;
@@ -458,7 +458,7 @@ class Config extends EventEmitter {
     if (typeof s.id !== 'string' || s.id === '' || this.siteById(s.id)) s.id = newId('site');
     for (const f of SECRET_FIELDS) {
       if (typeof s[f] !== 'string') s[f] = '';
-      if (s[f] && !s[f].startsWith('mp:') && !s[f].startsWith('os:')) s[f] = s.savePassword || f !== 'password' ? protectSecret(s[f], f) : '';
+      if (s[f] && !s[f].startsWith('mp:') && !s[f].startsWith('os:')) s[f] = s.savePassword || f !== 'password' ? protectSecret(s[f], f, true) : '';
     }
     this.data.sites.push(s);
     this.save(`Added the site "${s.name || s.hostName}"`);
@@ -475,7 +475,7 @@ class Config extends EventEmitter {
     for (const f of SECRET_FIELDS) {
       const v = patch[f];
       if (v !== undefined) {
-        merged[f] = typeof v !== 'string' || v === '' ? '' : (v.startsWith('mp:') || v.startsWith('os:') ? v : protectSecret(v, f));
+        merged[f] = typeof v !== 'string' || v === '' ? '' : (v.startsWith('mp:') || v.startsWith('os:') ? v : protectSecret(v, f, true));
       }
     }
     if (patch.savePassword === false) merged.password = '';
@@ -640,7 +640,7 @@ class Config extends EventEmitter {
     let wrapped;
     try {
       wrapped = plain.map((record) => Object.fromEntries(SECRET_FIELDS.map((field) => [
-        field, record[field] ? protectSecret(record[field], field) : '',
+        field, record[field] ? protectSecret(record[field], field, true) : '',
       ])));
     } catch {
       crypt.lockMaster();
@@ -668,7 +668,7 @@ class Config extends EventEmitter {
     let wrapped;
     try {
       wrapped = plain.map((record) => Object.fromEntries(SECRET_FIELDS.map((field) => [
-        field, record[field] ? protectSecret(record[field], field) : '',
+        field, record[field] ? protectSecret(record[field], field, true) : '',
       ])));
     } catch {
       crypt.unlockMaster(password, this.data.prefs.security.masterPasswordVerifier);
