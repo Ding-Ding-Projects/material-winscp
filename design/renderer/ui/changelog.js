@@ -187,6 +187,20 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "7d90403", kind: 'commit', ref: "7d90403", oid: "7d9040307ce9bcbe971ab34f9aea4ac3e325f697", date: "2026-08-03",
+    title: "Harden config, masks, crypto, storage, and WinAPI",
+    changes: [
+      { category: "fixed", text: "Configuration imports now re-protect clear-text secrets, crypto rejects malformed base64 envelopes, editor masks follow WinSCP wildcard rules, storage normalizes duplicate keys, and WinAPI dispatch accepts only safe own methods. Regression tests and focused documentation cover each boundary so the code stops improvising at the edges instead of making the edges do stand-up comedy.\\n\\n設定匯入會重新保護明文秘密，crypto 會拒絕古怪 base64，editor mask 跟足 WinSCP 萬用字元，storage 會整理重複 key，WinAPI 只准安全嘅 own method。測試同文件一齊補齊，等啲邊界位唔好再自己加戲。" },
+    ],
+  },
+  {
+    id: "2eb26e3", kind: 'commit', ref: "2eb26e3", oid: "2eb26e3320bd65c64dea1997cbc52d147fc3def2", date: "2026-08-03",
+    title: "Fix protocol, session, UI, and changelog gaps",
+    changes: [
+      { category: "security", text: "English: Tighten the seams where the port was confidently pretending: stale FTP resumes, EOF reads, secret loading, login validation, panel reachability, editor IPC, and current changelog links now have real guards and tests.\\n\\nCantonese: 執返啲 port 扮緊冇事嘅位：FTP resume 唔再留垃圾尾、EOF 唔再扮 network error、secret 唔亂出、login 同 panel 真係有門，editor IPC 同 changelog 亦有憑有據。" },
+    ],
+  },
+  {
     id: "0c43eb7", kind: 'commit', ref: "0c43eb7", oid: "0c43eb78968f9afb9e40afcd0115b21a33b874db", date: "2026-08-03",
     title: "Refresh final handoff metadata",
     changes: [
@@ -973,38 +987,6 @@ export const DEVELOPMENT = [
       { category: "changed", text: "ref 而且唔 cancel-in-progress，仲要順手擋住之後所有 push。今日兩樣都發生咗：一個 main run 喺 \"Test (windows-latest)\" 坐咗成粒鐘，而全日其他 run 三到六分鐘就完, 跟住嗰個 push 排喺後面永遠冇開過。" },
       { category: "changed", text: "吊死係測試最衰嘅結局，因為佢乜都唔出。衰咗起碼講到邊個測試；吊死連 grep 都冇得 grep，喺出面睇落同「行得慢」一模一樣。" },
       { category: "changed", text: "成套跑 14 秒，畀 120 秒一個測試係鬆到冇朋友。守門測試會查住個 flag 仲喺唔喺度。" },
-    ],
-  },
-  {
-    id: "f38f073", kind: 'commit', ref: "f38f073", oid: "f38f073f9cddfcec5045c36c1a337c0730453aa4", date: "2026-08-02",
-    title: "Guard the one line that stops a release from building itself",
-    changes: [
-      { category: "fixed", text: "Publishing a release creates a tag, a bare `on: push` fires for tag pushes, and so every release triggered a build that published a release. ci.yml has carried a comment about this since the first outbreak — nine releases from four commits — but nothing enforced the fix. It recurred today and produced over 200 releases, rebuilding the same commit under a new number each lap." },
-      { category: "changed", text: "The loop is invisible from a green build, which is what makes it worth a test: every individual run SUCCEEDS. Nothing is red, nothing throws, and the only symptom is a release list growing on its own." },
-      { category: "fixed", text: "`tags-ignore: ['**']` is the entire fix and it is one line in a YAML block that a reformat could quietly drop. This asserts it is present, that it excludes every tag rather than a subset, and that no `tags:` allow-list reopens the same loop spelled the other way round." },
-      { category: "changed", text: "Proved it fails for the right reason: removing the two lines from ci.yml turns this test red with \"on.push must carry tags-ignore\", and ci.yml was restored byte-identical afterwards. 8/8." },
-      { category: "changed", text: "出 release 會開 tag，`on: push` 見到 tag 又行一次，行完又出 release —— 自己生" },
-    ],
-    changesYue: [
-      { category: "changed", text: "自己。ci.yml 早就寫低咗呢件事（上次四個 commit 出咗九個 release），但冇人守住。 今日又發作，出咗二百幾個，同一個 commit 一圈換一個號碼咁重複起。" },
-      { category: "changed", text: "最陰險係：睇 build 係綠嘅。每一次 run 都成功，冇嘢紅冇嘢拋，唯一症狀就係個 release list 自己識生。所以先要落個測試守住。" },
-      { category: "changed", text: "`tags-ignore: ['**']` 就係全部答案，得一行，reformat 一下就冇咗。試過剷咗佢, 個測試即刻紅，剷完再原封不動放返。8/8。" },
-    ],
-  },
-  {
-    id: "2b21dc3", kind: 'commit', ref: "2b21dc3", oid: "2b21dc3779210c27be6d613054c425c4cb94c0ec", date: "2026-08-02",
-    title: "Re-unpack Electron after patching extract-zip, since npm broke it before we could",
-    changes: [
-      { category: "fixed", text: "npm runs Electron's postinstall DURING `npm install`, when extract-zip is still the broken upstream copy. So the binary gets unpacked with the exact bug this tool exists to fix, and patching afterwards does nothing about the damage: dist/ is left holding one file — LICENSES.chromium.html, whichever entry the zip listed first — and no path.txt. The tool's own header has admitted since it was written that Electron \"had to be unpacked by hand\", and then never did it." },
-      { category: "changed", text: "Nothing reports this, and the symptom is three layers from the cause: require('electron') throws \"failed to install correctly\"; every e2e test fails blaming its own assertion; and `npm test` HANGS, so there is no summary at all. A test run that never finishes is a worse diagnostic than one that fails, and this is what a fresh clone on Node 26 gets." },
-      { category: "changed", text: "The tool now checks path.txt against the binary it names — a pointer to a file that is not there being precisely what a half-finished unpack leaves — and re-runs Electron's own install.js when it leads nowhere. Same cached zip, so no download. --check reports it and exits non-zero." },
-      { category: "fixed", text: "Verified by reproducing the broken state exactly (one entry, no path.txt): --check exits 1 and names it, the repair restores 19 entries and electron.exe, and test/e2e-app.test.js goes from a hung runner to 36/36 in 14s. The screenshot is that run's real captured window, not a redraw." },
-      { category: "fixed", text: "npm 裝 electron 嗰陣，extract-zip 仲未補，所以個 binary 就係用緊呢個 bug 解壓 —— 補完先都冇用，dist/ 淨返一個 LICENSES.chromium.html，path.txt 都冇。呢個工具嘅" },
-    ],
-    changesYue: [
-      { category: "changed", text: "註解一早寫住「要手動解壓」，然後一直冇做。" },
-      { category: "changed", text: "最陰功係三層之後先見到：require('electron') 話裝錯；e2e 全部紅，每個都賴自己; `npm test` 直情吊死，連個總結都冇。跑到永遠唔完，仲衰過跑到衰。" },
-      { category: "changed", text: "而家會查 path.txt 指住嗰個檔案係咪真係喺度，唔喺就再行一次 electron 自己嘅 install.js，讀返同一個 cache，唔使再載。試過整返個爛狀態出嚟：--check 出 1, 修完 19 個檔案連 electron.exe，e2e-app 由吊死變 36/36，14 秒搞掂。" },
     ],
   },
 ];
