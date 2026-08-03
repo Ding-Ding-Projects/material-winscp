@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `d85b97c`** — Refresh in-app changelog for boundary hardening
+**At commit `ec10eab`** — Refresh in-app changelog for lifecycle hardening
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3280 run, **3279 pass, 0 fail**, 1 skipped |
-| Hand-written code | 215,585 lines across 393 files |
-| Commits | 107 on `main` |
+| Tests | 3286 run, **3285 pass, 0 fail**, 1 skipped |
+| Hand-written code | 215,814 lines across 393 files |
+| Commits | 110 on `main` |
 | Working tree | clean |
-| Remote | `origin/main` at `c46bd62` — **differs from HEAD** |
+| Remote | `origin/main` at `f114157` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `ec10eab` | 2026-08-03 | Refresh in-app changelog for lifecycle hardening |
+| `c95cd9d` | 2026-08-03 | Harden editor, session, sync, auth, and workspace lifecycles |
+| `f114157` | 2026-08-03 | Refresh boundary-hardening handoff metadata |
 | `d85b97c` | 2026-08-03 | Refresh in-app changelog for boundary hardening |
 | `6aee465` | 2026-08-03 | Harden terminal, protocol, checklist, and WinApi boundaries |
 | `c46bd62` | 2026-08-03 | Refresh unit-porting handoff metadata |
 | `6e6f5e3` | 2026-08-03 | Refresh in-app changelog for unit-porting wave |
 | `3e1d057` | 2026-08-03 | Port Explorer, editor, preferences, queue, SFTP, and WinConfiguration slices |
-| `48b7a5f` | 2026-08-03 | Refresh dialog protocol handoff metadata |
-| `b01e17a` | 2026-08-03 | Refresh in-app changelog for dialog protocol fixes |
-| `8557de4` | 2026-08-03 | Harden dialogs, file search, and S3 cancellation |
 
 ## Notes from whoever worked on this last
 
