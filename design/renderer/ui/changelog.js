@@ -187,6 +187,34 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "bcc1fd8", kind: 'commit', ref: "bcc1fd8", oid: "bcc1fd8a50bd2db15aad23b5601cab4cd31bc19a", date: "2026-08-03",
+    title: "Fix workspace, search, session, and SFTP edge cases",
+    changes: [
+      { category: "changed", text: "The edge cases now follow the real capability and protocol contracts; the code can stop pretending every workspace member is a tab." },
+    ],
+    changesYue: [
+      { category: "changed", text: "修正工作區、搜尋、工作階段同 SFTP 嘅邊角位；啲 bug 而家唔使再扮成主角搶戲。" },
+    ],
+  },
+  {
+    id: "09b1239", kind: 'commit', ref: "09b1239", oid: "09b12394a44c05e615a47f855fac8869b90ea073", date: "2026-08-03",
+    title: "Refresh handoff for the verified CLI wave",
+    changes: [
+      { category: "fixed", text: "Refresh HANDOFF.md against the post-fix commit and the verified 3,371/3,372 test result. The ledger now points at the actual current tree instead of last week's archaeological layer." },
+    ],
+    changesYue: [
+      { category: "changed", text: "Handoff.md 而家對準修正後 commit，同埋已驗證嘅 3371/3372 測試結果。個 ledger 終於指向現況，唔再挖緊上星期嘅考古層。" },
+    ],
+  },
+  {
+    id: "33d884f", kind: 'commit', ref: "33d884f", oid: "33d884f0f21f345d5a6b1ecd0aebad1d8e34ffef", date: "2026-08-03",
+    title: "Record the expanded CLI and protocol fixes",
+    changes: [
+      { category: "removed", text: "The in-app history now names the verified headless CLI, drag/drop target, checklist, DirView, synchronization, FTP, SFTP, and editor work. The changelog has receipts now, so the code cannot sneak out wearing a fake moustache." },
+      { category: "removed", text: "App 入面嘅 history 而家記低已驗證嘅 headless CLI、drag/drop target、checklist、DirView、同步、FTP、SFTP 同 editor 修正。changelog 有齊收據，啲 code 唔可以再戴假鬍鬚扮冇做過嘢。" },
+    ],
+  },
+  {
     id: "69004b4", kind: 'commit', ref: "69004b4", oid: "69004b45a056a36bb9262415a72b7b9e3f75831a", date: "2026-08-03",
     title: "Expand headless CLI and close transfer edge cases",
     changes: [
@@ -626,27 +654,6 @@ export const DEVELOPMENT = [
     title: "Refresh dialog wave handoff metadata",
     changes: [
       { category: "fixed", text: "The handoff now records the 3,245-pass regression run, Docker smoke, the 71db2c6 and fa7b4ce milestones, and the honest 59.0% coverage with 114 units outstanding. It is a handoff, not an incantation for pretending the roadmap is finished.\\n\\nHandoff 而家記低 3,245 pass regression、Docker smoke、71db2c6 同 fa7b4ce milestone，仲有老實嘅 59.0% coverage 同 114 個未完成 unit。佢係交接文件，唔係用嚟施法扮 roadmap 已經完工。" },
-    ],
-  },
-  {
-    id: "fa7b4ce", kind: 'commit', ref: "fa7b4ce", oid: "fa7b4cef76501ad0078dae951f2f69e080d8c346", date: "2026-08-03",
-    title: "Refresh in-app changelog for dialog fixes",
-    changes: [
-      { category: "fixed", text: "The in-app history now records the verified 71db2c6 overlay, editor, host-key, CopyParams, rights, and SiteTree fixes with complete links and bilingual copy. The changelog now knows which button escaped.\\n\\nApp 入面嘅歷史而家記低已驗證嘅 71db2c6 overlay、editor、host-key、CopyParams、rights 同 SiteTree 修正，連埋完整 link 同雙語 copy；changelog 而家知道邊粒 button 走失咗。" },
-    ],
-  },
-  {
-    id: "71db2c6", kind: 'commit', ref: "71db2c6", oid: "71db2c6a28e762c6519f134b572160abc9818d88", date: "2026-08-03",
-    title: "Harden dialogs, overlays, and site navigation",
-    changes: [
-      { category: "changed", text: "Dialogs now keep failed host-key answers open for retry, editor saves serialize immutable snapshots, CopyParams rejects unsafe values, rights validation refuses malformed modes, SiteTree persists only safe navigation state, and narrow modals scroll without hiding actions. Focused tests and docs follow each boundary, so the UI can stop playing hide-and-seek with the buttons.\\n\\nDialog 而家遇到 host-key delivery fail 會留低畀人 retry，editor save 用 immutable snapshot 排隊，CopyParams 唔收危險值，rights 唔收古怪 mode，SiteTree 只記安全 navigation state，窄 modal 會 scroll 但唔會藏起 actions。測試文件跟齊，等 UI 唔好再同啲 button 玩捉迷藏。" },
-    ],
-  },
-  {
-    id: "461e050", kind: 'commit', ref: "461e050", oid: "461e050e2b93d9052dd77c7c33042d7212012dcc", date: "2026-08-03",
-    title: "Refresh geometry wave handoff metadata",
-    changes: [
-      { category: "fixed", text: "The handoff now records the 3,235-pass regression run, Docker smoke, the c274856 and 5652951 milestones, and the honest 59.0% coverage with 114 units outstanding. It reports the project, not a fairy tale about the project.\\n\\nHandoff 而家記低 3,235 pass regression、Docker smoke、c274856 同 5652951 milestone，仲有老實嘅 59.0% coverage 同 114 個未完成 unit。佢報告緊個 project，唔係 project 嘅童話故事。" },
     ],
   },
 ];
