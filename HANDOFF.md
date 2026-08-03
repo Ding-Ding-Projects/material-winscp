@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `9e8c679`** — Refresh in-app changelog for editor and lifecycle hardening
+**At commit `14afd31`** — Refresh changelog for CLI and accessibility fixes
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3321 run, **3320 pass, 0 fail**, 1 skipped |
-| Hand-written code | 216,720 lines across 398 files |
-| Commits | 125 on `main` |
+| Tests | 3325 run, **3324 pass, 0 fail**, 1 skipped |
+| Hand-written code | 216,802 lines across 398 files |
+| Commits | 132 on `main` |
 | Working tree | **1 uncommitted change(s)** |
-| Remote | `origin/main` at `2494d85` — **differs from HEAD** |
+| Remote | `origin/main` at `b03c84f` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `14afd31` | 2026-08-03 | Refresh changelog for CLI and accessibility fixes |
+| `a74836c` | 2026-08-03 | Harden CLI drop classification and progress accessibility |
+| `b03c84f` | 2026-08-03 | Cancel pending queue prompts on removal |
+| `ac29837` | 2026-08-03 | Assign IDs during configuration import |
+| `2960899` | 2026-08-03 | Fix case-insensitive workspace reconnect links |
+| `bf98db8` | 2026-08-03 | Refuse invalid Explorer drop effects |
+| `ceff51c` | 2026-08-03 | Refresh editor-wave handoff metadata |
 | `9e8c679` | 2026-08-03 | Refresh in-app changelog for editor and lifecycle hardening |
-| `abe24d9` | 2026-08-03 | Harden editor, terminal, SCP, and configuration lifecycles |
-| `2494d85` | 2026-08-03 | Refresh roadmap-slice handoff metadata |
-| `dfd9fe4` | 2026-08-03 | Refresh in-app changelog for high-weight roadmap slices |
-| `10f6d8a` | 2026-08-03 | Harden Login, commands, site security, and S3 WebDAV |
-| `046c0df` | 2026-08-03 | Refresh session-wave handoff metadata |
-| `6ae0377` | 2026-08-03 | Refresh in-app changelog for session and surface hardening |
-| `f61f353` | 2026-08-03 | Harden session, panel, search, bookmark, and About surfaces |
 
 ## Notes from whoever worked on this last
 
