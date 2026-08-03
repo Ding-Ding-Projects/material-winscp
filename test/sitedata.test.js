@@ -1076,6 +1076,19 @@ test('siteAdvancedPatch preserves ordinary edits and only sends touched secrets'
   assert.strictEqual(withSecret.password, 'new-secret');
 });
 
+test('WebDAV legacy authentication persists its real key and exposes the enabled warning', async () => {
+  const { adv, tree } = await modules;
+  const control = adv.allAdvancedControls().find(({ control: c }) => c.id === 'WebDavAuthLegacyCheck').control;
+  assert.equal(control.key, 'webDavAuthLegacy');
+  assert.equal(tree.SESSION_DEFAULTS.webDavAuthLegacy, false);
+  assert.match(control.warning, /credentials are sent before the server proves/i);
+
+  const site = await siteOf({ protocol: 'webdav', webDavAuthLegacy: true });
+  assert.equal(adv.getSiteKey(site, control.key), true);
+  assert.equal(adv.siteAdvancedPatch(site).webDavAuthLegacy, true);
+  assert.equal(adv.describeValue(control, site), 'on');
+});
+
 test('mergeAlgorithmOrder keeps the stored order and restores what is missing', async () => {
   const { adv } = await modules;
   const merged = adv.mergeAlgorithmOrder(['aes', 'WARN', 'des'], adv.CIPHERS);

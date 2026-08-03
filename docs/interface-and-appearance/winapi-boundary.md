@@ -18,6 +18,10 @@ porting label, not a promise that every host has a Win32 implementation.
   scheme-restricted `openExternal` operations. Electron's non-empty
   `shell.openPath` error is returned as a failure rather than being treated as
   success.
+- Injected Unicode clipboard text copying through `copyText`. The operation
+  requires an explicit `clipboard.writeText` adapter on every platform; a
+  missing adapter returns `UNSUPPORTED_PLATFORM` or `UNSUPPORTED_OPERATION`
+  and never claims that text was copied.
 - An injected Windows-only backend through `callWindows`. On every non-Windows
   platform it is ignored without probing or enumerating it, and calls return a
   structured `UNSUPPORTED_PLATFORM` result. On Windows, only non-empty string
@@ -26,8 +30,8 @@ porting label, not a promise that every host has a Win32 implementation.
 
 ## Integration and failure behaviour
 
-Create the boundary in the main process with `createWinApi({ shell, screen,
-windows })`. The renderer must continue to use the existing preload/API
+Create the boundary in the main process with `createWinApi({ shell, clipboard,
+screen, windows })`. The renderer must continue to use the existing preload/API
 surface; it must not receive Node, Electron, or a native backend. A native
 adapter can be supplied for Windows-only metrics or APIs, but it must be
 injected only by a Windows main-process path.

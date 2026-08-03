@@ -16,6 +16,9 @@ metadata or the `..` navigation row for payload bytes. Empty directories are
 represented by no content rows; a visible `..` row is navigation, not content.
 Rows with no file name are rejected as malformed, and duplicate names are
 rejected so an ambiguous path is never exposed as a selectable transfer target.
+Remote rows also expose the WinSCP-compatible `isSymlink` and `partial` aliases
+used by the directory view; both are derived from the canonical `isSymLink`
+and `.filepart` state, including numbered and case-insensitive suffixes.
 
 Permission columns support full POSIX modes, setuid/setgid/sticky bits,
 Windows OpenSSH's `*` unset marker and partially-known selections. Owner and

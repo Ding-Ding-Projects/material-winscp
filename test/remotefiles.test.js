@@ -979,10 +979,24 @@ test('a file names itself through its directory, or through a stored full name',
 test('iconType classifies without a shell, and strips a partial suffix', () => {
   const f = parse('-rw-r--r-- 1 u g 5 Jun 15 12:34 report.pdf.filepart');
   assert.equal(f.isPartial, true);
+  assert.equal(f.partial, true);
   assert.equal(f.iconType, 'ext:pdf');
+  const numbered = parse('-rw-r--r-- 1 u g 5 Jun 15 12:34 report.pdf.FILEPART.2');
+  assert.equal(numbered.partial, true);
+  const ordinary = parse('-rw-r--r-- 1 u g 5 Jun 15 12:34 report.filepartx');
+  assert.equal(ordinary.partial, false);
   const d = parse('drwxr-xr-x 2 u g 5 Jun 15 12:34 sub');
   assert.equal(d.iconType, 'dir');
   assert.equal(new R.TRemoteParentDirectory().iconType, 'parent');
+});
+
+test('directory-view aliases expose symlink state without changing the canonical field', () => {
+  const link = parse('lrwxrwxrwx 1 u g 7 Jun 15 12:34 current -> release');
+  assert.equal(link.isSymLink, true);
+  assert.equal(link.isSymlink, true);
+  link.type = '-';
+  assert.equal(link.isSymLink, false);
+  assert.equal(link.isSymlink, false);
 });
 
 // ---------------------------------------------------------------------------

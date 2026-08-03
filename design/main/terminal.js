@@ -2562,12 +2562,17 @@ class Terminal extends EventEmitter {
     await this.reactOnCommand('copyFile');
   }
 
-  /** TTerminal::CopyFiles. */
-  copyFiles(fileList, target, fileMask, dontOverwrite) {
+  /** TTerminal::CopyFiles. Batch reads are coalesced like MoveFiles. */
+  async copyFiles(fileList, target, fileMask, dontOverwrite) {
     const params = { target, fileMask, dontOverwrite: !!dontOverwrite };
-    this.directoryModified(target, true);
-    return this.processFiles(fileList, OPERATIONS.remoteCopy,
-      (name, file) => this.copyFile(name, file, params), params);
+    this.beginTransaction();
+    try {
+      return await this.processFiles(fileList, OPERATIONS.remoteCopy,
+        (name, file) => this.copyFile(name, file, params), params);
+    } finally {
+      if (this.active) this.directoryModified(target, true);
+      await this._doEndTransaction(false);
+    }
   }
 
   // -------------------------------------------------- create directory/link

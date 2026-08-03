@@ -22,6 +22,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
 const importRenderer = (rel) => import(pathToFileURL(path.join(__dirname, '..', rel)).href);
+const fs = require('node:fs');
 
 let Q;              // design/renderer/ui/queue.js
 let CL;             // design/renderer/ui/dialogs/checklist.js
@@ -567,6 +568,24 @@ test('setChecked leaves the action alone', () => {
   assert.equal(off.checked, false);
   assert.equal(off.action, 'upload');
   assert.equal(it.checked, true);
+});
+
+test('invertChecked flips actionable rows but never ticks do-nothing rows', () => {
+  const rows = [
+    item({ checked: true }),
+    item({ action: 'download', checked: false, remote: { ...item().remote, exists: true } }),
+    item({ action: 'nothing', checked: true }),
+  ];
+  const inverted = CL.invertChecked(rows);
+  assert.deepEqual(inverted.map((r) => r.checked), [false, true, false]);
+  assert.deepEqual(inverted.map((r) => r.action), rows.map((r) => r.action));
+  assert.equal(rows[0].checked, true, 'the input rows are not mutated');
+});
+
+test('checklist toolbar controls expose explicit accessible names', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'design/renderer/ui/dialogs/checklist.js'), 'utf8');
+  assert.match(source, /bindText\(btn, labelKey, \{ attr: 'aria-label' \}\)/);
+  assert.match(source, /bindText\(btn, 'txClGroup', \{ attr: 'aria-label' \}\)/);
 });
 
 test('directory-scoped check and uncheck preserve other directories and actions', () => {

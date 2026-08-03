@@ -59,6 +59,7 @@ defineStrings({
   txClCheckDirectory: ['Tick every actionable item in this directory', '呢個目錄入面可以做嘅全部剔'],
   txClUncheckDirectory: ['Untick every item in this directory', '呢個目錄入面全部唔剔'],
   txClReverse: ['Reverse the direction', '調轉方向'],
+  txClInvert: ['Invert the selection', '反轉選取'],
   txClGroup: ['Group by directory', '按目錄分組'],
   txClSearchPh: ['Search the checklist', '搵清單'],
   txClScope: ['this checklist', '呢張清單'],
@@ -185,6 +186,13 @@ export function overrideAction(item, action) {
 
 /** Tick or untick without changing the action. */
 export function setChecked(item, checked) { return { ...item, checked: !!checked }; }
+
+/** Invert selection without making a row that does nothing actionable. */
+export function invertChecked(items) {
+  return (items || []).map((item) => item.action === 'nothing'
+    ? setChecked(item, false)
+    : setChecked(item, !item.checked));
+}
 
 /** Match a directory and its descendants, like WinSCP's directory action. */
 export function isInDirectory(directory, candidate) {
@@ -393,6 +401,11 @@ export function openChecklistDialog(result = {}) {
     render();
   }
 
+  function invertSelection() {
+    rows = invertChecked(rows);
+    render();
+  }
+
   function applyToDirectory(directory, checked) {
     rows = setCheckedInDirectory(rows, directory, checked);
     render();
@@ -540,6 +553,7 @@ export function openChecklistDialog(result = {}) {
   const toolbar = h('div', { class: 'tx-cl-toolbar' },
     toolButton('select_all', 'txClCheckAll', () => applyToAll((r) => (r.action === 'nothing' ? r : setChecked(r, true)))),
     toolButton('remove', 'txClUncheckAll', () => applyToAll((r) => setChecked(r, false))),
+    toolButton('flip', 'txClInvert', invertSelection),
     toolButton('swap_horiz', 'txClReverse', () => applyToAll((r) => { const x = reverseAction(r); return x.ok ? x.item : r; })),
     groupToggle(),
     toolButton('content_copy', 'txClCopyList', copyChecklist),
@@ -551,6 +565,7 @@ export function openChecklistDialog(result = {}) {
       type: 'button', class: 'tx-q-once', 'aria-pressed': 'true',
       onclick: () => { grouped = !grouped; btn.setAttribute('aria-pressed', String(grouped)); btn.classList.toggle('is-on', grouped); render(); },
     }, icon('topic', 15), h('span', {}, t('txClGroup')));
+    bindText(btn, 'txClGroup', { attr: 'aria-label' });
     btn.classList.add('is-on');
     appearanceTarget(btn, 'checklist-group-toggle', 'Group checklist by directory');
     return btn;
@@ -697,6 +712,7 @@ function toolButton(glyph, labelKey, onSelect) {
     icon(glyph, 16), h('span', {}));
   bindText(btn.lastChild, labelKey);
   bindText(btn, labelKey, { attr: 'title' });
+  bindText(btn, labelKey, { attr: 'aria-label' });
   appearanceTarget(btn, `checklist-tool-${labelKey}`, `Checklist toolbar: ${labelKey}`);
   return btn;
 }

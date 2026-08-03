@@ -59,6 +59,9 @@ current-directory reread when automatic post-operation reads are enabled. Both
 `copyToRemote` and `copyToLocal` are treated as file-modifying commands, so a
 download cannot leave the panel showing the pre-operation listing. Inside a
 transaction the reread is deferred and coalesced with other file operations.
+The server-side batch `copyFiles` path uses the same transaction boundary as
+`moveFiles`: its target directory is invalidated after the batch, and the
+current listing is reread once when the batch closes rather than once per file.
 
 ## Multi-session ownership
 

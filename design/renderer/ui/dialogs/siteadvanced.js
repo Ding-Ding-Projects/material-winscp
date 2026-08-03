@@ -442,7 +442,10 @@ export const SITE_ADVANCED_PAGES = [
           check('WebDavCrossDomainRedirectsCheck', 'webDavCrossDomainRedirects', 'Allow redirects to other hosts',
             { hint: 'Off by default: following a redirect to another host sends your credentials there.' }),
           check('WebDavAuthLegacyCheck', 'webDavAuthLegacy', 'Send credentials before the server asks (legacy servers)',
-            { hint: 'Sends Basic authentication pre-emptively. Only for a server that rejects the challenge-response exchange.' }),
+            {
+              hint: 'Sends Basic authentication pre-emptively. Only for a server that rejects the challenge-response exchange.',
+              warning: 'Warning: when enabled, credentials are sent before the server proves it wants them. Use this only with a trusted WebDAV endpoint, preferably over HTTPS.',
+            }),
         ],
       },
     ],
@@ -1235,8 +1238,12 @@ export function createSiteAdvancedPanel(site, opts = {}) {
     const input = h('input', { type: 'checkbox', id, onchange: () => commit(input.checked) });
     input.checked = !!getKey(state.site, control.key);
     input.disabled = !enabled;
-    return h('label', { class: `sd-check${enabled ? '' : ' is-disabled'}`, for: id },
+    const label = h('label', { class: `sd-check${enabled ? '' : ' is-disabled'}`, for: id },
       input, h('span', { class: 'sd-check-text' }, control.label));
+    if (control.warning && input.checked) {
+      label.appendChild(h('span', { class: 'sd-hint sd-full', role: 'alert' }, control.warning));
+    }
+    return label;
   }
 
   /** BufferSizeCheck: a check box whose two states are two numeric values. */

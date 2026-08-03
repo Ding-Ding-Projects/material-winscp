@@ -948,6 +948,28 @@ test('local copy rereads are coalesced inside a transaction', async () => {
   assert.strictEqual(adapter.calls.list, 1);
 });
 
+test('batch remote copy coalesces rereads and invalidates its target after completion', async () => {
+  const { terminal, adapter, session } = makeTerminal({ cwd: '/source' });
+  adapter.add('/source/a.txt', {});
+  adapter.add('/source/b.txt', {});
+  terminal.autoReadDirectory = true;
+  // Isolate the lifecycle seam: the adapter contract for server-side copy is
+  // covered elsewhere, while this regression only needs successful per-file
+  // callbacks that request the normal post-operation reread.
+  terminal.copyFile = async () => terminal.reactOnCommand('copyFile');
+
+  const ok = await terminal.copyFiles([
+    { name: 'a.txt', fullFileName: '/source/a.txt', type: 'file' },
+    { name: 'b.txt', fullFileName: '/source/b.txt', type: 'file' },
+  ], '/target', '*.bak', true);
+
+  assert.strictEqual(ok, true);
+  assert.strictEqual(adapter.calls.list, 1,
+    'batch copy must flush one reread after all files, not one per file');
+  assert.ok(session.invalidated.includes('/target'),
+    'the copied-to directory must be invalidated after the operation');
+});
+
 // ===========================================================================
 // ProcessFiles — the operation loop
 // ===========================================================================

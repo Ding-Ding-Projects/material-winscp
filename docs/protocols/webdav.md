@@ -32,6 +32,12 @@ The remote path is the URL path. A site whose `hostName` is
 `dav.example.com` and whose `remoteDirectory` is `/team/docs` addresses
 `https://dav.example.com/team/docs`.
 
+The **Send credentials before the server asks** checkbox is available under
+**Site → Advanced → WebDAV** and persists the `webDavAuthLegacy` site setting.
+When enabled, the dialog shows an inline warning because Basic credentials are
+sent before a challenge proves the endpoint requested them. Use it only for a
+trusted endpoint, preferably over HTTPS.
+
 ## Failure modes
 
 | Situation | What the user sees | Recoverable |

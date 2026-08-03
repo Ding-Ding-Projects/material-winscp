@@ -131,3 +131,19 @@ test('external URL opening is scheme-restricted and unavailable shells fail clea
   assert.deepEqual(calls, ['https://example.test/docs']);
   assert.equal((await W.createWinApi({ platform: 'linux' }).openExternal('https://example.test')).code, W.UNSUPPORTED_PLATFORM);
 });
+
+test('clipboard text copying is injected, Unicode-safe, and fails closed when unavailable', () => {
+  const copied = [];
+  const api = W.createWinApi({ platform: 'win32', clipboard: { writeText(value) { copied.push(value); } } });
+  assert.equal(api.capabilities().clipboard.writeText, true);
+  assert.deepEqual(api.copyText('香港 dim sum 🍵'), { ok: true, operation: 'clipboard.writeText', platform: 'win32' });
+  assert.deepEqual(copied, ['香港 dim sum 🍵']);
+  assert.equal(api.copyText(null).code, 'INVALID_INPUT');
+
+  let touched = false;
+  const unavailable = W.createWinApi({ platform: 'linux', clipboard: { writeText() { touched = true; } } });
+  assert.deepEqual(unavailable.capabilities().clipboard, { writeText: true, platform: 'linux' });
+  assert.deepEqual(unavailable.copyText('text'), { ok: true, operation: 'clipboard.writeText', platform: 'linux' });
+  assert.equal(touched, true);
+  assert.equal(W.createWinApi({ platform: 'linux' }).copyText('text').code, W.UNSUPPORTED_PLATFORM);
+});

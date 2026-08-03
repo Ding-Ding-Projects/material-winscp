@@ -220,6 +220,13 @@ function shellCapabilities(shell, platform) {
   };
 }
 
+function clipboardCapabilities(clipboard, platform) {
+  return {
+    writeText: !!clipboard && typeof clipboard.writeText === 'function',
+    platform,
+  };
+}
+
 function safePathForOperation(value, platform, operation) {
   try { return { ok: true, path: normalizePath(value, { platform }) }; }
   catch (error) { return failure(error.code || 'INVALID_INPUT', operation, error.message, { platform }); }
@@ -244,6 +251,7 @@ function createWinApi(options) {
   const o = options || {};
   const platform = platformName(o.platform);
   const shell = o.shell || null;
+  const clipboard = o.clipboard || null;
   // Do not read, bind, or probe a Windows backend on another platform.
   const windows = platform === 'win32' ? (o.windows || null) : null;
 
@@ -260,6 +268,7 @@ function createWinApi(options) {
         platform,
         isWindows: platform === 'win32',
         shell: shellCapabilities(shell, platform),
+        clipboard: clipboardCapabilities(clipboard, platform),
         windowsBackend: {
           available: platform === 'win32' && !!windows,
           operations: platform === 'win32' && windows ? Object.keys(windows).filter((key) => typeof windows[key] === 'function').sort() : [],
@@ -300,6 +309,21 @@ function createWinApi(options) {
         shell.showItemInFolder(checked.path);
         return { ok: true, operation: 'showItemInFolder', platform, path: checked.path };
       } catch (error) { return nativeFailure('showItemInFolder', platform, error); }
+    },
+    checkCopyText(value) {
+      if (typeof value !== 'string') return failure('INVALID_INPUT', 'clipboard.writeText', 'Clipboard text must be a string', { platform });
+      if (!clipboard || typeof clipboard.writeText !== 'function') {
+        return unsupported('clipboard.writeText', platform, 'The desktop clipboard cannot accept text in this process');
+      }
+      return { ok: true, operation: 'clipboard.writeText', platform, text: value };
+    },
+    copyText(value) {
+      const checked = api.checkCopyText(value);
+      if (!checked.ok) return checked;
+      try {
+        clipboard.writeText(checked.text);
+        return { ok: true, operation: 'clipboard.writeText', platform };
+      } catch (error) { return nativeFailure('clipboard.writeText', platform, error); }
     },
     async openExternal(value) {
       if (!allowedExternalUrl(value)) return failure('INVALID_INPUT', 'openExternal', 'Only http, https, and mailto URLs may be opened', { platform });

@@ -1252,6 +1252,11 @@ class TRemoteFile {
   get isParentDirectory() { return this.fileName === C.PARENT_DIRECTORY; }
   get isThisDirectory() { return this.fileName === C.THIS_DIRECTORY; }
 
+  // The directory view consumes the public WinSCP-shaped names. Keep these
+  // aliases derived from the canonical model fields so overlays cannot drift
+  // when a listing row is parsed or duplicated.
+  get isSymlink() { return this.isSymLink; }
+
   get isHidden() {
     if (this._isHidden === 0) return false;
     if (this._isHidden === 1) return true;
@@ -1375,6 +1380,7 @@ class TRemoteFile {
   }
 
   get isPartial() { return getPartialFileExtLen(this.fileName) > 0; }
+  get partial() { return this.isPartial; }
 
   /**
    * The `ls -l` line this file came from, regenerated. Used by the SCP backend

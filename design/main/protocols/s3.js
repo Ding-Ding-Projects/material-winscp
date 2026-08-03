@@ -1032,7 +1032,13 @@ class S3Adapter extends Adapter {
     if (info && info.type === 'dir') {
       await this._deletePrefix(bucket, `${key.replace(/\/+$/, '')}/`);
       // And the marker object itself, if one exists.
-      await this._s3('DELETE', bucket, `${key.replace(/\/+$/, '')}/`).catch(() => {});
+      await this._s3('DELETE', bucket, `${key.replace(/\/+$/, '')}/`).catch((error) => {
+        // A folder marker can disappear between the listing and this cleanup.
+        // WinSCP treats that specific race as harmless, but must still surface
+        // permission, transport, and other delete failures.
+        if (error && error.status === 404) return;
+        throw error;
+      });
       return;
     }
     await this._s3('DELETE', bucket, key);
