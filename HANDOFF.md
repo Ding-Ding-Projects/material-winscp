@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `6ae0377`** — Refresh in-app changelog for session and surface hardening
+**At commit `dfd9fe4`** — Refresh in-app changelog for high-weight roadmap slices
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3306 run, **3305 pass, 0 fail**, 1 skipped |
-| Hand-written code | 216,283 lines across 396 files |
-| Commits | 119 on `main` |
+| Tests | 3315 run, **3314 pass, 0 fail**, 1 skipped |
+| Hand-written code | 216,538 lines across 398 files |
+| Commits | 122 on `main` |
 | Working tree | clean |
-| Remote | `origin/main` at `19b22bb` — **differs from HEAD** |
+| Remote | `origin/main` at `046c0df` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `dfd9fe4` | 2026-08-03 | Refresh in-app changelog for high-weight roadmap slices |
+| `10f6d8a` | 2026-08-03 | Harden Login, commands, site security, and S3 WebDAV |
+| `046c0df` | 2026-08-03 | Refresh session-wave handoff metadata |
 | `6ae0377` | 2026-08-03 | Refresh in-app changelog for session and surface hardening |
 | `f61f353` | 2026-08-03 | Harden session, panel, search, bookmark, and About surfaces |
 | `19b22bb` | 2026-08-03 | Refresh preference-wave handoff metadata |
 | `058e002` | 2026-08-03 | Refresh changelog and stabilize empty-history coverage |
 | `bf1d6de` | 2026-08-03 | Harden preferences, SFTP, queue, sync, and import dialogs |
-| `d5f0b8d` | 2026-08-03 | Refresh protocol-hardening handoff metadata |
-| `e3bec36` | 2026-08-03 | Refresh in-app changelog for protocol and surface hardening |
-| `7592b4c` | 2026-08-03 | Harden configuration, console, SCP, and progress surfaces |
 
 ## Notes from whoever worked on this last
 
