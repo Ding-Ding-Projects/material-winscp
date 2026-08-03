@@ -828,6 +828,14 @@ export function siteAdvancedPatch(site, touchedSecrets = []) {
   return stripSecrets({ ...site }, { keep });
 }
 
+/** Encryption cannot be enabled without a key; a sentinel means one is stored. */
+export function encryptionKeyState(site) {
+  const enabled = site?.encryptFiles === true;
+  const key = site?.encryptKey;
+  const available = key === SECRET_SENTINEL || (typeof key === 'string' && key.trim().length > 0);
+  return { enabled, available, valid: !enabled || available };
+}
+
 /** Everything a `visible`/`enabled` predicate is handed. */
 export function advancedContext(site, prefs = {}) {
   const info = protocolInfo(site.protocol);
@@ -1224,6 +1232,14 @@ export function createSiteAdvancedPanel(site, opts = {}) {
       wrap.appendChild(h('p', { class: 'sd-hint prose' }, control.hint));
     }
     if (control.gap && GAPS[control.gap]) wrap.appendChild(gapNote(GAPS[control.gap]));
+    if (control.id === 'EncryptFilesCheck' && encryptionKeyState(state.site).enabled && !encryptionKeyState(state.site).available) {
+      wrap.appendChild(h('p', { class: 'sd-hint sd-full', role: 'alert' },
+        'Encryption is enabled but no encryption key is set. Add a key before saving this site.'));
+    }
+    if (control.id === 'EncryptKeyEdit' && encryptionKeyState(state.site).enabled && !encryptionKeyState(state.site).available) {
+      wrap.appendChild(h('p', { class: 'sd-hint sd-full', role: 'alert' },
+        'Required while file encryption is enabled. The key is stored as a protected secret.'));
+    }
     appearanceTarget(wrap, `site-advanced-${control.id}`, control.label || control.id);
     return wrap;
   }
@@ -1633,6 +1649,9 @@ export function createSiteAdvancedPanel(site, opts = {}) {
     element: root,
     get site() { return state.site; },
     get touchedSecrets() { return new Set(state.touchedSecrets); },
+    validationErrors() {
+      return encryptionKeyState(state.site).valid ? [] : ['File encryption requires an encryption key.'];
+    },
     /** The patch to send to main: secrets the user never touched are removed. */
     patch() {
       return siteAdvancedPatch(state.site, state.touchedSecrets);
@@ -1669,7 +1688,11 @@ export function registerSiteAdvancedDialog() {
         { label: t('cancel'), kind: 'text' },
         {
           label: t('ok'), kind: 'filled', autofocus: true,
-          onSelect: () => { props.onAccept?.(panel.patch(), panel.touchedSecrets); },
+          onSelect: () => {
+            const errors = panel.validationErrors();
+            if (errors.length) { notify.error('Cannot save site', errors[0]); return; }
+            props.onAccept?.(panel.patch(), panel.touchedSecrets);
+          },
         },
       ],
     };

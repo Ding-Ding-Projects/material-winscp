@@ -71,6 +71,19 @@ export function validateLoginSite(site = {}) {
   return null;
 }
 
+/** Return every site below a folder, including sites in nested folders. */
+export function folderSites(node) {
+  const sites = [];
+  const visit = (item) => {
+    for (const child of item?.children || []) {
+      if (child.kind === 'site') sites.push(child);
+      else if (child.kind === 'folder') visit(child);
+    }
+  };
+  visit(node);
+  return sites;
+}
+
 function storedSearchMode() {
   const all = store.get('search') || {};
   return SITE_SEARCH_MODES.some((m) => m.id === all.siteSearchMode)
@@ -755,7 +768,7 @@ export function createLoginPanel(opts = {}) {
   }
 
   async function openFolder(node) {
-    const sites = node.children.filter((c) => c.kind === 'site');
+    const sites = folderSites(node);
     if (!sites.length) { notify.warning(t('loginBtn'), 'This folder has no sites to open.'); return; }
     let opened = 0;
     for (const child of sites) {

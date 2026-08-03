@@ -31,6 +31,10 @@ Under **Preferences → Transfer → Background**, stored in `PREF_DEFAULTS.queu
 | `onceEmpty` | `none` | `none`, `disconnect`, `suspend`, `shutdown`, `idle` when the queue drains. |
 | `disconnectOnceEmpty` | `false` | Shorthand for the `disconnect` action. |
 
+The View → Queue → Show command saves `view=show` and reopens the current queue
+surface immediately. It does not create a second queue or duplicate transfer
+controller.
+
 ## Behaviour worth knowing
 
 - **Ordering is stable.** Items run in the order they were added; raising

@@ -63,9 +63,9 @@ trusted endpoint, preferably over HTTPS.
   credentials and the session's keep-alive agent, even when the user permits
   following it. A redirect from HTTPS to HTTP is refused outright.
 - **The XML parser does not expand declarations** — DTDs and external entity
-  declarations are ignored. A hard byte cap for non-streaming response bodies
-  remains a follow-up gap before hostile, very large `PROPFIND` output is fully
-  bounded against denial of service.
+  declarations are ignored. Non-streaming response bodies, including
+  `PROPFIND` XML and error explanations, are capped at 16 MiB before parsing;
+  streamed file transfers are not subject to this XML-response cap.
 - **ETags are the only concurrency signal available.** The editor compares them
   before writing back; when the server does not send one, the editor says the
   file could not be checked rather than implying it was.
@@ -80,9 +80,8 @@ trusted endpoint, preferably over HTTPS.
 - Digest authentication covers MD5, SHA-256 and SHA-512/256; the last uses the
   standardized SHA-512/256 function (not a truncated SHA-512 digest), as
   required by RFC 7616.
-- Redirect refusal has direct tests; declaration handling is covered by the
-  parser fixtures, while the non-streaming response byte cap remains untested
-  and unimplemented.
+- Redirect refusal has direct tests; declaration handling and the 16 MiB
+  non-streaming response byte cap are covered by focused tests.
 - Cross-origin redirect handling is exercised with two local HTTP servers: the
   original request is authenticated, while the redirected request carries no
   `Authorization` header.

@@ -2689,7 +2689,15 @@ for (const [name, value] of QUEUE_VIEW) {
   def(name, {
     kind: 'radio',
     checked: () => readPref('queue.view', 'show') === value,
-    run: () => writePref('queue.view', value, 'Changed the queue visibility'),
+    run: () => {
+      const saved = writePref('queue.view', value, 'Changed the queue visibility');
+      // QueueShowAction is also the command behind the View menu. Persisting
+      // the preference alone leaves an already-running window closed; the
+      // queue surface owns the existing queue:open event and can reopen it
+      // without creating a second queue or bypassing its controller.
+      if (value === 'show') saved.then(() => bus.emit('queue:open', {}));
+      return saved;
+    },
   });
 }
 def('QueueToggleShowAction', {

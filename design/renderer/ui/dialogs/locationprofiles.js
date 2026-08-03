@@ -38,6 +38,7 @@ const STRINGS = {
   lpMoveTo: ['Move To…', '移去…'],
   lpUp: ['Up', '上'],
   lpDown: ['Down', '落'],
+  lpDuplicate: ['Duplicate', '複製'],
   lpShortcut: ['Shortcut…', '快捷鍵…'],
   lpBrowse: ['Browse…', '瀏覽…'],
   lpBookmarks: ['Bookmarks…', '書籤…'],
@@ -75,6 +76,20 @@ function normalizeProfile(p) {
     remote: String(p.remote || ''),
     shortCut: String(p.shortCut || ''),
   };
+}
+
+/** Return a copied profile with a unique name, inserted beside its source. */
+export function duplicateProfile(list, profile) {
+  const source = normalizeProfile(profile);
+  const names = new Set(list.filter((p) => p.node === source.node).map((p) => p.name));
+  const base = `${source.name} (copy)`;
+  let name = base;
+  let suffix = 2;
+  while (names.has(name)) name = `${base} ${suffix++}`;
+  const copy = normalizeProfile({ ...source, name, shortCut: '' });
+  const at = list.indexOf(profile);
+  list.splice(at < 0 ? list.length : at + 1, 0, copy);
+  return copy;
 }
 
 export async function readProfiles(sessionKey) {
@@ -193,6 +208,7 @@ registerDialog('locationprofiles', ({ props, close }) => {
     const moveButton = button('lpMoveTo', () => moveProfile());
     const upButton = button('lpUp', () => moveWithin(-1));
     const downButton = button('lpDown', () => moveWithin(1));
+    const duplicateButton = button('lpDuplicate', () => duplicateSelected());
     const shortcutButton = which === 'shared' ? button('lpShortcut', () => assignShortcut()) : null;
 
     function rowFor(profile) {
@@ -406,6 +422,17 @@ registerDialog('locationprofiles', ({ props, close }) => {
       });
     }
 
+    async function duplicateSelected() {
+      const at = find(selected);
+      if (at < 0) return;
+      const copy = duplicateProfile(list(), list()[at]);
+      selected = { kind: 'profile', name: copy.name, node: copy.node };
+      await save(`Duplicated the location profile ${copy.name}`);
+      paint();
+      notify.success(tx('lpAdded', copy.name));
+      announce(tx('lpAdded', copy.name));
+    }
+
     async function moveWithin(delta) {
       const at = find(selected);
       if (at < 0) return;
@@ -452,6 +479,7 @@ registerDialog('locationprofiles', ({ props, close }) => {
       else if (e.key === 'ArrowLeft') { e.preventDefault(); rows[active]?.__setExpanded?.(false); }
       else if (e.key === 'Delete') { e.preventDefault(); removeProfile(); }
       else if (e.key === 'F2') { e.preventDefault(); renameProfile(); }
+      else if (e.key.toLowerCase() === 'd' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); duplicateSelected(); }
       else if (e.key === 'Enter' && selected && selected.kind === 'profile') { e.preventDefault(); accept(); }
     });
 
@@ -459,7 +487,7 @@ registerDialog('locationprofiles', ({ props, close }) => {
       h('div', { class: 'row' }, search.element),
       tree,
       note,
-      h('div', { class: 'row' }, addButton, removeButton, renameButton, moveButton, upButton, downButton, shortcutButton));
+      h('div', { class: 'row' }, addButton, removeButton, renameButton, duplicateButton, moveButton, upButton, downButton, shortcutButton));
     appearanceTarget(element, `locprofiles-sheet-${which}`, `Location profiles: ${which}`);
 
     return {

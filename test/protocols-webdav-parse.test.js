@@ -461,6 +461,17 @@ test('cross-origin redirects do not forward WebDAV credentials', async () => {
   }
 });
 
+test('non-streaming WebDAV responses are capped before XML parsing', async () => {
+  const response = Readable.from([Buffer.from('123'), Buffer.from('456')]);
+  await assert.rejects(() => WebDavAdapter.readBody(response, 5), /exceeded the 5 byte safety limit/);
+});
+
+test('the response safety limit allows an exact-size body', async () => {
+  const response = Readable.from([Buffer.from('123'), Buffer.from('45')]);
+  const body = await WebDavAdapter.readBody(response, 5);
+  assert.strictEqual(body.toString(), '12345');
+});
+
 test('HTTPS redirects cannot downgrade a WebDAV session to HTTP', async () => {
   const adapter = new WebDavAdapter({
     hostName: 'dav.example.test',

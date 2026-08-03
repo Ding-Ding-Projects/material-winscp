@@ -27,6 +27,8 @@ const { Adapter, entry } = require('./base');
 
 const DAV_NS = 'DAV:';
 const XML_NS = 'http://www.w3.org/XML/1998/namespace';
+// Bound in-memory XML/error responses without affecting streamed transfers.
+const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
 // ---------------------------------------------------------------------------
 // A small, namespace-aware XML reader
@@ -822,12 +824,26 @@ class WebDavAdapter extends Adapter {
     });
   }
 
-  static readBody(res) {
+  static readBody(res, maxBytes = MAX_RESPONSE_BYTES) {
     return new Promise((resolve, reject) => {
       const chunks = [];
-      res.on('data', (c) => chunks.push(c));
-      res.on('end', () => resolve(Buffer.concat(chunks)));
-      res.on('error', reject);
+      let size = 0;
+      let settled = false;
+      const fail = (error) => {
+        if (settled) return;
+        settled = true;
+        if (typeof res.destroy === 'function') res.destroy();
+        reject(error);
+      };
+      res.on('data', (c) => {
+        chunks.push(c);
+        size += Buffer.byteLength(c);
+        if (size > maxBytes) fail(new Error(`WebDAV response exceeded the ${maxBytes} byte safety limit`));
+      });
+      res.on('end', () => {
+        if (!settled) { settled = true; resolve(Buffer.concat(chunks)); }
+      });
+      res.on('error', fail);
     });
   }
 

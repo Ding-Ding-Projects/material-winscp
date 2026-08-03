@@ -1,6 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateLoginSite } from '../design/renderer/ui/dialogs/login.js';
+import { folderSites, validateLoginSite } from '../design/renderer/ui/dialogs/login.js';
+
+test('folder opening includes sites nested in child folders', () => {
+  const first = { kind: 'site', id: 'one' };
+  const second = { kind: 'site', id: 'two' };
+  assert.deepEqual(folderSites({
+    kind: 'folder',
+    children: [first, { kind: 'folder', children: [{ kind: 'folder', children: [second] }] }],
+  }), [first, second]);
+});
+
+test('folder traversal ignores non-folder, non-site tree records', () => {
+  assert.deepEqual(folderSites({
+    kind: 'folder',
+    children: [{ kind: 'workspace', children: [{ kind: 'site', id: 'not-opened' }] }],
+  }), []);
+});
 
 test('Login validation rejects missing hosts before opening a session', () => {
   assert.deepEqual(validateLoginSite({ portNumber: 22 }), {

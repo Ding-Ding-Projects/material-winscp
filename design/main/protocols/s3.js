@@ -573,6 +573,14 @@ class S3Adapter extends Adapter {
     const doc = parseXml(text);
     const creds = kid(kid(kid(doc, 'AssumeRoleResponse'), 'AssumeRoleResult'), 'Credentials');
     if (!creds) throw new Error('AssumeRole returned no credentials');
+    // STS can return a syntactically valid response whose Credentials node is
+    // incomplete (for example when a proxy or test double drops one field).
+    // The core requires every temporary-credential field before accepting the
+    // role, because signing with an empty secret would otherwise fail later as
+    // an unrelated S3 authorization error.
+    const required = ['AccessKeyId', 'SecretAccessKey', 'SessionToken', 'Expiration'];
+    const missing = required.find((name) => !textOf(creds, name));
+    if (missing) throw new Error(`AssumeRole returned incomplete credentials: missing ${missing}`);
     this.credentials = {
       accessKeyId: textOf(creds, 'AccessKeyId'),
       secretAccessKey: textOf(creds, 'SecretAccessKey'),

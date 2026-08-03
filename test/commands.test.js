@@ -24,10 +24,12 @@ let ACTION_CATEGORIES;
 let C;          // ui/commands.js
 let PC;         // ui/panelcolumns.js
 let P;          // ui/panels.js
+let BUS;
 
 test.before(async () => {
   ({ ACTIONS, ACTION_CATEGORIES } = await import(R('actions.js')));
   C = await import(R('ui/commands.js'));
+  ({ bus: BUS } = await import(R('state.js')));
   PC = await import(R('ui/panelcolumns.js'));
   P = await import(R('ui/panels.js'));
 });
@@ -246,6 +248,17 @@ test('commandState is stable for an unknown name', () => {
   assert.equal(st.exists, false);
   assert.equal(st.enabled, false);
   assert.match(st.reason, /not a WinSCP action/);
+});
+
+test('QueueShowAction reopens the existing queue surface after saving', async () => {
+  let opened = 0;
+  const off = BUS.on('queue:open', () => { opened += 1; });
+  try {
+    await C.getCommand('QueueShowAction')._spec.run({});
+    assert.equal(opened, 1);
+  } finally {
+    off();
+  }
 });
 
 /* ------------------------------------------------------------------ */

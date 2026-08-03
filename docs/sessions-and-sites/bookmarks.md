@@ -97,6 +97,16 @@ ordering, duplicate policies, shortcut conflicts, immutable updates, opened
 folder state, deterministic round trips, malformed/versioned data, legacy
 loading, per-session scope derivation and the absence of secrets from output.
 
+## Location-profile duplication
+
+The Location Profiles dialog can duplicate the selected profile with the
+`Duplicate` button or <kbd>Ctrl+D</kbd> (<kbd>Cmd+D</kbd> on macOS). The copy
+stays in the same one-level folder, is inserted immediately after the source,
+and receives a collision-free ` (copy)` name with a numeric suffix when needed.
+Shortcuts are intentionally cleared so duplication cannot steal an existing
+shortcut. The operation is persisted through the same profile preference and
+history path as the other profile mutations.
+
 ## Suggested articles
 
 - [The site manager](site-manager.md) — saved connection identity and folders.

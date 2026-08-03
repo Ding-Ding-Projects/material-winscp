@@ -1084,6 +1084,15 @@ test('siteAdvancedPatch preserves ordinary edits and only sends touched secrets'
   assert.strictEqual(withSecret.password, 'new-secret');
 });
 
+test('enabling site encryption requires a key while preserving stored secrets', async () => {
+  const { adv, tree } = await modules;
+  assert.deepStrictEqual(adv.encryptionKeyState({ encryptFiles: false, encryptKey: '' }),
+    { enabled: false, available: false, valid: true });
+  assert.equal(adv.encryptionKeyState({ encryptFiles: true, encryptKey: '' }).valid, false);
+  assert.equal(adv.encryptionKeyState({ encryptFiles: true, encryptKey: tree.SECRET_SENTINEL }).valid, true);
+  assert.equal(adv.encryptionKeyState({ encryptFiles: true, encryptKey: 'new-key' }).valid, true);
+});
+
 test('WebDAV legacy authentication persists its real key and exposes the enabled warning', async () => {
   const { adv, tree } = await modules;
   const control = adv.allAdvancedControls().find(({ control: c }) => c.id === 'WebDavAuthLegacyCheck').control;
