@@ -430,6 +430,61 @@ class Options {
     return out;
   }
 
+  /**
+   * Find every occurrence of a variadic switch in command-line order.
+   *
+   * The console front-end accepts repeated `/command` and `/parameter`
+   * switches, while `findSwitchParams()` intentionally models the original
+   * first-occurrence helper. Keeping this separate preserves that helper's
+   * semantics for the rest of the script parser and gives the process boundary
+   * a way to consume all batch values without treating the later groups as a
+   * session URL or interactive input.
+   */
+  findAllSwitchParams(name, paramsMax = -1, caseSensitive = false) {
+    const wanted = String(name);
+    let found = false;
+    const out = [];
+    const kept = [];
+    const matches = (option) => option.type === 'switch'
+      && (caseSensitive ? option.name === wanted : option.name.toLowerCase() === wanted.toLowerCase());
+
+    for (let i = 0; i < this.options.length; i++) {
+      const option = this.options[i];
+      if (!matches(option)) {
+        kept.push(option);
+        continue;
+      }
+
+      found = true;
+      option.used = true;
+      kept.push(option);
+
+      const following = [];
+      let j = i + 1;
+      while (j < this.options.length && this.options[j].type === 'param') {
+        following.push(this.options[j]);
+        j++;
+      }
+      let count = following.length;
+      const asInt = Number(option.value);
+      if (option.value !== '' && Number.isInteger(asInt) && asInt < count) count = asInt;
+      if (paramsMax >= 0 && count > paramsMax) count = paramsMax;
+      for (let k = 0; k < following.length; k++) {
+        if (k < count) {
+          following[k].used = true;
+          out.push(following[k].value);
+        } else {
+          kept.push(following[k]);
+        }
+      }
+      i = j - 1;
+    }
+
+    this.options = kept;
+    this.paramCount = kept.reduce((n, option) => n + (option.type === 'param' ? 1 : 0), 0);
+    return found ? out : null;
+  }
+
   switchValue(name, def = '') {
     const r = this.locateSwitch(name);
     const v = r.found ? r.value : '';

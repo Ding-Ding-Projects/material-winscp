@@ -17,7 +17,9 @@ batch file can safely use the process exit code.
 When present, `/script=FILE` commands run first and `/command` arguments follow.
 If neither switch is present, commands are read from standard input. Script
 files may be UTF-8 or BOM-marked UTF-16; invalid text is rejected rather than
-silently reinterpreted. `/parameter` values expand as `%1%` through `%9%`, and
+silently reinterpreted. Repeated `/command` and `/parameter` switches are
+consumed in their original order, so later groups remain batch input rather
+than becoming a fake session URL or an interactive prompt. `/parameter` values expand as `%1%` through `%9%`, and
 timestamp/environment expansion happens immediately before execution.
 Generated command arguments are quoted when they contain either a space or a
 tab, matching the tokenizer's separators; this keeps paths and names with
@@ -41,6 +43,7 @@ do not share a script transcript or XML log without reviewing it.
 | A command fails in batch-continue mode | Later lines run, but the runner still returns `1`. |
 | `/xmllog` is requested with `/xmlgroups` | Each group name is XML-escaped and command credentials are redacted. |
 | `/stdin` or `/stdout` has an unknown mode | The in-process runner prints the parser error and returns `1`, matching the console front end's process boundary. |
+| Repeated `/command` or `/parameter` switches are supplied | Every group is consumed in order; no implicit session or prompt is created. |
 | No script and no standard input | The non-interactive runner exits `0` without hanging. |
 
 Focused coverage lives in `test/script.test.js`, including the `/script` and

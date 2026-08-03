@@ -49,6 +49,9 @@ recoverable by choosing a valid target or using the equivalent command.
 Unknown effects never become uploads, and local staging paths are validated
 before they reach the shell. A drag gesture cannot bypass read-only or
 protocol-capability checks.
+Remote names are also checked after Windows-invalid-character replacement. If
+two names would become the same case-insensitive local name, staging refuses
+the whole drag instead of letting one file overwrite the other.
 
 ## Verification
 

@@ -346,6 +346,11 @@ class DragOut {
 
     this.dir = null;
     this.items = [];
+    // Windows Explorer resolves names case-insensitively. Keep the check here
+    // rather than in the downloader: otherwise two different remote names
+    // that sanitize to one local name can silently overwrite one another in
+    // the private staging directory before the shell ever sees the drag.
+    this._localNames = new Set();
     /** -1 once a directory is included, because its size is not known up front. */
     this.totalSize = 0;
     this.staged = false;
@@ -355,6 +360,7 @@ class DragOut {
     // The original recreates the list on every drag detect, "sometimes we do
     // not get DDEnd so the list is not released".
     this.items = [];
+    this._localNames = new Set();
     this.totalSize = 0;
     this.staged = false;
     this.dir = uniqDragTempDir(this.tempRoot, { exists: this.exists, now: this.now });
@@ -379,6 +385,13 @@ class DragOut {
     if (!local || local === '.' || local === '..' || /[\\/]/.test(local) || isWindowsDeviceName(local)) {
       throw new DragError('The dragged name is not a safe local file name.', 'DRAG_UNSAFE_NAME');
     }
+    const localIdentity = local.toLowerCase();
+    if (this._localNames.has(localIdentity)) {
+      throw new DragError(
+        `The dragged names ${JSON.stringify(local)} collide after Windows filename conversion.`,
+        'DRAG_DUPLICATE_NAME');
+    }
+    this._localNames.add(localIdentity);
 
     if (this.totalSize >= 0) {
       if (f.isDirectory) this.totalSize = -1;
@@ -468,6 +481,7 @@ class DragOut {
     this.deletion.add(dir, this.deleteDelay);
     this.dir = null;
     this.items = [];
+    this._localNames = new Set();
     this.staged = false;
     return dir;
   }
@@ -479,6 +493,7 @@ class DragOut {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch { this.deletion.add(dir, 0); }
     this.dir = null;
     this.items = [];
+    this._localNames = new Set();
     this.staged = false;
     return dir;
   }

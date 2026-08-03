@@ -19,7 +19,11 @@ winscp drag extension-status
 ```
 
 The `script` and `command` forms forward the console runner's practical
-headless switches as well as commands and parameters:
+headless switches as well as commands and parameters. Repeated `--command` and
+`--parameter` options are grouped into one contiguous `/command` or
+`/parameter` run before the existing console engine sees them; this preserves
+all values instead of accidentally leaving later values for an interactive
+prompt:
 `--log FILE`, `--loglevel N`, `--xmllog FILE`, `--xmllogrequired`,
 `--xmlgroups[=on|off]`, `--stdout[=binary|chunked]`, `--stdin=binary`,
 `--ini PATH`, `--rawsettings NAME=VALUE`, `--nointeractiveinput`, and
@@ -102,6 +106,7 @@ accepted as an explicit synonym for the default machine-readable format.
 | A classified path is gone | It appears in `classification.missing`; the command still reports the other paths. If every path is gone, `accepted.ok` is `false` and no operation is planned. | Yes — restore or remove the path |
 | Read-only or incapable remote target | `accepted.ok` is `false` with the specific reason. | Yes — choose a writable target |
 | Stage source cannot be read | The command fails and removes its staging directory. | Yes — fix the path or permissions |
+| Different remote names sanitize to the same Windows name | The command fails with a collision error before staging; it never overwrites one item with another. | Yes — choose a transfer naming rule or drag the items separately |
 | An empty stage path is supplied | The command fails with an input error; it never resolves the empty value to the current directory. | Yes — provide a file or directory path |
 | A console script fails | The existing console engine returns its normal non-zero script result. | Yes — inspect its log/XML output |
 

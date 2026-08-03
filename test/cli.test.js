@@ -86,11 +86,47 @@ test('convenience commands translate to the existing console runner switches', (
   assert.deepEqual(cli.buildConsoleArgs([
     '--command', 'open sftp://host/', '--command', 'exit', '--session', 'stored-site',
   ], 'command'), [
-    '/console', '/command', 'open sftp://host/', '/command', 'exit', 'stored-site',
+    '/console', '/command', 'open sftp://host/', 'exit', 'stored-site',
   ]);
   assert.deepEqual(cli.buildConsoleArgs(['open sftp://host/', 'exit'], 'command'), [
-    '/console', '/command', 'open sftp://host/', '/command', 'exit',
+    '/console', '/command', 'open sftp://host/', 'exit',
   ]);
+});
+
+test('convenience commands group repeated variadic switches for the console parser', () => {
+  assert.deepEqual(cli.buildConsoleArgs([
+    '--parameter', 'production', '--parameter', 'eu-west',
+    '--command', 'echo one', '--command', 'echo two',
+  ], 'command'), [
+    '/console', '/parameter', 'production', 'eu-west',
+    '/command', 'echo one', 'echo two',
+  ]);
+});
+
+test('the executable convenience command consumes every command and exits', () => {
+  const entry = path.join(__dirname, '..', 'bin', 'winscp.js');
+  const run = spawnSync(process.execPath, [entry, 'command', 'echo one', 'echo two', 'exit'], {
+    encoding: 'utf8',
+    timeout: 120000,
+  });
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stdout, /one/);
+  assert.match(run.stdout, /two/);
+  assert.equal(run.stdout.includes('winscp> '), false, 'batch commands must not fall into an interactive prompt');
+  assert.equal(run.stderr, '');
+});
+
+test('the executable legacy run accepts repeated variadic switches', () => {
+  const entry = path.join(__dirname, '..', 'bin', 'winscp.js');
+  const run = spawnSync(process.execPath, [
+    entry, 'run', '/command', 'echo one', '/command', 'echo two', '/command', 'exit',
+  ], { encoding: 'utf8', timeout: 120000 });
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stdout, /one/);
+  assert.match(run.stdout, /two/);
+  assert.equal(run.stdout.includes('winscp> '), false);
+  assert.equal(run.stdout.includes('Opening session using command-line parameter'), false);
+  assert.equal(run.stderr, '');
 });
 
 test('convenience commands forward the console runner control switches', () => {

@@ -899,9 +899,9 @@ async function runConsole(argv = [], deps = {}) {
         loadError = e;
       }
     }
-    const commands = params.findSwitchParams('command');
+    const commands = params.findAllSwitchParams('command');
     if (commands) for (const c of commands) scriptCommands.push(c);
-    const parameters = params.findSwitchParams('parameter');
+    const parameters = params.findAllSwitchParams('parameter');
     if (parameters) for (const p of parameters) scriptParameters.push(p);
   }
 

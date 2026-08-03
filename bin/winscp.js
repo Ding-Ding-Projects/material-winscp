@@ -369,12 +369,16 @@ function buildConsoleArgs(argv, kind) {
     if (!file) throw new Error('script needs a FILE');
     consoleArgs.push(`/script=${file}`);
   }
-  for (const value of optionValues(options, 'parameter')) consoleArgs.push('/parameter', String(value));
+  const parameters = optionValues(options, 'parameter');
+  if (parameters.length) consoleArgs.push('/parameter', ...parameters.map(String));
   const commands = optionValues(options, 'command');
   if (kind === 'command' && commands.length === 0) {
     for (const value of positional.splice(0)) commands.push(value);
   }
-  for (const value of commands) consoleArgs.push('/command', String(value));
+  // TOptions::FindSwitchParams consumes the contiguous parameter run after a
+  // switch. Emit one switch for the whole run: repeating /command or
+  // /parameter would leave later values behind as interactive input.
+  if (commands.length) consoleArgs.push('/command', ...commands.map(String));
   for (const name of ['log', 'loglevel', 'xmllog', 'ini', 'rawsettings', 'stdout', 'stdin']) {
     for (const value of optionValues(options, name)) consoleArgs.push(`/${name}=${String(value)}`);
   }

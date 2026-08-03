@@ -1206,6 +1206,21 @@ test('a remote name Windows cannot store is renamed for the staging copy', () =>
   drag.abort();
 });
 
+test('a drag refuses names that collide after Windows filename conversion', () => {
+  const drag = new SI.DragOut({
+    tempRoot: os.tmpdir(),
+    copyParam: { replaceInvalidChars: true, invalidCharsReplacement: '_' },
+  });
+  drag.begin();
+  drag.add({ name: 'a:b.txt', size: 1 });
+  assert.throws(() => drag.add({ name: 'a?b.txt', size: 1 }), (error) => {
+    assert.equal(error.code, 'DRAG_DUPLICATE_NAME');
+    assert.match(error.message, /collide/);
+    return true;
+  });
+  drag.abort();
+});
+
 test('a preserved remote path cannot escape the temporary drag payload', () => {
   const drag = new SI.DragOut({
     tempRoot: os.tmpdir(),

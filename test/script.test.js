@@ -447,6 +447,23 @@ test('findSwitchParams honours a numeric count in the switch value', () => {
   assert.equal(o.paramCount, 1);
 });
 
+test('findAllSwitchParams consumes repeated variadic switches in order', () => {
+  const o = new Options();
+  o.parse('/command echo-one /parameter first /command echo-two exit /parameter second');
+  assert.deepEqual(o.findAllSwitchParams('command'), ['echo-one', 'echo-two', 'exit']);
+  assert.deepEqual(o.findAllSwitchParams('parameter'), ['first', 'second']);
+  assert.equal(o.paramCount, 0);
+  assert.equal(o.unusedSwitch(), null);
+});
+
+test('findAllSwitchParams preserves a numeric per-switch count', () => {
+  const o = new Options();
+  o.parse('/command=1 first leftover /command=2 second third extra');
+  assert.deepEqual(o.findAllSwitchParams('command'), ['first', 'second', 'third']);
+  assert.deepEqual(o.params(), ['leftover', 'extra']);
+  assert.equal(o.paramCount, 2);
+});
+
 test('logOptions reports every original token, including consumed ones', () => {
   const o = new Options();
   o.parse('-speed=100 file.txt');
@@ -2058,6 +2075,18 @@ test('runConsole passes /parameter values through to %1%', async () => {
     { console: c, env: {} });
   assert.equal(code, CR.RESULT_SUCCESS);
   assert.deepEqual(c.lines, ['<VALUE>']);
+});
+
+test('runConsole accepts repeated /command and /parameter groups without an implicit session', async () => {
+  const c = new CR.BufferConsole({});
+  const code = await CR.runConsole([
+    '/command', 'echo <%1%>', '/command', 'echo second', '/command', 'exit',
+    '/parameter', 'VALUE', '/parameter', 'UNUSED',
+  ], { console: c, env: {} });
+  assert.equal(code, CR.RESULT_SUCCESS);
+  assert.deepEqual(c.lines, ['<VALUE>', 'second']);
+  assert.equal(c.output.includes('Opening session using command-line parameter'), false);
+  assert.equal(c.output.includes('winscp> '), false);
 });
 
 test('runConsole reports a missing script file and exits 1', async () => {
