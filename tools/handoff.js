@@ -101,7 +101,7 @@ function git() {
     // The report files are the output of this command. Counting their own
     // pending rewrite means the committed report can never describe the state
     // it leaves behind, so exclude those two generated paths from the count.
-    dirty: dirtyFiles.length,
+    dirty: dirtyFiles.size,
     recent: sh('git', ['log', '-8', '--format=%h\t%ad\t%s', '--date=short']).trim().split('\n').filter(Boolean),
   };
 }
