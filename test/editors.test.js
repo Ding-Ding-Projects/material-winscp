@@ -178,6 +178,34 @@ test('overlapping file-changed callbacks serialize uploads and keep the final ed
   }
 });
 
+test('a failed watcher upload can be retried without modifying the temporary file', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-retry-'));
+  P.setRoot(root);
+  const f = fixture();
+  try {
+    const opened = await f.manager.openRemote({ sessionId: f.session.id, remotePath: '/notes.txt', mode: 'internal' });
+    await fs.writeFile(opened.localPath, 'retry me');
+    const originalWrite = f.session.adapter.writeFile;
+    let attempts = 0;
+    f.session.adapter.writeFile = async (...args) => {
+      attempts++;
+      if (attempts === 1) throw Object.assign(new Error('temporary outage'), { code: 'NETWORK' });
+      return originalWrite(...args);
+    };
+
+    const first = await f.manager.executedFileChanged(opened.id);
+    assert.equal(first.uploaded, false);
+    assert.equal(first.error.code, 'NETWORK');
+    const second = await f.manager.executedFileChanged(opened.id);
+    assert.equal(second.uploaded, true);
+    assert.equal(attempts, 2);
+    assert.equal((await f.session.adapter.readFile('/notes.txt')).toString(), 'retry me');
+    await f.manager.close(opened.id, {});
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('a failed external launch rolls back its watcher, registry record, and temporary copy', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-launch-'));
   P.setRoot(root);

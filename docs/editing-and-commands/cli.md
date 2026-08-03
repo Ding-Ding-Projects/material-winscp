@@ -63,8 +63,10 @@ Help is available at every simulation level: `winscp drag --help`,
 reference with exit code `0`, without starting the console runner or a GUI.
 
 Explorer drag payloads fail closed when a preserved remote name contains `/`,
-`\\`, `.` or `..`. Those names are not allowed to escape the private staging
-directory, even when invalid-character replacement is disabled.
+`\\`, `.` or `..`, or ends in a dot or space. Windows trims those suffixes when
+resolving a name, so accepting them could make two staged entries alias or turn
+`CON ` into the reserved `CON` device. These names are rejected even when
+invalid-character replacement is disabled.
 
 The application-side drop executor has the same safety boundary: only an
 explicit `COPY` or `MOVE` effect is actionable. `NONE`, cancel, and unknown

@@ -1126,6 +1126,14 @@ test('numeric advanced combos keep tunnel ports finite, integral, and in range',
   assert.equal(adv.normalizeAdvancedComboNumber('70000'), 65535);
 });
 
+test('advanced numeric steppers remain keyboard reachable and named', async () => {
+  const source = await require('node:fs').promises.readFile(
+    path.join(__dirname, '..', 'design', 'renderer', 'ui', 'dialogs', 'siteadvanced.js'), 'utf8');
+  assert.doesNotMatch(source, /type: 'button', tabindex: '-1', 'aria-hidden': 'true', onclick: \(\) => step\(/);
+  assert.ok(source.includes("'aria-label': `Increase ${control.label}`"));
+  assert.ok(source.includes("'aria-label': `Decrease ${control.label}`"));
+});
+
 test('WebDAV legacy authentication persists its real key and exposes the enabled warning', async () => {
   const { adv, tree } = await modules;
   const control = adv.allAdvancedControls().find(({ control: c }) => c.id === 'WebDavAuthLegacyCheck').control;

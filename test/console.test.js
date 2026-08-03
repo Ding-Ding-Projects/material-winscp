@@ -1193,6 +1193,15 @@ test('an empty stdin exits successfully rather than waiting for a prompt nobody 
   assert.strictEqual(await runConsoleFrontEnd([], deps), RESULT.SUCCESS);
 });
 
+test('StdConsole /stdin=binary preserves arbitrary bytes without line framing', async () => {
+  const input = Readable.from([Buffer.from([0x00, 0xff, 0x0a, 0x0d, 0x80])]);
+  const consoleInstance = new CR.StdConsole({
+    stdin: input, stdIn: 'binary', noInteractiveInput: true,
+    stdout: new FakeStream(), stderr: new FakeStream(),
+  });
+  assert.deepEqual([...await consoleInstance.transferIn()], [0x00, 0xff, 0x0a, 0x0d, 0x80]);
+});
+
 test('a bad /stdout value stops the run before anything is transferred', async () => {
   const deps = frontEndDeps();
   const code = await runConsoleFrontEnd(['/stdout=base64', '/command', 'exit'], deps);

@@ -1240,6 +1240,18 @@ test('a preserved Windows device name cannot become a shell staging path', () =>
   drag.begin();
   assert.throws(() => drag.add({ name: 'CON.txt', size: 1 }), /safe local file name/);
   assert.throws(() => drag.add({ name: 'LPT1', size: 1 }), /safe local file name/);
+  assert.throws(() => drag.add({ name: 'CON ', size: 1 }), /safe local file name/);
+  drag.abort();
+});
+
+test('preserved trailing-space names cannot alias another Windows payload name', () => {
+  const drag = new SI.DragOut({
+    tempRoot: os.tmpdir(),
+    copyParam: { replaceInvalidChars: false },
+  });
+  drag.begin();
+  drag.add({ name: 'report.txt', size: 1 });
+  assert.throws(() => drag.add({ name: 'report.txt ', size: 1 }), /safe local file name/);
   drag.abort();
 });
 

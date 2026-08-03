@@ -53,6 +53,9 @@ controller.
   cancellation arrives while a transfer is waiting for its speed-limit token,
   the delayed chunk is discarded before it reaches the destination. The same
   guard applies to the final text-conversion tail and parallel ranged writes.
+- **Cancellation removes incomplete public targets.** This includes the
+  pre-sized destination created before parallel ranged workers start; resumable
+  `.filepart` data remains available for retry.
 - **Parallel ranged writes fail as one operation.** If one ranged reader or
   writer fails, the queue destroys the sibling streams and waits for every
   range to settle before retrying or reporting the item error. This prevents a

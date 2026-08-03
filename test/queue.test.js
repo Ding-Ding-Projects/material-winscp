@@ -1844,6 +1844,31 @@ test('cancellation during throttling does not write the delayed chunk', async ()
   assert.equal(remote.read('/r/a.bin'), null, 'cancelled transfer must not publish a target');
 });
 
+test('cancellation during parallel target seeding removes the public target', async () => {
+  const { local, remote } = makePair();
+  local.put('/l/huge.bin', bigBuffer(65536));
+  const createWriteStream = remote.createWriteStream.bind(remote);
+  remote.createWriteStream = async (path, options) => {
+    const stream = await createWriteStream(path, options);
+    if (options && options.flags === 'w') {
+      const end = stream.end.bind(stream);
+      stream.end = (...args) => setTimeout(() => end(...args), 25);
+    }
+    return stream;
+  };
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'upload', source: '/l/huge.bin', target: '/r/huge.bin',
+    sourceAdapter: local, targetAdapter: remote,
+    copyParam: { parallelTransfers: 4, parallelTransferThreshold: 16384, resumeSupport: 'off' },
+  });
+  await waitFor(() => item.state === 'active', 1000, 'transfer start');
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  q.remove(item.id);
+  await q.idle();
+  assert.equal(remote.read('/r/huge.bin'), null, 'cancelled parallel transfer must not publish a target');
+});
+
 test('removing an item cancels a pending prompt so idle can settle', async () => {
   const q = new TransferQueue({ prefs: prefs({ queue: { enabledByDefault: false } }), progressMs: 0 });
   const item = q.add({ id: 'prompt-cancel', source: '/l/a', target: '/r/a' });

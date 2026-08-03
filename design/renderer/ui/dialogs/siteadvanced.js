@@ -1398,8 +1398,8 @@ export function createSiteAdvancedPanel(site, opts = {}) {
       commit(Number(input.value));
     };
     const stepper = h('div', { class: 'sd-stepper' },
-      h('button', { type: 'button', tabindex: '-1', 'aria-hidden': 'true', onclick: () => step(1) }, icon('expand_less', 13)),
-      h('button', { type: 'button', tabindex: '-1', 'aria-hidden': 'true', onclick: () => step(-1) }, icon('expand_more', 13)));
+      h('button', { type: 'button', 'aria-label': `Increase ${control.label}`, onclick: () => step(1) }, icon('expand_less', 13)),
+      h('button', { type: 'button', 'aria-label': `Decrease ${control.label}`, onclick: () => step(-1) }, icon('expand_more', 13)));
     for (const b of stepper.querySelectorAll('button')) b.disabled = !enabled;
     const row = h('div', { class: 'sd-row is-tight' }, input, stepper,
       control.unit ? h('span', { class: 'sd-hint' }, control.unit) : null);

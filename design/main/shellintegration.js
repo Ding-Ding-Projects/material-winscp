@@ -109,7 +109,12 @@ function isFakeTransferDirectory(name) {
 
 /** Windows treats these basenames as device paths, even when an extension is present. */
 function isWindowsDeviceName(name) {
-  return /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$/i.test(String(name));
+  // Win32 ignores trailing dots and spaces before resolving a basename. This
+  // makes `CON ` the same device name as `CON`, and can also make `x` and
+  // `x ` alias one another in a staged drag when replacement is disabled.
+  const normalized = String(name).replace(/[. ]+$/, '');
+  return normalized !== String(name) ||
+    /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$/i.test(normalized);
 }
 
 /**

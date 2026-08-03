@@ -22,4 +22,8 @@ Numeric editable combos such as the local tunnel port are normalized before
 they enter site state: non-finite input becomes `0`, fractional input is
 truncated, and ports are limited to `0`–`65535`.
 
+Numeric fields also expose named increment/decrement buttons. They remain in the
+keyboard tab order and are not hidden from assistive technology, so users can
+make the same bounded adjustment without relying on a pointer.
+
 Verification: `node --test test/sitedata.test.js`.

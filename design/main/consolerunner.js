@@ -197,6 +197,15 @@ class StdConsole extends ConsoleBase {
   transferOut(buffer) { this.out.write(buffer); }
 
   async transferIn() {
+    if (this.stdInMode === 'binary') {
+      // Binary stdin is a byte stream, not a command stream. Do not route it
+      // through the line reader: UTF-8 decoding and newline reconstruction
+      // would corrupt arbitrary payload bytes and change their length.
+      const chunks = [];
+      for await (const chunk of this.in) chunks.push(Buffer.isBuffer(chunk)
+        ? chunk : Buffer.from(chunk));
+      return Buffer.concat(chunks);
+    }
     this._startReading();
     const chunks = [];
     for (;;) {

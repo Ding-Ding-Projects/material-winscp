@@ -600,6 +600,11 @@ class EditorManager extends EventEmitter {
       return { changed: true, ...result };
     } catch (e) {
       if (e.code === 'REMOTE_CHANGED') return { changed: true, uploaded: false, conflict: true };
+      // Keep the same bytes eligible for a later direct watcher notification.
+      // The upload may have failed transiently (for example after a session
+      // drop); retaining this stamp would make the next notification look
+      // unchanged and strand the edit until the user modifies the file again.
+      rec.localStamp = null;
       rec.lastError = e.message;
       this._send('event:editor', {
         type: 'error', id: rec.id, message: e.message,

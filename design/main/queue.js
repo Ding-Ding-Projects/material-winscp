@@ -1332,7 +1332,18 @@ class TransferQueue extends EventEmitter {
       return entry.size;
     }
 
-    const written = await this._copyBytes(item, entry, targetPath, mode, existing, text);
+    let written;
+    try {
+      written = await this._copyBytes(item, entry, targetPath, mode, existing, text);
+    } catch (err) {
+      // Parallel copies seed a plain-overwrite target before ranged workers
+      // start. Cancellation must not leave that incomplete public name behind.
+      if ((item._cancelled || err instanceof TransferCancelled)
+          && mode === 'overwrite' && !item._copyUsingPartial) {
+        await this._tolerate(cp, () => dst.remove(targetPath));
+      }
+      throw err;
+    }
 
     // Preserve metadata once the bytes are all there.
     if (cp.preserveTime && dst.caps.timestamp && entry.mtime) {
@@ -1578,6 +1589,7 @@ class TransferQueue extends EventEmitter {
     }
 
     const parallel = this._parallelChunks(item, entry, { text, canRange, mode, readFrom });
+    item._copyUsingPartial = usingPartial;
     let written;
     if (parallel > 1) {
       written = await this._copyChunked(item, entry, writePath, parallel);
@@ -1590,6 +1602,7 @@ class TransferQueue extends EventEmitter {
       if (existing) await this._tolerate(cp, () => dst.remove(targetPath));
       await dst.rename(writePath, targetPath);
     }
+    item._copyUsingPartial = false;
     return written;
   }
 

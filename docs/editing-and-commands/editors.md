@@ -101,6 +101,7 @@ available through the visible Up and Down buttons for pointer users.
 | Binary file opened in the internal editor | Detected and refused with an explanation, rather than displaying and re-saving mangled bytes. | Yes |
 | Very large file | Above a threshold the internal editor declines and suggests downloading; it does not attempt to load it entirely into memory. | Yes |
 | Session lost while editing | The temporary survives. Reconnecting offers to upload it. | Yes |
+| Watcher upload fails temporarily | The edit remains dirty; a later `editor:fileChanged` notification retries the same bytes even if the file was not modified again. | Yes |
 | Orphaned temporaries from a crash | With `warnOrphans`, a startup notification listing them with an option to recover or discard. | Yes |
 | `maxEditors` reached | Refused with a count, rather than opening an editor that cannot be tracked. | Yes |
 
