@@ -1403,14 +1403,14 @@ test('a workspace member links to the stored site, or copies it when there is no
   assert.strictEqual(copied.hostName, 'other');
 });
 
-test('a workspace link resolves through to the site, and a cycle resolves to nothing', () => {
+test('a workspace link resolves case-insensitively, and a cycle resolves to nothing', () => {
   const site = S.defaultSessionData('prod');
   const link = S.defaultSessionData('0001');
-  link.link = 'prod';
+  link.link = 'Prod';
   assert.strictEqual(S.resolveWorkspaceData([site, link], link), site);
 
   const a = S.defaultSessionData('a'); a.link = 'b';
-  const b = S.defaultSessionData('b'); b.link = 'a';
+  const b = S.defaultSessionData('B'); b.link = 'A';
   assert.strictEqual(S.resolveWorkspaceData([a, b], a), null);
 });
 

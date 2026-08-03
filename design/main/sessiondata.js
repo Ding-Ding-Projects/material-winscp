@@ -2777,9 +2777,13 @@ function resolveWorkspaceData(sessions, data) {
   let d = data;
   const seen = new Set();
   while (d && d.link) {
-    if (seen.has(d.link)) return null;      // a link cycle resolves to nothing
-    seen.add(d.link);
-    d = sessions.find((s) => s.name === d.link) || null;
+    // Site names are case-insensitive in the stored-session list (see
+    // findSame). Keep workspace links consistent with reconnect lookup;
+    // otherwise a persisted `Prod` link silently misses the `prod` site.
+    const linkKey = String(d.link).toLowerCase();
+    if (seen.has(linkKey)) return null;      // a link cycle resolves to nothing
+    seen.add(linkKey);
+    d = sessions.find((s) => String(s.name).toLowerCase() === linkKey) || null;
   }
   return d;
 }

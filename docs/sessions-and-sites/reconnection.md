@@ -58,6 +58,10 @@ Keepalives are per site; reconnection policy is global, under
   order and selection. It does not silently re-run an operation that was in
   flight — that decision belongs to the queue.
 - **Tunnelled sessions re-establish both hops** in order.
+- **Workspace links use case-insensitive site names.** Stored site names are
+  matched without regard to case, so a persisted workspace link such as
+  `Prod` still reconnects to the stored `prod` site and restores its session
+  settings. Link cycles are rejected using the same comparison rule.
 
 ## Failure modes
 
@@ -98,6 +102,8 @@ Keepalives are per site; reconnection policy is global, under
   the drop and the retry.
 - Auth-failure-does-not-retry is tested to assert exactly one attempt.
 - Context restoration (directory, filter, sort, selection) is round-trip tested.
+- Workspace-link reconnect lookup is tested with mixed-case names, including a
+  mixed-case cycle that must be rejected rather than followed forever.
 
 ## Suggested articles
 
