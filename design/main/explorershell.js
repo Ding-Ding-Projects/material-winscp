@@ -2035,9 +2035,16 @@ class ExplorerShell {
   ddGetTarget(spec) {
     const s = spec || {};
     if (s.ontoQueueView) {
+      const directory = String(s.defaultDownloadTarget || '').trim();
+      // An empty queue target must not become the process working directory.
+      // A queue drop is a real download, so accepting it without an explicit
+      // destination would make the target depend on how the app was launched.
+      if (!directory) {
+        return { ok: false, forceQueue: false, counterName: 'DownloadsDragDropQueueTargetUnknown' };
+      }
       return {
         ok: true,
-        directory: String(s.defaultDownloadTarget || ''),
+        directory,
         forceQueue: true,
         counterName: 'DownloadsDragDropQueue',
       };

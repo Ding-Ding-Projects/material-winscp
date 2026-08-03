@@ -689,6 +689,10 @@ class WebDavAdapter extends Adapter {
   }
 
   _makeAgent() {
+    // A reconnect can create a new agent without going through disconnect
+    // first. Retire the old pool so its keep-alive sockets (and any requests
+    // still using them) are not left behind after the session is rebuilt.
+    if (this._agent && this._agent.destroy) this._agent.destroy();
     const keepAlive = { keepAlive: true, maxSockets: 8 };
     if (!this.secure) { this._agent = new http.Agent(keepAlive); return; }
     this._agent = new https.Agent({

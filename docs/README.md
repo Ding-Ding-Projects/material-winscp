@@ -37,6 +37,7 @@ apply.
 | [version-history/](version-history/) | The local git-backed history of every user-managed record, and its filters. |
 | [accessibility-and-languages/](accessibility-and-languages/) | Language modes, funny-level sliders, the narrator, accessibility guarantees, the dim sum surprise. |
 | [packaging-and-updates/](packaging-and-updates/) | The Squirrel installer, CI, releases, code names and the update lifecycle. |
+| [configuration/](configuration/) | Durable JSON/INI configuration, migration and protected session secrets. |
 
 ## How to read a feature article
 

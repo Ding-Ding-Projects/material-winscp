@@ -42,6 +42,10 @@ controller.
   moved by hand, and a moved item keeps its settings.
 - **Pause is real.** Pausing suspends the stream rather than buffering it, so a
   paused transfer stops consuming bandwidth immediately.
+- **Idle means no pending work.** `idle()` remains pending for an item paused
+  before it receives a transfer slot; it settles only after that item is
+  resumed, removed, or reaches a terminal state. Cancellation/removal therefore
+  cannot accidentally make a still-visible paused row look finished.
 - **Cancellation is checked after throttling as well as before it.** If a
   cancellation arrives while a transfer is waiting for its speed-limit token,
   the delayed chunk is discarded before it reaches the destination. The same
@@ -136,6 +140,8 @@ their place and run first.
 - Queue mechanics — ordering, concurrency limits, pause/resume, per-item
   settings isolation, failure containment — are tested against the local adapter
   with synthetic delays, so no network is involved.
+- A queued item paused before its first slot has a regression test proving that
+  `idle()` does not settle until the item is resumed and completes.
 - `onceEmpty` action gating (that a failure suppresses it) has a direct test.
 - The reconnect budget is covered at `sessionReopenTimeout: 0` (unlimited, the
   shipped default), at a non-zero value (the window expires and the item is

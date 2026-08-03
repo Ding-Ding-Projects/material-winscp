@@ -277,6 +277,7 @@ async function stageDrag(argv) {
   const records = [];
   const names = new Set();
   for (const sourcePath of sourcePaths) {
+    if (!String(sourcePath).trim()) throw new Error('drag stage paths cannot be empty');
     const absolutePath = localPath(sourcePath);
     const stat = await fsp.stat(absolutePath);
     const name = path.basename(absolutePath);

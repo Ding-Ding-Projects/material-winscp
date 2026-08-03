@@ -80,6 +80,7 @@ accepted as an explicit synonym for the default machine-readable format.
 | A classified path is gone | It appears in `classification.missing`; the command still reports the other paths. If every path is gone, `accepted.ok` is `false` and no operation is planned. | Yes — restore or remove the path |
 | Read-only or incapable remote target | `accepted.ok` is `false` with the specific reason. | Yes — choose a writable target |
 | Stage source cannot be read | The command fails and removes its staging directory. | Yes — fix the path or permissions |
+| An empty stage path is supplied | The command fails with an input error; it never resolves the empty value to the current directory. | Yes — provide a file or directory path |
 | A console script fails | The existing console engine returns its normal non-zero script result. | Yes — inspect its log/XML output |
 
 ## Security considerations

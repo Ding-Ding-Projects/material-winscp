@@ -107,6 +107,11 @@ function isFakeTransferDirectory(name) {
   return String(path.basename(String(name))).slice(0, FAKE_DIR_PREFIX_LEN).toLowerCase() === FAKE_DIR_PREFIX;
 }
 
+/** Windows treats these basenames as device paths, even when an extension is present. */
+function isWindowsDeviceName(name) {
+  return /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$/i.test(String(name));
+}
+
 /**
  * StartCreationDirectoryMonitorsOnEachDrive (GUITools.cpp:710) reads the
  * DDDrives preference: a comma list where an entry beginning with `-` excludes
@@ -371,7 +376,7 @@ class DragOut {
       : validLocalFileName(remoteName, this.copyParam.invalidCharsReplacement);
     // Preserving unusual remote names must not turn the shell payload into a
     // relative or absolute path outside the private staging directory.
-    if (!local || local === '.' || local === '..' || /[\\/]/.test(local)) {
+    if (!local || local === '.' || local === '..' || /[\\/]/.test(local) || isWindowsDeviceName(local)) {
       throw new DragError('The dragged name is not a safe local file name.', 'DRAG_UNSAFE_NAME');
     }
 

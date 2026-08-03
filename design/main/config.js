@@ -116,6 +116,7 @@ class Config extends EventEmitter {
   load() {
     const file = P.config();
     let migratedIni = false;
+    let migratedJson = false;
     if (fs.existsSync(file)) {
       try {
         const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -126,7 +127,12 @@ class Config extends EventEmitter {
         if (!raw.prefs || !raw.prefs.customCommands || !raw.prefs.customCommands.length) {
           this.data.prefs.customCommands = clone(DEFAULT_CUSTOM_COMMANDS);
         }
-        this.data.sites = (raw.sites || []).map(normalizeSite);
+        const rawSites = Array.isArray(raw.sites) ? raw.sites : [];
+        migratedJson = rawSites.some((site) => !site.id || SECRET_FIELDS.some((field) => {
+          const value = site && site[field];
+          return typeof value === 'string' && value && !value.startsWith('mp:') && !value.startsWith('os:');
+        }));
+        this.data.sites = rawSites.map(normalizeSite);
         this.data.folders = raw.folders || [];
         this.data.workspaces = raw.workspaces || [];
         this.data.version = raw.version || 1;
@@ -151,7 +157,7 @@ class Config extends EventEmitter {
     if (fs.existsSync(P.hostkeys())) {
       try { this.data.hostKeys = JSON.parse(fs.readFileSync(P.hostkeys(), 'utf8')); } catch { this.data.hostKeys = {}; }
     }
-    if (migratedIni) {
+    if (migratedIni || migratedJson) {
       try { this.flush(); } catch (e) { this.emit('error', e); }
     }
     this.data.loaded = true;

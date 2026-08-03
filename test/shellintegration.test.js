@@ -1217,6 +1217,17 @@ test('a preserved remote path cannot escape the temporary drag payload', () => {
   drag.abort();
 });
 
+test('a preserved Windows device name cannot become a shell staging path', () => {
+  const drag = new SI.DragOut({
+    tempRoot: os.tmpdir(),
+    copyParam: { replaceInvalidChars: false },
+  });
+  drag.begin();
+  assert.throws(() => drag.add({ name: 'CON.txt', size: 1 }), /safe local file name/);
+  assert.throws(() => drag.add({ name: 'LPT1', size: 1 }), /safe local file name/);
+  drag.abort();
+});
+
 test('a drag refuses to run out of order', async () => {
   const drag = new SI.DragOut({ tempRoot: os.tmpdir() });
   assert.throws(() => drag.add({ name: 'x' }), /begin\(\) must be called/);

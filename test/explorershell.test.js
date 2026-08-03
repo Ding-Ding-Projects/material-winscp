@@ -1039,6 +1039,15 @@ test('a drop on the queue view forces the transfer into the background', () => {
   assert.strictEqual(unknown.ok, false);
 });
 
+test('a queue drop is refused when its download target is blank', () => {
+  const shell = makeShell({});
+  for (const defaultDownloadTarget of ['', '   ', undefined, null]) {
+    const target = shell.ddGetTarget({ ontoQueueView: true, defaultDownloadTarget });
+    assert.strictEqual(target.ok, false, `blank target ${String(defaultDownloadTarget)} must be refused`);
+    assert.strictEqual(target.counterName, 'DownloadsDragDropQueueTargetUnknown');
+  }
+});
+
 test('the lack-of-temp-space warning can be refused, and switched off for good', async () => {
   const refusing = makeShell({
     prefs: { dDWarnLackOfTempSpace: true, dDWarnLackOfTempSpaceRatio: 1.1 },

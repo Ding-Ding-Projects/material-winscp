@@ -64,6 +64,9 @@ trusted endpoint, preferably over HTTPS.
 - **Redirects are not followed blindly.** A cross-origin redirect drops
   credentials and the session's keep-alive agent, even when the user permits
   following it. A redirect from HTTPS to HTTP is refused outright.
+- **Reconnects retire the previous connection pool.** Rebuilding a session
+  destroys the prior keep-alive agent before creating a new one, so stale
+  sockets and requests cannot survive a reconnect unnoticed.
 - **The XML parser does not expand declarations** — DTDs and external entity
   declarations are ignored. Non-streaming response bodies, including
   `PROPFIND` XML and error explanations, are capped at 16 MiB before parsing;

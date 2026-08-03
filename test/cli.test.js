@@ -140,6 +140,10 @@ test('drag stage exercises the real temporary-folder payload and cleans it', asy
   }
 });
 
+test('drag stage rejects an empty path instead of staging the current directory', async () => {
+  await assert.rejects(() => cli.stageDrag(['--file=']), /paths cannot be empty/);
+});
+
 test('drop classify refuses empty and missing-only drops', () => {
   assert.throws(() => cli.classifyDrop([]), /at least one PATH/);
   const result = cli.classifyDrop(['definitely-not-present.txt', '--last-effect', 'move']);

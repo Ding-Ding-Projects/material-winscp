@@ -1831,6 +1831,22 @@ test('removing an item cancels a pending prompt so idle can settle', async () =>
   assert.equal(q.get(item.id), null);
 });
 
+test('idle stays pending for a queued item paused before it starts', async () => {
+  const q = new TransferQueue({ prefs: prefs({ queue: { enabledByDefault: false } }), progressMs: 0 });
+  const item = q.add({ id: 'paused-before-start', source: '/l/a', target: '/r/a' });
+  assert.equal(q.pauseItem(item.id), true);
+
+  let settled = false;
+  const pending = q.idle().then(() => { settled = true; });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false, 'paused queued work is not idle');
+
+  q.setEnabled(true);
+  assert.equal(q.resumeItem(item.id), true);
+  await q.idle();
+  await pending;
+});
+
 test('queue management: enable/disable, reorder, delete, delete all done', async () => {
   const { local, remote } = makePair();
   for (const n of ['a', 'b', 'c']) local.put(`/l/${n}.txt`, n);

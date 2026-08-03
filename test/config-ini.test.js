@@ -102,6 +102,19 @@ test('JSON load and import re-protect clear-text session secrets', () => withRoo
   assert.doesNotMatch(fs.readFileSync(P.config(), 'utf8'), /another-password/);
 }));
 
+test('JSON load persists protection when migrating a legacy clear-text secret', () => withRoot((root) => {
+  fs.writeFileSync(P.config(), JSON.stringify({ sites: [
+    { name: 'Legacy', hostName: 'legacy.example.com', password: 'plain-password', savePassword: true },
+  ] }), 'utf8');
+
+  const config = new Config().load();
+  const stored = fs.readFileSync(P.config(), 'utf8');
+
+  assert.notEqual(config.sites[0].password, 'plain-password');
+  assert.doesNotMatch(stored, /plain-password/);
+  assert.match(JSON.parse(stored).sites[0].id, /^site-/);
+}));
+
 test('JSON load and import assign IDs to legacy sites that omit them', () => withRoot((root) => {
   fs.writeFileSync(P.config(), JSON.stringify({ sites: [
     { name: 'Legacy', hostName: 'legacy.example.com' },

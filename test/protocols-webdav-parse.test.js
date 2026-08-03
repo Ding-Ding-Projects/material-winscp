@@ -522,6 +522,17 @@ test('HTTPS redirects cannot downgrade a WebDAV session to HTTP', async () => {
   );
 });
 
+test('rebuilding a WebDAV connection destroys the previous agent pool', () => {
+  const adapter = new WebDavAdapter({ hostName: 'dav.example.com', ftps: 'none' });
+  let destroyed = 0;
+  adapter._agent = { destroy: () => { destroyed += 1; } };
+
+  adapter._makeAgent();
+
+  assert.equal(destroyed, 1);
+  assert.notEqual(adapter._agent.destroy, undefined);
+});
+
 test('recursive MKCOL does not mistake an existing file for a directory', async () => {
   const adapter = new WebDavAdapter({
     hostName: 'dav.example.test', portNumber: 443, ftps: 'implicit',

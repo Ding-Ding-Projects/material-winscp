@@ -686,7 +686,10 @@ class TransferQueue extends EventEmitter {
 
   _isIdle() {
     if (this._active.size) return false;
-    return !this.items.some((i) => i.state === 'queued');
+    // A queued item can be paused before it gets an active slot. It is still
+    // pending work, so idle() must not resolve until that item is resumed,
+    // removed, or reaches a terminal state.
+    return !this.items.some((i) => i.state === 'queued' || i.state === 'paused');
   }
 
   // ---- query / prompt --------------------------------------------------

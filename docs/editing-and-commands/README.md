@@ -18,6 +18,7 @@ files any of it applies to.
 | [file-find.md](file-find.md) | Streaming file search, cancellation, masks and zero-result limits. |
 | [command-palette.md](command-palette.md) | The persisted keyboard palette: every registered command, Preferences destinations, regex search and exact setting teleport. |
 | [explorer-properties-dispatch.md](explorer-properties-dispatch.md) | Explorer-side dispatch and capability context for local and remote file properties. |
+| [drag-drop.md](drag-drop.md) | Safe drag/drop effects, Explorer targets, queue drops and refusal conditions. |
 
 ## Postman
 
