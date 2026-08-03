@@ -79,6 +79,7 @@ test('unix path decomposition, including the empty results', () => {
   assert.equal(R.unixExtractFileName('/a/'), '');
   assert.equal(R.unixExtractFileExt('b.tar.gz'), '.gz');
   assert.equal(R.unixExtractFileExt('noext'), '');
+  assert.equal(R.unixExtractFileExt('/a.b/c.txt'), '.txt');
   // A dot-file is its own extension: the C++ takes LastDelimiter('.') > 0 on a
   // 1-based index, so position 1 counts, and Delphi's ExtractFileExt agrees.
   assert.equal(R.unixExtractFileExt('.hidden'), '.hidden');

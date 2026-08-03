@@ -163,7 +163,7 @@ function unixExtractFileExt(path) {
   const p = String(path);
   const fileName = unixExtractFileName(p);
   const pos = fileName.lastIndexOf('.');
-  return pos >= 0 ? p.slice(pos) : '';
+  return pos >= 0 ? fileName.slice(pos) : '';
 }
 
 function extractFileName(path, unix) {
