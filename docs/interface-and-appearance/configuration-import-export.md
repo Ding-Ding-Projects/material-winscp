@@ -60,6 +60,11 @@ protected when platform protection is available and otherwise discarded. This
 prevents a hand-edited or legacy backup from turning the durable store into a
 clear-text credential file.
 
+Legacy or hand-edited JSON sites that omit an `id` receive a generated site ID
+during load/import. This matters because the ID is the address used by update,
+move, and delete operations; without it a site could be displayed but not
+managed.
+
 ## Import failure behavior
 
 An import is transactional in the running GUI: JSON imports restore preferences,

@@ -73,6 +73,9 @@ function isIniConfiguration(file, text) {
 /** Normalize an imported/loaded site before it can be persisted. */
 function normalizeSite(site) {
   const normalized = deepMerge(clone(SESSION_DEFAULTS), site || {});
+  // Older/manual JSON backups may omit IDs. Without one the site is visible
+  // but cannot be addressed by update/remove/move operations.
+  normalized.id = normalized.id || newId('site');
   for (const field of SECRET_FIELDS) {
     const value = normalized[field];
     if (!value) { normalized[field] = ''; continue; }

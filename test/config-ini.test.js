@@ -102,6 +102,23 @@ test('JSON load and import re-protect clear-text session secrets', () => withRoo
   assert.doesNotMatch(fs.readFileSync(P.config(), 'utf8'), /another-password/);
 }));
 
+test('JSON load and import assign IDs to legacy sites that omit them', () => withRoot((root) => {
+  fs.writeFileSync(P.config(), JSON.stringify({ sites: [
+    { name: 'Legacy', hostName: 'legacy.example.com' },
+  ] }), 'utf8');
+  const config = new Config().load();
+  const loaded = config.sites[0];
+
+  assert.match(loaded.id, /^site-/);
+  assert.equal(config.siteById(loaded.id), loaded);
+  assert.equal(config.updateSite(loaded.id, { name: 'Renamed' }).name, 'Renamed');
+
+  config.importState({ sites: [{ name: 'Imported legacy', hostName: 'imported.example.com' }] });
+  assert.match(config.sites[0].id, /^site-/);
+  assert.equal(config.removeSite(config.sites[0].id), true);
+  config.flush();
+}));
+
 test('failed JSON import rolls back the live configuration before reporting the write error', () => withRoot(() => {
   const config = new Config();
   config.data.prefs.language = 'en';
