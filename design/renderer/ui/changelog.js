@@ -187,6 +187,27 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "8557de4", kind: 'commit', ref: "8557de4", oid: "8557de45e9b970c304ec15acdec7815d67c7cb77", date: "2026-08-03",
+    title: "Harden dialogs, file search, and S3 cancellation",
+    changes: [
+      { category: "security", text: "RemoteTransfer now validates before queue submission, Progress reports cancellation failures accessibly, CustomCommand protects shortcuts, FileFind ignores stale verification and exposes the regex builder, Session keeps secret-free lifecycle state, and S3 aborts HTTP and multipart work. The tests and docs keep every boundary honest, so cancellation can stop the job without stopping the explanation.\\n\\nRemoteTransfer 會先 validation 先入 queue，Progress 會清楚報 cancel failure，CustomCommand 守住 shortcut，FileFind 唔收 stale verification 又有 regex builder，Session 只留安全 lifecycle state，S3 會 abort HTTP 同 multipart。測試文件講清楚每個 boundary，cancel 可以停 job，但唔會停埋解釋。" },
+    ],
+  },
+  {
+    id: "6881f62", kind: 'commit', ref: "6881f62", oid: "6881f6217366b6f1bcc18b89381a09b6bcb0c902", date: "2026-08-03",
+    title: "Refresh dialog wave handoff metadata",
+    changes: [
+      { category: "fixed", text: "The handoff now records the 3,245-pass regression run, Docker smoke, the 71db2c6 and fa7b4ce milestones, and the honest 59.0% coverage with 114 units outstanding. It is a handoff, not an incantation for pretending the roadmap is finished.\\n\\nHandoff 而家記低 3,245 pass regression、Docker smoke、71db2c6 同 fa7b4ce milestone，仲有老實嘅 59.0% coverage 同 114 個未完成 unit。佢係交接文件，唔係用嚟施法扮 roadmap 已經完工。" },
+    ],
+  },
+  {
+    id: "fa7b4ce", kind: 'commit', ref: "fa7b4ce", oid: "fa7b4cef76501ad0078dae951f2f69e080d8c346", date: "2026-08-03",
+    title: "Refresh in-app changelog for dialog fixes",
+    changes: [
+      { category: "fixed", text: "The in-app history now records the verified 71db2c6 overlay, editor, host-key, CopyParams, rights, and SiteTree fixes with complete links and bilingual copy. The changelog now knows which button escaped.\\n\\nApp 入面嘅歷史而家記低已驗證嘅 71db2c6 overlay、editor、host-key、CopyParams、rights 同 SiteTree 修正，連埋完整 link 同雙語 copy；changelog 而家知道邊粒 button 走失咗。" },
+    ],
+  },
+  {
     id: "71db2c6", kind: 'commit', ref: "71db2c6", oid: "71db2c6a28e762c6519f134b572160abc9818d88", date: "2026-08-03",
     title: "Harden dialogs, overlays, and site navigation",
     changes: [
@@ -815,49 +836,6 @@ export const DEVELOPMENT = [
       { category: "changed", text: "呢個係 #29 嘅證據，唔係用嘴講，係真係 build 完、serve 出嚟、再喺一個離屏桌面度用 Edge 開嚟影 —— 全程 headless，冇掂過你個熒幕。" },
       { category: "changed", text: "影出嚟仲慘過「冇 CSS」：字體係瀏覽器預設嘅襯線體、連結係藍色底線，因為 app.css 404；而導覽列以下**成版白晒** —— 56 篇文由 docs/ 生成得好地地，一篇都出唔到，因為 app.js 都係 404，冇人負責放佢哋上去。" },
       { category: "changed", text: "最陰險係個骨架仲喺度（跳過連結、標題、搜尋框、幾個掣、四條連結），所以睇落似「載 緊」多過似「載唔到」—— 呢個就係佢可以一直冇人發現嘅原因。" },
-    ],
-  },
-  {
-    id: "f6a9d13", kind: 'commit', ref: "f6a9d13", oid: "f6a9d13ea702f8e4c8deea82047717625cea0004", date: "2026-08-02",
-    title: "Bring the in-app changelog current: 39 entries, every sha verified",
-    changes: [
-      { category: "fixed", text: "The changelog viewer had drifted nine commits behind — everything from the Electron unpack fix through the mega wave was missing, which is the stretch a user would most want to read about. Regenerated from the real git log rather than written by hand, which is the whole point of tools/changelog.js existing." },
-      { category: "changed", text: "39 entries, newest c6cbbc5. Every object name verified with git cat-file before it was written, because a wrong sha is worse than none: it sends a reader somewhere confidently irrelevant. 36 of the 39 carry Cantonese copy taken from the commit itself, so the viewer's language modes have real prose rather than a machine translation of the English." },
-      { category: "changed", text: "`node tools/changelog.js --check` now exits 0. It exited 1 before, which is how this was noticed at all — the check exists precisely because \"I will update the changelog later\" has a poor record." },
-    ],
-    changesYue: [
-      { category: "changed", text: "份 app 內置嘅更新日誌落後咗九個 commit —— 由修 Electron 解壓嗰陣一直到成個大浪 全部冇 —— 而嗰段正正就係用戶最想睇嘅。而家由真嘅 git log 生返出嚟，唔係人手寫, 呢個本身就係 tools/changelog.js 存在嘅理由。" },
-      { category: "changed", text: "39 條，每個 sha 都用 git cat-file 驗過先寫落去 —— 一個錯嘅 sha 衰過冇，因為佢會 好肯定咁帶你去一個完全唔相干嘅地方。39 條入面有 36 條嘅粵語版係直接攞 commit 自己嗰半，唔係機翻。" },
-    ],
-  },
-  {
-    id: "c6cbbc5", kind: 'commit', ref: "c6cbbc5", oid: "c6cbbc520d8983b18a83bc8ebef9c1c6cced7f65", date: "2026-08-02",
-    title: "Stop one test permanently forbidding the only fix for another",
-    changes: [
-      { category: "fixed", text: "Two fixes from the same wave landed with a deadlock between them, spotted by the completeness critic rather than by either author — each was correct alone." },
-      { category: "fixed", text: "The shallow-clone fix added `submodules: false` count === checkout count, to stop someone paying for full history by quietly pulling 300k lines of vendored C++ into every run. Reasonable. But the extractor fix skips two tests when vendor/ is absent (NO_VENDOR), and checking the submodule out in the test job is the only way to un-skip them — which an assertion demanding `false` forbids outright. A test that permanently prevents the only fix for another test is worse than no test, and nothing about either commit made that visible." },
-      { category: "changed", text: "The guard now asserts the value is DECLARED rather than that it is false. The accident worth catching was always an omitted key, where a default nobody read decides whether 300k lines enter the run; flipping one to true is a deliberate, reviewable trade — slower runs against real coverage of the extractor — and belongs to whoever makes it." },
-      { category: "changed", text: "Not weakened: removing one declaration still turns it red, now naming which checkout (\"2 checkouts, 1 declared\"). 42/42." },
-    ],
-    changesYue: [
-      { category: "changed", text: "同一浪入面兩個修改各自啱，夾埋就打結 —— 而且係「查漏」嗰個 agent 執到，兩個作者 都冇為意。" },
-      { category: "changed", text: "一個要求「每個 checkout 都必須 submodules: false」，另一個因為冇 vendor/ 而 skip 咗 兩個測試 —— 而唯一解得到嗰個 skip 嘅方法，就係喺 CI 度 checkout 個 submodule，正正 被前者禁死。一個測試永久封住另一個測試唯一嘅出路，仲衰過冇測試。" },
-      { category: "changed", text: "而家改成「一定要寫明」，唔係「一定要係 false」。本來要防嘅係「唔記得寫」—— 咁就變成 由一個冇人睇過嘅預設值話事。想改成 true 係一個要負責任嘅取捨（跑得慢啲，換真實嘅 覆蓋率），呢個決定應該係改嗰個人做，唔係由一句 assert 幫佢做咗。" },
-    ],
-  },
-  {
-    id: "49dab33", kind: 'commit', ref: "49dab33", oid: "49dab338d1a3664e5adea5f0e8701df753de03bb", date: "2026-08-02",
-    title: "Record a handoff that finally has real test numbers in it",
-    changes: [
-      { category: "changed", text: "The Tests row has said \"not run in this regeneration\" for four commits, because tools/handoff.js runs the suite itself and had no --test-timeout — so the only way to make it finish was --skip-tests, and the document whose whole premise is that it \"cannot flatter the state of the work\" quietly left its most important row blank." },
-      { category: "fixed", text: "It now reads: 2903 run, 2902 pass, 0 fail, 1 skipped. Verified across four consecutive full runs on Node 26 and one on the Node 22 that CI pins, after the flaky ssh2 key generation was fixed — the number is stable, not a lucky sample." },
-      { category: "fixed", text: "The hand-written sections were empty and now carry what a successor actually needs: run fix-node26-deps.js AFTER npm install and never before; check both Node majors because three defects this session lived on only one of them, in both directions; and the two release-loop decisions that belong to the maintainer rather than to whoever picks this up next." },
-      { category: "changed", text: "The roadmap gets the lesson rather than the numbers: reachability is the bar. The transfer engine had channels, a byte mover and passing tests, and no renderer code called any of it — done from every angle except a user's. A setting that is stored, mapped and rendered is not a setting that works, and eight more are still in that state with no row warning anyone." },
-    ],
-    changesYue: [
-      { category: "changed", text: "份 handoff 一連四個 commit 都寫住「今次冇跑測試」，因為佢自己跑測試但冇 timeout, 唯一跑得完嘅方法就係 --skip-tests —— 一份成篇強調自己「唔識講大話」嘅文件，最緊要 嗰行係空白嘅。" },
-      { category: "changed", text: "而家有真數：2903 跑，2902 過，0 衰。而且係修好 ssh2 嗰個唔穩定嘅 key 之後，連跑 四次 Node 26 加一次 Node 22 都一樣，唔係撞彩。" },
-      { category: "changed", text: "Roadmap 記低嘅唔係數字，係教訓：**能唔能夠行到先係標準**。個 transfer engine 有 channel、有 byte mover、測試全過，但 renderer 由頭到尾冇叫過 —— 除咗用戶之外，喺 邊個角度睇都似做完咗。" },
     ],
   },
 ];
