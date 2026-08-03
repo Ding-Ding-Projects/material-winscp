@@ -28,6 +28,7 @@ rather than decoration.
 | [window-geometry.md](window-geometry.md) | Safe display metrics, minimum sizing and reachable restored window bounds. |
 | [properties-rights.md](properties-rights.md) | Defensive permission metadata parsing, editing failure semantics and accessibility. |
 | [symlink-dialog-validation.md](symlink-dialog-validation.md) | Safe link-name validation and target/path separation. |
+| [create-directory-dialog.md](create-directory-dialog.md) | Async create/permission failure handling and retry behavior. |
 
 ## The two rules that decide everything here
 

@@ -14,6 +14,12 @@ bin, and bounded request pipelining that makes resumable SFTP fast over long
 links without allowing a large hand-edited queue value to grow memory without
 limit.
 
+Checksum fallback is exact: shell execution is used only for MD5, SHA-1,
+SHA-256, and SHA-512. If an extension cannot compute another requested
+algorithm, the adapter refuses it instead of returning a digest from a
+different algorithm. Extension-provided private algorithms remain available
+when the server implements them.
+
 ## Configuration
 
 All of these live in `SESSION_DEFAULTS` (`design/main/defaults.js`) and surface

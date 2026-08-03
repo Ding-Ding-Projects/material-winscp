@@ -451,6 +451,11 @@ const haveFocus = (c) => !!c.panel && !!(c.focused || (c.panel.focusedEntry && c
 const online = (c) => c.isLocal || c.connected;
 const cap = (name) => (c) => !!(c.caps && c.caps[name]);
 const bothPanels = (c) => !!c.panel && !!c.other;
+// CustomScpExplorer has one remote panel by design. Its transfer dialog asks
+// for the local destination, so remote downloads do not need Commander’s
+// second panel in order to be a real, reachable operation.
+const transferPanels = (c) => bothPanels(c)
+  || (c.side === 'remote' && services.workspace?.interfaceMode?.() === 'explorer');
 
 function selPaths(ctx) {
   const p = ctx.panel;
@@ -1387,7 +1392,7 @@ export function transferQueueMode(name) {
 for (const [name, side, direction, move, background, queue] of TRANSFERS) {
   def(name, {
     side,
-    enabled: (c) => haveSel(c) && bothPanels(c) && !!c.sessionId,
+    enabled: (c) => haveSel(c) && transferPanels(c) && !!c.sessionId,
     run: (c) => transferWithOptions(c, { direction, move, background, queue }),
   });
 }

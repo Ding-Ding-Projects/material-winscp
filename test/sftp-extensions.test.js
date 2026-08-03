@@ -902,6 +902,16 @@ test('SFTP extended requests against a real server', async (t) => {
     } finally { await srv.close(); }
   });
 
+  await t.test('does not label a SHA-384 request as a SHA-256 shell checksum', async () => {
+    const srv = await startRawSftpServer({ extensions: [] });
+    try {
+      const { adapter } = await connectAdapter(srv);
+      await assert.rejects(() => adapter.checksum('/f', 'sha384'),
+        /no usable checksum path for sha384.*MD5, SHA-1, SHA-256 and SHA-512/i);
+      await adapter.disconnect();
+    } finally { await srv.close(); }
+  });
+
   await t.test('md5-hash is used for md5 when check-file is absent', async () => {
     const digest = require('crypto').createHash('md5').update('x').digest();
     const srv = await startRawSftpServer({

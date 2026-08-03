@@ -229,6 +229,7 @@ test('unix path helpers keep WinSCP\'s exact trailing-slash rules', () => {
   // An empty path stays empty: turning "" into "/" would make an unknown
   // directory look like the root.
   assert.strictEqual(T.includeTrailingSlash(''), '');
+  assert.strictEqual(T.includeTrailingSlash('/'), '/', 'root must not become //');
   assert.strictEqual(T.includeTrailingSlash('/a'), '/a/');
   assert.strictEqual(T.includeTrailingSlash('/a/'), '/a/');
   // The root keeps its slash.
@@ -242,6 +243,7 @@ test('unix path helpers keep WinSCP\'s exact trailing-slash rules', () => {
   assert.ok(T.isChildPath('/a', '/a/b'));
   assert.ok(T.isChildPath('/a', '/a'));
   assert.ok(!T.isChildPath('/a', '/ab/c'));
+  assert.ok(T.isChildPath('/', '/child'), 'root must contain root-relative children');
 
   assert.strictEqual(T.extractFileDir('/a/b'), '/a');
   assert.strictEqual(T.extractFileDir('/a'), '/');
@@ -257,6 +259,7 @@ test('unix path helpers keep WinSCP\'s exact trailing-slash rules', () => {
 });
 
 test('expandFileName resolves one level of ".." and nothing more', () => {
+  assert.strictEqual(T.expandFileName('sub', '/'), '/sub');
   assert.strictEqual(T.expandFileName('sub', '/a/b'), '/a/b/sub');
   assert.strictEqual(T.expandFileName('..', '/a/b/c'), '/a/b');
   assert.strictEqual(T.expandFileName('/abs', '/a/b'), '/abs');

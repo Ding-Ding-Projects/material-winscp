@@ -468,6 +468,12 @@ test('numeric preference edits normalize the visible value before persistence', 
   assert.deepEqual(schema.normalizeNumberInput(control, 'not-a-number'), { ui: 1, stored: 1000 });
 });
 
+test('the Preferences writer validates slider commits, not just number changes', async () => {
+  const source = require('fs').readFileSync(require('path').resolve(__dirname, '../design/renderer/ui/dialogs/preferences.js'), 'utf8');
+  assert.match(source, /control\.type === 'number' \|\| control\.type === 'slider'/);
+  assert.match(source, /normalizeNumberInput\(control, value\)\.stored/);
+});
+
 test('numeric controls reject invalid ranges and out-of-range defaults', async () => {
   const { schema } = await load();
   const result = schema.validateSchema({ pages: [{

@@ -48,7 +48,10 @@ const { getPartialFileExtLen } = require('./remotefiles');
 /** Adds a trailing slash unless there is one — and never turns "" into "/". */
 function includeTrailingSlash(p) {
   const s = String(p === undefined || p === null ? '' : p);
-  return (s !== '' && !s.endsWith('/')) ? s + '/' : s;
+  // Root already is the separator. Returning "//" makes it fail as the
+  // parent of every child and doubles separators when joining root-relative
+  // paths.
+  return (s !== '' && s !== '/' && !s.endsWith('/')) ? s + '/' : s;
 }
 
 /** Strips a trailing slash, keeping "/" for the root. */

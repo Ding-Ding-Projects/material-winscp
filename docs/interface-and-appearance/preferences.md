@@ -108,6 +108,13 @@ successful settings.
   process, including persistence and live queue prompting.
 - `npm test` is the required full regression suite before integration.
 
+Numeric controls have one persistence validation seam. Number fields normalize
+on change and sliders commit on every input, but both paths pass through the
+Preferences writer, which rejects non-finite values and clamps the UI value to
+the declared range before writing the stored (scaled, when applicable) value.
+This also protects the main-process consumer from synthetic or programmatic
+renderer events.
+
 ## Security and accessibility
 
 Pending values are not secrets and remain subject to the normal atomic config

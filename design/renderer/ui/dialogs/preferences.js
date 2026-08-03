@@ -36,6 +36,7 @@ import { registerDialog, registerCommand, funnySlider } from '../../app.js';
 import {
   PAGES, orderedPages, pageById, flattenControls, renderControl, localized,
   describeValue, matchPreferences, matchesByPage, getAt, searchFieldsFor, isPending,
+  normalizeNumberInput,
 } from './prefpages.js';
 import { createCopyParamsFrame, createPresetList, openCopyParamPreset } from './copyparams.js';
 import { createEditorList } from './editorpreferences.js';
@@ -955,6 +956,13 @@ export function createPreferences(opts = {}) {
   }
 
   async function writeControl(control, value, page, repaint) {
+    // Number inputs normalize themselves on change, but range sliders commit
+    // on every input event. Keep this seam authoritative so every numeric
+    // control, including a synthetic/programmatic slider event, persists only
+    // a finite value inside the schema's UI range.
+    if (control.type === 'number' || control.type === 'slider') {
+      value = normalizeNumberInput(control, value).stored;
+    }
     const label = revisionLabel(control, value);
     try {
       await prefs.set(control.key, value, label);

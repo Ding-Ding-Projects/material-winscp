@@ -21,6 +21,7 @@ files any of it applies to.
 | [file-find.md](file-find.md) | Streaming file search, cancellation, masks and zero-result limits. |
 | [command-palette.md](command-palette.md) | The persisted keyboard palette: every registered command, Preferences destinations, regex search and exact setting teleport. |
 | [explorer-properties-dispatch.md](explorer-properties-dispatch.md) | Explorer-side dispatch and capability context for local and remote file properties. |
+| [explorer-transfers.md](explorer-transfers.md) | Remote copy and move reachability in the single-panel Explorer interface. |
 | [drag-drop.md](drag-drop.md) | Safe drag/drop effects, Explorer targets, queue drops and refusal conditions. |
 | [generate-url-ipv6-escaping.md](generate-url-ipv6-escaping.md) | URI-safe escaping and round-tripping for scoped IPv6 hosts. |
 

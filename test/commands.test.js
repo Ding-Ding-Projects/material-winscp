@@ -258,6 +258,27 @@ test('commandState is stable for an unknown name', () => {
   assert.match(st.reason, /not a WinSCP action/);
 });
 
+test('Explorer mode keeps remote downloads reachable without a second panel', () => {
+  const previous = C.services.workspace;
+  C.services.workspace = { interfaceMode: () => 'explorer' };
+  const panel = {
+    path: () => '/remote', pathOf: (entry) => `/remote/${entry.name}`,
+    sessionInfo: () => ({ id: 'session-1', connected: true, caps: {} }),
+  };
+  const over = {
+    side: 'remote', panel, other: null, sessionId: 'session-1',
+    connected: true, selection: [{ name: 'report.txt', type: 'file' }],
+  };
+  try {
+    for (const name of ['RemoteCopyAction', 'RemoteMoveAction']) {
+      const cmd = C.getCommand(name);
+      assert.equal(cmd._spec.enabled(C.makeContext(cmd, over)), true);
+    }
+  } finally {
+    C.services.workspace = previous;
+  }
+});
+
 test('ShowHiddenFilesAction is unavailable without a workspace to update', () => {
   const state = C.commandState('ShowHiddenFilesAction');
   assert.equal(state.enabled, false);

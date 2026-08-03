@@ -83,6 +83,9 @@ a new read instead of presenting stale entries.
 
 Directory-change cache keys use a delimiter boundary. Clearing `/a` does not
 clear `/ab`, and clearing target `/var/data` does not clear `/var/database`.
+The root path remains exactly `/` when a trailing slash is added, so root
+subtree invalidation and root-relative path joins do not acquire a doubled
+separator.
 An empty path is treated as invalid rather than as a subtree prefix, so a
 malformed invalidation cannot clear every cached directory.
 

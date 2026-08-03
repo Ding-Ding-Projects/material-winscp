@@ -2139,7 +2139,16 @@ class SftpAdapter extends Adapter {
     if (!this.caps.exec) {
       throw new Error('The server offers no checksum extension and this account has no shell access');
     }
-    const tool = alg === 'md5' ? 'md5sum' : alg === 'sha1' ? 'sha1sum' : alg === 'sha512' ? 'sha512sum' : 'sha256sum';
+    const shellTools = {
+      md5: 'md5sum',
+      sha1: 'sha1sum',
+      sha256: 'sha256sum',
+      sha512: 'sha512sum',
+    };
+    const tool = shellTools[alg];
+    if (!tool) {
+      throw new Error(`The server offers no usable checksum path for ${algorithm}; shell fallback supports MD5, SHA-1, SHA-256 and SHA-512`);
+    }
     const res = await this.transport.exec(`${tool} -- ${shellQuote(target)}`);
     if (res.code !== 0) throw new Error(`${tool} failed: ${(res.stderr || '').trim() || 'exit code ' + res.code}`);
     const hex = /^([0-9a-f]+)\s/i.exec(res.stdout.trim());

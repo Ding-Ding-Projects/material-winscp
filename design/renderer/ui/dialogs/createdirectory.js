@@ -169,7 +169,7 @@ registerDialog('createdirectory', ({ props, close }) => {
 
   async function create() {
     const path = targetPath();
-    if (!path) return;
+    if (!path) return false;
     try {
       const created = local
         ? await ops.fs.localMkdir(path)
@@ -200,9 +200,15 @@ registerDialog('createdirectory', ({ props, close }) => {
       notify.success(tx('cdCreated', finalPath));
       announce(t('createdMsg', finalPath));
       props.onCreated?.(finalPath);
+      return true;
     } catch (err) {
       notify.error(t('createDirTitle'), tx('cdFailed', err.message));
+      return false;
     }
+  }
+
+  function submitAndClose() {
+    create().then((created) => { if (created) close('action'); });
   }
 
   return {
@@ -214,7 +220,8 @@ registerDialog('createdirectory', ({ props, close }) => {
       {
         label: t('ok'), kind: 'filled', autofocus: true,
         ref: (btn) => { okButton = btn; updatePreview(); },
-        onSelect: () => { create(); close(); },
+        // Keep the form available for retry while the asynchronous operation runs.
+        onSelect: () => { submitAndClose(); return true; },
       },
     ],
   };
