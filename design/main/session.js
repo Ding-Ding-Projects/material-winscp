@@ -702,6 +702,12 @@ class Session extends EventEmitter {
     const o = options || {};
     this._closing = true;
     this._connectGeneration++;
+    // A session close owns the foreground Terminal as well as its adapter.
+    // Cancel before tearing the adapter down so an active operation cannot
+    // keep running against a disconnected session or leave its prompt open.
+    if (this.__terminal && typeof this.__terminal.cancelOperation === 'function') {
+      this.__terminal.cancelOperation();
+    }
     if (this._connectPromise) this._connectPromise.catch(() => undefined);
     if (this._reconnect.timer) { clearTimeout(this._reconnect.timer); this._reconnect.timer = null; }
     this._cancelPrompts('disconnected');

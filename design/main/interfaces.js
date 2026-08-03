@@ -2467,10 +2467,13 @@ function openFolderOrWorkspace(stored, name, options) {
   const mode = o.mode ? checkInterface(o.mode) : COMMANDER;
   const all = getFolderOrWorkspace(stored, name);
   const usable = all.filter((data) => supportedSession(mode, data));
-  if (o.checkMaxSessions && typeof o.maxSessions === 'number' && all.length > o.maxSessions) {
+  // The ceiling applies to tabs this interface can create, not members it
+  // must skip. Otherwise an Explorer workspace full of local-local entries
+  // can refuse a valid remote tab before the capability filter takes effect.
+  if (o.checkMaxSessions && typeof o.maxSessions === 'number' && usable.length > o.maxSessions) {
     return {
       ok: false,
-      reason: `the workspace has ${all.length} sessions and the limit is ${o.maxSessions}`,
+      reason: `the workspace has ${usable.length} sessions and the limit is ${o.maxSessions}`,
       sessions: [],
     };
   }

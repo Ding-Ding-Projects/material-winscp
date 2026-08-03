@@ -61,6 +61,17 @@ test('disconnect clears the Terminal cache owned by that session', async () => {
   assert.equal(terminal.changesCache.isEmpty, true);
 });
 
+test('disconnect cancels an active Terminal operation before closing the adapter', async () => {
+  const session = new Session({ protocol: 'sftp', hostName: 'cancel.example' }, { emit() {} });
+  const terminal = terminalFor(session);
+  let cancelled = 0;
+  terminal.cancelOperation = () => { cancelled++; return true; };
+
+  await session.disconnect({ keepOpen: true });
+
+  assert.equal(cancelled, 1);
+});
+
 test('a close event from a replaced adapter cannot take down the new adapter', () => {
   const session = new Session({ protocol: 'sftp', hostName: 'race.example' }, { emit() {} });
   const oldAdapter = new EventEmitter();

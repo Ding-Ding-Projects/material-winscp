@@ -65,6 +65,9 @@ covered by [version history](../version-history/).
   appears anywhere in the stored record.
 - Restore-with-failures is tested to assert failed sessions produce disconnected
   tabs rather than being dropped.
+- Workspace restore applies the requested interface's support filter before
+  constructing tabs; Explorer therefore skips local-local members instead of
+  creating unusable sessions.
 
 ## Suggested articles
 

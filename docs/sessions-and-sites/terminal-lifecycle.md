@@ -24,6 +24,12 @@ WinSCP's parent progress chain and prevents an inner transfer helper from
 unwinding while the outer batch continues with later files. The scopes are
 still stopped individually, so each emits its own single completion snapshot.
 
+Session shutdown owns that foreground operation too: `Session.disconnect()`
+asks the attached Terminal to cancel before it tears down the adapter. This
+prevents a close or reconnect from leaving progress running against a dead
+connection or leaving an operation-owned prompt unresolved. The cancellation
+is best-effort and does not change the adapter cleanup result.
+
 Prompts are refusal-safe. A dismissed or malformed answer chooses the safest
 available answer; an empty answer set becomes cancellation. Security prompts
 that are refused or cancelled never schedule an automatic reconnect.

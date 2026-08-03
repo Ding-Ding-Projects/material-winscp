@@ -47,7 +47,8 @@ they are handled:
    `invalidCharsReplacement` and the change is reported, not silent.
 2. **Invalid characters** — `< > : " | ? *` and control bytes are legal on POSIX
    servers and illegal here. `replaceInvalidChars` (default `true`) substitutes
-   them; disabling it makes the transfer fail loudly instead.
+   them; disabling it makes the transfer fail loudly instead, including names
+   with a trailing dot or space and reserved device names such as `CON.txt`.
 3. **Trailing dots and spaces** — legal remotely, silently stripped by Windows.
    The adapter detects the mismatch after writing and reports it rather than
    leaving the user with a file whose name is not what they asked for.

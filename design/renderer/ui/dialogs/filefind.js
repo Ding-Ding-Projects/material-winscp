@@ -19,12 +19,10 @@
 //     generator inside main; it does not merely stop rendering. Closing the
 //     window cancels too, so a forgotten search cannot keep a session busy.
 //
-// Two mismatches in the current fs:find bridge are compensated for here rather
-// than papered over — see startSearch(): main forwards `text`, `recursive` and
-// `maxResults` to find.js, which reads `grep`, `maxDepth` and `limit`, so a
-// content search would come back unfiltered and a limit would be ignored. Each
-// hit is therefore verified in this window before it is shown, and the limit is
-// enforced by cancelling. Both are documented in the report for that build.
+// Main forwards the native find.js option names (`grep`, `maxDepth` and
+// `limit`) over fs:find. The renderer still verifies returned content hits to
+// provide a line preview and to reject stale callbacks, while main enforces
+// the depth and result bound in the streaming walk.
 
 import {
   h, icon, uid, clear, appearanceTarget, announce, layer, focusMemory, copyText, oneLine,
@@ -463,9 +461,9 @@ export function openFileFind(props = {}) {
   /**
    * Confirm a hit really contains the text, and remember which line.
    * The bridge cannot pass find.js its `grep` option today, so a content
-   * search that trusted main would return every mask match. Reading the
-   * candidate back is slower but truthful, and a file too large to read is
-   * marked unverified instead of being claimed as a match.
+   * search is already filtered by main. Reading the candidate back supplies a
+   * line preview and keeps stale-result safeguards; a file too large to read is
+   * marked unverified.
    */
   async function verifyContent(hit) {
     if (!matcher || hit.type === 'dir') return true;
@@ -589,11 +587,11 @@ export function openFileFind(props = {}) {
         sessionId: props.sessionId || undefined,
         root,
         mask,
-        text: textInput.value || undefined,
+        grep: textInput.value || undefined,
         regex: regexCheck.input.checked,
         caseSensitive: caseCheck.input.checked,
-        recursive: recursiveCheck.input.checked,
-        maxResults: Math.max(1, Number(limitInput.value) || DEFAULT_LIMIT),
+        maxDepth: recursiveCheck.input.checked ? Infinity : 0,
+        limit: Math.max(1, Number(limitInput.value) || DEFAULT_LIMIT),
       });
       await pushHistory('remoteDirectory', root);
       if (mask) await pushHistory('selectMask', mask);

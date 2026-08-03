@@ -1421,11 +1421,11 @@ class Ipc {
       const cid = optStr(r.correlationId, 'correlationId', 64) || `find-${Date.now().toString(36)}`;
       const finder = mod.find(adapter, root, stripUndefined({
         mask: optStr(r.mask, 'mask', LIMITS.small) || undefined,
-        text: optStr(r.text, 'text', LIMITS.small) || undefined,
+        grep: optStr(r.grep, 'grep', LIMITS.small) || undefined,
         regex: r.regex === undefined ? undefined : bool(r.regex, 'regex'),
         caseSensitive: r.caseSensitive === undefined ? undefined : bool(r.caseSensitive, 'caseSensitive'),
-        recursive: r.recursive === undefined ? undefined : bool(r.recursive, 'recursive'),
-        maxResults: r.maxResults === undefined ? 10000 : num(r.maxResults, 'maxResults', 1, 200000),
+        maxDepth: r.maxDepth === undefined ? Infinity : num(r.maxDepth, 'maxDepth', 0, 100000),
+        limit: r.limit === undefined ? 10000 : num(r.limit, 'limit', 1, 200000),
       }));
 
       this._finders.set(cid, finder);

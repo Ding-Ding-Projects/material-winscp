@@ -421,7 +421,8 @@ function displayableStr(bytes) {
  *  * TOKEN_REPLACEMENT encodes it as '%XX', which is reversible — this is what
  *    the "replace invalid characters" transfer setting uses, and why a name
  *    that already contains a valid '%XX' token is left alone;
- *  * NO_REPLACEMENT refuses instead, throwing for a name with a separator.
+ *  * NO_REPLACEMENT refuses instead, throwing for any name Windows cannot
+ *    store faithfully.
  *
  * Two Windows-isms are handled after the substitution: a trailing space or dot
  * would be silently trimmed by the file system, so it is encoded; and a
@@ -434,7 +435,9 @@ function validLocalFileName(fileName, invalidCharsReplacement, tokenizibleChars,
   const invalid = localInvalidChars === undefined ? LOCAL_INVALID_CHARS : localInvalidChars;
 
   if (replacement === NO_REPLACEMENT) {
-    if (/[\\/]/.test(name)) {
+    const last = name[name.length - 1];
+    if ([...name].some((ch) => invalid.indexOf(ch) >= 0 || ch.charCodeAt(0) < 32) ||
+        last === ' ' || last === '.' || isReservedName(name)) {
       throw new Error(`"${fileName}" is not valid filename.`);
     }
     return name;

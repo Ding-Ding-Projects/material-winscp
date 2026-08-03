@@ -65,6 +65,14 @@ const HOSTKEYS = {
   dsa: ['ssh-dss'],
 };
 
+/** Apply SiteAdvanced's send buffer without allowing malformed imports to
+ * poison the ssh2 connection options. */
+function applySshSendBuffer(cfg, value) {
+  const sendBuf = Number(value);
+  if (Number.isFinite(sendBuf) && sendBuf > 0) cfg.highWaterMark = sendBuf;
+  return cfg;
+}
+
 /**
  * Expand a WinSCP preference list into ssh2 names. Entries after the 'WARN'
  * marker are the ones WinSCP would stop and warn about; with no channel to ask
@@ -662,6 +670,11 @@ class SshTransport extends EventEmitter {
         });
       },
     };
+
+    // SiteAdvanced's SSH buffer setting maps to ssh2's parser stream buffer.
+    // Keep the default when an imported/raw value is invalid; the connection
+    // must never fail just because an old profile contains a bad number.
+    applySshSendBuffer(cfg, s.sendBuf);
 
     if (s.agentFwd && !s.tryAgent) {
       this.log('warn', 'Agent forwarding needs the agent enabled; forwarding will be inactive');
@@ -2206,6 +2219,7 @@ module.exports = {
   openSocket,
   agentPath,
   signedSeconds,
+  applySshSendBuffer,
   CIPHERS,
   KEXES,
   HOSTKEYS,

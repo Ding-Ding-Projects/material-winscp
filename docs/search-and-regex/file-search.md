@@ -26,6 +26,14 @@ it, alongside the dedicated mask editor. Plain text and mask syntax are the
 defaults; regex is an explicit opt-in, and applying a builder pattern writes it
 back to the mask field so the next search uses exactly what was shown.
 
+## IPC reachability
+
+The FileFind renderer calls `window.api.find`, which crosses `fs:find` with the
+same option names consumed by `design/main/find.js`: `grep` for containing-text
+searches, `maxDepth` (`0` for the root only, or unlimited when recursion is
+enabled), and `limit` for the result bound. This keeps filtering and stopping in
+the streaming main-process walk.
+
 ## Behaviour worth knowing
 
 - **Results stream in.** The list fills as the walk proceeds; there is no wait
@@ -41,9 +49,9 @@ back to the mask field so the next search uses exactly what was shown.
   the same operation is also available from the context menu.
 - **It uses the ordinary adapter listing path**, so it obeys the protocol's
   capabilities, the site's timeouts and any active session limits.
-- **It searches names, not contents.** Content search would mean downloading
-  every file, which is a very different and much more expensive feature; the
-  dialog says so rather than leaving people to discover it.
+- **Containing-text search is streamed in main.** Matching files are filtered
+  while they are read, with binary and oversized-file safeguards; the renderer
+  may read a returned hit again only to show a line preview.
 
 ## Failure modes
 

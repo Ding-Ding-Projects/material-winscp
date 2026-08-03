@@ -167,11 +167,16 @@ test('validLocalFileName substitutes, tokenizes and defuses reserved names', () 
     C.validLocalFileName('100% done', C.TOKEN_REPLACEMENT, tokenizible, C.LOCAL_INVALID_CHARS),
     '100% done');
 
-  // No replacement at all: a separator is refused rather than mangled.
+  // No replacement at all: every name Windows cannot store faithfully is refused.
   assert.throws(
     () => C.validLocalFileName('a/b', C.NO_REPLACEMENT, '', C.LOCAL_INVALID_CHARS),
     /not valid filename/);
-  assert.equal(C.validLocalFileName('a:b', C.NO_REPLACEMENT, '', C.LOCAL_INVALID_CHARS), 'a:b');
+  for (const name of ['a:b', 'name.', 'name ', 'CON.txt', 'line\u0001break']) {
+    assert.throws(
+      () => C.validLocalFileName(name, C.NO_REPLACEMENT, '', C.LOCAL_INVALID_CHARS),
+      /not valid filename/);
+  }
+  assert.equal(C.validLocalFileName('safe.txt', C.NO_REPLACEMENT, '', C.LOCAL_INVALID_CHARS), 'safe.txt');
 });
 
 // ---------------------------------------------------------------------------

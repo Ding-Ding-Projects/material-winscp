@@ -30,3 +30,9 @@ test('FileFind makes result export keyboard reachable', () => {
 test('FileFind disables the regex builder while a search is running', () => {
   assert.match(source, /limitInput, editMaskButton, regexMaskButton,/);
 });
+
+test('FileFind reaches native grep, depth, and result limit options', () => {
+  assert.match(source, /grep: textInput\.value \|\| undefined/);
+  assert.match(source, /maxDepth: recursiveCheck\.input\.checked \? Infinity : 0/);
+  assert.match(source, /limit: Math\.max\(1, Number\(limitInput\.value\) \|\| DEFAULT_LIMIT\)/);
+});

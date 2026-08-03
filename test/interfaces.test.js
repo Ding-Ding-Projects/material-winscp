@@ -1539,6 +1539,22 @@ test('Explorer skips the local-local members of a workspace and may end with non
   assert.equal(I.openFolderOrWorkspace([pair], 'WS', { mode: COMMANDER }).sessions.length, 1);
 });
 
+test('Explorer workspace limits count only members it can actually open', () => {
+  const local = SD.defaultSessionData('WS/0000');
+  local.isWorkspace = true;
+  local.localDirectory = 'C:\\a';
+  local.otherLocalDirectory = 'C:\\b';
+  const remote = SD.defaultSessionData('WS/0001');
+  remote.isWorkspace = true;
+  remote.hostName = 'example.test';
+  const opened = I.openFolderOrWorkspace([local, remote], 'WS', {
+    mode: EXPLORER, checkMaxSessions: true, maxSessions: 1,
+  });
+  assert.equal(opened.ok, true);
+  assert.equal(opened.sessions.length, 1);
+  assert.equal(opened.skipped, 1);
+});
+
 test('an empty window saves no workspace on close', () => {
   assert.deepEqual(I.autoSaveWorkspaceOnClose({ autoSaveWorkspace: true, hasSession: false }),
     { save: false, reason: 'no session is open' });

@@ -16,8 +16,14 @@ const net = require('net');
 
 const { Server, utils, Client } = require('ssh2');
 const ext = require('../design/main/protocols/sftp-extensions');
-const { SftpAdapter, SshTransport, signedSeconds } = require('../design/main/protocols/sftp');
+const { SftpAdapter, SshTransport, signedSeconds, applySshSendBuffer } = require('../design/main/protocols/sftp');
 const { generateKeyPair } = require('./helpers/sftp-server');
+
+test('SiteAdvanced sendBuf reaches ssh2 highWaterMark and rejects invalid imports', () => {
+  assert.equal(applySshSendBuffer({}, 131072).highWaterMark, 131072);
+  assert.deepEqual(applySshSendBuffer({}, 0), {});
+  assert.deepEqual(applySshSendBuffer({}, 'not-a-number'), {});
+});
 
 const P = ext.SFTP_PACKET;
 

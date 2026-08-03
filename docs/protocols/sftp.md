@@ -35,6 +35,7 @@ under **Site → Advanced → SSH** and **→ SFTP**.
 | `authGSSAPI`, `authGSSAPIKEX`, `gssapiFwdTGT` | `false` | Kerberos/GSSAPI. |
 | `publicKeyFile`, `passphrase` | `''` | Private key and its passphrase. |
 | `sshNoUserAuth` | `false` | Skip the authentication phase entirely (rare servers). |
+| `sendBuf` | `262144` | SSH parser stream buffer in bytes. Larger values can reduce backpressure on high-throughput links; invalid or non-positive values use ssh2's default. |
 
 ### SFTP layer
 

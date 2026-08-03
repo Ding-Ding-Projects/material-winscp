@@ -71,6 +71,15 @@ export function validateLoginSite(site = {}) {
   return null;
 }
 
+/** Keep the session-open error contract useful across old and new bridges. */
+export function loginErrorMessage(resultOrError, fallback = 'The session could not be opened.') {
+  const error = resultOrError?.error ?? resultOrError;
+  if (typeof error === 'string' && error.trim()) return error;
+  if (error && typeof error.message === 'string' && error.message.trim()) return error.message;
+  if (resultOrError instanceof Error && resultOrError.message) return resultOrError.message;
+  return fallback;
+}
+
 /** Return every site below a folder, including sites in nested folders. */
 export function folderSites(node) {
   const sites = [];
@@ -751,7 +760,7 @@ export function createLoginPanel(opts = {}) {
       }
       notify.info(t('connecting', label), t('searchingHost'));
       const res = await call(request);
-      if (!res?.ok) throw new Error(res?.error?.message || 'The session could not be opened.');
+      if (!res?.ok) throw new Error(loginErrorMessage(res));
       forgetSecrets();
       notify.success(t('connEstablished', label), siteSummary(state.site));
       bus.emit('login:opened', res.value);
@@ -760,7 +769,7 @@ export function createLoginPanel(opts = {}) {
     } catch (err) {
       // Connection failure is information, not a decision: a persistent error
       // toast, and the dialog stays exactly as the user left it.
-      notify.error(t('loginBtn'), err.message || String(err));
+      notify.error(t('loginBtn'), loginErrorMessage(err));
       return null;
     } finally {
       forgetSecrets();
