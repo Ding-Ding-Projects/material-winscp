@@ -11,10 +11,18 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const {
+  S3Adapter,
   signRequestV4, createCanonicalRequest, createStringToSign, deriveSigningKey,
   canonicalQuery, canonicalHeaders, uriEncode, amzDate, sha256hex,
   parseAwsIni, parseXml, EMPTY_SHA256,
 } = require('../design/main/protocols/s3');
+
+test('S3 max-keys is normalized to an integer accepted by the service', () => {
+  const adapter = new S3Adapter({ s3MaxKeys: 2.9 });
+  assert.equal(adapter._maxKeys(), 2);
+  adapter.session.s3MaxKeys = 0.5;
+  assert.equal(adapter._maxKeys(), 1);
+});
 
 // ---------------------------------------------------------------------------
 // The signing key derivation vector from the AWS "Signature Version 4 signing

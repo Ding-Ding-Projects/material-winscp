@@ -13,6 +13,10 @@ Last reviewed against `ssh2` 1.17.0 and `basic-ftp` 5.3.1.
 
 ## SSH / SFTP (`ssh2` vs PuTTY)
 
+The server-side `copy-data` fallback now removes its exclusive destination when
+the copy request fails, preventing a partial remote file from being mistaken
+for a completed copy. The failure is still returned to the caller unchanged.
+
 | Gap | WinSCP option affected | Status | Consequence today |
 |---|---|---|---|
 | **GSSAPI / Kerberos** authentication and key exchange | `authGSSAPI`, `authGSSAPIKEX`, `gssapiFwdTGT`, `gssLibList` | ⬜ Not available | `ssh2` implements no GSSAPI mechanism. The flags are accepted, a warning is logged, and the remaining authentication methods are tried. Single-sign-on against a Kerberos realm does not work. |
@@ -151,6 +155,7 @@ verifies the SigV4 signature of every request (`test/e2e-s3.test.js`).
 | Gap | WinSCP option affected | Status | Consequence today |
 |---|---|---|---|
 | **Resuming a transfer** | `resumeSupport`, `parallelTransfers` | ➖ Matches the original | Every `PutObject` replaces the whole object, and a multipart part cannot be appended to. WinSCP answers `false` to `fcResumeSupport` and `fcParallelFileTransfers` for S3, and `caps.resume` is `false` here for the same reason. An interrupted upload restarts; a large one still goes out as a real multipart upload, and a failed part triggers `AbortMultipartUpload` so no orphan parts are billed. |
+| **Fractional listing page size** | `max-keys` | ✅ Resolved | S3 accepts only an integer page size. The adapter floors fractional site values (with a minimum of one) before sending `max-keys`, avoiding a service-side request rejection. |
 | **Server-side copy above 5 GiB** | `CopyObject` / multipart copy | ✅ Resolved | The >5 GiB path now uses the existing bounded part-size calculation for contiguous `UploadPartCopy` ranges, then completes the multipart copy. The regression is secret-free and mocks only the request seam; a live 5 GiB fixture remains untested. |
 | **Plain-HTTP endpoints depend on the shared `ftps` field** | Encryption | 🚧 Partial | WinSCP gives S3 its own `Ftps` default (implicit TLS) and derives the port from it. Our `SESSION_DEFAULTS` carries one `ftps: 'none'` for every protocol, so the adapter treats a site as plaintext only when it says `ftps: 'none'` **and** is not on port 443 — otherwise an S3 site left at its defaults would silently drop to HTTP. Closing this properly means a per-protocol default in `defaults.js` plus the Encryption control on the S3 site page. |
 | **Setting a modification time** | `preserveTime` | ➖ By design | `Last-Modified` is assigned by S3. |

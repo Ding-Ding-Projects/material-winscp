@@ -892,7 +892,9 @@ class S3Adapter extends Adapter {
     const v = this.session.s3MaxKeys;
     if (v === undefined || v === null || v === '' || v === 'auto') return null;
     const n = Number(v);
-    return Number.isFinite(n) && n > 0 ? Math.min(n, 1000) : null;
+    // S3's max-keys parameter is an integer.  Passing a fractional value is
+    // rejected by AWS and several compatible endpoints instead of rounding it.
+    return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 1000) || 1 : null;
   }
 
   /**
