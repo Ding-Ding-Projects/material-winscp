@@ -19,3 +19,18 @@ test('keep-up-to-date controls expose stable start/stop state while awaiting IPC
     action: 'stop', busy: false, labelKey: 'txKutdStop',
   });
 });
+
+test('keep-up-to-date tolerates queue errors without an item', async () => {
+  const { Watcher } = require('../design/main/sync');
+  const { EventEmitter } = require('node:events');
+  const queue = new EventEmitter();
+  const adapter = { normalize: (p) => p, join: (a, b) => `${a}/${b}`, list: async () => [], watch: () => ({ close() {} }) };
+  const watcher = new Watcher(adapter, '/local', adapter, '/remote', queue);
+  const errors = [];
+  watcher.on('error', (error) => errors.push(error));
+  watcher.start();
+  assert.doesNotThrow(() => queue.emit('item-error', new Error('connection lost')));
+  assert.equal(watcher.running, true);
+  watcher.stop();
+  assert.deepEqual(errors, []);
+});

@@ -18,6 +18,10 @@ on the drive list.
 Long UNC spellings (`\\\\?\\UNC\\server\\share\\...`) and slash-separated
 UNC input are normalized to the same canonical tree path.
 
+Windows tree-cache and selection lookups are case-insensitive. A refresh that
+changes only the casing of a directory name therefore updates the existing
+node instead of creating a duplicate or losing the selected path.
+
 ## Accessibility and refresh
 
 The tree exposes `role="tree"` and `role="treeitem"` semantics, visible focus,
@@ -39,3 +43,6 @@ bypass filesystem permissions.
 long-path normalization and slash normalization. The full renderer smoke is
 still environment-dependent for UNC shares: this repository does not assume a
 particular network server or share exists on the test host.
+
+The case-insensitive refresh/selection regression is covered by
+`test/dirview.test.js`.

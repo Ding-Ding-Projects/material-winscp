@@ -62,6 +62,7 @@ a server in another timezone does not make every file look changed.
 | Case-insensitive local vs case-sensitive remote | `File.txt` and `file.txt` cannot coexist locally. The pair is reported as a conflict and skipped, never silently merged. | Yes |
 | Symlinks | Compared as links unless `followDirectorySymlinks` is on. A link and a real file with the same name are a conflict, not a match. | Yes |
 | Connection lost mid-run | Completed items stand; the rest return to the checklist marked pending. No partial state is hidden. | Yes |
+| Queue reports an error before an item exists | The watcher keeps running and surfaces the original connection/transport error; cleanup does not replace it with a secondary missing-item error. | Yes |
 | Empty local directory, Mirror to remote with delete | Would delete everything remote. The confirmation states the count and the fact that the source is empty, in those words. | **Only from a backup** |
 
 ## Security considerations
@@ -92,6 +93,8 @@ a server in another timezone does not make every file look changed.
   Mirror mode and the delete option are set.
 - Interruption is tested by failing the adapter mid-run and asserting that
   completed and pending items are reported accurately.
+- Keep-up-to-date queue cleanup is tested with an item-less queue error, proving
+  a transport failure cannot crash the watcher while it removes in-flight state.
 
 ## Suggested articles
 

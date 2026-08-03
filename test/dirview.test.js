@@ -1307,6 +1307,19 @@ test('a Windows tree uses backslashes and drive roots', () => {
   assert.strictEqual(tree.findNodeToPath('C:\\Users').name, 'Users');
 });
 
+test('a Windows tree treats case-only refreshes as the same cached node and selection path', () => {
+  const tree = new dv.DirectoryTree({ unixPath: false, rootName: 'C:' });
+  tree.loadPath('C:\\Work');
+  tree.updatePath('C:\\Work', [{ name: 'Reports', type: 'dir' }]);
+  tree.setSelectedPath('c:\\work\\reports');
+
+  tree.updatePath('c:\\work', [{ name: 'reports', type: 'dir' }]);
+
+  assert.ok(tree.findNodeToPath('C:\\WORK\\REPORTS'));
+  assert.strictEqual(tree.findNodeToPath('C:\\Work').children.length, 1);
+  assert.deepStrictEqual(tree.pendingDeletes, []);
+});
+
 /* ================================================================== */
 /* drive info                                                          */
 /* ================================================================== */

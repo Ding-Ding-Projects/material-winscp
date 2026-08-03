@@ -15,6 +15,7 @@ files any of it applies to.
 | [script-runner.md](script-runner.md) | Batch scripting, `/script` and `/command` execution, exit status, and secure XML output. |
 | [command-line.md](command-line.md) | The `/` and `-` switch parser shared by startup and second-instance launches. |
 | [cli.md](cli.md) | The headless `winscp` entry point, console-compatible commands, and drag/drop simulation. |
+| [file-find.md](file-find.md) | Streaming file search, cancellation, masks and zero-result limits. |
 | [command-palette.md](command-palette.md) | The persisted keyboard palette: every registered command, Preferences destinations, regex search and exact setting teleport. |
 | [explorer-properties-dispatch.md](explorer-properties-dispatch.md) | Explorer-side dispatch and capability context for local and remote file properties. |
 

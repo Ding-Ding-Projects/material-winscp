@@ -632,6 +632,10 @@ class WindowsIntegration {
   }
 
   removeShortcut(spec) {
+    // Shortcut files are a Windows shell integration detail. Do not let a
+    // non-Windows uninstall derive a path and unlink a user file ending in
+    // `.lnk` merely because cleanup was invoked.
+    if (!IS_WIN) return false;
     const folder = this.specialFolder(spec.folder || 'desktop');
     const file = path.join(folder, `${validLocalFileName(spec.name)}.lnk`);
     try { fs.unlinkSync(file); return true; } catch { return false; }

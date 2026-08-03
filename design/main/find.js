@@ -139,6 +139,11 @@ async function grepFile(adapter, path, size, matcher, options) {
  */
 async function* search(adapter, root, userOptions = {}) {
   const options = { ...DEFAULTS, ...userOptions };
+  // A zero (or negative) result limit is an explicit request for no results.
+  // Check it before normalizing the root or listing the adapter: besides
+  // avoiding one leaked match, this keeps a cancelled/empty search from
+  // starting remote work unnecessarily.
+  if (Number.isFinite(options.limit) && options.limit <= 0) return;
   const matcher = buildMatcher(options);
   const mask = new FileMask(options.mask, { caseSensitive: options.caseSensitive, root });
 

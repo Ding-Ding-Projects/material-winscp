@@ -130,8 +130,11 @@ class QueueController extends EventEmitter {
       const action = payload && payload.onceDone;
       this.reconcile({ reason: 'idle' });
       if (action && action !== 'none') {
-        const request = { action, snapshot: this.snapshot };
         this._snapshot.lastOnceDone = { action, requestedAt: Date.now() };
+        // Record the prompt before taking its snapshot. Consumers use this
+        // immutable request to render/confirm the host-owned operation; a
+        // stale snapshot makes the prompt look as if no request was made.
+        const request = { action, snapshot: this.snapshot };
         this.emit('once-done-requested', request);
       }
     };

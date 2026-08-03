@@ -146,3 +146,13 @@ test('closeOnFailure disconnects and removes the failed session', async () => {
   );
   assert.deepEqual(manager.all(), []);
 });
+
+test('exec fails closed when a stale capability flag has no implementation', async () => {
+  const session = new Session({ protocol: 'sftp', hostName: 'capability.example' }, { emit() {} });
+  session.adapter = { connected: true, protocolName: 'SFTP', caps: { exec: true } };
+
+  await assert.rejects(
+    () => session.exec('echo should-not-run'),
+    (error) => error && error.code === 'NOT_SUPPORTED' && /cannot execute remote commands/.test(error.message),
+  );
+});

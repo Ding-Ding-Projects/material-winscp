@@ -137,6 +137,20 @@ test('idle once-done is reported as a request, not a fake completed power action
   controller.close();
 });
 
+test('idle once-done prompt snapshot includes the recorded request', () => {
+  const queue = new FakeQueue();
+  const controller = new QueueController(queue);
+  let request;
+  controller.on('once-done-requested', (value) => { request = value; });
+
+  queue.emit('idle', { onceDone: 'disconnect' });
+
+  assert.equal(request.action, 'disconnect');
+  assert.equal(request.snapshot.lastOnceDone.action, 'disconnect');
+  assert.equal(request.snapshot.lastOnceDone.requestedAt, controller.snapshot.lastOnceDone.requestedAt);
+  controller.close();
+});
+
 test('TransferQueue retry requeues only failed work and leaves a second failure visible', async () => {
   const queue = new TransferQueue({ progressMs: 0, prefs: { queue: { keepDoneItemsFor: -1 } } });
   queue.add({ id: 'broken', source: '/missing', target: '/missing' });

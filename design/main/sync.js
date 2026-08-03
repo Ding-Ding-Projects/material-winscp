@@ -503,7 +503,14 @@ class Watcher extends EventEmitter {
     this.running = true;
 
     this._onDone = (view) => this._inFlight.delete(view.source);
-    this._onError = (e) => this._inFlight.delete(e.item.source);
+    // Queue error payloads can be transport-level failures without an item
+    // (for example a connection drop before a queue item is materialized).
+    // Do not let cleanup throw while handling that error, or the watcher can
+    // lose its error event and remain stuck with stale in-flight paths.
+    this._onError = (e) => {
+      const source = e && e.item && e.item.source;
+      if (source) this._inFlight.delete(source);
+    };
     this.queue.on('item-done', this._onDone);
     this.queue.on('item-error', this._onError);
 

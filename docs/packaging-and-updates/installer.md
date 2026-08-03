@@ -90,6 +90,12 @@ In `forge.config.js`, under the Squirrel maker:
   knowing if the data is sensitive — removing the app does not remove the
   history repository or the stored (encrypted) credentials.
 
+Shortcut cleanup is guarded by the host platform: `removeShortcut()` is a
+no-op off Windows. This prevents a Linux or macOS headless/uninstall path from
+deriving a `.lnk` filename under the user's home directory and deleting a
+regular file. Shortcut creation and removal therefore both require the
+Windows shell integration surface.
+
 ## Verification
 
 The installer was **built and inspected** — see [building](building.md) for the

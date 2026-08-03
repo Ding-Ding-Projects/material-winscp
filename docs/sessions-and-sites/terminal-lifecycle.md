@@ -49,6 +49,12 @@ read during the retry. Concurrent `connect()` calls share one in-flight promise;
 disconnecting invalidates that generation, cleans the adapter, and prevents a
 late result from changing the current session state.
 
+Remote command execution fails closed at the session boundary. The adapter must
+both advertise `caps.exec` and provide an `exec()` function; if either is
+missing, `Session.exec()` returns the standard `NOT_SUPPORTED` error instead of
+invoking an absent method. This protects reconnecting sessions from stale or
+partially initialized capability metadata.
+
 ## Directory-cache invalidation
 
 The session listing cache returns copies, and Terminal invalidation clears the

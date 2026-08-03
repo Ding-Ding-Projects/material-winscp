@@ -958,7 +958,10 @@ class Session extends EventEmitter {
   /** Run a remote command through the adapter. */
   async exec(command, options) {
     const a = this._requireAdapter();
-    if (!a.caps.exec) {
+    // Capabilities are advisory metadata from the adapter. Require the
+    // implementation too: a stale capability flag must fail closed with the
+    // normal unsupported-operation error, never leak a raw TypeError.
+    if (!a.caps.exec || typeof a.exec !== 'function') {
       const e = new Error(`${a.protocolName} cannot execute remote commands.`);
       e.code = 'NOT_SUPPORTED';
       throw e;

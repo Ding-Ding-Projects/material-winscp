@@ -34,6 +34,9 @@ When the queue emits `idle` with a non-`none` action, the controller emits
 `once-done-requested`. That event records what the queue requested; it does not
 claim that disconnect, suspend, or shutdown has happened. The host that owns
 those capabilities must perform and report that operation separately.
+The emitted request snapshot already contains the matching `lastOnceDone`
+record, so a prompt renderer can show the current request without racing a
+later controller update.
 
 ## Configuration choices
 

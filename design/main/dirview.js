@@ -1978,6 +1978,14 @@ class DirectoryTree {
 
   get separator() { return this.unixPath ? '/' : '\\'; }
 
+  // Windows file paths and directory names are case-insensitive. Keep the
+  // first spelling for display, but use a canonical key for cache lookups and
+  // selection guards so refreshes cannot create case-only duplicate nodes.
+  pathKey(path) {
+    const p = this.excludeTrailing(path);
+    return this.unixPath ? p : p.toLowerCase();
+  }
+
   isRootPath(path) {
     const p = String(path || '');
     if (this.unixPath) return p === '' || p === '/';
@@ -2023,7 +2031,7 @@ class DirectoryTree {
    */
   loadPath(path, file) {
     let p = this.excludeTrailing(path === '' || path == null ? (this.unixPath ? '/' : '') : path);
-    const existing = this._byPath.get(p);
+    const existing = this._byPath.get(this.pathKey(p));
     if (existing) return existing;
 
     let parent = null;
@@ -2044,7 +2052,7 @@ class DirectoryTree {
       file: file || null,
       loaded: false,
     };
-    this._byPath.set(path, node);
+    this._byPath.set(this.pathKey(path), node);
     if (parent) {
       parent.children.push(node);
       this.sortChildren(parent);
@@ -2072,7 +2080,9 @@ class DirectoryTree {
     const node = this._byPath.get(this.excludeTrailing(path));
     if (!node) return null;
     const listing = Array.isArray(files) ? files : [];
-    const seen = new Map(node.children.map((child) => [child.name, child]));
+    const seen = new Map(node.children.map((child) => [
+      this.unixPath ? child.name : child.name.toLowerCase(), child,
+    ]));
 
     for (const file of listing) {
       const name = itemFileName(file);
@@ -2080,7 +2090,7 @@ class DirectoryTree {
       if (!this.showHiddenDirs && file.hidden) continue;
       if (!this.showInaccesibleDirectories && file.isInaccesibleDirectory) continue;
 
-      const existing = seen.get(name);
+      const existing = seen.get(this.unixPath ? name : name.toLowerCase());
       if (existing) {
         existing.file = file;
         seen.delete(name);
@@ -2118,7 +2128,7 @@ class DirectoryTree {
   checkPendingDeletes() {
     let removed = 0;
     for (const path of [...this._pendingDelete]) {
-      const node = this._byPath.get(path);
+      const node = this._byPath.get(this.pathKey(path));
       if (!node) { this._pendingDelete.delete(path); continue; }
       if (this.nodeTryDelete(node, false)) { this._pendingDelete.delete(path); removed += 1; }
     }
@@ -2134,15 +2144,15 @@ class DirectoryTree {
       const i = node.parent.children.indexOf(node);
       if (i >= 0) node.parent.children.splice(i, 1);
     }
-    this._byPath.delete(node.path);
+    this._byPath.delete(this.pathKey(node.path));
     this._pendingDelete.delete(node.path);
     if (this.root === node) this.root = null;
     return true;
   }
 
   isAncestorPath(ancestor, path) {
-    const a = this.excludeTrailing(ancestor);
-    const p = this.excludeTrailing(path);
+    const a = this.pathKey(ancestor);
+    const p = this.pathKey(path);
     if (a === p) return false;
     const prefix = a.endsWith('/') || a.endsWith('\\') ? a : a + this.separator;
     return p.startsWith(prefix) || (this.unixPath && a === '/' && p.startsWith('/'));
@@ -2150,7 +2160,7 @@ class DirectoryTree {
 
   /** FindNodeToPath — the exact node for a path, or null. */
   findNodeToPath(path) {
-    return this._byPath.get(this.excludeTrailing(path)) || null;
+    return this._byPath.get(this.pathKey(path)) || null;
   }
 
   /**
@@ -2161,7 +2171,7 @@ class DirectoryTree {
   findPathNode(path) {
     let p = this.excludeTrailing(path);
     for (;;) {
-      const node = this._byPath.get(p);
+      const node = this._byPath.get(this.pathKey(p));
       if (node) return node;
       if (this.isRootPath(p) || p === '') return this.root;
       p = this.parentOf(p);
@@ -2196,10 +2206,10 @@ class DirectoryTree {
 
   /** LoadNodeState/RestoreState — re-expand what was expanded. */
   restoreExpanded(paths) {
-    const set = new Set(paths || []);
+    const set = new Set((paths || []).map((path) => this.pathKey(path)));
     let count = 0;
     for (const [path, node] of this._byPath) {
-      const expand = set.has(path);
+      const expand = set.has(this.pathKey(path));
       if (node.expanded !== expand) count += 1;
       node.expanded = expand;
     }
