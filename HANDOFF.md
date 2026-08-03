@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `b01e17a`** — Refresh in-app changelog for dialog protocol fixes
+**At commit `6e6f5e3`** — Refresh in-app changelog for unit-porting wave
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3263 run, **3262 pass, 0 fail**, 1 skipped |
-| Hand-written code | 215,098 lines across 391 files |
-| Commits | 101 on `main` |
+| Tests | 3272 run, **3271 pass, 0 fail**, 1 skipped |
+| Hand-written code | 215,438 lines across 392 files |
+| Commits | 104 on `main` |
 | Working tree | clean |
-| Remote | `origin/main` at `6881f62` — **differs from HEAD** |
+| Remote | `origin/main` at `48b7a5f` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `6e6f5e3` | 2026-08-03 | Refresh in-app changelog for unit-porting wave |
+| `3e1d057` | 2026-08-03 | Port Explorer, editor, preferences, queue, SFTP, and WinConfiguration slices |
+| `48b7a5f` | 2026-08-03 | Refresh dialog protocol handoff metadata |
 | `b01e17a` | 2026-08-03 | Refresh in-app changelog for dialog protocol fixes |
 | `8557de4` | 2026-08-03 | Harden dialogs, file search, and S3 cancellation |
 | `6881f62` | 2026-08-03 | Refresh dialog wave handoff metadata |
 | `fa7b4ce` | 2026-08-03 | Refresh in-app changelog for dialog fixes |
 | `71db2c6` | 2026-08-03 | Harden dialogs, overlays, and site navigation |
-| `461e050` | 2026-08-03 | Refresh geometry wave handoff metadata |
-| `5652951` | 2026-08-03 | Refresh in-app changelog for CLI geometry fixes |
-| `c274856` | 2026-08-03 | Harden CLI output, geometry, queue, and SCP |
 
 ## Notes from whoever worked on this last
 
