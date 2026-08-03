@@ -581,6 +581,14 @@ export function snapshotPreferenceValues(entries, read = (key) => prefs.get(key)
   return snap;
 }
 
+/** Focus the concrete editor after a command-palette jump, not only its row. */
+export function focusPreferenceControl(row) {
+  if (!row) return null;
+  const control = row.querySelector?.('input,select,textarea,button,[tabindex]:not([tabindex="-1"])') || row;
+  control.focus?.({ preventScroll: true });
+  return control;
+}
+
 export function createPreferences(opts = {}) {
   ensurePreferenceStyles();
 
@@ -829,6 +837,7 @@ export function createPreferences(opts = {}) {
       if (row) {
         row.classList.add('is-hit');
         row.scrollIntoView({ block: 'center', behavior: store.get('theme.reduceMotion') ? 'auto' : 'smooth' });
+        requestAnimationFrame(() => focusPreferenceControl(row));
         setTimeout(() => row.classList.remove('is-hit'), 2600);
       }
       hitKey = null;

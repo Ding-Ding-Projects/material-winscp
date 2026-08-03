@@ -9,8 +9,8 @@ shell registry when opened, so commands added by dialogs, the queue, panels or
 the WinSCP action layer appear in the same list.
 
 The palette also indexes every page and control declared in the Preferences
-schema. A page row opens that page; a setting row opens the exact page and
-flashes the exact control briefly. It does not maintain a second preference
+schema. A page row opens that page; a setting row opens the exact page, focuses
+the concrete editor inside the row, and flashes the exact control briefly. It does not maintain a second preference
 value and it never writes a setting itself — the real Preferences control owns
 validation, persistence, unavailable-state handling and version-history labels.
 

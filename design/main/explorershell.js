@@ -703,12 +703,14 @@ function resolveDropTarget(spec) {
     if (!directory) return { ok: false, forceQueue: false, counterName: 'DownloadsDragDropQueueTargetUnknown' };
     return { ok: true, directory, forceQueue: true, counterName: 'DownloadsDragDropQueue' };
   }
-  if (s.fakeFileDropTarget) return {
-    ok: true, directory: excludeTrailingBackslash(nodePath.win32.dirname(String(s.fakeFileDropTarget))),
+  const fakeFileTarget = String(s.fakeFileDropTarget || '').trim();
+  if (fakeFileTarget) return {
+    ok: true, directory: excludeTrailingBackslash(nodePath.win32.dirname(fakeFileTarget)),
     forceQueue: false, counterName: 'DownloadsDragDropFakeFile',
   };
-  if (s.externalDropDirectory) return {
-    ok: true, directory: excludeTrailingBackslash(String(s.externalDropDirectory)),
+  const externalDirectory = String(s.externalDropDirectory || '').trim();
+  if (externalDirectory) return {
+    ok: true, directory: excludeTrailingBackslash(externalDirectory),
     forceQueue: false, counterName: 'DownloadsDragDropExternalExt',
   };
   return { ok: false, forceQueue: false, counterName: 'DownloadsDragDropExternalExtTargetUnknown' };

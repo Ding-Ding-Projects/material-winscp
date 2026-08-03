@@ -1048,6 +1048,21 @@ test('a queue drop is refused when its download target is blank', () => {
   }
 });
 
+test('fake-file and external-extension targets refuse whitespace-only handshakes', () => {
+  const shell = makeShell({});
+  for (const spec of [
+    { fakeFileDropTarget: '   ' },
+    { externalDropDirectory: '\t\r\n' },
+  ]) {
+    const target = shell.ddGetTarget(spec);
+    assert.deepStrictEqual(target, {
+      ok: false,
+      forceQueue: false,
+      counterName: 'DownloadsDragDropExternalExtTargetUnknown',
+    });
+  }
+});
+
 test('the lack-of-temp-space warning can be refused, and switched off for good', async () => {
   const refusing = makeShell({
     prefs: { dDWarnLackOfTempSpace: true, dDWarnLackOfTempSpaceRatio: 1.1 },

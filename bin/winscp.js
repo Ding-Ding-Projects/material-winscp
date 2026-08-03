@@ -58,6 +58,7 @@ const EFFECTS = Object.freeze({ none: shell.DROPEFFECT.NONE, copy: shell.DROPEFF
 const VALUE_OPTIONS = new Set([
   'source', 'destination', 'result', 'last-effect', 'effect', 'target', 'windows-build',
   'parameter', 'command', 'session', 'file', 'temp-root', 'log', 'loglevel', 'xmllog',
+  'ini', 'rawsettings',
   'stdout', 'stdin', 'default-download-target', 'fake-file-target', 'external-drop-directory',
 ]);
 const BOOLEAN_OPTIONS = new Set([
@@ -358,7 +359,8 @@ async function stageDrag(argv) {
 function buildConsoleArgs(argv, kind) {
   const { positional, options } = parseOptions(argv);
   assertKnownOptions(options, new Set([
-    'parameter', 'command', 'session', 'log', 'loglevel', 'xmllog', 'xmllogrequired',
+    'parameter', 'command', 'session', 'log', 'loglevel', 'xmllog', 'ini', 'rawsettings',
+    'xmllogrequired',
     'xmlgroups', 'stdout', 'stdin', 'nointeractiveinput', 'unsafe',
   ]), `${kind} command`);
   const consoleArgs = ['/console'];
@@ -373,7 +375,7 @@ function buildConsoleArgs(argv, kind) {
     for (const value of positional.splice(0)) commands.push(value);
   }
   for (const value of commands) consoleArgs.push('/command', String(value));
-  for (const name of ['log', 'loglevel', 'xmllog', 'stdout', 'stdin']) {
+  for (const name of ['log', 'loglevel', 'xmllog', 'ini', 'rawsettings', 'stdout', 'stdin']) {
     for (const value of optionValues(options, name)) consoleArgs.push(`/${name}=${String(value)}`);
   }
   for (const name of ['xmllogrequired', 'nointeractiveinput', 'unsafe']) {

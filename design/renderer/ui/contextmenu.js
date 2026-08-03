@@ -115,7 +115,10 @@ function displayKey(key) {
 }
 
 function displayModifier(modifier, platform) {
-  if (!MAC_PLATFORMS.test(platform)) return modifier;
+  if (!MAC_PLATFORMS.test(platform)) {
+    if (modifier === 'Meta') return /linux/i.test(platform) ? 'Super' : 'Win';
+    return modifier;
+  }
   return {
     Ctrl: '⌃', Alt: '⌥', Shift: '⇧', Meta: '⌘',
   }[modifier] || modifier;
@@ -226,6 +229,10 @@ export function openMenu(opts = {}) {
   // these caps only make the range viewport-safe.
   root.style.minWidth = 'min(220px, calc(100vw - 12px))';
   root.style.maxWidth = 'min(420px, calc(100vw - 12px))';
+  // Cap anchored dropdowns before positioning so long menus scroll instead
+  // of extending below a short viewport.
+  const viewportHeight = document.documentElement.clientHeight || window.innerHeight || 0;
+  root.style.maxHeight = `${Math.max(1, viewportHeight - 12)}px`;
 
   let subHandle = null;
   let typeahead = '';
@@ -276,9 +283,9 @@ export function openMenu(opts = {}) {
   } else {
     const vw = document.documentElement.clientWidth;
     const vh = document.documentElement.clientHeight;
-    // Cap the height BEFORE measuring, or a long menu is clamped against a
-    // height it will never have and runs off the bottom of the window.
-    root.style.maxHeight = `${Math.max(1, vh - 12)}px`;
+    // The height cap is applied before measuring, or a long menu is clamped
+    // against a height it will never have and runs off the bottom of the
+    // window.
     const r = root.getBoundingClientRect();
     const left = clamp(opts.x ?? 0, 6, Math.max(6, vw - r.width - 6));
     const top = clamp(opts.y ?? 0, 6, Math.max(6, vh - r.height - 6));

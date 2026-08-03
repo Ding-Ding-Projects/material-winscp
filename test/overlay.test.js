@@ -68,7 +68,7 @@ test('the production overlay surfaces have an explicit scroll/background contrac
   assert.match(components, /\.rb-popover, \.cp-popover, \.ts, \.ap, \.nc\s*\{[\s\S]*?background: var\(--c-high\)/);
   assert.match(queue, /\.tx-q-popover\s*\{[\s\S]*?overflow: hidden;/);
   assert.match(queue, /\.tx-q-popbody\s*\{[\s\S]*?min-height: 0;[\s\S]*?overflow: hidden;/);
-  assert.match(contextMenu, /root\.style\.maxHeight = `\$\{Math\.max\(1, vh - 12\)\}px`/);
+  assert.match(contextMenu, /root\.style\.maxHeight = `\$\{Math\.max\(1, viewportHeight - 12\)\}px`/);
 });
 
 test('blocking dialogs keep a scrollable body inside a narrow viewport', () => {

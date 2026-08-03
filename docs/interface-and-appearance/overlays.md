@@ -42,6 +42,11 @@ floating root carries a surface class plus its border/elevation. Transparent
 gradients inside the colour picker's alpha rail are intentional data
 visualisation, not the panel background.
 
+Anchored dropdowns and submenus receive the viewport-height cap before
+`anchorTo()` measures them. Long bilingual or action-heavy menus therefore
+stay inside the window and use the existing `overflow-y: auto` rule for the
+remaining content instead of disappearing below the bottom edge.
+
 ## Security and accessibility
 
 Positioning is local DOM arithmetic. No overlay content or geometry is sent to

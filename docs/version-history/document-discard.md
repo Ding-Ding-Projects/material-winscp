@@ -18,9 +18,11 @@ blocks the requested close.
 ## Failure modes
 
 If the history write fails, the editor still closes, emits the orphan event and
-keeps the temporary file. If the temporary file has already disappeared, the
-history record still proves that the discard action occurred, but there is no
-local content to recover.
+keeps the temporary file. That event explicitly reports `discardAudit.status:
+not-recorded` (and the failure reason), so the UI or another consumer cannot
+mistake a close for a durable audit. A successful write reports `recorded`. If
+the temporary file has already disappeared, a recorded audit still proves the
+discard action occurred, but there is no local content to recover.
 
 ## Security considerations
 
@@ -31,7 +33,8 @@ copy, and the history repository lives in the app-owned data root.
 ## Verification
 
 `test/editors.test.js` asserts that the history snapshot happens before close,
-contains the discard metadata, and still emits the orphan event. Run
+contains the discard metadata, emits the audit status, and still closes when
+the history write fails. Run
 `node --test test/editors.test.js test/history.test.js` when changing editor
 close or history restore behavior.
 

@@ -170,6 +170,23 @@ test('discarding an unsaved remote edit records an audit revision before close',
       remotePath: '/notes.txt', localPath: opened.localPath,
     });
     assert.ok(f.emitted.some((e) => e.type === 'orphan' && e.id === opened.id));
+    assert.equal(f.emitted.find((e) => e.type === 'orphan').discardAudit.status, 'recorded');
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('discarding an unsaved edit reports when the audit could not be recorded', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-history-failure-'));
+  P.setRoot(root);
+  const f = fixture();
+  f.manager.history = { snapshot: async () => ({ ok: false, error: { code: 'HISTORY_ERROR' } }) };
+  try {
+    const opened = await f.manager.openRemote({ sessionId: f.session.id, remotePath: '/notes.txt', mode: 'internal' });
+    f.manager.open.get(opened.id).dirty = true;
+    await f.manager.close(opened.id, {});
+    const orphan = f.emitted.find((e) => e.type === 'orphan');
+    assert.deepEqual(orphan.discardAudit, { status: 'not-recorded', reason: 'history-write-failed', code: 'HISTORY_ERROR' });
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

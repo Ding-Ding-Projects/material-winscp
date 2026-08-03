@@ -22,6 +22,8 @@ there is no hidden fallback directory.
   it could otherwise resolve relative to the app's process working directory.
 - A drop with no known Explorer, fake-file, external-extension, or queue target
   is refused and reported as target unknown.
+- Whitespace-only fake-file and external-extension handshake targets are also
+  refused as target unknown; they must not become the current working directory.
 - A remote-panel drop onto free space is refused; a target directory is
   required. Ctrl requests copy, while a move is used only when the session
   advertises remote move support.

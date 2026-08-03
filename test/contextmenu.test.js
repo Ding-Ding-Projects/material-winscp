@@ -28,6 +28,14 @@ test('action descriptors resolve through the shared registry and use platform no
   assert.equal(C.ariaShortcutForMenu({ action: 'LocalBackAction' }), 'Alt+ArrowLeft');
 });
 
+test('Meta uses the host platform name while ARIA keeps the canonical modifier', () => {
+  const item = { shortcut: 'Meta+S' };
+  assert.equal(C.shortcutForMenu(item, { platform: 'win32' }), 'Win+S');
+  assert.equal(C.shortcutForMenu(item, { platform: 'linux' }), 'Super+S');
+  assert.equal(C.shortcutForMenu(item, { platform: 'darwin' }), '⌘+S');
+  assert.equal(C.ariaShortcutForMenu(item), 'Meta+S');
+});
+
 test('special keys are tokenized without losing a plus key', () => {
   const cases = [
     [{ shortcut: 'Ctrl+Num +' }, ['Ctrl', 'Num+'], 'Ctrl+Num+'],
@@ -170,4 +178,11 @@ test('narrow menus have a viewport-safe width contract', () => {
   assert.equal(normalized.disabled, true);
   assert.equal(normalized.checked, true);
   assert.equal(normalized.submenu.length, 1);
+});
+
+test('anchored menus cap height before positioning so long dropdowns scroll', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'design/renderer/ui/contextmenu.js'), 'utf8');
+  assert.match(source, /const viewportHeight = document\.documentElement\.clientHeight \|\| window\.innerHeight \|\| 0;/);
+  assert.match(source, /root\.style\.maxHeight = `\$\{Math\.max\(1, viewportHeight - 12\)\}px`;/);
+  assert.match(source, /if \(opts\.anchor\) \{/);
 });

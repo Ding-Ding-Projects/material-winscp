@@ -22,7 +22,8 @@ The `script` and `command` forms forward the console runner's practical
 headless switches as well as commands and parameters:
 `--log FILE`, `--loglevel N`, `--xmllog FILE`, `--xmllogrequired`,
 `--xmlgroups[=on|off]`, `--stdout[=binary|chunked]`, `--stdin=binary`,
-`--nointeractiveinput`, and `--unsafe`. They are translated to their WinSCP
+`--ini PATH`, `--rawsettings NAME=VALUE`, `--nointeractiveinput`, and
+`--unsafe`. They are translated to their WinSCP
 slash-switch equivalents before the existing console engine runs. For exact
 WinSCP command-line compatibility, pass those slash switches directly to
 `winscp run` or invoke `winscp-com`.
@@ -56,7 +57,7 @@ method directly.
 
 The direct `winscp run` form accepts every switch understood by the existing
 console runner, including `/script`, `/command`, `/parameter`, `/log`,
-`/loglevel`, `/xmllog`, `/xmllogrequired`, `/xmlgroups`, `/stdout`, `/stdin`,
+`/loglevel`, `/xmllog`, `/ini`, `/rawsettings`, `/xmllogrequired`, `/xmlgroups`, `/stdout`, `/stdin`,
 `/nointeractiveinput` and `/unsafe`.
 `winscp-com` remains available for scripts that explicitly require that
 legacy executable name. It also supports `winscp-com --help` and

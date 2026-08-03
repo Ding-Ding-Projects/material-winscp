@@ -91,6 +91,15 @@ test('convenience commands forward the console runner control switches', () => {
   ]);
 });
 
+test('convenience commands forward INI and raw-settings switches', () => {
+  assert.deepEqual(cli.buildConsoleArgs([
+    'deploy.txt', '--ini', 'nul', '--rawsettings', 'FSProtocol2\u003d2', '--command', 'exit',
+  ], 'script'), [
+    '/console', '/script=deploy.txt', '/command', 'exit', '/ini=nul',
+    '/rawsettings=FSProtocol2\u003d2',
+  ]);
+});
+
 test('drag plan uses the safe ambiguous-result rule and capability checks', () => {
   const remoteToLocal = cli.dragPlan([
     '--source', 'remote', '--result', 'invalid', '--last-effect', 'move', '--queue',

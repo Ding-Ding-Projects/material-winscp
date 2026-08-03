@@ -29,6 +29,7 @@ The display formatter canonicalizes WinSCP names before rendering:
 | `Alt+Left` | `Alt` + `←` | `⌥` + `←` |
 | `Ctrl+Num +` | `Ctrl` + `Num+` | `⌃` + `Num+` |
 | `Ctrl+Enter` | `Ctrl` + `↵` | `⌃` + `↵` |
+| `Meta+S` | `Win` + `S` (Windows), `Super` + `S` (Linux) | `⌘` + `S` |
 
 The visible glyphs are accompanied by `aria-keyshortcuts` using canonical key
 names, and the `<kbd>` group has an accessible label. This means a screen

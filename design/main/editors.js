@@ -621,10 +621,11 @@ class EditorManager extends EventEmitter {
     // A discard is itself an auditable user action. Write it before the close
     // notification and before deleting the record. History is best effort by
     // contract: a broken history repository must never trap the user's close.
+    let discardAudit = orphan ? { status: 'not-recorded', reason: 'history-unavailable' } : null;
     if (orphan && this.history && typeof this.history.snapshot === 'function') {
       const state = this.historyState() || {};
       try {
-        await this.history.snapshot(`Discarded unsaved document "${rec.fileName}"`, {
+        const result = await this.history.snapshot(`Discarded unsaved document "${rec.fileName}"`, {
           ...state,
           editorDiscard: {
             id: rec.id,
@@ -634,12 +635,16 @@ class EditorManager extends EventEmitter {
             localPath: rec.localPath,
           },
         });
-      } catch { /* history failure never blocks the requested close */ }
+        discardAudit = result && result.ok === false
+          ? { status: 'not-recorded', reason: 'history-write-failed', code: result.error && result.error.code }
+          : { status: 'recorded' };
+      } catch { discardAudit = { status: 'not-recorded', reason: 'history-write-failed' }; }
     }
 
     if (orphan) {
       this._send('event:editor', {
         type: 'orphan', id: rec.id, localPath: rec.localPath, remotePath: rec.remotePath,
+        discardAudit,
         message: 'The edit was not uploaded; the temporary file has been kept.',
       });
     } else if (!keep && !rec.localOnly) {

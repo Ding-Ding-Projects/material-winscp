@@ -40,6 +40,15 @@ test('setting destinations teleport by page and exact control without exposing s
   }
 });
 
+test('preference jump focuses the concrete editor inside the matched row', async () => {
+  const preferences = await import(R('ui/dialogs/preferences.js'));
+  let focused = 0;
+  const input = { focus: (options) => { focused += 1; assert.deepEqual(options, { preventScroll: true }); } };
+  const row = { querySelector: (selector) => { assert.match(selector, /input/); return input; } };
+  assert.equal(preferences.focusPreferenceControl(row), input);
+  assert.equal(focused, 1);
+});
+
 test('unavailable settings remain keyboard-reachable destinations', () => {
   const settings = P.preferenceDestinations(() => false);
   const pending = settings.find((e) => e.type === 'setting' && e.pending);
