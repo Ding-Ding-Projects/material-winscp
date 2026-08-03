@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `b754414`** — Refresh in-app changelog for lifecycle and dialog fixes
+**At commit `ad59ee8`** — Keep generated report commits out of the app changelog
 
 ## Where the work stands
 
@@ -14,8 +14,8 @@
 | **Port coverage (logic)** | **60.5%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 71.5% — includes embedded hex resources, **do not quote this one** |
 | Tests | 3677 run, **3676 pass, 0 fail**, 1 skipped |
-| Hand-written code | 228,309 lines across 449 files |
-| Commits | 260 on `main` |
+| Hand-written code | 228,353 lines across 449 files |
+| Commits | 262 on `main` |
 | Working tree | clean |
 | Remote | `origin/main` at `077decf` — **differs from HEAD** |
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `ad59ee8` | 2026-08-03 | Keep generated report commits out of the app changelog |
+| `4eea6f6` | 2026-08-03 | Refresh handoff after lifecycle and dialog fixes |
 | `b754414` | 2026-08-03 | Refresh in-app changelog for lifecycle and dialog fixes |
 | `3636cfb` | 2026-08-03 | Harden session, configuration, preferences, and dialogs |
 | `9f07ff2` | 2026-08-03 | Refresh handoff after changelog verification |
 | `077decf` | 2026-08-03 | Refresh changelog after protocol queue fixes |
 | `1af12e3` | 2026-08-03 | Refresh handoff after protocol queue fixes |
 | `64e0cc2` | 2026-08-03 | Harden protocol queue and sync boundaries |
-| `2e23e4f` | 2026-08-03 | Fail closed on credential and identity gaps |
-| `52bda17` | 2026-08-03 | Refresh handoff after editor site fixes |
 
 ## Notes from whoever worked on this last
 
