@@ -83,6 +83,10 @@ function lines() {
 }
 
 function git() {
+  const dirtyFiles = sh('git', ['status', '--porcelain']).trim().split('\n')
+    .filter(Boolean)
+    .map((line) => line.slice(3).split(' -> ')[0])
+    .filter((file) => file !== 'HANDOFF.md' && file !== 'ROADMAP.md');
   return {
     head: sh('git', ['rev-parse', '--short', 'HEAD']).trim(),
     headFull: sh('git', ['rev-parse', 'HEAD']).trim(),
@@ -90,7 +94,10 @@ function git() {
     branch: sh('git', ['rev-parse', '--abbrev-ref', 'HEAD']).trim(),
     remote: sh('git', ['rev-parse', '--short', 'origin/main']).trim(),
     count: sh('git', ['rev-list', '--count', 'HEAD']).trim(),
-    dirty: sh('git', ['status', '--porcelain']).trim().split('\n').filter(Boolean).length,
+    // The report files are the output of this command. Counting their own
+    // pending rewrite means the committed report can never describe the state
+    // it leaves behind, so exclude those two generated paths from the count.
+    dirty: dirtyFiles.length,
     recent: sh('git', ['log', '-8', '--format=%h\t%ad\t%s', '--date=short']).trim().split('\n').filter(Boolean),
   };
 }
