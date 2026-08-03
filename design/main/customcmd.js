@@ -445,6 +445,17 @@ function validate(command, options) {
   let i = 0;
   while (i < cmd.length) {
     const { len, cmd: pc } = getToken(cmd, i, patternLen);
+    // Interactive patterns are consumed before TFileCustomCommand validates
+    // file iteration.  Counting their punctuation as a bare file pattern
+    // would reject valid commands such as `!?label?! !&`.
+    if (cmd[i] === '!' && cmd[i + 1] === '?') {
+      const end = cmd.indexOf('!', i + 2);
+      if (end >= 0) { i = end + 1; continue; }
+    }
+    if (cmd[i] === '!' && cmd[i + 1] === '`') {
+      const end = cmd.indexOf('`', i + 2);
+      if (end >= 0) { i = end + 1; continue; }
+    }
     // Ported verbatim from TFileCustomCommand::ValidatePattern, which measures
     // the token with the FILE rule — so `!!` also counts as single-file here.
     // That is a WinSCP quirk, but a command that behaves differently from the

@@ -413,6 +413,14 @@ async function runCli(argv = process.argv.slice(2), io = {}) {
     if (first === 'drag' || first === 'drop') {
       const subcommand = args[1] || (first === 'drop' ? 'classify' : 'plan');
       const subcommandArgs = args.slice(2);
+      const helpRequested = (value) => value === '--help' || value === '-h' || value === 'help';
+      // Keep nested help headless too: automation commonly discovers a
+      // command one level at a time, and an unknown-subcommand error here is
+      // needlessly less helpful than the already complete command reference.
+      if (helpRequested(subcommand) || (subcommandArgs.length === 1 && helpRequested(subcommandArgs[0]))) {
+        streams.stdout.write(HELP);
+        return 0;
+      }
       const { options } = parseOptions(subcommandArgs);
       if (subcommand === 'plan') printJson(streams, dragPlan(subcommandArgs), outputIsPretty(options));
       else if (subcommand === 'classify') printJson(streams, classifyDrop(subcommandArgs), outputIsPretty(options));

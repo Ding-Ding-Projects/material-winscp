@@ -30,3 +30,10 @@ test('remote transfer gating requires explicit server-side copy capability', asy
   assert.equal(supportsRemoteCopy({ exec: true }), false);
   assert.equal(supportsRemoteCopy({}), false);
 });
+
+test('IPC remote-copy gating rejects exec-only sessions like the dialog does', () => {
+  const { hasRemoteCopyCapability } = require('../design/main/ipc');
+  assert.equal(hasRemoteCopyCapability({ copyRemote: true }), true);
+  assert.equal(hasRemoteCopyCapability({ exec: true }), false);
+  assert.equal(hasRemoteCopyCapability({ copyRemote: false, exec: true }), false);
+});

@@ -9,8 +9,10 @@ files any of it applies to.
 | Article | Covers |
 | --- | --- |
 | [editors.md](editors.md) | The internal editor, external editors, and the download-edit-upload cycle. |
+| [editor-preferences.md](editor-preferences.md) | Ordered editor associations, first-match selection, validation, and filtered keyboard reordering. |
 | [remote-edit-round-trip.md](remote-edit-round-trip.md) | The renderer-to-IPC-to-main upload seam and its conflict/error behaviour. |
 | [custom-commands.md](custom-commands.md) | Command patterns, argument expansion, quoting and extensions. |
+| [custom-command-validation.md](custom-command-validation.md) | The shared UI/main validation contract for interactive and file patterns. |
 | [file-masks.md](file-masks.md) | The WinSCP mask language — wildcards, exclusion, size and time filters. |
 | [console.md](console.md) | The remote terminal, and which protocols can offer one. |
 | [script-runner.md](script-runner.md) | Batch scripting, `/script` and `/command` execution, exit status, and secure XML output. |

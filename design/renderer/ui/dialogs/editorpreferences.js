@@ -130,6 +130,18 @@ export function moveEditorEntry(list, index, destination) {
   return rows;
 }
 
+/** Pick the next row from the currently visible editor indices. */
+export function moveEditorSelection(visibleIndices, selected, key) {
+  const visible = Array.isArray(visibleIndices) ? visibleIndices : [];
+  const position = visible.indexOf(selected);
+  if (!visible.length || position < 0) return selected;
+  if (key === 'Home') return visible[0];
+  if (key === 'End') return visible[visible.length - 1];
+  if (key === 'ArrowUp' || key === 'ArrowLeft') return visible[Math.max(0, position - 1)];
+  if (key === 'ArrowDown' || key === 'ArrowRight') return visible[Math.min(visible.length - 1, position + 1)];
+  return selected;
+}
+
 /* ================================================================== */
 /* the entry editor (EditorPreferences.dfm)                            */
 /* ================================================================== */
@@ -380,20 +392,17 @@ export function createEditorList({ value = [], onChange } = {}) {
     for (const { r, i } of shown) {
       const btn = h('button', {
         type: 'button', role: 'option', 'aria-selected': String(i === selected),
+        'data-editor-index': String(i),
         class: `pref-list-row${i === selected ? ' is-selected' : ''}`,
         onclick: () => { selected = i; paint(); },
         onkeydown: (event) => {
-          let destination = -1;
-          if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') destination = i - 1;
-          if (event.key === 'ArrowDown' || event.key === 'ArrowRight') destination = i + 1;
-          if (event.key === 'Home') destination = 0;
-          if (event.key === 'End') destination = rows.length - 1;
-          if (destination < 0 || destination >= rows.length || destination === i) return;
+          const destination = moveEditorSelection(visible().map(({ i: rowIndex }) => rowIndex), i, event.key);
+          if (destination === i) return;
           event.preventDefault();
           rows.splice(0, rows.length, ...moveEditorEntry(rows, i, destination));
           selected = destination;
           paint(); emit();
-          listEl.querySelectorAll('[role="option"]')[destination]?.focus();
+          listEl.querySelector(`[data-editor-index="${destination}"]`)?.focus();
           announce(tx(`Moved to position ${destination + 1}.`, `移咗去第 ${destination + 1} 行。`));
         },
         ondblclick: () => edit(i),

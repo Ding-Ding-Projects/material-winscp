@@ -89,6 +89,26 @@ test('ExecuteFile opens the remote copy and EditedFileUploaded saves it back', a
   }
 });
 
+test('forced Unicode encodings preserve content when the file has no BOM', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-encoding-'));
+  P.setRoot(root);
+  try {
+    for (const [encoding, bytes, expected] of [
+      ['utf8bom', Buffer.from('alpha'), 'alpha'],
+      ['utf16le', Buffer.from('alpha', 'utf16le'), 'alpha'],
+      ['utf16be', (() => { const b = Buffer.from('alpha', 'utf16le'); b.swap16(); return b; })(), 'alpha'],
+    ]) {
+      const f = fixture();
+      f.files.set('/notes.txt', { data: bytes, mtime: 1000 });
+      const opened = await f.manager.openRemote({ sessionId: f.session.id, remotePath: '/notes.txt', mode: 'internal', encoding });
+      assert.equal((await f.manager.read(opened.id)).text, expected, encoding);
+      await f.manager.close(opened.id, {});
+    }
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('the preload bridge exposes the direct file-changed IPC seam', async () => {
   const source = await fs.readFile(path.join(__dirname, '..', 'design/preload/preload.js'), 'utf8');
   const ipcSource = await fs.readFile(path.join(__dirname, '..', 'design/main/ipc.js'), 'utf8');

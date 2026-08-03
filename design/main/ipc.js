@@ -1483,7 +1483,7 @@ class Ipc {
         };
       }
       // remote-copy: both ends are the same server.
-      need(remote.caps.copyRemote || remote.caps.exec, `${remote.protocolName} cannot copy files on the server.`);
+      need(hasRemoteCopyCapability(remote.caps), `${remote.protocolName} cannot copy files on the server.`);
       return {
         side: 'remote-copy',
         source: remotePath(session, file, 'file'),
@@ -2541,4 +2541,8 @@ function isHiddenWin(name) {
   return String(name || '').startsWith('.');
 }
 
-module.exports = { Ipc, ok, err, publicSite, validateSite, ValidationError, LIMITS };
+function hasRemoteCopyCapability(caps = {}) {
+  return !!caps.copyRemote;
+}
+
+module.exports = { Ipc, ok, err, publicSite, validateSite, ValidationError, LIMITS, hasRemoteCopyCapability };

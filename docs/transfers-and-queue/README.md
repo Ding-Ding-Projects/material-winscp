@@ -15,8 +15,8 @@ counts, which is why pausing, throttling and resuming work uniformly.
 | [resume.md](resume.md) | Resume, `.filepart` files, overwrite modes and what each protocol can actually do. |
 | [speed-limits.md](speed-limits.md) | Per-transfer and global throttling, and how the limit is enforced. |
 | [overwrite-decision.md](overwrite-decision.md) | What happens when the file is already there: the batch-mode ladder, the per-file question, and every refusal behind the Append and Resume buttons. |
-| [remote-transfer-dialog.md](remote-transfer-dialog.md) | Remote duplicate/move validation, server-side copy routing, cancellation, and IPC failure behaviour. |
-| [queue-controller.md](queue-controller.md) | The production command surface for accessible queue actions, model reconciliation, retries, and once-done choices. |
+| [remote-transfer-dialog.md](remote-transfer-dialog.md) | Remote duplicate/move validation, capability gating at the dialog and IPC seam, server-side copy routing, cancellation, and IPC failure behaviour. |
+| [queue-controller.md](queue-controller.md) | The production command surface for accessible queue actions, model reconciliation, retries, once-done choices, and IPC-safe reconciliation failures. |
 
 ## The shape of a transfer
 

@@ -34,6 +34,20 @@ test('headless CLI prints help and version without opening the app', async () =>
   assert.equal(JSON.parse(extension.text()).brokenOnThisWindows, true);
 });
 
+test('nested drag and drop help stays headless and succeeds', async () => {
+  for (const args of [
+    ['drag', '--help'],
+    ['drop', '-h'],
+    ['drag', 'plan', '--help'],
+    ['drop', 'target', 'help'],
+  ]) {
+    const nested = output();
+    assert.equal(await cli.runCli(args, { stdout: nested.stream, stderr: nested.stream }), 0);
+    assert.match(nested.text(), /winscp drag plan/);
+    assert.equal(nested.text().includes('No session manager is available'), false);
+  }
+});
+
 test('simulation output is compact JSON by default and pretty JSON on request', async () => {
   const compact = output();
   assert.equal(await cli.runCli(['drag', 'plan', '--source', 'remote'], {

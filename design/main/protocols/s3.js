@@ -361,6 +361,7 @@ class S3UploadStream extends Writable {
     this.parts = [];
     this.partNumber = 0;
     this.result = null;
+    this.abortPromise = null;
     this.signal = opts.signal || null;
     if (this.signal && this.signal.aborted) this.destroy(new Error('S3 upload cancelled'));
     if (this.signal) this.signal.addEventListener('abort', () => this.destroy(new Error('S3 upload cancelled')), { once: true });
@@ -401,7 +402,7 @@ class S3UploadStream extends Writable {
     };
     finish().then(() => cb(), async (err) => {
       if (this.uploadId) {
-        try { await this.adapter._abortMultipartUpload(this.bucket, this.key, this.uploadId); } catch { /* the original error is the one that matters */ }
+        await this._abortMultipartUpload();
       }
       cb(err);
     });
@@ -409,12 +410,19 @@ class S3UploadStream extends Writable {
 
   _destroy(err, cb) {
     if (err && this.uploadId) {
-      this.adapter._abortMultipartUpload(this.bucket, this.key, this.uploadId)
-        .catch(() => {})
+      this._abortMultipartUpload()
         .finally(() => cb(err));
       return;
     }
     cb(err);
+  }
+
+  _abortMultipartUpload() {
+    if (!this.abortPromise) {
+      this.abortPromise = Promise.resolve()
+        .then(() => this.adapter._abortMultipartUpload(this.bucket, this.key, this.uploadId));
+    }
+    return this.abortPromise.catch(() => {});
   }
 }
 

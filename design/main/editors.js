@@ -103,13 +103,18 @@ function isValidUtf8(buf) {
 }
 
 function decode(buf, encoding) {
+  const startsWith = (bytes) => buf.length >= bytes.length && bytes.every((b, i) => buf[i] === b);
   switch (encoding) {
-    case 'utf8bom': return buf.subarray(3).toString('utf8');
-    case 'utf16le': return buf.subarray(2).toString('utf16le');
+    // A forced encoding describes how to interpret the bytes; it does not
+    // promise that a BOM is present. Only consume a marker that is actually
+    // there, otherwise a BOM-less file loses its first character(s).
+    case 'utf8bom': return (startsWith([0xef, 0xbb, 0xbf]) ? buf.subarray(3) : buf).toString('utf8');
+    case 'utf16le': return (startsWith([0xff, 0xfe]) ? buf.subarray(2) : buf).toString('utf16le');
     case 'utf16be': {
-      const swapped = Buffer.from(buf.subarray(2));
+      const body = startsWith([0xfe, 0xff]) ? buf.subarray(2) : buf;
+      const swapped = Buffer.from(body.subarray(0, body.length - (body.length % 2)));
       swapped.swap16();
-      return swapped.toString('utf16le');
+      return swapped.toString('utf16le') + (body.length % 2 ? '\ufffd' : '');
     }
     case 'ansi': return buf.toString('latin1');
     case 'utf8':

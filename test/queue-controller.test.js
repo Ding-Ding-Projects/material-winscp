@@ -124,6 +124,26 @@ test('controller rejects disabled, invalid and unavailable commands instead of c
   unavailableController.close();
 });
 
+test('queue event reconciliation contains IPC failures without an error listener', () => {
+  const queue = new FakeQueue([item('a', 'queued')]);
+  const controller = new QueueController(queue);
+  queue.list = () => { throw new Error('stale queue snapshot'); };
+  assert.doesNotThrow(() => queue.emit('item-updated'));
+  controller.close();
+});
+
+test('queue event reconciliation reports IPC failures to an error listener', () => {
+  const queue = new FakeQueue([item('a', 'queued')]);
+  const controller = new QueueController(queue);
+  const errors = [];
+  controller.on('error', (error) => errors.push(error));
+  queue.list = () => { throw new Error('stale queue snapshot'); };
+  queue.emit('item-updated');
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].message, 'stale queue snapshot');
+  controller.close();
+});
+
 test('idle once-done is reported as a request, not a fake completed power action', () => {
   const queue = new FakeQueue();
   const controller = new QueueController(queue);

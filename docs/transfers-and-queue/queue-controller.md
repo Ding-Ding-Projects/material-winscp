@@ -30,6 +30,11 @@ trusting a stale event payload. `dispatch()` waits for the real queue method,
 rejects a false result or missing method, then reconciles again. It never emits
 a success result for a no-op or an unavailable command.
 
+Queue events are a failure boundary too. If reconciliation cannot read a queue
+snapshot, the controller reports the error to an attached `error` listener; if
+there is no diagnostic listener, it contains the failure rather than allowing
+Node's special unhandled-`error` event to terminate the IPC host.
+
 When the queue emits `idle` with a non-`none` action, the controller emits
 `once-done-requested`. That event records what the queue requested; it does not
 claim that disconnect, suspend, or shutdown has happened. The host that owns
@@ -55,6 +60,9 @@ node --test test/queue-controller.test.js
 node --check design/main/queue-controller.js
 node --check design/main/queue.js
 ```
+
+The event-boundary regression tests cover both IPC-safe containment and
+diagnostic delivery when an `error` listener is present.
 
 The queue controller is not an HTTP API. Postman artefacts are not applicable;
 the feature is exercised through the local model and its event contract.

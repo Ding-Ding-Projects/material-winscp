@@ -44,6 +44,10 @@ PATH`, `--fake-file-target PATH`, or `--external-drop-directory PATH`. It
 returns the target, queue-forcing decision, and refusal counter as JSON without
 starting Electron, Explorer, or a network connection.
 
+Help is available at every simulation level: `winscp drag --help`,
+`winscp drop --help`, and `winscp drag plan --help` all return the same command
+reference with exit code `0`, without starting the console runner or a GUI.
+
 Explorer drag payloads fail closed when a preserved remote name contains `/`,
 `\\`, `.` or `..`. Those names are not allowed to escape the private staging
 directory, even when invalid-character replacement is disabled.

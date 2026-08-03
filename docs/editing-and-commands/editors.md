@@ -21,7 +21,7 @@ Under **Preferences → Editors**, stored in `PREF_DEFAULTS.editor`.
 | `autoFont` | `true` | Pick a font suited to the file's content. |
 | `wordWrap` | `false` | |
 | `tabSize` | `8` | |
-| `encoding` | `auto` | `auto`, `utf8`, `utf8bom`, `ansi`. |
+| `encoding` | `auto` | `auto`, `utf8`, `utf8bom`, `utf16le`, `utf16be`, `ansi`. A forced BOM-capable encoding strips a BOM only when one is present; BOM-less files keep their first character. |
 | `warnOnEncodingFallback` | `true` | Say when the chosen encoding could not represent the content. |
 | `maxEditors` | `500` | Concurrent open editors. |
 | `singleEditor` | `true` | Reuse one internal editor window with tabs. |
@@ -137,7 +137,9 @@ to the caller with the executable error so the association can be corrected.
   save.
 - `earlyClose` is tested with a synthetic editor that exits immediately.
 - Encoding round trips are tested for UTF-8 with and without BOM, and for the
-  ANSI fallback path including the warning.
+  ANSI fallback path including the warning. Forced UTF-8/UTF-16 encodings are
+  also tested against BOM-less files so selecting an encoding cannot discard
+  their leading bytes.
 - Orphan recovery is tested by leaving temporaries behind and restarting.
 - A failed external launch is tested for registry, watcher and temporary-file
   cleanup.

@@ -6,6 +6,15 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 
 const sourcePath = path.join(__dirname, '..', 'design/renderer/ui/dialogs/editor.js');
+const preferencesSourcePath = path.join(__dirname, '..', 'design/renderer/ui/dialogs/editorpreferences.js');
+
+test('editor preferences keep keyboard reorder inside filtered visible rows', async () => {
+  const source = await fs.readFile(preferencesSourcePath, 'utf8');
+  assert.match(source, /export function moveEditorSelection\(visibleIndices, selected, key\)/);
+  assert.match(source, /moveEditorSelection\(visible\(\)\.map\(\(\{ i: rowIndex \}\) => rowIndex\), i, event\.key\)/);
+  assert.match(source, /data-editor-index/);
+  assert.match(source, /querySelector\(`\[data-editor-index="\$\{destination\}"\]`\)/);
+});
 
 test('editor saves are serialized and tied to an immutable text snapshot', async () => {
   const source = await fs.readFile(sourcePath, 'utf8');

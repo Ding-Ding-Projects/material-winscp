@@ -121,7 +121,11 @@ class QueueController extends EventEmitter {
     for (const event of ['item-added', 'item-updated', 'item-done', 'item-error', 'queue-updated', 'progress']) {
       const listener = () => {
         try { this.reconcile({ reason: event }); }
-        catch (error) { this.emit('error', error); }
+        catch (error) {
+          // An unhandled EventEmitter error terminates Node. Queue events can
+          // arrive from IPC, so a stale snapshot must stay a contained failure.
+          if (this.listenerCount('error') > 0) this.emit('error', error);
+        }
       };
       this.queue.on(event, listener);
       this._listeners.push([event, listener]);

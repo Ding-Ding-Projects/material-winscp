@@ -314,6 +314,12 @@ test('a command using only one of the two validates', () => {
   assert.equal(cc.validate('ls -la'), true);
 });
 
+test('validation ignores interactive patterns before checking file iteration', () => {
+  assert.equal(cc.validate('grep "!?Text:?default!" !&'), true);
+  assert.equal(cc.validate('echo !`date` !&'), true);
+  assert.throws(() => cc.validate('echo !?Text?! ! !&'), /cannot be combined/);
+});
+
 test('an unterminated prompt pattern is an error, not a silent truncation', () => {
   assert.throws(() => cc.collectPrompts('echo !?Name?default'), /Unterminated/);
 });

@@ -26,6 +26,7 @@ run time.
 | [ftp.md](ftp.md) | FTP, FTPS (explicit and implicit), passive-host policy, active mode, MLSD, TLS session reuse, resume and encoding/error behaviour. |
 | [webdav.md](webdav.md) | WebDAV and WebDAVS, XML listings, escaping, redirect origin isolation, and legacy authentication. |
 | [s3.md](s3.md) | Amazon S3 and S3-compatible endpoints, URL styles, pagination, multipart copy, and storage classes. |
+| [s3-multipart-abort.md](s3-multipart-abort.md) | Idempotent cleanup of failed, cancelled and incomplete multipart uploads. |
 | [local.md](local.md) | The local filesystem backend and Windows path handling. |
 
 ## Capability matrix
