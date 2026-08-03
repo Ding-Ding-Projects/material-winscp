@@ -449,10 +449,17 @@ npm ci                    # install
 npm start                 # run the app
 npm run dev               # run with --dev
 npm test                  # node --test test/
+npm run smoke:docker      # opt-in real SFTP + FTP diff smoke with throwaway Docker servers
 npm run package           # unpacked app → out/
 npm run make              # installer + zip → out/make/
 node build/make-icon.js   # regenerate build/icon.ico from the tracked catalog image
 ```
+
+The installed package also exposes a headless `winscp` command. Use
+`winscp run /script=FILE` for the full console-compatible scripting surface, or
+`winscp drag plan`, `winscp drop classify` and `winscp drag stage` to exercise
+drag/drop decisions and staging as JSON without launching a GUI. See
+[`docs/editing-and-commands/cli.md`](docs/editing-and-commands/cli.md).
 
 ### Node version
 

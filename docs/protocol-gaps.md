@@ -206,8 +206,10 @@ is stated as what the **user** cannot do, and each row names the code path in
 WinSCP ships two binaries: `winscp.exe` owns the window, and `winscp.com` is a
 separate console-subsystem program that a shell launches, that owns the
 terminal, and that talks to the GUI half through a named file mapping and three
-named events. This port ships one Node program, `bin/winscp-com.js`, which runs
-both halves in one process.
+named events. This port ships `bin/winscp-com.js` for the legacy console name
+and the headless `bin/winscp.js` entry point. Both run the two halves in one
+Node process; `winscp` additionally exposes JSON drag/drop simulation commands
+for CI and automation.
 
 | Gap | WinSCP feature affected | Status | Consequence today |
 |---|---|---|---|

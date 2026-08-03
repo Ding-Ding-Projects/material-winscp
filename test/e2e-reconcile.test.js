@@ -630,4 +630,47 @@ test.describe('the session transfer path moves real bytes over a real server', (
     assert.deepEqual(await app.ok('queue.list'), [],
       'a "non-queue" transfer put an item on the queue — it took the queued path after all');
   });
+
+  test.it('returns a structured-clone-safe result from synchronizing a real tree', async () => {
+    // sync.apply() returns live queue items in the main process. Returning
+    // those objects through Electron throws because each contains an adapter
+    // and promise gate. The bridge must hand the renderer the same plain view
+    // it uses for sync change events, while the transfer still reaches disk.
+    const root = path.join(localDir, 'ipc-sync');
+    await fsp.mkdir(root, { recursive: true });
+    await fsp.writeFile(path.join(root, 'clone-safe.txt'), 'clone-safe');
+
+    const comparison = await app.ok('sync.compare', {
+      sessionId,
+      localPath: root,
+      remotePath: '/uploads',
+      direction: 'remote',
+      mode: 'synchronize',
+      criteria: 'size',
+      recursive: true,
+      deleteFiles: false,
+      existingOnly: false,
+      caseSensitive: false,
+      transferMode: 'binary',
+      copyParam: { transferMode: 'binary' },
+    });
+    const applied = await app.ok('sync.apply', {
+      token: comparison.token,
+      checked: comparison.items.map((item) => item.checked),
+      onlyChecked: true,
+      performDeletions: false,
+    });
+
+    assert.ok(Array.isArray(applied.items), 'sync.apply did not return a plain item list');
+    assert.ok(applied.items.every((item) => item && typeof item.id === 'string'),
+      'sync.apply returned an item without its public queue id');
+    assert.ok(Array.isArray(applied.deletions), 'sync.apply did not return plain deletions');
+    assert.ok(Array.isArray(applied.errors), 'sync.apply did not return plain error records');
+    const done = await app.waitForEvent('event:queue',
+      (p) => p.type === 'item-done' && p.item && p.item.source
+        && p.item.source.endsWith('clone-safe.txt'), 20000);
+    assert.equal(done.item.state, 'done');
+    assert.equal(await fsp.readFile(path.join(server.root, 'uploads', 'clone-safe.txt'), 'utf8'),
+      'clone-safe');
+  });
 });

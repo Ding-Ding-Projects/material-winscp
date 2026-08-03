@@ -14,6 +14,7 @@ files any of it applies to.
 | [console.md](console.md) | The remote terminal, and which protocols can offer one. |
 | [script-runner.md](script-runner.md) | Batch scripting, `/script` and `/command` execution, exit status, and secure XML output. |
 | [command-line.md](command-line.md) | The `/` and `-` switch parser shared by startup and second-instance launches. |
+| [cli.md](cli.md) | The headless `winscp` entry point, console-compatible commands, and drag/drop simulation. |
 | [command-palette.md](command-palette.md) | The persisted keyboard palette: every registered command, Preferences destinations, regex search and exact setting teleport. |
 
 ## Postman

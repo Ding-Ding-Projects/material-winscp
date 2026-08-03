@@ -1599,11 +1599,17 @@ class Ipc {
         checklist.items.forEach((it, i) => { it.checked = !!checked[i]; });
       }
 
-      return s.apply(checklist, this.queue(), {
+      const applied = await s.apply(checklist, this.queue(), {
         onlyChecked: r.onlyChecked !== false,
         performDeletions: r.performDeletions !== false,
         copyParam: optObj(r.copyParam, 'copyParam'),
       });
+      // `apply()` returns queue internals holding live adapters and promise
+      // gates. Those are useful inside the main process but cannot cross
+      // Electron's structured-clone boundary. Return the same plain view used
+      // for sync change events, so an accepted checklist gets a reply instead
+      // of an IPC_FAILED clone error after the files were already queued.
+      return syncPayload('changes', applied, this);
     });
 
     this.handle('sync:keepUpToDate', (req) => {
@@ -2406,6 +2412,18 @@ function syncPayload(type, payload, ipc) {
   const view = (it) => {
     try { return ipc.queue().view(it); } catch { return { id: it && it.id, source: it && it.source, target: it && it.target }; }
   };
+  const errorView = (entry) => {
+    const item = entry && entry.item;
+    const error = entry && entry.error;
+    return {
+      action: item && item.action ? item.action : '',
+      path: item && item.action === 'deleteLocal' ? item.local && item.local.path
+        : item && item.action === 'deleteRemote' ? item.remote && item.remote.path
+          : item && item.local && item.local.path || item && item.remote && item.remote.path || '',
+      message: error && error.message ? error.message : String(error || 'Synchronization failed.'),
+      code: error && error.code ? error.code : 'SYNC_ERROR',
+    };
+  };
   return {
     items: (payload.items || []).map(view),
     deletions: (payload.deletions || []).map((d) => ({
@@ -2413,6 +2431,7 @@ function syncPayload(type, payload, ipc) {
       action: d && d.item ? d.item.action : '',
       isDirectory: !!(d && d.item && d.item.isDirectory),
     })),
+    errors: (payload.errors || []).map(errorView),
   };
 }
 

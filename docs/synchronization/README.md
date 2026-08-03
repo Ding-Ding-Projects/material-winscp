@@ -13,6 +13,7 @@ you can generate a checklist and never transfer a thing.
 | [comparison-checklist.md](comparison-checklist.md) | The reviewable list of differences, policy-aware selection, and per-item overrides. |
 | [keep-up-to-date.md](keep-up-to-date.md) | Continuous watching, and synchronized browsing. |
 | [watcher-cancellation.md](watcher-cancellation.md) | Cancellation of comparisons that are still waiting on adapter I/O. |
+| [docker-diff-smoke.md](docker-diff-smoke.md) | The opt-in smoke against throwaway Docker SFTP and FTP servers. |
 
 ## The rule that shapes everything here
 
