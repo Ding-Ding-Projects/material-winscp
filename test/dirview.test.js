@@ -44,6 +44,22 @@ function file(name, extra) {
   };
 }
 
+test('ExecuteFile resolves directory entry and open actions', () => {
+  const directory = file('reports', { type: 'dir' });
+  const regular = file('notes.txt', { type: 'file' });
+
+  assert.deepStrictEqual(dv.resolveExecuteFile(directory, { action: 'changeDir' }), {
+    action: 'changeDir', item: directory,
+  });
+  assert.deepStrictEqual(dv.resolveExecuteFile(regular, { action: 'changeDir' }), {
+    action: 'open', item: regular,
+  });
+  assert.deepStrictEqual(dv.resolveExecuteFile(directory, { action: 'open' }), {
+    action: 'open', item: directory,
+  });
+  assert.deepStrictEqual(dv.resolveExecuteFile(null), { action: 'noop', item: null });
+});
+
 function dir(name, extra) {
   return file(name, { type: 'dir', ...(extra || {}) });
 }

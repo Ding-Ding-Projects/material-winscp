@@ -31,6 +31,12 @@ Under **Site → Advanced → SCP/Shell**.
 | `notUtf` | `auto` | Treat filenames as non-UTF-8. |
 | `postLoginCommands` | `[]` | Commands run once after the shell opens. |
 
+On connect, the adapter first runs a harmless `:` command and discards any
+output it receives. This mirrors WinSCP's startup conversation and keeps a
+login banner or MOTD from being mistaken for the output of the initial `pwd`
+or `uname` probes. The discarded byte count is retained in the debug session
+log; a non-zero status is a classified startup protocol error.
+
 Remote duplicate actions use the same `copyRemote` adapter capability as the
 Commander queue. When the user chooses overwrite, the adapter removes only the
 resolved destination path and then runs `cp -a`; otherwise it leaves the

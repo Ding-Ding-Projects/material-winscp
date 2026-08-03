@@ -145,6 +145,26 @@ function itemIsFile(item) {
 }
 
 /**
+ * Resolve the action behind TUnixDirView::ExecuteFile.
+ *
+ * The UI owns actually changing directories or opening properties; the model
+ * owns the decision so double-click and keyboard Enter cannot drift apart.
+ * Directories (including the synthetic parent row) always enter when the
+ * configured action is `changeDir`. The open action returns the item that the
+ * caller should focus before opening its properties/editor affordance.
+ */
+function resolveExecuteFile(item, options) {
+  if (!item) return { action: 'noop', item: null };
+  const o = options || {};
+  const action = o.action === 'changeDir' ? 'changeDir' : 'open';
+  if (action === 'changeDir' && itemIsDirectory(item)) {
+    return { action, item };
+  }
+  if (action === 'open') return { action, item };
+  return { action: 'open', item };
+}
+
+/**
  * GetItemFileSize — a directory has no size until one is calculated, and a
  * calculated size wins over the reported one. The remote view returns -1 for an
  * uncalculated directory; the local view returns 0. Both are reproduced: the
@@ -2332,6 +2352,7 @@ module.exports = {
   // item accessors
   PARENT_DIRECTORY, OVERLAY,
   itemFileName, itemIsParentDirectory, itemIsDirectory, itemIsFile,
+  resolveExecuteFile,
   itemFileSize, itemFileTime, itemExtension, itemAttr, itemTypeName, itemIsHidden,
   itemOwner, itemGroup, itemRights, itemLinkTarget, itemOverlayIndexes,
 

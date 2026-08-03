@@ -40,7 +40,7 @@ visible in the editor so they can be cleared rather than silently changing.
 | `!U` | The username. |
 | `!S` | The session name. |
 | `!P` | The port. |
-| `!?prompt?!` | A value asked for at run time. |
+| `!?prompt?!` or `!?prompt!` | A value asked for at run time; the `?default` part is optional. |
 | `!&` | The whole selection, one command for all files rather than one per file. |
 | `!!` | A literal `!`. |
 

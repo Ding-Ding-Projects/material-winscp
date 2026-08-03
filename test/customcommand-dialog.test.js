@@ -25,3 +25,15 @@ test('custom command inputs expose explicit accessible names', () => {
   assert.match(source, /aria-label': tx\('Custom command pattern'/);
   assert.match(source, /aria-label': tx\('Keyboard shortcut'/);
 });
+
+test('interactive prompt validation accepts prompts without a default', () => {
+  assert.match(source, /if \(c === '\?'\).*prompt\[\?default\]/s);
+  assert.match(source, /const end = cmd\.indexOf\('\!', i \+ 2\)/);
+  assert.match(source, /aria-live': 'polite'/);
+});
+
+test('validation feedback is announced and associated with the command field', () => {
+  assert.match(source, /role: 'status'/);
+  assert.match(source, /aria-describedby', validation\.id/);
+  assert.match(source, /role: 'alert'/);
+});

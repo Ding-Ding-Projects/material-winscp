@@ -59,3 +59,12 @@ older backup or importing a backup re-normalizes every session secret. Tagged
 protected when platform protection is available and otherwise discarded. This
 prevents a hand-edited or legacy backup from turning the durable store into a
 clear-text credential file.
+
+## Import failure behavior
+
+An import is transactional in the running GUI: JSON imports restore preferences,
+sites, folders and workspaces if the durable write fails; INI imports restore
+sites and folders. The failure is then returned to the caller, and no
+`changed`/`sites-changed` event or history revision is emitted for the rejected
+import. This keeps a failed disk operation from leaving the visible session
+manager out of sync with the stored configuration.

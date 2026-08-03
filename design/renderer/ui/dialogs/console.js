@@ -149,6 +149,15 @@ export function canOpenConsole(info) {
   return !!(info && info.caps && info.caps.exec);
 }
 
+/**
+ * Console events are session-scoped. Keep this check at the renderer boundary
+ * as well as in main: multiple sessions can be open at once, and an event
+ * without this console's identity must never pollute its scrollback.
+ */
+export function isConsoleEventForSession(payload, sessionId) {
+  return !!(payload && payload.sessionId === sessionId);
+}
+
 /* ------------------------------------------------------------------ */
 /* styles                                                              */
 /* ------------------------------------------------------------------ */
@@ -508,7 +517,7 @@ export function createConsoleWindow(info) {
   });
 
   const offConsole = onMainEvent('event:console', (payload) => {
-    if (!payload) return;
+    if (!isConsoleEventForSession(payload, sessionId)) return;
     if (payload.text) push(payload.stream === 'stderr' ? 'stderr' : 'stdout', payload.text);
     if (payload.done) push('exit', payload.exitCode ? s('csExit', payload.exitCode) : s('csExitOk'));
   });

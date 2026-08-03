@@ -101,3 +101,35 @@ test('JSON load and import re-protect clear-text session secrets', () => withRoo
   assert.notEqual(loaded.sites[0].password, 'another-password');
   assert.doesNotMatch(fs.readFileSync(P.config(), 'utf8'), /another-password/);
 }));
+
+test('failed JSON import rolls back the live configuration before reporting the write error', () => withRoot(() => {
+  const config = new Config();
+  config.data.prefs.language = 'en';
+  config.data.sites = [{ id: 'existing', name: 'Existing' }];
+  config.data.folders = ['Existing'];
+  config.data.workspaces = [{ name: 'Existing workspace' }];
+  const before = config.exportState();
+  const failure = new Error('simulated disk failure');
+  config.flush = () => { throw failure; };
+
+  assert.throws(() => config.importState({
+    prefs: { language: 'yue' },
+    sites: [{ name: 'Imported' }],
+    folders: ['Imported'],
+    workspaces: [{ name: 'Imported workspace' }],
+  }), failure);
+  assert.deepEqual(config.exportState(), before);
+}));
+
+test('failed INI import rolls back sites and folders before reporting the write error', () => withRoot(() => {
+  const config = new Config();
+  config.data.sites = [{ id: 'existing', name: 'Existing' }];
+  config.data.folders = ['Existing'];
+  const before = { sites: config.data.sites, folders: config.data.folders };
+  const failure = new Error('simulated disk failure');
+  config.flush = () => { throw failure; };
+
+  assert.throws(() => config.importIni(ini, 'Imported a WinSCP INI'), failure);
+  assert.deepEqual(config.data.sites, before.sites);
+  assert.deepEqual(config.data.folders, before.folders);
+}));

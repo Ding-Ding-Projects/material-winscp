@@ -57,6 +57,8 @@ defineStrings({
   txPgSpeedLimit: ['Speed limit', '速度上限'],
   txPgCancelled: ['Cancelled "{0}".', '取消咗「{0}」。'],
   txPgCancelling: ['Cancelling transfer…', '取消緊傳輸⋯'],
+  txPgFinished: ['Transfer finished.', '傳輸完成。'],
+  txPgFinishedWithErrors: ['Transfer finished with errors.', '傳輸完成，但有錯誤。'],
   txPgActionFailed: ['Could not update the transfer: {0}', '更新傳輸失敗：{0}'],
 });
 
@@ -198,6 +200,7 @@ export function openProgressDialog({ id } = {}) {
   const startedAt = Date.now();
   let disposed = false;
   let actionBusy = false;
+  let lastPaintState = null;
 
   function setStatus(message, error = false) {
     status.textContent = message || '';
@@ -212,6 +215,7 @@ export function openProgressDialog({ id } = {}) {
     const item = currentItem();
     paintToolbar(item);
     if (!item) {
+      lastPaintState = null;
       sourceLine.set(t('txPgNoItem'), false);
       targetLine.set('—', false);
       currentLine.set('—', false);
@@ -223,6 +227,12 @@ export function openProgressDialog({ id } = {}) {
       graphCaption.textContent = '';
       if (!actionBusy) setStatus('');
       return;
+    }
+    if (lastPaintState !== item.state) {
+      if (item.state === 'done') setStatus(t('txPgFinished'));
+      else if (item.state === 'error') setStatus(t('txPgFinishedWithErrors'), true);
+      else if (!actionBusy) setStatus('');
+      lastPaintState = item.state;
     }
     const p = item.progress || {};
     sourceLine.set(item.source || '—');
@@ -267,11 +277,14 @@ export function openProgressDialog({ id } = {}) {
     pauseBtn.disabled = !item;
 
     const canSkip = item?.state === 'query';
+    const terminal = item?.state === 'done' || item?.state === 'error' || item?.state === 'cancelled';
     skipBtn.disabled = !canSkip;
     skipBtn.title = canSkip ? t('txPgSkipFile') : t('txPgSkipUnavailable');
-    cancelBtn.disabled = !item;
+    cancelBtn.disabled = !item || terminal;
     cancelBtn.disabled = cancelBtn.disabled || actionBusy;
-    speedBtn.disabled = !item;
+    speedBtn.disabled = !item || terminal;
+    pauseBtn.disabled = !item || terminal;
+    backgroundBtn.disabled = !item || terminal;
 
     const limit = item?.cpsLimit || 0;
     clear(speedBtn);

@@ -466,6 +466,19 @@ class ScpAdapter extends Adapter {
     if (!this.transport.connected) await this.transport.connect();
     this.connected = true;
 
+    // WinSCP's TSCPFileSystem drains one command before startup probing. A
+    // login shell may print a banner/MOTD on that first exec channel; consume
+    // it here so it cannot become the apparent output of `pwd` or `uname`.
+    const startup = await this._run(':');
+    if (startup.code !== 0) {
+      throw scpError(new Error(`Could not skip the shell startup message: ${(startup.stderr || startup.stdout || '').trim() || `exit code ${startup.code}`}`), {
+        category: 'protocol', code: 'EPROTO', operation: 'startup',
+      });
+    }
+    if (startup.stdout || startup.stderr) {
+      this._log('debug', `Discarded shell startup output (${[startup.stdout, startup.stderr].filter(Boolean).join('').length} bytes)`);
+    }
+
     const pwd = await this._run('pwd');
     this.home = this.normalize((pwd.stdout || '').trim() || '/');
 

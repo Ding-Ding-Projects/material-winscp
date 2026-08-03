@@ -26,6 +26,10 @@ font, size, colours, spacing — is editable through the per-element
 ["Edit appearance…"](../interface-and-appearance/appearance-editor.md) path like
 any other surface.
 
+Live console events are matched to the owning session before they enter the
+scrollback. This keeps two open consoles isolated even when the main process
+publishes events for both sessions.
+
 ## Failure modes
 
 | Situation | What the user sees | Recoverable |
@@ -60,6 +64,8 @@ any other surface.
 
 - Capability gating is tested to assert the console is unavailable without
   `caps.shell`.
+- Session identity filtering is tested for matching, mismatched and malformed
+  live console events.
 - Output bounding and interrupt are tested against a synthetic never-ending
   command.
 - Full-screen program detection is tested with recorded escape sequences.

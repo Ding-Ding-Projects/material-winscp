@@ -76,6 +76,32 @@ test.describe('SCP adapter contract', () => {
     );
   });
 
+  test('drains login-shell startup output before probing the working directory', async () => {
+    const commands = [];
+    const logs = [];
+    const adapter = new ScpAdapter({ returnVar: '$?' }, {
+      transport: {
+        connected: true,
+        on() {},
+        exec: async (command) => {
+          commands.push(command);
+          if (commands.length === 1) return { code: 0, stdout: 'Welcome banner\n', stderr: '' };
+          if (commands.length === 2) return { code: 0, stdout: '/home/demo\n', stderr: '' };
+          return { code: 0, stdout: 'Linux 6.1\n', stderr: '' };
+        },
+      },
+    });
+    adapter.on('log', (event) => logs.push(event));
+
+    await adapter.connect();
+
+    assert.equal(commands.length, 3);
+    assert.match(commands[0], /^:; echo/);
+    assert.match(commands[1], /^pwd; echo/);
+    assert.equal(adapter.home, '/home/demo');
+    assert.ok(logs.some((event) => /Discarded shell startup output \(15 bytes\)/.test(event.message)));
+  });
+
   test('rejects malformed records, oversized control lines, and unsafe modes', async () => {
     assert.throws(() => parseControl('C0999 1 file'), (error) => error.code === 'EPROTO');
     assert.throws(() => parseControl('E unexpected'), (error) => error.code === 'EPROTO');

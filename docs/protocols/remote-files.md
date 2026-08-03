@@ -53,6 +53,15 @@ entry. This prevents a removed row from continuing to manufacture a full path
 through a stale directory object, and prevents a hidden `..` row from leaking
 into the next listing.
 
+## Directory-entry execution
+
+The production-loaded directory-view model exposes the `ExecuteFile` decision
+as `resolveExecuteFile(item, { action })`. A directory (including the synthetic
+parent row) resolves to `changeDir` only when the configured action is
+`changeDir`; files resolve to `open` so an enter action cannot accidentally
+navigate through a regular file. A missing item resolves to `noop`. The model
+returns the original entry for the caller to focus before it opens the item.
+
 ## Failure modes and security
 
 - A malformed or refused listing line raises `ListLineError`; it is never

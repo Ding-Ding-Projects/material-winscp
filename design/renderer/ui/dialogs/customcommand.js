@@ -166,10 +166,11 @@ export function validateCommand(command, options = {}) {
     }
     const c = i + 1 < cmd.length ? cmd[i + 1] : '\0';
 
-    if (c === '?') {                                  // !?prompt?default!
-      const firstQ = cmd.indexOf('?', i + 2);
-      const end = firstQ < 0 ? -1 : cmd.indexOf('!', firstQ + 1);
-      if (end < 0) return { ok: false, error: `Unterminated prompt pattern at position ${i + 1} — "!?" needs a matching "?…!".` };
+    if (c === '?') {                                  // !?prompt[?default]!
+      // The main parser closes prompts at the next `!`; the `?default`
+      // separator is optional, so `!?Prompt!` is valid as well.
+      const end = cmd.indexOf('!', i + 2);
+      if (end < 0) return { ok: false, error: `Unterminated prompt pattern at position ${i + 1} — "!?" needs a matching "…!".` };
       i = end + 1;
       continue;
     }
@@ -319,7 +320,10 @@ export function openCustomCommand({ entry, sessionId, onSave, title } = {}) {
     { en: 'A local command works on this computer, so the selected remote files are downloaded to the temporary directory first and !^! is their local path.', yue: '本機指令喺呢部電腦跑，所以會先將揀咗嘅遠端檔案下載去臨時目錄，!^! 就係佢哋嘅本機路徑。' });
 
   const preview = h('div', { class: 'cc-preview' });
-  const validation = h('p', { class: 'pref-hint' });
+  const validation = h('p', {
+    class: 'pref-hint', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true',
+  });
+  cmdInput.setAttribute('aria-describedby', validation.id = uid('cc-validation'));
   const secretNote = h('p', { class: 'pref-hint', hidden: true });
 
   const reference = patternReference({
@@ -382,7 +386,7 @@ export function openCustomCommand({ entry, sessionId, onSave, title } = {}) {
     }
   }
 
-  const error = h('p', { class: 'pref-hint is-danger', hidden: true });
+  const error = h('p', { class: 'pref-hint is-danger', hidden: true, role: 'alert' });
   refresh();
 
   return openModal({

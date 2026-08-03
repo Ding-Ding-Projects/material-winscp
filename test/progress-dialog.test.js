@@ -21,6 +21,14 @@ test('cancel failures remain visible and do not masquerade as success', () => {
   assert.match(source, /notify\.error\(t\('txPgTitle'\), message\);/);
 });
 
+test('terminal queue state is announced and no longer offers transfer actions', () => {
+  assert.match(source, /item\.state === 'done'\) setStatus\(t\('txPgFinished'\)\)/);
+  assert.match(source, /item\.state === 'error'\) setStatus\(t\('txPgFinishedWithErrors'\), true\)/);
+  assert.match(source, /const terminal = item\?\.state === 'done' \|\| item\?\.state === 'error' \|\| item\?\.state === 'cancelled'/);
+  assert.match(source, /cancelBtn\.disabled = !item \|\| terminal;/);
+  assert.match(source, /speedBtn\.disabled = !item \|\| terminal;/);
+});
+
 test('long paths use an accessible title while the value can shrink in narrow layouts', () => {
   assert.match(source, /value\.title = String\(text \?\? ''\);/);
   assert.match(source, /class: 'tx-pg-line-value'/);

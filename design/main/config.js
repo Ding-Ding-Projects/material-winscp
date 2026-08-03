@@ -252,9 +252,19 @@ class Config extends EventEmitter {
   /** Import only the portable site hierarchy from a WinSCP INI file. */
   importIni(text, label) {
     const imported = this._parseIniSites(text);
-    this.data.sites = imported.sites;
-    this.data.folders = imported.folders;
-    this.flush();
+    const previous = {
+      sites: this.data.sites,
+      folders: this.data.folders,
+    };
+    try {
+      this.data.sites = imported.sites;
+      this.data.folders = imported.folders;
+      this.flush();
+    } catch (e) {
+      this.data.sites = previous.sites;
+      this.data.folders = previous.folders;
+      throw e;
+    }
     this._snapshot(label || 'Imported sites from a WinSCP INI file');
     this.emit('changed');
     this.emit('sites-changed');
@@ -284,11 +294,25 @@ class Config extends EventEmitter {
 
   /** Restore is itself a new revision — history stays append-only. */
   importState(state, label) {
-    if (state.prefs) this.data.prefs = deepMerge(clone(PREF_DEFAULTS), state.prefs);
-    if (state.sites) this.data.sites = state.sites.map(normalizeSite);
-    if (state.folders) this.data.folders = state.folders;
-    if (state.workspaces) this.data.workspaces = state.workspaces;
-    this.flush();
+    const previous = {
+      prefs: this.data.prefs,
+      sites: this.data.sites,
+      folders: this.data.folders,
+      workspaces: this.data.workspaces,
+    };
+    try {
+      if (state.prefs) this.data.prefs = deepMerge(clone(PREF_DEFAULTS), state.prefs);
+      if (state.sites) this.data.sites = state.sites.map(normalizeSite);
+      if (state.folders) this.data.folders = state.folders;
+      if (state.workspaces) this.data.workspaces = state.workspaces;
+      this.flush();
+    } catch (e) {
+      this.data.prefs = previous.prefs;
+      this.data.sites = previous.sites;
+      this.data.folders = previous.folders;
+      this.data.workspaces = previous.workspaces;
+      throw e;
+    }
     this._snapshot(label || 'Restored an earlier revision');
     this.emit('changed');
   }
