@@ -187,6 +187,20 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "8884879", kind: 'commit', ref: "8884879", oid: "88848797575cd5a7db695c91bceb009e44278725", date: "2026-08-03",
+    title: "Expand explorer preferences and SFTP reachability",
+    changes: [
+      { category: "fixed", text: "English: Reach Explorer transfers, validate slider persistence, refuse unsupported SFTP checksum fallbacks, fix root paths, and keep folder creation open for retry. Another five parity gaps have been given actual doors instead of cardboard signs.\\n\\n粵語：Explorer transfer 真係行到、slider persistence 過 validation、SFTP 唔再亂 fallback、root path 唔再生雙斜線，create folder 失敗可以 retry。又五個 parity gap 有真門口，唔係紙牌扮入口。" },
+    ],
+  },
+  {
+    id: "30b2408", kind: 'commit', ref: "30b2408", oid: "30b2408463de4d1cb50d8525a013cc7ebc13c4ad", date: "2026-08-03",
+    title: "Refresh console and transfer evidence",
+    changes: [
+      { category: "fixed", text: "English: Record the binary-stdin, drag-name, queue-cancel, SiteAdvanced, and editor-retry fixes with the verified 3,463-test handoff. The paperwork has stopped chasing yesterday's bugs.\\n\\n粵語：記低 binary stdin、drag name、queue cancel、SiteAdvanced 同 editor retry 修正，handoff 對準已驗證 3463 測試；份 paperwork 唔再追住尋日啲 bug 跑。" },
+    ],
+  },
+  {
     id: "da2d937", kind: 'commit', ref: "da2d937", oid: "da2d937156c78b341a8e1d843b5a0e1f2c1493c9", date: "2026-08-03",
     title: "Harden console drag queue and editor paths",
     changes: [
@@ -688,20 +702,6 @@ export const DEVELOPMENT = [
     title: "Refresh changelog for drag and protocol hardening",
     changes: [
       { category: "fixed", text: "Record the Preferences, Commander drag, shell staging, Terminal, S3 and WebDAV fixes with verified commit links. The changelog now notes that credentials and drag paths both deserve a passport check.\\n\\n廣東話：更新日誌記低 credentials 同 drag path 都要過關，唔係見門就入。" },
-    ],
-  },
-  {
-    id: "ae54b2a", kind: 'commit', ref: "ae54b2a", oid: "ae54b2a10ef9b397ef88f602fb968f2bcfa40d9b", date: "2026-08-03",
-    title: "Harden drag shell terminal and protocol security",
-    changes: [
-      { category: "added", text: "Expose disabled preference state, capture drag-start panel paths, refuse unsafe staged names, release pending terminal prompts on cancel, reject invalid AssumeRole expiry, and require WebDAV challenges unless legacy auth is explicit. Add focused tests and documentation. The drag payload now knows where it started, and the protocols have stopped handing credentials to surprise guests.\\n\\n廣東話：drag payload 記住自己由邊度出發，WebDAV 唔再見人就派 credentials；Terminal、S3、panel 同 Preferences 都收好尾。" },
-    ],
-  },
-  {
-    id: "599ae98", kind: 'commit', ref: "599ae98", oid: "599ae984e0d4cb3fc164b7440bb15434c8fc0dbd", date: "2026-08-03",
-    title: "Refresh handoff for queue and panel wave",
-    changes: [
-      { category: "fixed", text: "Update the factual handoff with 59.0% logic coverage, 114 outstanding units, 3342 passing tests plus one skip, the 22-issue scan and the fourth-wave queue/session/search/panel/setup fixes. Another pothole is flagged; the cardboard finish line is still unemployed.\\n\\n廣東話：handoff 報清楚多咗幾個測試同新修正，終點紙牌繼續失業，因為條路仲未行完。" },
     ],
   },
 ];
