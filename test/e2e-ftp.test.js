@@ -753,7 +753,7 @@ test('explicit FTPS asks the application about the certificate before logging in
 
     const calls = [];
     const a = new FtpAdapter(
-      siteFor(sec, { hostName: 'localhost', ftps: 'explicitTls' }),
+      siteFor(sec, { hostName: 'localhost', ftps: 'explicitTls', ftpTransferActiveImmediately: 'on' }),
       {
         password: PASSWORD,
         certVerifier: (host, cert, problem) => { calls.push({ host, cert, problem }); return true; },
