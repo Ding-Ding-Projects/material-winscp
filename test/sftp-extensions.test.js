@@ -40,6 +40,31 @@ test('SFTP EOF ends a pipelined read cleanly, including an empty file', async ()
   assert.equal(stream.destroyed, true);
 });
 
+test('SFTP recursive removal lstat-probes directory entries without attributes', async () => {
+  const adapter = new SftpAdapter({});
+  const calls = [];
+  adapter.sftp = {};
+  adapter._call = async (method, path) => {
+    calls.push([method, path]);
+    if (method === 'lstat' && path === '/root') return { mode: 0o40755 };
+    if (method === 'lstat' && path === '/root/child') return { mode: 0o40755 };
+    if (method === 'readdir' && path === '/root') return [{ filename: 'child', attrs: {} }];
+    if (method === 'readdir' && path === '/root/child') return [];
+    return undefined;
+  };
+
+  await adapter.remove('/root', { recursive: true });
+
+  assert.deepEqual(calls, [
+    ['lstat', '/root'],
+    ['readdir', '/root'],
+    ['lstat', '/root/child'],
+    ['readdir', '/root/child'],
+    ['rmdir', '/root/child'],
+    ['rmdir', '/root'],
+  ]);
+});
+
 // ------------------------------------------------------------- test server
 
 let HOST_KEY = null;

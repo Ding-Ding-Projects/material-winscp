@@ -1210,6 +1210,30 @@ test('the in-process ConsoleRunner returns an exit code for a bad stream mode', 
   assert.match(stdout.text, /Unknown value 'base64' of option 'stdout'/);
 });
 
+test('runner cleanup tolerates a failing XML close and releases the script', async () => {
+  let closeAllCalls = 0;
+  let xmlCloseCalls = 0;
+  const script = {
+    batch: 'off',
+    continue: true,
+    groups: false,
+    usageWarnings: true,
+    startInteractive() {},
+    async command() {},
+    async closeAll() { closeAllCalls++; throw new Error('session cleanup failed'); },
+    log() {},
+  };
+  const runner = new CR.ConsoleRunner(new CR.BufferConsole({ input: [] }), {
+    scriptFactory: () => script,
+    xmlLog: { close() { xmlCloseCalls++; throw new Error('log cleanup failed'); } },
+  });
+
+  assert.strictEqual(await runner.run({ scriptCommands: ['exit'] }), CR.RESULT_SUCCESS);
+  assert.strictEqual(closeAllCalls, 1);
+  assert.strictEqual(xmlCloseCalls, 1);
+  assert.strictEqual(runner.script, null, 'cleanup releases the runner script reference');
+});
+
 test('an unusable product version stops the front-end with a global error', async () => {
   const deps = frontEndDeps({ productVersion: 'not-a-version' });
   const code = await runConsoleFrontEnd(['/command', 'exit'], deps);

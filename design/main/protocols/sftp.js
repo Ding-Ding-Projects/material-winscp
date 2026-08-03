@@ -1786,7 +1786,15 @@ class SftpAdapter extends Adapter {
       const rows = await this._call('readdir', dir);
       for (const row of rows) {
         const child = this.join(dir, row.filename);
-        const mode = (row.attrs && row.attrs.mode) || 0;
+        let mode = (row.attrs && row.attrs.mode) || 0;
+        // SFTP permits servers to omit attributes from directory entries. In
+        // that case, do an lstat rather than guessing from a zero mode. Using
+        // lstat is important: stat would follow a symlink to a directory and
+        // recursive removal would then walk outside the requested tree.
+        if (!mode) {
+          const childAttrs = await this._call('lstat', child);
+          mode = childAttrs.mode || 0;
+        }
         if ((mode & S_IFMT) === S_IFDIR) stack.push(child);
         else await this._call('unlink', child);
       }

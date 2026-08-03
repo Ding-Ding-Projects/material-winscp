@@ -835,7 +835,11 @@ class ConsoleRunner {
       if (this.script) {
         try { await this.script.closeAll(); } catch { /* exiting anyway */ }
       }
-      if (this.xmlLog) this.xmlLog.close();
+      // Cleanup must not turn a completed command into an unhandled rejection.
+      // A broken optional log is already represented by its own failure state;
+      // the runner still has to release its script reference even if closing
+      // that log throws (for example, after a late filesystem error).
+      try { if (this.xmlLog) this.xmlLog.close(); } catch { /* exiting anyway */ }
       this.script = null;
     }
 

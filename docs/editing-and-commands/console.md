@@ -42,6 +42,7 @@ publishes events for both sessions.
 | Session drops with the console open | The console shows the disconnection and offers reconnect. Scrollback is preserved. | Yes |
 | A command waits for input the user did not expect | It is interactive — that is what this surface is for. Interrupt is always available. | Yes |
 | Console startup fails while creating its communication session | Startup reports the global initialization error and closes the session-owned channel, so a retry cannot reuse a half-open console. | Yes — retry after correcting the startup failure |
+| Cleanup encounters a late session or XML-log error | The command keeps its established exit result, attempts both cleanup paths, and releases the runner state instead of rejecting after completion. | Yes — rerun after correcting the underlying resource error |
 
 ## Security considerations
 
@@ -76,6 +77,8 @@ publishes events for both sessions.
   inspecting the commands issued at shell open.
 - Startup cleanup is tested by forcing initialization to fail and asserting the
   session-owned communication channel is closed before the global error returns.
+- Runner cleanup is tested with failing session and XML-log close operations to
+  ensure both are attempted without leaking the completed run's script state.
 
 ## Suggested articles
 

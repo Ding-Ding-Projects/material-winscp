@@ -155,10 +155,15 @@ function tokenize(cmdLine) {
   return out;
 }
 
-/** AddQuotes: quote only when the value contains a space, as the C++ does. */
+/**
+ * AddQuotes: quote values containing script-token separators.
+ *
+ * DoCutToken ends a token on either a space or a tab. Quoting only spaces
+ * makes generated commands lose the part after a tab when parsed again.
+ */
 function addQuotes(s) {
   const str = String(s === undefined || s === null ? '' : s);
-  return str.includes(' ') ? `"${str}"` : str;
+  return /[ \t]/.test(str) ? `"${str}"` : str;
 }
 
 // ---------------------------------------------------------------------------

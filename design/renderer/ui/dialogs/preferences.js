@@ -560,6 +560,27 @@ let openHandle = null;
  * Build the whole preferences surface. Returns { element, destroy, snapshot }.
  * The caller (a modal, or a future settings tab) decides where it lives.
  */
+function cloneValue(v) { try { return structuredClone(v); } catch { return v === undefined ? v : JSON.parse(JSON.stringify(v)); } }
+
+/**
+ * Capture every persisted path represented by a control. Some controls expose
+ * one UI value but write an `alsoKeys` companion as well; omitting that
+ * companion makes Revert changes restore the screen while leaving the stored
+ * configuration split-brained.
+ */
+export function snapshotPreferenceValues(entries, read = (key) => prefs.get(key)) {
+  const snap = {};
+  for (const entry of entries) {
+    const control = entry.control || entry;
+    if (control.virtual && control.type === 'custom') continue;
+    for (const key of [control.key, ...(control.alsoKeys || [])]) {
+      if (!key || MASTER_PASSWORD_KEYS.has(key) || Object.hasOwn(snap, key)) continue;
+      snap[key] = cloneValue(read(key));
+    }
+  }
+  return snap;
+}
+
 export function createPreferences(opts = {}) {
   ensurePreferenceStyles();
 
@@ -1179,13 +1200,7 @@ export function createPreferences(opts = {}) {
   /* ---------------- snapshot / revert ---------------- */
 
   function snapshot() {
-    const snap = {};
-    for (const e of entries) {
-      if (e.control.virtual && e.control.type === 'custom') continue;
-      if (MASTER_PASSWORD_KEYS.has(e.control.key)) continue;
-      snap[e.control.key] = clone(prefs.get(e.control.key));
-    }
-    return snap;
+    return snapshotPreferenceValues(entries, (key) => prefs.get(key));
   }
 
   async function revert(snap) {
@@ -1200,9 +1215,7 @@ export function createPreferences(opts = {}) {
     return n;
   }
 
-  function clone(v) { try { return structuredClone(v); } catch { return v === undefined ? v : JSON.parse(JSON.stringify(v)); } }
-
-  /* ---------------- boot ---------------- */
+/* ---------------- boot ---------------- */
 
   // bindRender paints once immediately and again on every language / funny-level
   // change, so the whole dialog follows the mode without being reopened.

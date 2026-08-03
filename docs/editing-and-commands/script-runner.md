@@ -19,6 +19,9 @@ If neither switch is present, commands are read from standard input. Script
 files may be UTF-8 or BOM-marked UTF-16; invalid text is rejected rather than
 silently reinterpreted. `/parameter` values expand as `%1%` through `%9%`, and
 timestamp/environment expansion happens immediately before execution.
+Generated command arguments are quoted when they contain either a space or a
+tab, matching the tokenizer's separators; this keeps paths and names with
+tabs intact when a CLI command is parsed again.
 
 ## Secure output
 

@@ -1,7 +1,9 @@
 # Remote transfer dialog
 
 The Duplicate and Move dialogs validate the source selection, target path and
-source-session capability before calling `queue:add`. A multi-file selection
+the source session's explicit `copyRemote` capability before calling `queue:add`.
+A generic `exec` capability is not sufficient: command execution does not prove
+that the protocol implements server-side remote copy. A multi-file selection
 must use a filename mask such as `/dest/*.bak`; a single literal filename would
 overwrite each previous source name in turn and is refused in the dialog.
 

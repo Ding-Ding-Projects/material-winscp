@@ -22,3 +22,11 @@ test('remote transfer validation accepts a masked multi-file target', async () =
     target: '/dest/*.bak', sessions: [{ id: 's1' }], canCopy: true,
   }), '');
 });
+
+test('remote transfer gating requires explicit server-side copy capability', async () => {
+  const { supportsRemoteCopy } = await loadDialog();
+  assert.equal(supportsRemoteCopy({ copyRemote: true }), true);
+  assert.equal(supportsRemoteCopy({ copyRemote: false, exec: true }), false);
+  assert.equal(supportsRemoteCopy({ exec: true }), false);
+  assert.equal(supportsRemoteCopy({}), false);
+});

@@ -203,6 +203,14 @@ test('findFile searches PATH only for a bare name', () => {
     { found: false, path: 'sub\\t.exe' });
 });
 
+test('findFile uses the host PATH delimiter and separator off Windows', () => {
+  const env = { PATH: '/opt/tools:/usr/local/bin' };
+  const exists = (p) => p === '/usr/local/bin/tool';
+  assert.deepStrictEqual(
+    G.findFile('tool', { platform: 'linux', env, exists }),
+    { found: true, path: '/usr/local/bin/tool' });
+});
+
 test('findFile ignores empty PATH components instead of probing the root', () => {
   const checked = [];
   const r = G.findFile('tool.exe', {

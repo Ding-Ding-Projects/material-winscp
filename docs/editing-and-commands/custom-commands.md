@@ -61,6 +61,13 @@ chain a command, even by accident.
 | Local command with the file not yet downloaded | Downloaded to a temporary first, and uploaded back afterwards if it changed — the same cycle as [editors](editors.md). | Yes |
 | An imported extension requiring a protocol the site does not use | Not offered, with the requirement stated in the extension list. | n/a |
 
+External application lookup follows the host platform. Windows uses semicolon-
+separated `PATH` entries and backslash joining; Linux and other Unix-like hosts
+use colon-separated entries and slash joining. A bare executable name is looked
+up in `PATH`, while a name containing a directory is treated as an explicit path.
+An empty `PATH` entry is covered by the current-directory probe and is not turned
+into a root-relative path.
+
 ## Security considerations
 
 - **This feature executes commands. That is its purpose and its risk.**

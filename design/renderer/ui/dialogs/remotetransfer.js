@@ -96,6 +96,11 @@ export function validateRemoteTransfer({ files = [], target = '', sessions = [],
   return '';
 }
 
+/** Server-side duplicate is a distinct capability from generic command execution. */
+export function supportsRemoteCopy(caps = {}) {
+  return !!caps.copyRemote;
+}
+
 /**
  * props:
  *   sessionId          the source session
@@ -216,7 +221,7 @@ registerDialog('remotetransfer', ({ props, close }) => {
   /** True when the server can perform the copy itself — the only route there is. */
   function canServerCopy() {
     const caps = sourceSession().caps || props.caps || {};
-    return !!(caps.copyRemote || caps.exec);
+    return supportsRemoteCopy(caps);
   }
 
   /**

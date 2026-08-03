@@ -35,6 +35,16 @@ test('Preferences tree keyboard navigation wraps and supports Home/End', async (
   assert.equal(preferenceTreeIndex('ArrowDown', 0, 0), -1);
 });
 
+test('preference revert snapshots companion persisted keys', async () => {
+  const { snapshotPreferenceValues } = await import('../design/renderer/ui/dialogs/preferences.js');
+  const values = { 'panel.doubleClickAction': 'open', 'panel.singleClickAction': 'select' };
+  const snap = snapshotPreferenceValues([
+    { control: { key: 'panel.doubleClickAction', alsoKeys: ['panel.singleClickAction'] } },
+  ], (key) => values[key]);
+  assert.deepEqual(snap, values,
+    'revert must capture every key written by a multi-key preference control');
+});
+
 const load = async () => ({
   schema: await import('../design/renderer/ui/dialogs/prefpages.js'),
   copy: await import('../design/renderer/ui/dialogs/copyparams.js'),

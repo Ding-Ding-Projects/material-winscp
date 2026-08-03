@@ -545,6 +545,7 @@ function defaultFileExists(p) {
  */
 function findFile(path, options) {
   const opts = options || {};
+  const isWindows = opts.platform === undefined ? process.platform === 'win32' : opts.platform === 'win32';
   const env = opts.env || process.env;
   const exists = opts.exists || defaultFileExists;
   let p = String(path == null ? '' : path);
@@ -564,14 +565,17 @@ function findFile(path, options) {
   if (sameText(extractFileName(p), p)) {
     const paths = env.PATH || env.Path || '';
     if (paths) {
-      for (const part of String(paths).split(';')) {
+      const delimiter = isWindows ? ';' : ':';
+      const separator = isWindows ? WIN_SEP : '/';
+      for (const part of String(paths).split(delimiter)) {
         // Not normalizing: PATH is not under our control and an invalid entry
-        // must not throw, it must just fail to match.
-        // An empty Windows PATH component means the current directory. The
-        // desktop app must not turn that implicit location into a root probe
-        // when resolving an external tool, so empty components fail closed.
+        // must not throw, it must just fail to match. An empty component means
+        // the current directory on both platforms; the initial exists(p) probe
+        // already covers that case, so skip it rather than constructing a
+        // misleading root-relative candidate.
         if (part === '') continue;
-        const candidate = includeTrailingBackslash(part) + p;
+        const base = part.endsWith('\\') || part.endsWith('/') ? part : part + separator;
+        const candidate = base + p;
         if (exists(candidate)) return { found: true, path: candidate };
       }
     }

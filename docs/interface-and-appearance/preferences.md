@@ -26,6 +26,11 @@ their regex-builder buttons, changes `queue.noConfirmations` and
 prompt behaviour. It also proves that an unavailable setting cannot be edited
 through a synthetic change event.
 
+Revert captures every persisted path behind a control, including companion
+`alsoKeys`. This matters for controls with one visible value that writes more
+than one configuration key: reverting restores the visible setting and its
+companion together, rather than leaving the stored configuration inconsistent.
+
 ## Consumer ledger
 
 The consumer guard is production-only: it scans `design/` outside the

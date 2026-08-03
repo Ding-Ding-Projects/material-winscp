@@ -356,6 +356,11 @@ test('tokenize splits a whole line the way the parser will', () => {
     ['put', '-delete', 'a b.txt', '/remote/']);
 });
 
+test('addQuotes keeps tab-containing CLI arguments as one token', () => {
+  const value = 'folder\twith-tab.txt';
+  assert.deepEqual(S.tokenize(`put ${S.addQuotes(value)}`), ['put', value]);
+});
+
 // ===========================================================================
 // 2. option / switch parsing
 // ===========================================================================

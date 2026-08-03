@@ -107,6 +107,10 @@ behaviour, and only then apply it.
 - The FTPShell `LSTAT` compatibility path is unit-tested for its supported
   status code, its normalized directory result, and its refusal to downgrade
   unrelated errors.
+- Recursive removal lstat-probes directory entries whose server omitted
+  attributes. This preserves directory removal while treating symlinked
+  directories as links, so a cleanup cannot follow a link outside its target
+  tree.
 
 To check a real connection by hand: connect, run **Commands → Server/protocol
 information**, and confirm the negotiated SFTP version and extension list match
