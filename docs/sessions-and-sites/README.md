@@ -13,6 +13,7 @@ tunnels, proxies and automatic reconnection.
 | [import-sessions.md](import-sessions.md) | Bounded PuTTY/KiTTY, FileZilla, OpenSSH, WinSCP INI and known_hosts imports, including UTF-8 session-name compatibility. |
 | [bookmarks.md](bookmarks.md) | Ordered shared and per-site local/remote location profiles, duplicate policies and safe JSON persistence. |
 | [session-info.md](session-info.md) | Secret-free protocol, endpoint, display and live-session information snapshots. |
+| [session-dialog.md](session-dialog.md) | Bounded endpoint validation, secret-free dialog state, and stale-reconnect-safe close lifecycle. |
 | [terminal-lifecycle.md](terminal-lifecycle.md) | Foreground operation ownership, cancellation, reconnect backoff/budgets, prompt refusal, and directory-cache invalidation. |
 | [named-objects.md](named-objects.md) | Bounded names for sessions, queue items, operations and UI bridges, with weak or explicit ownership and identifier-only export. |
 | [workspaces.md](workspaces.md) | Saving and restoring sets of sessions, and the auto-workspace. |

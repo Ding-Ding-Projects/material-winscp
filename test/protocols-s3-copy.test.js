@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { S3Adapter } = require('../design/main/protocols/s3');
+const { S3Adapter, S3UploadStream } = require('../design/main/protocols/s3');
 
 const FIVE_MIB = 5 * 1024 * 1024;
 const FIVE_GIB = 5 * 1024 * 1024 * 1024;
@@ -46,4 +46,24 @@ test('multipart server-side copy partitions a >5 GiB object and completes it', a
     uploadId: 'copy-upload-1',
     parts: requests.map(({ partNumber }) => ({ partNumber, etag: `etag-${partNumber}` })),
   });
+});
+
+test('cancelling a multipart upload aborts the remote upload', async () => {
+  const controller = new AbortController();
+  let aborted = 0;
+  const adapter = {
+    _createMultipartUpload: async () => 'cancel-upload',
+    _uploadPart: async () => { await new Promise((resolve) => setTimeout(resolve, 10)); return 'etag'; },
+    _abortMultipartUpload: async () => { aborted += 1; },
+    _putObject: async () => ({ etag: 'etag' }),
+    _completeMultipartUpload: async () => ({ etag: 'etag' }),
+  };
+  const stream = new S3UploadStream(adapter, 'bucket', 'cancel.bin', { size: FIVE_MIB, signal: controller.signal });
+  const failed = new Promise((resolve) => stream.once('error', resolve));
+  stream.end(Buffer.alloc(FIVE_MIB));
+  await new Promise((resolve) => setTimeout(resolve, 1));
+  controller.abort();
+  const error = await failed;
+  assert.match(error.message, /cancelled/);
+  assert.equal(aborted, 1, 'cancellation aborts the in-progress multipart upload');
 });

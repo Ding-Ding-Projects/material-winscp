@@ -361,6 +361,9 @@ class S3UploadStream extends Writable {
     this.parts = [];
     this.partNumber = 0;
     this.result = null;
+    this.signal = opts.signal || null;
+    if (this.signal && this.signal.aborted) this.destroy(new Error('S3 upload cancelled'));
+    if (this.signal) this.signal.addEventListener('abort', () => this.destroy(new Error('S3 upload cancelled')), { once: true });
     // Keep every part above S3's 5 MiB floor while staying under the 10 000
     // part ceiling for whatever size the caller did tell us about.
     this.partSize = partSizeFor(opts.size);
@@ -374,6 +377,7 @@ class S3UploadStream extends Writable {
   }
 
   async _flushPart() {
+    if (this.signal && this.signal.aborted) throw new Error('S3 upload cancelled');
     const body = Buffer.concat(this.buffer, this.buffered);
     this.buffer = [];
     this.buffered = 0;
@@ -385,6 +389,7 @@ class S3UploadStream extends Writable {
 
   _final(cb) {
     const finish = async () => {
+      if (this.signal && this.signal.aborted) throw new Error('S3 upload cancelled');
       if (!this.uploadId) {
         // Everything fit in the buffer — one PutObject, no multipart dance.
         const body = Buffer.concat(this.buffer, this.buffered);
@@ -680,7 +685,7 @@ class S3Adapter extends Adapter {
     await this._ensureCredentials();
     const {
       method, host, port, secure, service = 's3', region, path: uriPath = '/',
-      query, headers = {}, body = null, payloadHash, stream, streamBody,
+      query, headers = {}, body = null, payloadHash, stream, streamBody, signal,
     } = spec;
 
     const date = new Date();
@@ -713,6 +718,7 @@ class S3Adapter extends Adapter {
     const lib = secure ? https : http;
 
     return new Promise((resolve, reject) => {
+      if (signal && signal.aborted) { reject(new Error('S3 request cancelled')); return; }
       const req = lib.request({
         method,
         hostname: host,
@@ -732,6 +738,9 @@ class S3Adapter extends Adapter {
         res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }));
         res.on('error', reject);
       });
+      const abort = () => req.destroy(new Error('S3 request cancelled'));
+      if (signal) signal.addEventListener('abort', abort, { once: true });
+      req.once('close', () => signal && signal.removeEventListener('abort', abort));
       this._pinCheck(req);
       req.on('error', reject);
       req.on('timeout', () => req.destroy(new Error(`Timed out on ${method} ${host}${uriPath}`)));
@@ -781,6 +790,7 @@ class S3Adapter extends Adapter {
         payloadHash: opts.payloadHash,
         stream: opts.stream,
         streamBody: opts.streamBody,
+        signal: opts.signal,
       });
 
       // S3 answers a misrouted request with the right region in a header; use
@@ -1202,12 +1212,17 @@ class S3Adapter extends Adapter {
     const headers = {};
     if (start > 0) headers.range = opts.end ? `bytes=${start}-${opts.end}` : `bytes=${start}-`;
 
-    const res = await this._s3('GET', bucket, key, { headers, stream: true });
+    const res = await this._s3('GET', bucket, key, { headers, stream: true, signal: opts.signal });
     if (start > 0 && res.status !== 206) {
       if (res.stream) res.stream.destroy();
       throw new Error(`Server ignored the Range header (answered ${res.status}); resume is not possible`);
     }
     const out = new PassThrough();
+    if (opts.signal) {
+      const abort = () => out.destroy(new Error('S3 download cancelled'));
+      if (opts.signal.aborted) abort();
+      else opts.signal.addEventListener('abort', abort, { once: true });
+    }
     res.stream.pipe(out);
     res.stream.on('error', (e) => out.destroy(e));
     return out;
@@ -1239,6 +1254,7 @@ class S3Adapter extends Adapter {
 
 module.exports = {
   S3Adapter,
+  S3UploadStream,
   signRequestV4,
   createCanonicalRequest,
   createStringToSign,

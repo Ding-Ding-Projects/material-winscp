@@ -33,6 +33,7 @@ import { t, bindRender } from '../../i18n.js';
 import { registerCommand, openModal } from '../../app.js';
 import { notify } from '../notifications.js';
 import { createSearchBar, filterBy, noMatchMessage } from '../searchbar.js';
+import { openRegexBuilder } from '../regexbuilder.js';
 import { registerContextMenu, SEPARATOR } from '../contextmenu.js';
 import {
   makeTranslator, txLabel, ops, checkRow, readHistory, pushHistory,
@@ -59,6 +60,7 @@ const STRINGS = {
   ffInDirectory: ['Searching in {0}', '搵緊 {0}'],
   ffFound: ['{0} file(s) found.', '搵到 {0} 個檔案。'],
   ffNone: ['No files found.', '搵唔到檔案。'],
+  ffChecking: ['Checking remaining candidates…', '仲喺度確認剩低嘅候選檔案…'],
   ffResults: ['Results', '結果'],
   ffResultsSearch: ['Search the results', '搵結果'],
   ffColName: ['Name', '名'],
@@ -124,6 +126,7 @@ export function openFileFind(props = {}) {
   let selection = new Set();
   let matcher = null;            // { re } while a content search is running
   let pending = 0;               // verifications still in flight
+  let searchGeneration = 0;
 
   /* ---------------- the filter group ---------------- */
 
@@ -173,6 +176,14 @@ export function openFileFind(props = {}) {
     }),
   });
   bindRender(editMaskButton, () => { editMaskButton.textContent = tx('ffEdit'); });
+  const regexMaskButton = h('button', {
+    type: 'button', class: 'icon-btn', 'aria-label': tx('ffRegex'), title: tx('ffRegex'),
+    onclick: () => openRegexBuilder({
+      anchor: regexMaskButton, pattern: maskInput.value,
+      sample: results.map((r) => r.name).join('\n'), title: tx('ffMask'),
+      onApply: ({ pattern }) => { maskInput.value = pattern; updateControls(); maskInput.focus(); },
+    }),
+  }, icon('code', 18));
 
   function labelledRow(labelKey, control, ...trailing) {
     const label = h('label', { class: 'field-label', for: control.id, style: { width: 'calc(14ch * var(--uiscale))' } });
@@ -203,7 +214,7 @@ export function openFileFind(props = {}) {
   h('legend', { class: 'field-label' }, tx('ffFilter')),
   labelledRow('ffSearchIn', rootInput),
   rootHistory,
-  labelledRow('ffMask', maskInput, editMaskButton),
+  labelledRow('ffMask', maskInput, regexMaskButton, editMaskButton),
   maskHistory,
   maskStatus,
   labelledRow('ffContaining', textInput),
@@ -260,6 +271,7 @@ export function openFileFind(props = {}) {
         style: { padding: 'calc(12px * var(--den))', fontSize: 'var(--type-body-sm)' },
       }, resultSearch.isActive
         ? noMatchMessage(resultSearch.predicate, tx('ffResults'))
+        : pending > 0 ? tx('ffChecking')
         : (state === 'done' || state === 'aborted' ? tx('ffNone') : tx('ffIdle'))));
       return;
     }
@@ -479,7 +491,8 @@ export function openFileFind(props = {}) {
     }
   }
 
-  function acceptHit(raw) {
+  function acceptHit(raw, generation = searchGeneration) {
+    if (generation !== searchGeneration || (state !== 'finding' && state !== 'aborting')) return;
     if (!raw) return;
     const path = raw.path || '';
     if (!path) return;
@@ -507,8 +520,10 @@ export function openFileFind(props = {}) {
       return;
     }
     pending += 1;
+    const generationAtStart = searchGeneration;
     verifyContent(hit).then((ok) => {
       pending -= 1;
+      if (generationAtStart !== searchGeneration) return;
       if (ok) addHit(hit, limit);
       else updateStatus();
     });
@@ -536,6 +551,7 @@ export function openFileFind(props = {}) {
     matcher = buildMatcher();
     if (textInput.value && hasSession && !matcher) return;   // an invalid pattern was reported
 
+    searchGeneration += 1;
     results = [];
     selection = new Set();
     focusedIndex = -1;
@@ -549,7 +565,7 @@ export function openFileFind(props = {}) {
     correlationId = cid;
     offProgress = ops.onProgress((payload) => {
       if (!payload || payload.correlationId !== cid || payload.kind !== 'find') return;
-      if (payload.hit) { acceptHit(payload.hit); updateStatus(payload.hit.path); return; }
+      if (payload.hit) { acceptHit(payload.hit, searchGeneration); updateStatus(payload.hit.path); return; }
       if (payload.error) {
         notify.warning(tx('ffTitle'), tx('ffError', payload.at || root, payload.error));
         return;
@@ -724,6 +740,8 @@ export function openFileFind(props = {}) {
 
   function close() {
     if (state === 'finding' || state === 'aborting') stopSearch();
+    searchGeneration += 1;
+    state = 'aborted';
     detach();
     resultSearch.destroy();
     windowEl.remove();

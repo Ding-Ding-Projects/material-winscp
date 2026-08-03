@@ -81,13 +81,41 @@ const DEFAULT_PARAMS = {
   useRemoteFiles: false,
 };
 
+export const CUSTOM_COMMAND_SHORTCUTS = new Set(
+  ['F2', 'F3', 'F4', 'F7', 'F8', 'F9', 'F11', 'F12']
+    .flatMap((key) => ['Ctrl+', 'Ctrl+Shift+', 'Shift+'].map((mod) => mod + key)),
+);
+
+/** Return a stable comparison key for persisted/user-entered shortcuts. */
+export function normaliseShortcut(shortcut) {
+  const value = typeof shortcut === 'string' ? shortcut.trim() : '';
+  return value ? value.toLowerCase() : '';
+}
+
+/** Validate the dialog-owned shortcut contract before a command is saved. */
+export function validateShortcut(shortcut) {
+  const value = typeof shortcut === 'string' ? shortcut.trim() : '';
+  if (!value) return { ok: true, error: null };
+  if (!CUSTOM_COMMAND_SHORTCUTS.has(value)) {
+    return { ok: false, error: `Unsupported keyboard shortcut "${value}".` };
+  }
+  return { ok: true, error: null };
+}
+
+/** Find a conflicting shortcut, excluding the entry currently being edited. */
+export function shortcutConflict(shortcut, entries = [], currentId = '') {
+  const key = normaliseShortcut(shortcut);
+  if (!key) return null;
+  return entries.find((entry) => entry?.id !== currentId && normaliseShortcut(entry?.shortcut) === key) || null;
+}
+
 export function normaliseCommand(entry) {
   const e = entry || {};
   return {
     id: e.id || `cc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
     name: typeof e.name === 'string' ? e.name : '',
     command: typeof e.command === 'string' ? e.command : '',
-    shortcut: typeof e.shortcut === 'string' ? e.shortcut : '',
+    shortcut: typeof e.shortcut === 'string' ? e.shortcut.trim() : '',
     params: { ...DEFAULT_PARAMS, ...(e.params || {}) },
   };
 }
@@ -251,6 +279,7 @@ export function openCustomCommand({ entry, sessionId, onSave, title } = {}) {
 
   const cmdInput = h('input', {
     type: 'text', class: 'field-input pref-text mono', autocomplete: 'off', spellcheck: 'false',
+    'aria-label': tx('Custom command pattern', '自訂指令樣式'),
     placeholder: 'grep "!?&Text to find:?!" !&',
     oninput: () => { draft.command = cmdInput.value; refresh(); },
   });
@@ -258,13 +287,15 @@ export function openCustomCommand({ entry, sessionId, onSave, title } = {}) {
 
   const shortcutSelect = h('select', {
     class: 'field-input pref-select',
+    'aria-label': tx('Keyboard shortcut', '鍵盤捷徑'),
     onchange: () => { draft.shortcut = shortcutSelect.value; },
   });
   shortcutSelect.appendChild(h('option', { value: '' }, tx('(none)', '（冇）')));
-  for (const key of ['F2', 'F3', 'F4', 'F7', 'F8', 'F9', 'F11', 'F12']) {
-    for (const mod of ['Ctrl+', 'Ctrl+Shift+', 'Shift+']) {
-      shortcutSelect.appendChild(h('option', { value: mod + key }, mod + key));
-    }
+  for (const shortcut of CUSTOM_COMMAND_SHORTCUTS) {
+    shortcutSelect.appendChild(h('option', { value: shortcut }, shortcut));
+  }
+  if (draft.shortcut && !CUSTOM_COMMAND_SHORTCUTS.has(draft.shortcut)) {
+    shortcutSelect.appendChild(h('option', { value: draft.shortcut }, `${draft.shortcut} — ${tx('unsupported', '唔支援')}`));
   }
   shortcutSelect.value = draft.shortcut || '';
 
@@ -403,6 +434,12 @@ export function openCustomCommand({ entry, sessionId, onSave, title } = {}) {
             error.hidden = false;
             return true;
           }
+          const shortcutResult = validateShortcut(draft.shortcut);
+          if (!shortcutResult.ok) {
+            error.textContent = shortcutResult.error;
+            error.hidden = false;
+            return true;
+          }
           if (!draft.command) {
             error.textContent = tx('A custom command needs a command line before it can be saved.', '要有指令內容先儲存得。');
             error.hidden = false;
@@ -516,6 +553,11 @@ export function createCommandList({ value = [], sessionId, onChange } = {}) {
       entry: index >= 0 ? rows[index] : null,
       sessionId,
       onSave: (saved) => {
+        const conflict = shortcutConflict(saved.shortcut, rows, saved.id);
+        if (conflict) {
+          notify.error(tx('Shortcut already used', '捷徑已經用緊'), tx(`"${conflict.name || conflict.command}" already uses ${saved.shortcut}.`, `「${conflict.name || conflict.command}」已經用緊 ${saved.shortcut}。`));
+          return;
+        }
         if (index >= 0) rows[index] = saved;
         else { rows.push(saved); selected = rows.length - 1; }
         paint(); emit();

@@ -56,6 +56,8 @@ defineStrings({
   txPgNothingRunning: ['Nothing is being transferred right now.', '而家冇嘢傳緊。'],
   txPgSpeedLimit: ['Speed limit', '速度上限'],
   txPgCancelled: ['Cancelled "{0}".', '取消咗「{0}」。'],
+  txPgCancelling: ['Cancelling transfer…', '取消緊傳輸⋯'],
+  txPgActionFailed: ['Could not update the transfer: {0}', '更新傳輸失敗：{0}'],
 });
 
 /** One window per item; asking twice focuses the one that is already open. */
@@ -83,6 +85,7 @@ export function openProgressDialog({ id } = {}) {
   const sourceLine = statLine('sourceLbl');
   const targetLine = statLine('destLbl');
   const currentLine = statLine('txPgFile');
+  const status = h('p', { class: 'tx-pg-status', role: 'status', 'aria-live': 'polite', hidden: true });
 
   const totalBar = progressBar(false);
   const fileBar = progressBar(true);
@@ -127,12 +130,18 @@ export function openProgressDialog({ id } = {}) {
     });
     close();
   });
-  const cancelBtn = toolButton('close', 'txCancelItem', () => run(async () => {
-    const item = currentItem();
-    await queueModel.cancel(itemId);
-    notify.info(t('queueTitle'), t('txPgCancelled', item ? item.source : itemId));
-    close();
-  }));
+  const cancelBtn = toolButton('close', 'txCancelItem', () => {
+    if (actionBusy) return;
+    actionBusy = true;
+    setStatus(t('txPgCancelling'));
+    paint();
+    run(async () => {
+      const item = currentItem();
+      await queueModel.cancel(itemId);
+      notify.info(t('queueTitle'), t('txPgCancelled', item ? item.source : itemId));
+      close();
+    });
+  });
 
   const speedBtn = h('button', { type: 'button', class: 'tx-q-once' });
   bindText(speedBtn, 'txPgSpeedLimit', { attr: 'aria-label' });
@@ -172,7 +181,7 @@ export function openProgressDialog({ id } = {}) {
     h('span', { class: 'nc-head-title', id: titleId }, t('txPgTitle')),
     closeBtn),
   h('div', { class: 'tx-pg' },
-    sourceLine.element, targetLine.element, currentLine.element,
+    sourceLine.element, targetLine.element, currentLine.element, status,
     labelled('txPgTotal', totalBar.element),
     labelled('txPgFile', fileBar.element),
     statsGrid,
@@ -188,6 +197,13 @@ export function openProgressDialog({ id } = {}) {
 
   const startedAt = Date.now();
   let disposed = false;
+  let actionBusy = false;
+
+  function setStatus(message, error = false) {
+    status.textContent = message || '';
+    status.hidden = !message;
+    status.setAttribute('aria-live', error ? 'assertive' : 'polite');
+  }
 
   function currentItem() { return queueModel.item(itemId); }
 
@@ -205,6 +221,7 @@ export function openProgressDialog({ id } = {}) {
       graphBox.hidden = true;
       graphEmpty.hidden = false;
       graphCaption.textContent = '';
+      if (!actionBusy) setStatus('');
       return;
     }
     const p = item.progress || {};
@@ -253,6 +270,7 @@ export function openProgressDialog({ id } = {}) {
     skipBtn.disabled = !canSkip;
     skipBtn.title = canSkip ? t('txPgSkipFile') : t('txPgSkipUnavailable');
     cancelBtn.disabled = !item;
+    cancelBtn.disabled = cancelBtn.disabled || actionBusy;
     speedBtn.disabled = !item;
 
     const limit = item?.cpsLimit || 0;
@@ -276,7 +294,16 @@ export function openProgressDialog({ id } = {}) {
   }
 
   function run(fn) {
-    Promise.resolve().then(fn).then(paint).catch((err) => notify.error(t('txPgTitle'), err.message));
+    Promise.resolve().then(fn).then(() => {
+      actionBusy = false;
+      paint();
+    }).catch((err) => {
+      actionBusy = false;
+      const message = err?.message || String(err || 'Unknown error');
+      setStatus(t('txPgActionFailed', message), true);
+      notify.error(t('txPgTitle'), message);
+      paint();
+    });
   }
 
   function skipCurrentFile() {

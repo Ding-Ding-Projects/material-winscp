@@ -21,15 +21,19 @@ revealed in the panel.
 | Follow symbolic links | Off by default — link loops are how a recursive search never finishes. |
 | Maximum results | Bounded, with the bound stated. |
 
-The search field carries the [regex builder](regex-builder.md) anchored beside
-it. Plain text and mask syntax are the defaults; regex is an explicit opt-in, and
-the builder shows the mask-to-regex conversion when switching so the transition
-is not a surprise.
+The file-mask field carries the [regex builder](regex-builder.md) anchored beside
+it, alongside the dedicated mask editor. Plain text and mask syntax are the
+defaults; regex is an explicit opt-in, and applying a builder pattern writes it
+back to the mask field so the next search uses exactly what was shown.
 
 ## Behaviour worth knowing
 
 - **Results stream in.** The list fills as the walk proceeds; there is no wait
   for the whole tree. The count updates live and is marked as still running.
+- **Empty results are truthful.** If candidate files are still being read back
+  for content verification, the list says that checking is in progress instead
+  of briefly claiming that no files exist. Closing or starting another search
+  invalidates those late callbacks.
 - **The search is cancellable at any point**, and cancelling keeps the results
   found so far.
 - **It uses the ordinary adapter listing path**, so it obeys the protocol's

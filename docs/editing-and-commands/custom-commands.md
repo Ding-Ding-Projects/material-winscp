@@ -23,6 +23,12 @@ Under **Preferences → Commands**. Each command has:
 | Options | Apply to directories; recurse; prompt for parameters; show results; copy results to clipboard. |
 | Keyboard shortcut | Optional. |
 
+The editor accepts only its displayed `Ctrl+`, `Ctrl+Shift+` and `Shift+` function
+key combinations. A shortcut is unique within the custom-command list; editing a
+command keeps its own shortcut available, while trying to reuse another command's
+shortcut is rejected. Older imported values that are no longer supported remain
+visible in the editor so they can be cleared rather than silently changing.
+
 ### Placeholders
 
 | Placeholder | Expands to |

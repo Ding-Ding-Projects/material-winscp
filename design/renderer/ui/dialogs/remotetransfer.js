@@ -44,6 +44,7 @@ const STRINGS = {
     '{0} 個檔案會全部寫入同一個名「{1}」，後面嗰個會冚咗前面嗰個。喺個名度加返個 * 就唔會撞。'],
   rtNoTarget: ['Type a target path first.', '要先打個目標路徑。'],
   rtNoSession: ['No session is open to duplicate into.', '冇開住嘅工作階段可以複製過去。'],
+  rtNoFiles: ['Select at least one file first.', '要先揀最少一個檔案。'],
   rtQueued: [[
     '{0} item(s) queued to {1}.',
     'Queued {0} item(s) for {1}.',
@@ -81,6 +82,18 @@ export function splitTarget(text) {
 export function isFileNameMask(mask) {
   const m = String(mask || '');
   return m === '' || /[*?]/.test(m);
+}
+
+/** Validate the fields that must be true before queue:add is attempted. */
+export function validateRemoteTransfer({ files = [], target = '', sessions = [], canCopy = true }) {
+  const value = String(target || '').trim();
+  if (!files.length) return 'noFiles';
+  if (!value) return 'noTarget';
+  if (!sessions.length) return 'noSession';
+  if (!canCopy) return 'unsupported';
+  const { mask } = splitTarget(value);
+  if (files.length > 1 && !isFileNameMask(mask)) return 'multiToOne';
+  return '';
 }
 
 /**
@@ -148,6 +161,7 @@ registerDialog('remotetransfer', ({ props, close }) => {
 
   const warning = h('div', {
     role: 'status',
+    'aria-live': 'polite',
     style: {
       fontSize: 'var(--type-label-md)', lineHeight: '1.45',
       background: 'var(--terc)', color: 'var(--onterc)',
@@ -155,6 +169,7 @@ registerDialog('remotetransfer', ({ props, close }) => {
     },
   });
   warning.hidden = true;
+  pathInput.setAttribute('aria-describedby', warning.id = uid('rtwarning'));
 
   const content = h('div', { class: 'stack' },
     headline,
@@ -166,6 +181,7 @@ registerDialog('remotetransfer', ({ props, close }) => {
   appearanceTarget(content, 'remotetransfer-dialog', 'Duplicate dialog');
 
   let okButton = null;
+  let submitting = false;
 
   function paintSessions() {
     // Only the source session may be a target. design/main/ipc.js's remote-copy
@@ -220,25 +236,27 @@ registerDialog('remotetransfer', ({ props, close }) => {
 
   function update() {
     const { directory, mask } = splitTarget(pathInput.value);
-    const blocked = !canServerCopy()
-      ? tx('rtUnsupported', sourceSession().protocol || props.protocolName || 'This protocol')
-      : '';
-    const problem = blocked
-      || (!pathInput.value.trim() ? tx('rtNoTarget')
-        : (!sessions.length ? tx('rtNoSession')
-          : (files.length > 1 && !isFileNameMask(mask) ? tx('rtMultiToOne', files.length, mask) : '')));
+    const reason = validateRemoteTransfer({ files, target: pathInput.value, sessions, canCopy: canServerCopy() });
+    const problem = reason === 'noFiles' ? tx('rtNoFiles')
+      : reason === 'noTarget' ? tx('rtNoTarget')
+        : reason === 'noSession' ? tx('rtNoSession')
+          : reason === 'unsupported' ? tx('rtUnsupported', sourceSession().protocol || props.protocolName || 'This protocol')
+            : reason === 'multiToOne' ? tx('rtMultiToOne', files.length, mask) : '';
     warning.textContent = problem;
     warning.hidden = !problem;
     // OK is refused for the two problems that make the request impossible, not
     // merely awkward: a protocol that cannot copy on the server, and no target.
-    if (okButton) okButton.disabled = !!blocked || !pathInput.value.trim() || !sessions.length;
+    if (okButton) okButton.disabled = submitting || !!reason;
     return { directory, mask };
   }
 
   async function queue() {
-    const { directory, mask } = splitTarget(pathInput.value);
+    const { directory, mask } = splitTarget(pathInput.value.trim());
     const sources = files.map((f) => f.path || joinPath(props.directory || '', f.name)).filter(Boolean);
-    if (!sources.length) return;
+    const reason = validateRemoteTransfer({ files: sources, target: pathInput.value, sessions, canCopy: canServerCopy() });
+    if (reason) { update(); return false; }
+    submitting = true;
+    update();
     try {
       const target = directory || '/';
       // One session, one server-side copy. The request carries only fields
@@ -260,8 +278,13 @@ registerDialog('remotetransfer', ({ props, close }) => {
       notify.success(tx('rtQueued', count, target));
       announce(tx('rtQueued', count, target));
       props.onQueued?.(added);
+      return true;
     } catch (err) {
-      notify.error(tx('rtTitle'), tx('rtFailed', err.message));
+      notify.error(tx('rtTitle'), tx('rtFailed', err?.message || 'The queue rejected the request.'));
+      return false;
+    } finally {
+      submitting = false;
+      update();
     }
   }
 
@@ -292,7 +315,11 @@ registerDialog('remotetransfer', ({ props, close }) => {
       {
         label: t('ok'), kind: 'filled', autofocus: true,
         ref: (btn) => { okButton = btn; update(); },
-        onSelect: () => { queue(); close(); },
+        onSelect: async (closeDialog) => {
+          const queued = await queue();
+          if (queued) closeDialog();
+          return true;
+        },
       },
     ],
   };
