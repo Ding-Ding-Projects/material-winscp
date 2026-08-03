@@ -38,7 +38,7 @@ the wrong host, and the tag follows the session into its tab and panel caption.
 
 | Operation | Notes |
 | --- | --- |
-| New / Edit / Duplicate / Rename / Delete | Deletion asks once and is undoable from history. |
+| New / Edit / Duplicate / Rename / Delete | A saved site opens as a read-only view first; Edit in Manage or the dialog action row unlocks its fields. Deletion asks once and is undoable from history. |
 | Clone to new site | Copies everything except the name. |
 | Set defaults | Makes this site's advanced options the default for new sites. |
 | New folder | Folders are ordinary records; moving a site between them is a drag or a keyboard move. |

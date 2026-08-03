@@ -1,0 +1,129 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('fs');
+const fsp = fs.promises;
+const os = require('os');
+const path = require('path');
+const { PassThrough } = require('stream');
+
+const {
+  ScpAdapter,
+  ScpSink,
+  ByteReader,
+  parseControl,
+  modeString,
+  transferMode,
+} = require('../design/main/protocols/scp');
+
+function ackReader() {
+  return {
+    readBytes: async () => Buffer.from([0]),
+    readLine: async () => '',
+  };
+}
+
+test.describe('SCP adapter contract', () => {
+  test('quotes remote paths and does not double-prefix a stored $? return variable', () => {
+    const adapter = new ScpAdapter({
+      returnVar: '$?',
+      clearAliases: false,
+      unsetNationalVars: false,
+    });
+
+    assert.equal(adapter._scp(['-f'], '/tmp/a; rm -rf /'), "scp -f -- '/tmp/a; rm -rf /'");
+    const wrapped = adapter._wrap('echo safe');
+    assert.match(wrapped, /echo 'WinSCP-material-rc:'"\$\?"/);
+    assert.doesNotMatch(wrapped, /\$\$\?/);
+
+    assert.throws(
+      () => new ScpAdapter({ returnVar: 'status; rm -rf /' })._wrap('true'),
+      (error) => error.code === 'INVALID_INPUT' && error.category === 'validation',
+    );
+  });
+
+  test('normalizes shell failures and returns the exitCode used by command callers', async () => {
+    const seen = [];
+    const adapter = new ScpAdapter({ returnVar: '$?' }, {
+      transport: {
+        exec: async (command) => {
+          seen.push(command);
+          return { code: 0, stdout: `before\nWinSCP-material-rc:7\n`, stderr: '' };
+        },
+      },
+    });
+
+    const streamed = [];
+    const result = await adapter.exec('echo safe', { onStdout: (text) => streamed.push(text) });
+    assert.equal(result.code, 7);
+    assert.equal(result.exitCode, 7);
+    assert.equal(result.stdout, 'before\n');
+    assert.deepEqual(streamed, ['before\n']);
+    assert.match(seen[0], /echo 'WinSCP-material-rc:'"\$\?"/);
+
+    const failing = new ScpAdapter({}, {
+      transport: {
+        exec: async () => ({ code: 1, stdout: '', stderr: 'Permission denied' }),
+      },
+    });
+    await assert.rejects(
+      () => failing._mustRun('chmod 0600 -- /secret', 'Changing permissions'),
+      (error) => error.category === 'permission'
+        && error.code === 'EACCES'
+        && error.protocol === 'SCP'
+        && error.operation === 'Changing permissions',
+    );
+  });
+
+  test('rejects malformed records, oversized control lines, and unsafe modes', async () => {
+    assert.throws(() => parseControl('C0999 1 file'), (error) => error.code === 'EPROTO');
+    assert.throws(() => parseControl('E unexpected'), (error) => error.code === 'EPROTO');
+    assert.throws(() => parseControl('C0644 9007199254740992 file'), (error) => error.code === 'EPROTO');
+    assert.equal(parseControl('C0644 4 file').size, 4);
+    assert.equal(modeString('0755'), '0755');
+    assert.throws(() => modeString('0999'), (error) => error.code === 'INVALID_INPUT');
+    assert.equal(transferMode({ mode: 0o644 }, { dirMode: '0644' }, true), 0o755);
+    assert.equal(transferMode({ mode: 0o644 }, { dirMode: '0644', addXToDirectories: false }, true), 0o644);
+
+    const source = new PassThrough();
+    const reader = new ByteReader(source, 1024, 8);
+    source.end('123456789\n');
+    await assert.rejects(() => reader.readLine(), (error) => error.category === 'protocol' && error.code === 'EPROTO');
+  });
+
+  test('never sends more bytes than the SCP header declares and reports progress', async () => {
+    const channel = new PassThrough();
+    const progress = [];
+    const sink = new ScpSink(channel, ackReader(), 3, null, (bytes) => progress.push(bytes));
+    await new Promise((resolve, reject) => {
+      sink.once('finish', resolve);
+      sink.once('error', reject);
+      sink.end(Buffer.from('abc'));
+    });
+    assert.deepEqual(progress, [3]);
+
+    const oversized = new ScpSink(new PassThrough(), ackReader(), 3);
+    await assert.rejects(
+      () => new Promise((resolve, reject) => {
+        oversized.once('finish', resolve);
+        oversized.once('error', reject);
+        oversized.end(Buffer.from('abcd'));
+      }),
+      (error) => error.code === 'INVALID_INPUT' && /exceeded its declared size/.test(error.message),
+    );
+  });
+
+  test('does not report a truncated recursive download as successful', async () => {
+    const channel = new PassThrough();
+    const adapter = new ScpAdapter({}, { transport: { execRaw: async () => channel } });
+    const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'material-scp-truncated-'));
+    try {
+      const transfer = adapter.downloadDirectory('/remote', root);
+      channel.end(Buffer.from('D0755 0 remote\nC0644 2 file\nab\0'));
+      await assert.rejects(transfer, (error) => error.category === 'protocol' && error.code === 'EPROTO');
+    } finally {
+      await fsp.rm(root, { recursive: true, force: true });
+    }
+  });
+});

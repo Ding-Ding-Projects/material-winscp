@@ -8,7 +8,7 @@ The goal is stated in [`docs/porting-mandate.md`](docs/porting-mandate.md) and i
 not negotiable: **port 100% of WinSCP, however many lines it takes.** Scale is
 not a reason to narrow scope.
 
-**Currently 55.3% of 209,889 logic lines.**
+**Currently 59.0% of 209,889 logic lines.**
 
 ## Done
 
@@ -24,39 +24,31 @@ not a reason to narrow scope.
 
 ## In progress
 
-- `forms/CustomScpExplorer` — 14,045 lines
-- `core/Terminal` — 10,449 lines
-- `forms/Login` — 8,977 lines
-- `forms/Preferences` — 8,171 lines
-- `forms/Editor` — 8,150 lines
-- `core/SessionData` — 6,884 lines
-- `forms/NonVisual` — 6,486 lines
-- `forms/SiteAdvanced` — 6,290 lines
-- `core/SftpFileSystem` — 6,074 lines
-- `forms/SynchronizeChecklist` — 5,850 lines
-- `forms/ScpCommander` — 5,807 lines
-- `core/Common` — 5,234 lines
+- `forms/CustomScpExplorer` — 7,023 weighted lines remaining
+- `core/Terminal` — 6,792 weighted lines remaining
+- `forms/Preferences` — 3,677 weighted lines remaining
+- `forms/Editor` — 3,667 weighted lines remaining
+- `core/SftpFileSystem` — 3,341 weighted lines remaining
+- `core/FtpFileSystem` — 3,064 weighted lines remaining
+- `forms/SiteAdvanced` — 2,830 weighted lines remaining
+- `windows/VCLCommon` — 2,825 weighted lines remaining
+- `core/SessionData` — 2,754 weighted lines remaining
+- `forms/Login` — 2,693 weighted lines remaining
+- `core/Common` — 2,617 weighted lines remaining
+- `forms/ScpCommander` — 2,613 weighted lines remaining
 
 ## Not started
 
-- `core/SessionInfo` — 2,274 lines
-- `core/PuttyIntf` — 1,689 lines
-- `components/ThemePageControl` — 882 lines
-- `windows/QueueController` — 764 lines
-- `core/Exceptions` — 761 lines
-- `core/Bookmarks` — 700 lines
-- `core/Usage` — 408 lines
-- `core/CoreMain` — 269 lines
-- `core/NamedObjs` — 218 lines
-- `windows/WinApi` — 198 lines
-- `core/Interface` — 197 lines
-- `core/Global` — 132 lines
+- `core/CoreMain` — 269 weighted lines remaining
+- `windows/WinHelp` — 102 weighted lines remaining
+- `core/CorePCH` — 22 weighted lines remaining
+- `windows/Windows` — 12 weighted lines remaining
+- `forms/FormsPCH` — 12 weighted lines remaining
+- `forms/ResourcesPCH` — 9 weighted lines remaining
+- `windows/WinPCH` — 1 weighted lines remaining
 
 ## Tracked as issues
 
-- [#28](https://github.com/Ding-Ding-Projects/material-winscp/issues/28) 🐛 The queue ignores "Keep reconnecting for" — five hardcoded attempts on the path most transfers take · 佇列唔理重連設定
-- [#27](https://github.com/Ding-Ding-Projects/material-winscp/issues/27) 🐛 Eight preferences are stored, rendered, and read by nothing — with no row warning the user · 八個設定得個樣
-- [#26](https://github.com/Ding-Ding-Projects/material-winscp/issues/26) 🐛 isEmptyDirectory recurses through symlinks WinSCP refuses to follow, and the remote size calculation still ignores the rule · 空目錄判斷會經 symlink 行落去
 - [#23](https://github.com/Ding-Ding-Projects/material-winscp/issues/23) 🗺️ Roadmap: truthful empty states and auditable discards · 真實空白狀態同可追蹤嘅捨棄
 - [#22](https://github.com/Ding-Ding-Projects/material-winscp/issues/22) 🚫 Policy: no promotional nags — do not port WinSCP's donation prompts · 唔好扭錢
 - [#21](https://github.com/Ding-Ding-Projects/material-winscp/issues/21) 🗺️ Roadmap: changelog entries link to their commits · 更新日誌要連到 commit

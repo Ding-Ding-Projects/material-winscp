@@ -306,6 +306,7 @@ export const RENDERER_DEFAULTS = {
   notifications: { durationSec: 6, position: 'bottom-right', centreLimit: 200 },
   tabs: { order: [], pinned: [], groups: [], groupOrder: [], collapsed: [], appearance: {} },
   search: {},                  // search-bar id -> { query, pattern, flags, mode }
+  commandPalette: { size: 'card' }, // card | full; the palette remembers the user's chosen surface
   dimSum: { lastLaunchId: '', seen: [] },
 };
 
@@ -381,7 +382,7 @@ function structuredCloneSafe(v) {
 /* persistence                                                         */
 /* ------------------------------------------------------------------ */
 
-const PERSISTED_PATHS = ['theme', 'language', 'funnyLevel', 'disclosureAccepted', 'notifications', 'tabs', 'search', 'dimSum'];
+const PERSISTED_PATHS = ['theme', 'language', 'funnyLevel', 'disclosureAccepted', 'notifications', 'tabs', 'search', 'commandPalette', 'dimSum'];
 
 let saveTimer = 0;
 let pendingPatch = {};

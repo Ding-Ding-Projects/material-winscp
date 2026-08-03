@@ -10,8 +10,9 @@ you can generate a checklist and never transfer a thing.
 | Article | Covers |
 | --- | --- |
 | [synchronize.md](synchronize.md) | The one-shot synchronize operation: directions, modes and criteria. |
-| [comparison-checklist.md](comparison-checklist.md) | The reviewable list of differences, and per-item overrides. |
+| [comparison-checklist.md](comparison-checklist.md) | The reviewable list of differences, policy-aware selection, and per-item overrides. |
 | [keep-up-to-date.md](keep-up-to-date.md) | Continuous watching, and synchronized browsing. |
+| [watcher-cancellation.md](watcher-cancellation.md) | Cancellation of comparisons that are still waiting on adapter I/O. |
 
 ## The rule that shapes everything here
 

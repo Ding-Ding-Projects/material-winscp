@@ -25,7 +25,7 @@ import {
 } from '../../dom.js';
 import { t, bindRender, getLanguage, getFunnyLevel } from '../../i18n.js';
 import { resolveI18n } from '../../../winscp-i18n.js';
-import { api } from '../../state.js';
+import { api, bus } from '../../state.js';
 import { styleSheet } from '../../theme.js';
 import { createSearchBar } from '../searchbar.js';
 import { compile, escapeLiteral } from '../regexbuilder.js';
@@ -477,6 +477,7 @@ export function looksBinary(text) {
 /* ================================================================== */
 
 const openEditors = new Map();          // editor id -> handle
+const pendingEditorWindows = new Map(); // editor id -> Promise<handle|null>
 
 /**
  * createEditorWindow(record, initial) — the surface for one already-open
@@ -1091,27 +1092,21 @@ export function createEditorWindow(record, initial, opts = {}) {
 /* ================================================================== */
 
 /**
- * openEditor({ sessionId, remotePath }) or openEditor({ localPath })
- *
- * Refuses a binary and refuses something too large to hold in memory, both
- * with the reason and both closing the record it opened rather than leaving a
- * temporary file behind for an editor that never appeared.
+ * Materialise a record that the command layer has already opened through the
+ * main-process editor manager. `commands.js` deliberately owns the panel-side
+ * ExecuteFile decision and emits `editor:opened`; opening the record here keeps
+ * that path from downloading the same remote file a second time.
  */
-export async function openEditor(request = {}) {
-  ensureStyles();
-  const name = request.remotePath || request.localPath || '';
-  let record = null;
-  try {
-    record = await callMain('editor.open', { ...request, mode: 'internal' });
-    if (openEditors.has(record.id)) {
-      // main reuses one record per remote path when singleEditor is on, so the
-      // right answer to a second open is the window that is already there.
-      const existing = openEditors.get(record.id);
-      existing.focus();
-      return existing;
-    }
-    const initial = await callMain('editor.read', record.id);
+async function openExistingEditor(record, options = {}) {
+  if (!record || !record.id) throw new Error('The editor manager returned no editor id.');
+  if (record.type === 'external') return null;
+  const existing = openEditors.get(record.id);
+  if (existing) { existing.focus(); return existing; }
+  const pending = pendingEditorWindows.get(record.id);
+  if (pending) return pending;
 
+  const promise = (async () => {
+    const initial = await callMain('editor.read', record.id);
     if (initial.bytes > MAX_EDIT_BYTES) {
       await callMain('editor.close', record.id, {}).catch(() => {});
       notify.error(t('editorTitle'), s('edTooBig', record.fileName, initial.bytes, MAX_EDIT_BYTES));
@@ -1130,7 +1125,7 @@ export async function openEditor(request = {}) {
     } catch { /* the window's own defaults stand */ }
 
     return createEditorWindow(record, initial, {
-      readOnly: !!request.readOnly,
+      readOnly: !!options.readOnly,
       wordWrap: prefs.wordWrap !== false,
       tabSize: prefs.tabSize,
       findText: prefs.findText,
@@ -1138,12 +1133,48 @@ export async function openEditor(request = {}) {
       findMatchCase: prefs.findMatchCase,
       findWholeWord: prefs.findWholeWord,
     });
+  })();
+  pendingEditorWindows.set(record.id, promise);
+  try { return await promise; }
+  finally { if (pendingEditorWindows.get(record.id) === promise) pendingEditorWindows.delete(record.id); }
+}
+
+/**
+ * openEditor({ sessionId, remotePath }) or openEditor({ localPath })
+ *
+ * Refuses a binary and refuses something too large to hold in memory, both
+ * with the reason and both closing the record it opened rather than leaving a
+ * temporary file behind for an editor that never appeared.
+ */
+export async function openEditor(request = {}) {
+  ensureStyles();
+  const name = request.remotePath || request.localPath || '';
+  let record = null;
+  try {
+    record = await callMain('editor.open', { ...request, mode: 'internal' });
+    return await openExistingEditor(record, request);
   } catch (err) {
     if (record) await callMain('editor.close', record.id, {}).catch(() => {});
     notify.error(t('editorTitle'), s('edOpenFailed', name, err.message));
     return null;
   }
 }
+
+/**
+ * The panel command path has already made the main-process decision and emits
+ * this record on the renderer bus. This listener is the missing ExecuteFile
+ * hand-off: external editors stay external, while internal/local records get
+ * the same modeless window as the explicit editor command.
+ */
+bus.on('editor:opened', (record) => {
+  if (!record || record.type === 'external') return;
+  openExistingEditor(record).catch((err) => {
+    // A bus-originated open has no caller waiting to perform the normal
+    // cleanup, so do not strand its temp file when materialisation fails.
+    callMain('editor.close', record.id, {}).catch(() => {});
+    notify.error(t('editorTitle'), s('edOpenFailed', record.fileName || record.remotePath || record.localPath || '', err.message));
+  });
+});
 
 /** Every open editor window, for a "save all" across them. */
 export function listEditorWindows() { return Array.from(openEditors.values()); }

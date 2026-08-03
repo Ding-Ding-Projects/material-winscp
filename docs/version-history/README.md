@@ -11,6 +11,7 @@ itself be undone.
 | [snapshots.md](snapshots.md) | What is snapshotted, when, and how the repository is laid out. |
 | [restore.md](restore.md) | Restoring, the append-only rule, and the AAD trap that makes naive restores unrecoverable. |
 | [history-panel.md](history-panel.md) | Browsing, diffing, labelling, and the date and action filters. |
+| [document-discard.md](document-discard.md) | The auditable history action and recovery copy for discarded unsaved edits. |
 
 ## The four rules
 

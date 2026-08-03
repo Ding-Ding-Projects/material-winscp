@@ -142,16 +142,20 @@ function newEditorId() { return `e${Date.now().toString(36)}${(++seq).toString(3
 
 class EditorManager extends EventEmitter {
   /**
-   * @param {object} deps
-   * @param {object} deps.config    the Config store
-   * @param {object} deps.sessions  the SessionManager
-   * @param {(ch:string, payload:object)=>void} [deps.emit]
+ * @param {object} deps
+ * @param {object} deps.config    the Config store
+ * @param {object} deps.sessions  the SessionManager
+ * @param {object} deps.history   append-only history store (optional)
+ * @param {()=>object} deps.historyState  current restorable app state (optional)
+ * @param {(ch:string, payload:object)=>void} [deps.emit]
    */
   constructor(deps) {
     super();
     const d = deps || {};
     this.config = d.config;
     this.sessions = d.sessions;
+    this.history = d.history || null;
+    this.historyState = typeof d.historyState === 'function' ? d.historyState : (() => ({}));
     this._send = d.emit || (() => {});
     /** id -> editor record */
     this.open = new Map();
@@ -355,10 +359,13 @@ class EditorManager extends EventEmitter {
     rec.dirty = true;
     if (rec.localOnly || !rec.remotePath) {
       rec.dirty = false;
-      this._send('event:editor', { type: 'saved', id: rec.id, local: true });
+      this._send('event:editor', {
+        type: 'saved', id: rec.id, local: true,
+        sessionId: rec.sessionId, remotePath: rec.remotePath, localPath: rec.localPath,
+      });
       return { uploaded: false, local: true };
     }
-    return this.upload(rec.id, { force: o.force });
+    return this.editedFileUploaded(rec.id, { force: o.force });
   }
 
   // -------------------------------------------------------------- upload
@@ -416,9 +423,30 @@ class EditorManager extends EventEmitter {
     session.invalidate(adapter.dirname(rec.remotePath));
     session.log.actions.record('upload', { filename: rec.localPath, destination: rec.remotePath, size: String(buf.length) });
     session.log.add('info', `Uploaded the edited ${rec.remotePath} (${buf.length} bytes).`);
-    this._send('event:editor', { type: 'uploaded', id: rec.id, bytes: buf.length, uploads: rec.uploads });
+    this._send('event:editor', {
+      type: 'uploaded', id: rec.id, bytes: buf.length, uploads: rec.uploads,
+      sessionId: rec.sessionId, remotePath: rec.remotePath, localPath: rec.localPath,
+    });
     this.emit('uploaded', rec);
     return { uploaded: true, bytes: buf.length, uploads: rec.uploads };
+  }
+
+  /**
+   * ExecutedFileChanged — the editor manager's file-watcher callback. Keep the
+   * named seam public so an editor implementation that reports a save directly
+   * can use the same debounce/check/upload path as an external editor.
+   */
+  async executedFileChanged(id) {
+    return this._onFileChanged(this._require(id));
+  }
+
+  /**
+   * EditedFileUploaded — the completion seam shared by save, the watcher and
+   * the close/shutdown flush. It deliberately remains a thin call into upload:
+   * the remote stamp is refreshed only after the server accepted the bytes.
+   */
+  async editedFileUploaded(id, options) {
+    return this.upload(id, options);
   }
 
   // ----------------------------------------------------- external editor
@@ -481,12 +509,12 @@ class EditorManager extends EventEmitter {
     try {
       watcher = fs.watch(rec.localPath, { persistent: false }, () => {
         if (timer) clearTimeout(timer);
-        timer = setTimeout(() => this._onFileChanged(rec).catch(() => { /* reported through events */ }), 300);
+        timer = setTimeout(() => this.executedFileChanged(rec.id).catch(() => { /* reported through events */ }), 300);
       });
     } catch (e) {
       // Some filesystems cannot watch; fall back to polling, which is slower
       // but never silently stops noticing saves.
-      const poll = setInterval(() => this._onFileChanged(rec).catch(() => { /* reported */ }), 1500);
+      const poll = setInterval(() => this.executedFileChanged(rec.id).catch(() => { /* reported */ }), 1500);
       rec.watcher = { close: () => clearInterval(poll) };
       this.emit('watch-fallback', { id: rec.id, reason: e.message });
       return;
@@ -502,28 +530,38 @@ class EditorManager extends EventEmitter {
   }
 
   async _onFileChanged(rec) {
-    if (rec.closed) return;
+    if (rec.closed) return { changed: false, reason: 'closed' };
     let st;
-    try { st = await fsp.stat(rec.localPath); } catch { return; }
-    if (rec.localStamp && st.size === rec.localStamp.size && st.mtimeMs === rec.localStamp.mtimeMs) return;
+    try { st = await fsp.stat(rec.localPath); } catch { return { changed: false, reason: 'missing' }; }
+    if (rec.localStamp && st.size === rec.localStamp.size && st.mtimeMs === rec.localStamp.mtimeMs) {
+      return { changed: false, reason: 'unchanged' };
+    }
     rec.localStamp = { size: st.size, mtimeMs: st.mtimeMs };
     rec.dirty = true;
-    this._send('event:editor', { type: 'changed', id: rec.id, bytes: st.size });
+    this._send('event:editor', {
+      type: 'changed', id: rec.id, bytes: st.size,
+      sessionId: rec.sessionId, remotePath: rec.remotePath, localPath: rec.localPath,
+    });
 
-    if (rec.localOnly || !rec.remotePath) return;
+    if (rec.localOnly || !rec.remotePath) return { changed: true, uploaded: false, local: true };
     try {
-      await this.upload(rec.id, {});
+      const result = await this.editedFileUploaded(rec.id, {});
+      return { changed: true, ...result };
     } catch (e) {
-      if (e.code === 'REMOTE_CHANGED') return;   // the prompt is already out
+      if (e.code === 'REMOTE_CHANGED') return { changed: true, uploaded: false, conflict: true };
       rec.lastError = e.message;
-      this._send('event:editor', { type: 'error', id: rec.id, message: e.message });
+      this._send('event:editor', {
+        type: 'error', id: rec.id, message: e.message,
+        sessionId: rec.sessionId, remotePath: rec.remotePath, localPath: rec.localPath,
+      });
+      return { changed: true, uploaded: false, error: e };
     }
   }
 
   // -------------------------------------------------------------- closing
   async _flushAndClose(rec) {
     if (rec.dirty && rec.remotePath && !rec.localOnly) {
-      try { await this.upload(rec.id, {}); } catch { /* the close path reports the orphan */ }
+      try { await this.editedFileUploaded(rec.id, {}); } catch { /* the close path reports the orphan */ }
     }
     return this.close(rec.id, {});
   }
@@ -547,6 +585,25 @@ class EditorManager extends EventEmitter {
       this.globalPrefs().temporaryDirectoryCleanup === false ||
       o.keep === true;
     const orphan = rec.dirty && !rec.localOnly;
+
+    // A discard is itself an auditable user action. Write it before the close
+    // notification and before deleting the record. History is best effort by
+    // contract: a broken history repository must never trap the user's close.
+    if (orphan && this.history && typeof this.history.snapshot === 'function') {
+      const state = this.historyState() || {};
+      try {
+        await this.history.snapshot(`Discarded unsaved document "${rec.fileName}"`, {
+          ...state,
+          editorDiscard: {
+            id: rec.id,
+            fileName: rec.fileName,
+            sessionId: rec.sessionId,
+            remotePath: rec.remotePath,
+            localPath: rec.localPath,
+          },
+        });
+      } catch { /* history failure never blocks the requested close */ }
+    }
 
     if (orphan) {
       this._send('event:editor', {

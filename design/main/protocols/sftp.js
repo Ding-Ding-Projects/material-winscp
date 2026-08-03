@@ -14,7 +14,7 @@ const net = require('net');
 const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
-const { Duplex } = require('stream');
+const { Duplex, Readable, Writable } = require('stream');
 const { spawn, spawnSync } = require('child_process');
 const { EventEmitter } = require('events');
 
@@ -86,6 +86,21 @@ function algorithmList(prefs, table, supported) {
     }
   }
   return { list: out, dropped };
+}
+
+/**
+ * An explicit SSH policy is a security boundary, not a hint. If every name a
+ * site selected is unavailable in this build (or was placed below WARN),
+ * leaving the field out would make ssh2 negotiate its own defaults instead.
+ * Refuse before the client sends an SSH identification string.
+ */
+function requireAlgorithmPolicy(label, prefs, resolved, sock) {
+  if (!Array.isArray(prefs) || prefs.length === 0 || !resolved || resolved.list.length) return;
+  const requested = prefs.filter((name) => name !== 'WARN').join(', ') || '(none)';
+  try { sock.destroy(); } catch { /* the caller is already failing closed */ }
+  const error = new Error(`SSH ${label} policy has no algorithms supported by this build: ${requested}`);
+  error.code = 'ERR_SSH_ALGORITHM_POLICY';
+  throw error;
 }
 
 // ------------------------------------------------------------- fingerprints
@@ -646,6 +661,8 @@ class SshTransport extends EventEmitter {
     const algorithms = {};
     const cipher = algorithmList(s.cipherList, CIPHERS, SUPPORTED && SUPPORTED.cipher);
     const kex = algorithmList(s.kexList, KEXES, SUPPORTED && SUPPORTED.kex);
+    requireAlgorithmPolicy('cipher', s.cipherList, cipher, sock);
+    requireAlgorithmPolicy('key exchange', s.kexList, kex, sock);
     if (cipher && cipher.list.length) algorithms.cipher = cipher.list;
     if (kex && kex.list.length) algorithms.kex = kex.list;
 
@@ -654,6 +671,7 @@ class SshTransport extends EventEmitter {
     // so a server with several key types does not make the user verify a second
     // fingerprint for a host they have already trusted.
     const hostKey = this._hostKeyOrder(profile);
+    requireAlgorithmPolicy('host-key', s.hostKeyList, hostKey, sock);
     if (hostKey.list.length) algorithms.serverHostKey = hostKey.list;
     if (hostKey.belowWarnThreshold.length) {
       this.log('debug', `Not offering host key ${hostKey.belowWarnThreshold.join(', ')} — below the warning threshold`);
@@ -1080,6 +1098,293 @@ function normalizeTimes(mtime, atime) {
   return { mtime: m, atime: Number.isFinite(a) ? a : m };
 }
 
+/** Keep a user-selected request window finite even when a hand-edited session
+ * contains an absurd value. One SFTP packet per slot is the memory bound. */
+function streamQueueDepth(value) {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n)) return 1;
+  return Math.max(1, Math.min(256, n));
+}
+
+/**
+ * Read several fixed ranges at once, but publish them in file order. ssh2's
+ * built-in ReadStream deliberately reads one range at a time; this adapter
+ * needs the same resumable stream contract with WinSCP's bounded queue depth.
+ */
+class PipelinedReadStream extends Readable {
+  constructor(sftp, path, options = {}) {
+    const highWaterMark = Number(options.highWaterMark) > 0
+      ? Number(options.highWaterMark) : 64 * 1024;
+    super({ highWaterMark, autoDestroy: options.autoClose !== false });
+    this.sftp = sftp;
+    this.path = path;
+    this.flags = options.flags === undefined ? 'r' : options.flags;
+    this.mode = options.mode === undefined ? 0o666 : options.mode;
+    this.autoClose = options.autoClose !== false;
+    this.handle = null;
+    this._opening = true;
+    this._stopped = false;
+    this._ending = false;
+    this._blocked = false;
+    this._inflight = 0;
+    this._ready = new Map();
+    this._nextRequest = Number(options.start) > 0 ? Number(options.start) : 0;
+    this._nextEmit = this._nextRequest;
+    this._end = Number.isFinite(options.end) ? Number(options.end) : Infinity;
+    this._eofAt = null;
+    this._concurrency = streamQueueDepth(options.concurrency);
+    const serverMax = Number(sftp._maxReadLen);
+    this._chunkSize = Math.max(1, Math.min(highWaterMark,
+      Number.isFinite(serverMax) && serverMax > 0 ? serverMax : highWaterMark));
+    if (this._nextRequest < 0 || this._end < 0 || this._nextRequest > this._end + 1) {
+      throw new RangeError('SFTP stream positions must be non-negative and ordered');
+    }
+    this._open();
+  }
+
+  _open() {
+    this.sftp.open(this.path, this.flags, this.mode, (err, handle) => {
+      this._opening = false;
+      if (err) return this.destroy(err);
+      if (this.destroyed || this._stopped) {
+        return this.sftp.close(handle, () => {});
+      }
+      this.handle = handle;
+      this.emit('open', handle);
+      this.emit('ready');
+      this._pump();
+    });
+  }
+
+  _read() {
+    if (this._ending || this.destroyed) return;
+    this._blocked = false;
+    this._emitReady();
+    this._pump();
+  }
+
+  _fail(err) {
+    if (!this._stopped && !this.destroyed) this.destroy(err);
+  }
+
+  _emitReady() {
+    while (!this._ending && this._ready.has(this._nextEmit)) {
+      const result = this._ready.get(this._nextEmit);
+      this._ready.delete(this._nextEmit);
+
+      if (this._eofAt !== null && result.position >= this._eofAt) continue;
+      const limit = this._eofAt === null
+        ? result.bytes
+        : Math.min(result.bytes, Math.max(0, this._eofAt - result.position));
+      if (limit > 0) {
+        const data = result.data.subarray(0, limit);
+        this._nextEmit += data.length;
+        if (!this.push(data)) {
+          this._blocked = true;
+          return;
+        }
+      }
+      if (this._eofAt !== null && this._nextEmit >= this._eofAt) {
+        this._ending = true;
+        this.push(null);
+        return;
+      }
+    }
+
+    if (!this._ending && this._eofAt !== null && this._nextEmit >= this._eofAt) {
+      this._ending = true;
+      this.push(null);
+    }
+  }
+
+  _pump() {
+    if (this._ending || this._blocked || this.destroyed || !this.handle) return;
+    this._emitReady();
+    while (!this._ending && !this._blocked &&
+           this._inflight + this._ready.size < this._concurrency) {
+      if (this._eofAt !== null) break;
+      if (this._nextRequest > this._end) {
+        this._eofAt = this._end + 1;
+        break;
+      }
+
+      const position = this._nextRequest;
+      const length = Math.min(this._chunkSize, this._end - position + 1);
+      if (length <= 0) {
+        this._eofAt = position;
+        break;
+      }
+      const buffer = Buffer.allocUnsafe(length);
+      this._nextRequest += length;
+      this._inflight++;
+      this.sftp.read(this.handle, buffer, 0, length, position, (err, bytes, data) => {
+        this._inflight--;
+        if (this._stopped) return;
+        if (err) return this._fail(err);
+
+        const count = Math.max(0, Math.min(Number(bytes) || 0, length));
+        // SFTP servers normally report EOF as either status EOF or a zero-byte
+        // DATA reply. A short DATA reply is also the only safe boundary when
+        // requests are already in flight: later speculative ranges are dropped.
+        if (count < length) {
+          const boundary = position + count;
+          this._eofAt = this._eofAt === null ? boundary : Math.min(this._eofAt, boundary);
+        }
+        this._ready.set(position, {
+          position,
+          bytes: count,
+          data: Buffer.isBuffer(data) ? data : buffer.subarray(0, count),
+        });
+        this._emitReady();
+        this._pump();
+      });
+    }
+    this._emitReady();
+  }
+
+  _destroy(err, cb) {
+    this._stopped = true;
+    this._ready.clear();
+    const handle = this.handle;
+    this.handle = null;
+    if (!handle) return cb(err);
+    this.sftp.close(handle, (closeErr) => cb(err || closeErr));
+  }
+}
+
+/**
+ * Split each incoming write into bounded SFTP WRITE requests and keep at most
+ * the configured number outstanding. The Writable callback is held until the
+ * complete incoming chunk has landed, so normal stream backpressure remains
+ * intact while the wire requests overlap.
+ */
+class PipelinedWriteStream extends Writable {
+  constructor(sftp, path, options = {}) {
+    const highWaterMark = Number(options.highWaterMark) > 0
+      ? Number(options.highWaterMark) : 64 * 1024;
+    super({ highWaterMark, autoDestroy: options.autoClose !== false });
+    this.sftp = sftp;
+    this.path = path;
+    this.flags = options.flags === undefined ? 'w' : options.flags;
+    this.mode = options.mode === undefined ? 0o666 : options.mode;
+    this.autoClose = options.autoClose !== false;
+    this.handle = null;
+    this._opening = true;
+    this._stopped = false;
+    this._failed = false;
+    this._job = null;
+    this._active = 0;
+    this._finalCb = null;
+    this._position = Number(options.start) > 0 ? Number(options.start) : 0;
+    this.bytesWritten = 0;
+    this._concurrency = streamQueueDepth(options.concurrency);
+    const serverMax = Number(sftp._maxWriteLen);
+    this._chunkSize = Math.max(1, Math.min(highWaterMark,
+      Number.isFinite(serverMax) && serverMax > 0 ? serverMax : highWaterMark));
+    if (this._position < 0) throw new RangeError('SFTP stream positions must be non-negative');
+    this._open();
+  }
+
+  _open() {
+    this.sftp.open(this.path, this.flags, this.mode, (err, handle) => {
+      this._opening = false;
+      if (err) return this.destroy(err);
+      if (this.destroyed || this._stopped) {
+        return this.sftp.close(handle, () => {});
+      }
+      this.handle = handle;
+      const ready = () => {
+        if (this.destroyed || this._stopped) return this.sftp.close(handle, () => {});
+        this.emit('open', handle);
+        this.emit('ready');
+      };
+      const setMode = () => {
+        if (typeof this.sftp.fchmod !== 'function') return ready();
+        this.sftp.fchmod(handle, this.mode, (modeErr) => {
+          if (!modeErr) return ready();
+          if (typeof this.sftp.chmod !== 'function') return ready();
+          this.sftp.chmod(this.path, this.mode, () => ready());
+        });
+      };
+      if (this.flags[0] === 'a' && typeof this.sftp.fstat === 'function') {
+        this.sftp.fstat(handle, (statErr, stat) => {
+          if (!statErr) { this._position = Number(stat.size) || 0; return setMode(); }
+          if (typeof this.sftp.stat !== 'function') return this.destroy(statErr);
+          this.sftp.stat(this.path, (fallbackErr, fallback) => {
+            if (fallbackErr) return this.destroy(statErr);
+            this._position = Number(fallback.size) || 0;
+            setMode();
+          });
+        });
+      } else {
+        setMode();
+      }
+    });
+  }
+
+  _write(data, encoding, cb) {
+    if (!Buffer.isBuffer(data)) return cb(new TypeError('SFTP writes need Buffer data'));
+    if (!this.handle) return this.once('ready', () => this._write(data, encoding, cb));
+    const chunks = [];
+    for (let offset = 0; offset < data.length; offset += this._chunkSize) {
+      chunks.push(data.subarray(offset, Math.min(data.length, offset + this._chunkSize)));
+    }
+    if (!chunks.length) return cb();
+    this._job = { chunks, index: 0, remaining: chunks.length, cb };
+    this._pumpWrites();
+  }
+
+  _pumpWrites() {
+    const job = this._job;
+    if (!job || this._failed || this._stopped || !this.handle) return;
+    while (job.index < job.chunks.length && this._active < this._concurrency) {
+      const data = job.chunks[job.index++];
+      const position = this._position;
+      this._position += data.length;
+      this._active++;
+      this.sftp.write(this.handle, data, 0, data.length, position, (err) => {
+        this._active--;
+        if (this._stopped || this._failed) return;
+        if (err) {
+          this._failed = true;
+          this._job = null;
+          job.cb(err);
+          return this.destroy(err);
+        }
+        this.bytesWritten += data.length;
+        job.remaining--;
+        if (job.remaining === 0) {
+          this._job = null;
+          job.cb();
+        }
+        if (this._active === 0 && !this._job && this._finalCb) {
+          const done = this._finalCb;
+          this._finalCb = null;
+          done();
+        }
+        this._pumpWrites();
+      });
+    }
+  }
+
+  _fail(err) {
+    if (!this._stopped && !this.destroyed) this.destroy(err);
+  }
+
+  _final(cb) {
+    if (this._active === 0 && !this._job) return cb();
+    this._finalCb = cb;
+  }
+
+  _destroy(err, cb) {
+    this._stopped = true;
+    const handle = this.handle;
+    this.handle = null;
+    if (!handle) return cb(err);
+    this.sftp.close(handle, (closeErr) => cb(err || closeErr));
+  }
+}
+
 class SftpAdapter extends Adapter {
   /**
    * @param session  resolved session data
@@ -1090,6 +1395,9 @@ class SftpAdapter extends Adapter {
     this.options = options;
     this.transport = options.transport || null;
     this.sftp = null;
+    this._streams = new Set();
+    this._streamChannelError = null;
+    this._streamChannelClose = null;
     this.extensions = {};
     this.caps = {
       ...this.caps,
@@ -1151,6 +1459,11 @@ class SftpAdapter extends Adapter {
 
     this.sftp = await this.transport.sftp();
     this.sftp.on('error', (e) => this._log('error', `SFTP channel error: ${e.message}`));
+    this._streamChannelError = (err) => this._failStreams(err);
+    this._streamChannelClose = () => this._failStreams(new Error('SFTP channel closed while a stream was active'));
+    this.sftp.on('error', this._streamChannelError);
+    this.sftp.on('close', this._streamChannelClose);
+    this.sftp.on('end', this._streamChannelClose);
     this.extensions = this.sftp._extensions || {};
 
     const ident = this.transport.sshImplementation;
@@ -1269,7 +1582,17 @@ class SftpAdapter extends Adapter {
 
   async disconnect() {
     this.connected = false;
-    try { if (this.sftp) this.sftp.end(); } catch { /* already down */ }
+    const channel = this.sftp;
+    this._failStreams(new Error('SFTP channel closed while a stream was active'));
+    if (channel && this._streamChannelError) channel.removeListener('error', this._streamChannelError);
+    if (channel && this._streamChannelClose) {
+      channel.removeListener('close', this._streamChannelClose);
+      channel.removeListener('end', this._streamChannelClose);
+    }
+    this._streamChannelError = null;
+    this._streamChannelClose = null;
+    this._streams.clear();
+    try { if (channel) channel.end(); } catch { /* already down */ }
     this.sftp = null;
     if (this._ownsTransport && this.transport) await this.transport.disconnect();
     this.transport = null;
@@ -1589,21 +1912,15 @@ class SftpAdapter extends Adapter {
     await this._call('utimes', this.normalize(p), atimeSec, mtimeSec);
   }
 
-  /**
-   * WinSCP's SFTP queue depths pipeline several read/write requests at once.
-   * This library only does that in its all-at-once fastGet/fastPut helpers,
-   * which cannot resume or report progress, so the streaming path stays
-   * request-at-a-time and the setting is reported as inactive rather than
-   * pretended into effect.
-   */
-  _warnQueueDepth() {
-    if (this._queueDepthWarned) return;
-    this._queueDepthWarned = true;
-    const down = Number(this.session.sftpDownloadQueue) || 0;
-    const up = Number(this.session.sftpUploadQueue) || 0;
-    if (down > 1 || up > 1) {
-      this._log('warn', `SFTP request pipelining (download queue ${down}, upload queue ${up}) is not available on the resumable transfer path; transfers run one request at a time`);
+  /** Return the configured bounded request window for one stream direction. */
+  _streamConcurrency(direction) {
+    const setting = direction === 'download' ? 'sftpDownloadQueue' : 'sftpUploadQueue';
+    const requested = Math.floor(Number(this.session[setting]));
+    const depth = streamQueueDepth(requested);
+    if (requested > 256) {
+      this._log('warn', `SFTP ${setting}=${requested} exceeds the safe adapter bound; using 256 outstanding requests`);
     }
+    return depth;
   }
 
   // ---- streaming -------------------------------------------------------
@@ -1617,9 +1934,13 @@ class SftpAdapter extends Adapter {
     // library, so the site's maximum packet size lands here.
     const hwm = opts.highWaterMark || this._packetSize();
     if (hwm > 0) options.highWaterMark = hwm;
-    this._warnQueueDepth();
-    this._log('debug', `download ${target}${options.start ? ' from offset ' + options.start : ''}`);
-    return this._adopt(this.sftp.createReadStream(target, options), `download ${target}`);
+    const concurrency = this._streamConcurrency('download');
+    this._log('debug', `download ${target}${options.start ? ' from offset ' + options.start : ''} with ${concurrency} request(s) in flight`);
+    return this._adopt(new PipelinedReadStream(this.sftp, target, {
+      ...options,
+      highWaterMark: hwm > 0 ? hwm : undefined,
+      concurrency,
+    }), `download ${target}`);
   }
 
   /**
@@ -1634,8 +1955,14 @@ class SftpAdapter extends Adapter {
    * still receives the event.
    */
   _adopt(stream, what) {
+    this._streams.add(stream);
+    stream.once('close', () => this._streams.delete(stream));
     stream.on('error', (e) => this._log('debug', `${what}: stream error after handover: ${e.message}`));
     return stream;
+  }
+
+  _failStreams(err) {
+    for (const stream of this._streams) stream.destroy(err);
   }
 
   /** `start > 0` reopens the file for update so a partial upload continues
@@ -1650,9 +1977,12 @@ class SftpAdapter extends Adapter {
     if (opts.mode !== undefined) options.mode = opts.mode;
     const hwm = opts.highWaterMark || this._packetSize();
     if (hwm > 0) options.highWaterMark = hwm;
-    this._warnQueueDepth();
-    this._log('debug', `upload ${target}${start ? ' from offset ' + start : ''}`);
-    return this._adopt(this.sftp.createWriteStream(target, options), `upload ${target}`);
+    const concurrency = this._streamConcurrency('upload');
+    this._log('debug', `upload ${target}${start ? ' from offset ' + start : ''} with ${concurrency} request(s) in flight`);
+    return this._adopt(new PipelinedWriteStream(this.sftp, target, {
+      ...options,
+      concurrency,
+    }), `upload ${target}`);
   }
 
   // ---- optional --------------------------------------------------------

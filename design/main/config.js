@@ -12,6 +12,7 @@ const { EventEmitter } = require('events');
 const P = require('./paths');
 const crypt = require('./crypto');
 const { SESSION_DEFAULTS, COPY_PARAM_DEFAULTS, PREF_DEFAULTS } = require('./defaults');
+const { exportSessionsToIni, importSessionsFromIni } = require('./sessiondata');
 
 /** Secret-bearing fields, protected on write and unwrapped on demand. */
 const SECRET_FIELDS = ['password', 'passphrase', 'proxyPassword', 'tunnelPassword',
@@ -50,6 +51,25 @@ function deepMerge(base, over) {
 
 function clone(v) { return v === undefined ? v : JSON.parse(JSON.stringify(v)); }
 
+const INI_SECRET_FIELDS = ['password', 'passphrase', 'proxyPassword', 'tunnelPassword',
+  'tunnelPassphrase', 'encryptKey', 's3SessionToken'];
+
+function writeAtomic(file, payload) {
+  P.ensure(path.dirname(file));
+  const tmp = `${file}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    fs.writeFileSync(tmp, payload, 'utf8');
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    try { fs.unlinkSync(tmp); } catch { /* best effort */ }
+    throw e;
+  }
+}
+
+function isIniConfiguration(file, text) {
+  return path.extname(file).toLowerCase() === '.ini' || /^\s*\[Sessions\\/im.test(text);
+}
+
 let nextId = 1;
 function newId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${(nextId++).toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -78,6 +98,7 @@ class Config extends EventEmitter {
 
   load() {
     const file = P.config();
+    let migratedIni = false;
     if (fs.existsSync(file)) {
       try {
         const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -97,9 +118,24 @@ class Config extends EventEmitter {
         try { fs.copyFileSync(file, file + '.corrupt-' + Date.now()); } catch { /* best effort */ }
         this.emit('error', new Error('Configuration could not be read and was reset: ' + e.message));
       }
+    } else if (fs.existsSync(P.ini())) {
+      // Portable WinSCP installations may leave an INI beside the app data.
+      // Import it once into our protected JSON store instead of silently
+      // starting with an empty site list.
+      try {
+        const imported = this._parseIniSites(fs.readFileSync(P.ini(), 'utf8'));
+        this.data.sites = imported.sites;
+        this.data.folders = imported.folders;
+        migratedIni = true;
+      } catch (e) {
+        this.emit('error', new Error('Configuration INI could not be imported: ' + e.message));
+      }
     }
     if (fs.existsSync(P.hostkeys())) {
       try { this.data.hostKeys = JSON.parse(fs.readFileSync(P.hostkeys(), 'utf8')); } catch { this.data.hostKeys = {}; }
+    }
+    if (migratedIni) {
+      try { this.flush(); } catch (e) { this.emit('error', e); }
     }
     this.data.loaded = true;
     return this;
@@ -147,6 +183,89 @@ class Config extends EventEmitter {
       folders: clone(this.data.folders),
       workspaces: clone(this.data.workspaces),
     };
+  }
+
+  /**
+   * Convert the app's site records to WinSCP's hierarchical session names.
+   * INI is an interoperability format, not the app's durable store: all
+   * credential fields are deliberately blanked before serialization.
+   */
+  exportIni() {
+    const sessions = this.data.sites.map((site) => {
+      const session = clone(site);
+      session.name = [site.folder, site.name].filter(Boolean).join('/') || site.name || site.hostName;
+      session.folder = '';
+      session.savePassword = false;
+      for (const field of INI_SECRET_FIELDS) session[field] = '';
+      return session;
+    });
+    return exportSessionsToIni(sessions);
+  }
+
+  _parseIniSites(text) {
+    const imported = importSessionsFromIni(text);
+    if (!imported.sessions.length) {
+      throw new Error('The INI file contains no stored sessions.');
+    }
+
+    const folders = new Set();
+    const sites = imported.sessions.map((session) => {
+      const parts = String(session.name || session.hostName || 'Imported site')
+        .split('/').filter(Boolean);
+      const name = parts.pop() || session.hostName || 'Imported site';
+      for (let i = 1; i <= parts.length; i++) folders.add(parts.slice(0, i).join('/'));
+
+      const site = deepMerge(clone(SESSION_DEFAULTS), session);
+      site.id = newId('site');
+      site.name = name;
+      site.folder = parts.join('/');
+      delete site.source;
+      delete site.modified;
+      delete site.saveOnly;
+      delete site.overrideCachedHostKey;
+      site.savePassword = Boolean(site.password);
+      for (const field of INI_SECRET_FIELDS) {
+        const value = site[field];
+        if (value && !String(value).startsWith('mp:') && !String(value).startsWith('os:')) {
+          site[field] = crypt.protect(value);
+        }
+      }
+      return site;
+    });
+    return { sites, folders: [...folders].sort() };
+  }
+
+  /** Import only the portable site hierarchy from a WinSCP INI file. */
+  importIni(text, label) {
+    const imported = this._parseIniSites(text);
+    this.data.sites = imported.sites;
+    this.data.folders = imported.folders;
+    this.flush();
+    this._snapshot(label || 'Imported sites from a WinSCP INI file');
+    this.emit('changed');
+    this.emit('sites-changed');
+    return { format: 'ini', imported: imported.sites.length, secretsOmitted: true };
+  }
+
+  /** Read or write either this app's JSON backup or a WinSCP-compatible INI. */
+  exportFile(file) {
+    const target = path.resolve(String(file));
+    const ini = path.extname(target).toLowerCase() === '.ini';
+    const payload = ini ? this.exportIni() : JSON.stringify(this.exportState(), null, 2);
+    writeAtomic(target, payload);
+    return { format: ini ? 'ini' : 'json', path: target, secretsOmitted: ini };
+  }
+
+  importFile(file, label) {
+    const source = path.resolve(String(file));
+    const text = fs.readFileSync(source, 'utf8');
+    if (isIniConfiguration(source, text)) return this.importIni(text, label);
+    const state = JSON.parse(text);
+    if (!state || typeof state !== 'object' || Array.isArray(state)) {
+      throw new Error('The configuration file must contain an object.');
+    }
+    this.importState(state, label || `Imported settings from ${path.basename(source)}`);
+    return { format: 'json', path: source };
   }
 
   /** Restore is itself a new revision — history stays append-only. */

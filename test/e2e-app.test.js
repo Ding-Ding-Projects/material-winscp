@@ -204,6 +204,58 @@ test.describe('the application boots and stays usable', () => {
     })()`);
     assert.match(selected, /New Site/i, 'the tree selection must follow the button');
   });
+
+  test.it('opens the command palette, searches with its own builder, persists size, and teleports to a setting', async () => {
+    const opened = await app.evaluate(`(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, shiftKey: true, bubbles: true }));
+      return true;
+    })()`);
+    assert.equal(opened, true);
+    await waitFor(() => app.evaluate('!!document.querySelector(".cmdp-surface")'), 8000,
+      'the command palette to open');
+
+    const inventory = await app.evaluate(`(() => ({
+      rows: document.querySelectorAll('.cmdp-row').length,
+      regexBuilder: !!document.querySelector('.cmdp-search .sb-rb'),
+      card: !document.querySelector('.cmdp-surface')?.classList.contains('is-full'),
+    }))()`);
+    assert.ok(inventory.rows >= 301, `palette exposed only ${inventory.rows} rows`);
+    assert.equal(inventory.regexBuilder, true, 'the palette search must carry its anchored regex-builder button');
+    assert.equal(inventory.card, true, 'the default palette surface must be the bounded card');
+
+    await app.evaluate(`(() => {
+      const input = document.querySelector('[data-search-id="command-palette"] input');
+      input.value = 'scpCommander.currentPanel';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    })()`);
+    await waitFor(() => app.evaluate('document.querySelectorAll(".cmdp-row").length === 1'), 8000,
+      'the exact setting search result');
+    await app.evaluate(`(() => {
+      const row = document.querySelector('.cmdp-row');
+      row?.click();
+      return !!row;
+    })()`);
+    await waitFor(() => app.evaluate('!!document.querySelector(".prefs")'), 8000,
+      'Preferences to open from the setting destination');
+    await waitFor(() => app.evaluate('!!document.querySelector("[data-pref-key=\\"scpCommander.currentPanel\\"].is-hit")'), 8000,
+      'the exact Preferences control to be highlighted');
+
+    // Close the settings surface, reopen the palette and exercise its persisted
+    // size choice. Click the real Preferences close action so this smoke does
+    // not depend on an eval-created KeyboardEvent carrying the active focus.
+    await app.evaluate('Array.from(document.querySelectorAll(".modal .modal-actions > .btn-filled")).at(-1)?.click()');
+    await waitFor(() => app.evaluate('!document.querySelector(".prefs")'), 8000, 'Preferences to close');
+    await app.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, shiftKey: true, bubbles: true }))`);
+    await waitFor(() => app.evaluate('!!document.querySelector(".cmdp-surface")'), 8000, 'the palette to reopen');
+    await app.evaluate('document.querySelector(".cmdp-size")?.click()');
+    assert.equal(await app.evaluate('document.querySelector(".cmdp-surface")?.classList.contains("is-full")'), true);
+    await app.evaluate('document.querySelector(".cmdp-close")?.click()');
+    await waitFor(() => app.evaluate('!document.querySelector(".cmdp-surface")'), 8000, 'the palette to close');
+    await app.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, shiftKey: true, bubbles: true }))`);
+    await waitFor(() => app.evaluate('!!document.querySelector(".cmdp-surface")'), 8000, 'the persisted full-window palette');
+    assert.equal(await app.evaluate('document.querySelector(".cmdp-surface")?.classList.contains("is-full")'), true);
+    await app.evaluate('document.querySelector(".cmdp-close")?.click()');
+  });
 });
 
 // ======================================== a real server, driven through IPC
@@ -642,6 +694,110 @@ test.describe('the transfer queue and the synchronizer report back to the window
     await app.waitForEvent('event:queue',
       (p) => p.type === 'item-done' && p.item.id === asked[0].id, 20000);
     assert.equal(await fsp.readFile(path.join(server.root, 'livepref.bin'), 'utf8'), 'silent overwrite');
+  });
+
+  test.it('opens Preferences, persists live settings, and marks no-op rows unavailable', async () => {
+    await app.evaluate(`(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', ctrlKey: true, bubbles: true }));
+      return true;
+    })()`);
+    await waitFor(() => app.evaluate('!!document.querySelector(".prefs")'), 10000,
+      'the real Preferences surface');
+
+    const surface = await app.evaluate(`(() => ({
+      searchBars: document.querySelectorAll('.prefs [role="search"]').length,
+      regexBuilders: document.querySelectorAll('.prefs .sb-rb').length,
+      namedRows: document.querySelectorAll('.prefs [data-pref-key]').length,
+    }))()`);
+    assert.ok(surface.searchBars >= 2, 'Preferences lost its all-pages or page search');
+    assert.equal(surface.regexBuilders, surface.searchBars,
+      'every Preferences search must expose its own regex builder');
+    assert.ok(surface.namedRows > 0, 'Preferences opened without rendering controls');
+
+    const clickPage = async (pageId) => {
+      const found = await app.evaluate(`(() => {
+        const button = document.querySelector('[data-page-id="${pageId}"]');
+        button?.click();
+        return !!button;
+      })()`);
+      assert.equal(found, true, `Preferences page ${pageId} was not reachable`);
+      await waitFor(() => app.evaluate(`!!document.querySelector('[data-pref-key]')`), 5000,
+        `the ${pageId} preference rows`);
+    };
+
+    // queue.noConfirmations is a real live main-process consumer. Change it
+    // through the UI, then prove the running queue stops asking and starts
+    // asking again when the same control is changed back.
+    await clickPage('background');
+    const setQueueConfirmation = async (checked) => {
+      const changed = await app.evaluate(`(() => {
+        const row = document.querySelector('[data-pref-key="queue.noConfirmations"]');
+        const input = row?.querySelector('input[type="checkbox"]');
+        if (!input) return false;
+        input.checked = ${checked ? 'true' : 'false'};
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        return !input.disabled;
+      })()`);
+      assert.equal(changed, true, 'the live queue preference control was unavailable');
+      await waitFor(() => app.ok('config.getPref', 'queue.noConfirmations')
+        .then((value) => value === checked), 5000, 'the preference persistence write');
+    };
+
+    await setQueueConfirmation(true);
+    await fsp.writeFile(path.join(server.root, 'prefs-live-off.bin'), 'server value');
+    const localOff = path.join(localDir, 'prefs-live-off.bin');
+    await fsp.writeFile(localOff, 'UI changed the setting');
+    const quiet = await app.ok('queue.add', {
+      sessionId, direction: 'upload', files: [localOff], target: '/',
+      copyParam: { transferMode: 'binary' },
+    });
+    await app.waitForEvent('event:queue',
+      (p) => p.type === 'item-done' && p.item && p.item.id === quiet[0].id, 20000);
+    assert.equal(app.seenEvents.some((e) => e.event === 'event:prompt'
+      && e.payload.promptId === quiet[0].id), false,
+    'the running main-process queue still prompted after Preferences disabled confirmations');
+
+    await setQueueConfirmation(false);
+    await fsp.writeFile(path.join(server.root, 'prefs-live-on.bin'), 'server value');
+    const localOn = path.join(localDir, 'prefs-live-on.bin');
+    await fsp.writeFile(localOn, 'this one must ask');
+    const asked = await app.ok('queue.add', {
+      sessionId, direction: 'upload', files: [localOn], target: '/',
+      copyParam: { transferMode: 'binary' },
+    });
+    await app.waitForEvent('event:prompt',
+      (p) => p.promptId === asked[0].id && p.payload && p.payload.query, 20000);
+    await app.ok('queue.answerQuery', asked[0].id, 'skip');
+    await app.waitForEvent('event:queue',
+      (p) => p.type === 'item-done' && p.item && p.item.id === asked[0].id, 20000);
+
+    // refreshRemotePanelInterval is live: it refreshes the attached remote
+    // panel and zero disables the timer. Keep the setting writable through the
+    // real Preferences surface so the production consumer cannot drift away.
+    await clickPage('panels-remote');
+    const pending = await app.evaluate(`(() => {
+      const row = document.querySelector('[data-pref-key="refreshRemotePanelInterval"]');
+      const input = row?.querySelector('input');
+      return {
+        status: row?.dataset.prefStatus,
+        ariaDisabled: row?.getAttribute('aria-disabled'),
+        disabled: !!input?.disabled,
+        note: !!row?.querySelector('.pref-hint.is-pending'),
+        value: input?.value,
+      };
+    })()`);
+    assert.deepEqual(pending, {
+      status: 'wired', ariaDisabled: 'false', disabled: false, note: false, value: '0',
+    });
+    await app.evaluate(`(() => {
+      const input = document.querySelector('[data-pref-key="refreshRemotePanelInterval"] input');
+      input.value = '17';
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    assert.equal(await app.ok('config.getPref', 'refreshRemotePanelInterval'), 17,
+      'the live remote refresh interval did not persist');
   });
 });
 

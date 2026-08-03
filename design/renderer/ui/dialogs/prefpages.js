@@ -1379,9 +1379,6 @@ export const PENDING_KEYS = new Set([
   'queue.disconnectOnceEmpty',
   'queue.individualTransfers',
   'queue.parallelDuplicateTransfers',
-  // The remote panel refreshes when something changes it and when the user
-  // asks; nothing runs it on a timer, so the interval is stored and ignored.
-  'refreshRemotePanelInterval',
   'security.randomSeedFile',
   // session.js:532-537 documents four sessionReopen* settings above
   // _scheduleReconnect, and that function reads two of them —
@@ -1405,6 +1402,15 @@ export const PENDING_KEYS = new Set([
 
 /** True when the option is stored but nothing in the application reads it yet. */
 export function isPending(key) { return PENDING_KEYS.has(key); }
+
+/** The user-facing explanation shared by every unavailable preference row. */
+export function pendingMessage(language = getLanguage()) {
+  const en = 'Unavailable in this build. The stored value is kept for imported configurations, but this control is read-only until the capability is ported.';
+  const yue = '呢個版本未有呢項能力。設定值會保留俾匯入嘅設定，但能力未移植之前呢個掣係唯讀。';
+  if (language === 'yue') return yue;
+  if (language === 'both') return `${en} · ${yue}`;
+  return en;
+}
 
 export function flattenControls(pages = PAGES) {
   const out = [];
@@ -1717,6 +1723,7 @@ function asNode(value) {
 function row(control, language, controlNode, opts = {}) {
   const id = opts.id || uid('pref');
   const hintId = control.hint ? uid('pref-hint') : null;
+  const pendingId = opts.pending ? uid('pref-pending') : null;
   const parts = [];
 
   if (opts.labelInline) {
@@ -1734,12 +1741,8 @@ function row(control, language, controlNode, opts = {}) {
         : language === 'both' ? 'Applies on the next start. · 要下次啟動先生效。'
           : 'Applies on the next start.'));
   }
-  if (isPending(control.key)) {
-    meta.push(h('p', { class: 'pref-hint is-pending' },
-      language === 'yue' ? '呢個設定會存落去，但係呢個版本重未有嘢跟住佢做——所以改咗都唔會有分別。'
-        : language === 'both'
-          ? 'Stored, but nothing in this build acts on it yet — changing it will not change any behaviour. · 呢個設定會存落去，但係呢個版本重未有嘢跟住佢做——所以改咗都唔會有分別。'
-          : 'Stored, but nothing in this build acts on it yet — changing it will not change any behaviour.'));
+  if (opts.pending) {
+    meta.push(h('p', { class: 'pref-hint is-pending', id: pendingId }, pendingMessage(language)));
   }
   if (control.danger) {
     meta.push(h('p', { class: 'pref-hint is-danger' },
@@ -1749,11 +1752,14 @@ function row(control, language, controlNode, opts = {}) {
   }
 
   const rowEl = h('div', {
-    class: `pref-row pref-row-${control.type}${opts.disabled ? ' is-disabled' : ''}`,
+    class: `pref-row pref-row-${control.type}${opts.disabled ? ' is-disabled' : ''}${opts.pending ? ' is-unavailable' : ''}`,
     'data-pref-key': control.key,
+    'data-pref-status': opts.pending ? 'unavailable' : 'wired',
+    'aria-disabled': opts.pending ? 'true' : 'false',
   }, ...parts, ...meta);
   appearanceTarget(rowEl, `pref-row-${control.key}`, `Preference: ${control.label.en}`);
-  if (hintId) controlNode.setAttribute?.('aria-describedby', hintId);
+  const describedBy = [hintId, pendingId].filter(Boolean).join(' ');
+  if (describedBy) controlNode.setAttribute?.('aria-describedby', describedBy);
   return rowEl;
 }
 
@@ -1787,6 +1793,7 @@ function applyDisabled(node, disabled) {
 export function renderControl(control, ctx) {
   const language = ctx.language || getLanguage();
   const enabled = controlEnabled(control, ctx.read);
+  const pending = isPending(control.key);
   const stored = ctx.read(control.key);
   const id = uid('pref');
   const commit = (value) => ctx.write(control, value);
@@ -1965,7 +1972,7 @@ export function renderControl(control, ctx) {
   };
 
   const built = build();
-  applyDisabled(built.node, !enabled);
+  applyDisabled(built.node, !enabled || pending);
   // A colour swatch or a font button is built by a shared component that owns
   // its own markup, so the id the row's <label for> points at has to be put
   // onto whatever inside it takes focus. Without this the label is an orphan:
@@ -1974,5 +1981,8 @@ export function renderControl(control, ctx) {
   if (!built.labelInline && built.focusable instanceof Element && !built.focusable.id) {
     built.focusable.id = rowId;
   }
-  return row(control, language, built.node, { id: rowId, labelInline: built.labelInline, disabled: !enabled });
+  return row(control, language, built.node, {
+    id: rowId, labelInline: built.labelInline,
+    disabled: !enabled || pending, pending,
+  });
 }

@@ -97,6 +97,7 @@ export function registerStatusItem(item) {
 export function registerCommand(cmd) {
   if (!cmd?.id || typeof cmd.run !== 'function') throw new Error('registerCommand needs { id, run }');
   commands.set(cmd.id, cmd);
+  bus.emit('shell:commandRegistered', cmd.id);
   return () => commands.delete(cmd.id);
 }
 export function runCommand(id, ...args) {

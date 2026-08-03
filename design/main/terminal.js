@@ -471,6 +471,7 @@ class OperationProgress {
   stop() {
     this._clearTransfer();
     this.inProgress = false;
+    this.done = true;
     this._progress();
   }
 
@@ -499,7 +500,8 @@ class OperationProgress {
     this._progress();
   }
 
-  setCancel(c) { this.cancel = c; this._progress(); }
+  /** Cancellation is monotonic for the life of an operation. */
+  setCancel(c) { this.setCancelAtLeast(c); }
 
   /** Never downgrades: a "cancel file" cannot undo a "cancel everything". */
   setCancelAtLeast(c) { if (this.cancel < c) { this.cancel = c; this._progress(); } }
@@ -582,6 +584,7 @@ class OperationProgress {
       fullFileName: this.fullFileName,
       directory: this.directory,
       inProgress: this.inProgress,
+      done: this.done,
       suspended: this.suspended,
       cancel: this.cancel,
       skipToAll: this.skipToAll,
@@ -694,8 +697,9 @@ class DirectoryChangesCache {
   static changeKey(sourceDir, change) {
     if (!change) return null;
     const absolute = isAbsolutePath(change);
-    if (!sourceDir && !absolute) return null;
-    return absolute ? change : `${sourceDir},${change}`;
+    const source = excludeTrailingSlash(sourceDir);
+    if (!source && !absolute) return null;
+    return absolute ? change : `${source},${change}`;
   }
 
   /**
@@ -725,9 +729,9 @@ class DirectoryChangesCache {
 
   /** Everything remembered *from* this directory is now suspect. */
   clearDirectoryChange(sourceDir) {
-    const prefix = String(sourceDir || '');
+    const prefix = `${excludeTrailingSlash(sourceDir)},`;
     for (const name of [...this._map.keys()]) {
-      if (name.slice(0, prefix.length) === prefix) this._map.delete(name);
+      if (name.startsWith(prefix)) this._map.delete(name);
     }
   }
 
@@ -738,12 +742,12 @@ class DirectoryChangesCache {
    * the name it used to have.
    */
   clearDirectoryChangeTarget(targetDir) {
-    const target = String(targetDir || '');
+    const target = excludeTrailingSlash(targetDir) || '/';
     const key = DirectoryChangesCache.changeKey(
       excludeTrailingSlash(extractFilePath(target)), extractFileName(target));
     for (const [name, value] of [...this._map.entries()]) {
-      if (name.slice(0, target.length) === target ||
-          String(value).slice(0, target.length) === target ||
+      if (isChildPath(target, name) ||
+          (value !== '//' && isChildPath(target, String(value))) ||
           (key && name === key)) {
         this._map.delete(name);
       }
@@ -939,6 +943,7 @@ class RobustLoop {
 
 /** Default answer when a query prompt is dismissed rather than answered. */
 function safestAnswer(answers) {
+  if (!Array.isArray(answers) || answers.length === 0) return ANSWERS.cancel;
   for (const a of [ANSWERS.cancel, ANSWERS.abort, ANSWERS.no, ANSWERS.skip]) {
     if (answers.includes(a)) return a;
   }
@@ -1417,7 +1422,7 @@ class Terminal extends EventEmitter {
       if (!(flags & LOOP_FLAGS.retryOnFatal)) throw e;
       const wrapped = new FatalError(message || e.message, e);
       wrapped.reopenQueried = !!e.reopenQueried;
-      if (!await this.doQueryReopen(wrapped)) throw wrapped;
+      if (!await this.queryReopen(wrapped, REOPEN_FLAGS.noReadDirectory, progress)) throw wrapped;
       return false;
     }
     return this.fileOperationLoopQuery(e, progress, message, flags, specialRetry);
@@ -1478,6 +1483,7 @@ class Terminal extends EventEmitter {
   clearCaches() {
     this.cache.clear();
     this.changesCache.clear();
+    this.files.timestamp = 0;
     if (this.session && typeof this.session.clearCache === 'function') this.session.clearCache();
   }
 
@@ -1492,7 +1498,7 @@ class Terminal extends EventEmitter {
     if (this.session && typeof this.session.invalidate === 'function') {
       // Mirror into the session's panel cache. `invalidate` also drops the
       // parent, which is broader than we need and never wrong.
-      this.session.invalidate(dir);
+      this.session.invalidate(dir, { subDirs: !!subDirs });
       for (const p of removed) this.session.invalidate(p);
     }
     // The in-hand listing is part of the cache surface: if the directory it
@@ -1924,7 +1930,7 @@ class Terminal extends EventEmitter {
       this.logEvent('Not refreshing directory, caching is off.');
       return this.files;
     }
-    if (this.cache.hasNewerFileList(this.peekCurrentDirectory(), this.files.timestamp)) {
+    if (!this.files.timestamp || this.cache.hasNewerFileList(this.peekCurrentDirectory(), this.files.timestamp)) {
       await this.readDirectory(true, true);
       this._readDirectoryPending = false;
     }
@@ -2064,6 +2070,14 @@ class Terminal extends EventEmitter {
     return this._progressStack.length ? this._progressStack[this._progressStack.length - 1] : null;
   }
 
+  /** Cancel the active foreground operation, if one exists. */
+  cancelOperation() {
+    const progress = this.operationProgress;
+    if (!progress || !progress.inProgress) return false;
+    progress.setCancelAtLeast(CANCEL.cancel);
+    return true;
+  }
+
   operationStart(progress, operation, side, count, options) {
     progress.start(operation, side, count, options);
     this._progressStack.push(progress);
@@ -2071,6 +2085,7 @@ class Terminal extends EventEmitter {
   }
 
   operationStop(progress) {
+    if (progress.done && !progress.inProgress) return;
     const i = this._progressStack.lastIndexOf(progress);
     if (i >= 0) this._progressStack.splice(i, 1);
     progress.stop();

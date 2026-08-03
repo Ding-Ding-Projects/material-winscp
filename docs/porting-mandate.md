@@ -62,8 +62,10 @@ one thing is missing, and nothing about the screen shows it.
 Two mechanisms hold the line:
 
 - **`PENDING_KEYS`** in `design/renderer/ui/dialogs/prefpages.js` — the options
-  this port stores and does not yet act on. Every one of them says so on its own
-  row, in both languages, so a user never has to run a grep to find out.
+  this port stores and does not yet act on. Every one of them is read-only and
+  says so on its own row, in both languages, so a user never gets a success
+  toast for a capability that is not there and never has to run a grep to find
+  out.
 - **The consumer scan** in `test/helpers/consumer-scan.js`, asserted by
   `test/preferences.test.js`. It finds every option nothing reads and holds
   `PENDING_KEYS` to exactly that set — failing in both directions, so an option

@@ -17,6 +17,10 @@ a configuration meant to move between machines.
   guessing slow.
 - Secrets are then sealed with authenticated encryption, so a modified
   ciphertext fails cleanly instead of decrypting to something wrong.
+- The in-memory derived key is explicitly zeroized when the session is locked or
+  replaced. Verifier salts and AES-GCM envelopes are validated before use, so a
+  damaged or hand-edited verifier fails closed instead of reaching a lower-level
+  crypto error.
 
 ## Configuration
 
@@ -68,7 +72,9 @@ Under **Preferences → Security**:
   noticeable moment is intended behaviour, not a performance bug.
 - **The derived key lives in memory while unlocked.** Anything that can read this
   process's memory can read it. Lock when stepping away; the app does not claim
-  protection against an attacker who is already running code as you.
+  protection against an attacker who is already running code as you. Locking
+  zeroizes the key buffer before releasing it; this reduces residual exposure but
+  is not a substitute for OS process isolation.
 - **No recovery mechanism exists**, and adding one would mean the password is not
   the only thing protecting the data.
 - **Not a full-disk or full-config encryption.** The setting says what it covers
@@ -80,6 +86,8 @@ Under **Preferences → Security**:
 
 - Derivation is tested for determinism given the same password and salt, and for
   producing a different key per installation salt.
+- Session lock/re-unlock, failed unlock preservation, malformed verifier
+  rejection, and truncated AES-GCM envelope rejection are tested directly.
 - The verifier is tested to reject wrong passwords and to leak nothing usable.
 - Re-wrapping is tested across a full configuration, asserting every secret
   decrypts afterwards and none is left under the old key.

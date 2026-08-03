@@ -18,7 +18,7 @@ Under **Site → Advanced → SCP/Shell**.
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `shell` | `''` (server default) | Shell to invoke. Set it when the login shell is not POSIX-compatible. |
-| `returnVar` | `''` | Variable holding the last exit code (`?` on most shells, `status` on csh). |
+| `returnVar` | `''` | Variable holding the last exit code (`$?`/`?` on most shells, `status` on csh). The adapter accepts either `$?` or `?` and quotes the marker safely. |
 | `listingCommand` | `ls -la` | The command whose output becomes a directory listing. |
 | `lookupUserGroups` | `auto` | Resolve numeric uid/gid to names with `groups`/`id`. |
 | `eolType` | `lf` | Line ending assumed for text-mode transfers. |
@@ -42,6 +42,8 @@ Under **Site → Advanced → SCP/Shell**.
 | Filenames containing newlines | Cannot be represented in `ls` output. Such entries are reported as unparseable rather than silently mangled or merged. | No — use SFTP |
 | Server clock is in another timezone | Timestamps look shifted; `timeDifferenceAuto` measures and corrects it. | Yes |
 | Transfer interrupted | SCP has no resume. The queue item fails with the whole file to redo — `caps.resume` is `false`, so the UI never offers Resume. | Partially |
+| A malformed or truncated SCP stream | The operation fails with a protocol error; a recursive download is never reported complete merely because its SSH channel closed. | No — retry the transfer |
+| The declared upload size is wrong | The upload fails validation before it can send an overlong payload, or after an incomplete payload, and the queue receives a bounded error. | Yes, retry with the real size |
 
 ## Security considerations
 
@@ -54,8 +56,14 @@ Under **Site → Advanced → SCP/Shell**.
   `; rm -rf ~` must never reach a shell unquoted. All substitution goes through
   the quoting layer, and any code path that builds a remote command by string
   concatenation is a bug to be fixed, not a style preference.
-- **Listing parsing is a parser fed by a remote party.** It is bounded (line
-  length, entry count) so a hostile `ls` cannot exhaust memory.
+- **Wire parsing is a parser fed by a remote party.** SCP control records are
+  capped at 64 KiB and file sizes must be safe integers, so a hostile peer
+  cannot turn a header into an unbounded allocation or a successful truncated
+  download.
+- **Shell failures cross the adapter boundary as classified errors.** Remote
+  permission failures are `permission`/`EACCES`; malformed SCP records and
+  command failures are `protocol`/`EPROTO`; invalid local transfer arguments
+  are `validation`/`INVALID_INPUT`.
 - **`ignoreLsWarnings` hides stderr.** Useful, but it can also hide a genuine
   permission problem; the session log still records the discarded text.
 - SCP inherits the SSH transport's security wholesale — cipher lists, host key
@@ -66,7 +74,11 @@ Under **Site → Advanced → SCP/Shell**.
 - Listing parsers are unit-tested against recorded `ls -la` output from GNU
   coreutils, BusyBox, macOS/BSD and Solaris, including the `--full-time` form.
 - Quoting of filenames containing spaces, quotes, `$`, backticks and semicolons
-  is tested directly against the expansion layer.
+  is tested directly against the expansion layer; a stored `$?` return variable
+  is checked for the exact one-dollar shell expansion.
+- Upload headers, byte counts, progress, malformed records, control-line limits,
+  recursive truncation, permissions and error categories are covered by
+  focused contract tests and the real SSH/SCP suite in `test/e2e-sftp.test.js`.
 - Timezone correction is tested with synthetic clock offsets.
 
 Manual check: connect over SCP, open **Commands → Console**, run `echo $0`, and

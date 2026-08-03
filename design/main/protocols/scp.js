@@ -15,9 +15,65 @@ const { once } = require('events');
 
 const { Adapter, entry } = require('./base');
 const { SshTransport, shellQuote, parseRights, normalizeTimes } = require('./sftp');
+const { normalizeError } = require('../exceptions');
 
 const NUL = Buffer.from([0]);
 const RETURN_MARKER = 'WinSCP-material-rc:';
+const MAX_CONTROL_LINE = 64 * 1024;
+
+function scpError(error, context = {}) {
+  const source = error instanceof Error ? error : new Error(String(error || ''));
+  return normalizeError(source, { protocol: 'SCP', ...context });
+}
+
+function scpProtocolError(message, operation = 'transfer') {
+  return scpError(new Error(message), {
+    category: 'protocol', code: 'EPROTO', operation,
+  });
+}
+
+function scpValidationError(message, operation = 'transfer') {
+  return scpError(new Error(message), {
+    category: 'validation', operation,
+  });
+}
+
+function scpRemoteError(message, operation = 'transfer') {
+  const permission = /\b(permission denied|access denied|not permitted|operation not permitted)\b/i.test(message);
+  return scpError(new Error(message), {
+    category: permission ? 'permission' : 'protocol',
+    code: permission ? 'EACCES' : 'EPROTO',
+    operation,
+  });
+}
+
+function checkedMode(mode) {
+  const text = typeof mode === 'string' ? mode.trim() : '';
+  const n = typeof mode === 'string'
+    ? (/^[0-7]{3,4}$/.test(text) ? parseInt(text, 8) : NaN)
+    : Number(mode);
+  if (!Number.isSafeInteger(n) || n < 0 || n > 0o7777) {
+    throw scpValidationError(`SCP mode must be an octal value from 0000 through 7777; received ${String(mode)}.`, 'permissions');
+  }
+  return n;
+}
+
+function checkedOffset(value, operation) {
+  if (value === undefined || value === null || value === '') return 0;
+  const n = Number(value);
+  if (!Number.isSafeInteger(n) || n < 0) {
+    throw scpValidationError(`SCP ${operation} offset must be a non-negative integer.`, operation);
+  }
+  return n;
+}
+
+function checkedEpochMilliseconds(value, label) {
+  const n = Number(value);
+  if (!Number.isSafeInteger(n) || n < 0) {
+    throw scpValidationError(`SCP ${label} must be a non-negative epoch time in milliseconds.`, 'upload');
+  }
+  return n;
+}
 
 // ------------------------------------------------------------- ls parsing
 
@@ -179,12 +235,13 @@ function parseListing(text, opts = {}) {
  * small reads and stream large ones without holding the file in memory.
  */
 class ByteReader {
-  constructor(src, highWaterMark = 1024 * 1024) {
+  constructor(src, highWaterMark = 1024 * 1024, maxControlLine = MAX_CONTROL_LINE) {
     this.src = src;
     this.buf = Buffer.alloc(0);
     this.ended = false;
     this.error = null;
     this.high = highWaterMark;
+    this.maxControlLine = maxControlLine;
     this._wake = null;
     src.on('data', (d) => {
       this.buf = this.buf.length ? Buffer.concat([this.buf, d]) : d;
@@ -208,8 +265,8 @@ class ByteReader {
 
   async readBytes(n) {
     while (this.buf.length < n) {
-      if (this.error) throw this.error;
-      if (this.ended) throw new Error('The SCP transfer ended before all the data arrived');
+      if (this.error) throw scpError(this.error, { operation: 'transfer' });
+      if (this.ended) throw scpProtocolError('The SCP transfer ended before all the data arrived');
       await this._idle();
     }
     return this._take(n);
@@ -218,9 +275,14 @@ class ByteReader {
   async readLine() {
     for (;;) {
       const i = this.buf.indexOf(0x0a);
-      if (i >= 0) return this._take(i + 1).subarray(0, i).toString('utf8');
-      if (this.error) throw this.error;
-      if (this.ended) throw new Error('The SCP transfer ended in the middle of a control line');
+      if (i >= 0) {
+        if (i > this.maxControlLine) throw scpProtocolError('The SCP peer sent an oversized control record.');
+        const line = this._take(i + 1).subarray(0, i).toString('utf8');
+        return line.endsWith('\r') ? line.slice(0, -1) : line;
+      }
+      if (this.buf.length > this.maxControlLine) throw scpProtocolError('The SCP peer sent an oversized control record.');
+      if (this.error) throw scpError(this.error, { operation: 'transfer' });
+      if (this.ended) throw scpProtocolError('The SCP transfer ended in the middle of a control line');
       await this._idle();
     }
   }
@@ -230,8 +292,8 @@ class ByteReader {
     let left = n;
     while (left > 0) {
       if (!this.buf.length) {
-        if (this.error) throw this.error;
-        if (this.ended) throw new Error('The SCP transfer ended before all the data arrived');
+        if (this.error) throw scpError(this.error, { operation: 'transfer' });
+        if (this.ended) throw scpProtocolError('The SCP transfer ended before all the data arrived');
         await this._idle();
         continue;
       }
@@ -248,34 +310,48 @@ async function expectAck(reader) {
   const b = await reader.readBytes(1);
   if (b[0] === 0) return;
   const message = (await reader.readLine()).trim();
-  if (b[0] === 1) throw new Error(message || 'The remote scp reported a problem');
-  throw new Error(message || 'The remote scp reported a fatal error');
+  throw scpRemoteError(message || (b[0] === 1
+    ? 'The remote scp reported a problem' : 'The remote scp reported a fatal error'));
 }
 
-function writeAck(channel) { channel.write(NUL); }
+function writeAck(channel) {
+  if (channel.destroyed || channel.writableEnded) {
+    throw scpProtocolError('The SCP channel closed before the peer acknowledged the record.');
+  }
+  try {
+    channel.write(NUL);
+  } catch (error) {
+    throw scpError(error, { category: 'transport', code: error.code || 'EPIPE', operation: 'transfer' });
+  }
+}
 
 /** 'C0644 1234 name' */
 function parseControl(line) {
   const kind = line[0];
   if (kind === 'C' || kind === 'D') {
-    const m = /^[CD](\d{4})\s+(\d+)\s+(.*)$/.exec(line);
-    if (!m) throw new Error(`The remote scp sent a record this client cannot read: ${line}`);
-    return { kind, mode: parseInt(m[1], 8), size: Number(m[2]), name: m[3] };
+    const m = /^[CD]([0-7]{4})\s+(\d+)\s+(.+)$/.exec(line);
+    if (!m) throw scpProtocolError(`The remote scp sent a record this client cannot read: ${line}`);
+    const size = Number(m[2]);
+    if (!Number.isSafeInteger(size)) throw scpProtocolError('The remote scp sent a file size outside the safe integer range.');
+    return { kind, mode: parseInt(m[1], 8), size, name: m[3] };
   }
   if (kind === 'T') {
     const m = /^T(\d+)\s+(\d+)\s+(\d+)\s+(\d+)$/.exec(line);
-    if (!m) throw new Error(`The remote scp sent a time record this client cannot read: ${line}`);
+    if (!m || !Number.isSafeInteger(Number(m[1])) || !Number.isSafeInteger(Number(m[3]))) {
+      throw scpProtocolError(`The remote scp sent a time record this client cannot read: ${line}`);
+    }
     return { kind, mtime: Number(m[1]) * 1000, atime: Number(m[3]) * 1000 };
   }
-  if (kind === 'E') return { kind: 'E' };
+  if (line === 'E') return { kind: 'E' };
   if (line.charCodeAt(0) === 1 || line.charCodeAt(0) === 2) {
-    throw new Error(line.slice(1).trim() || 'The remote scp reported an error');
+    throw scpRemoteError(line.slice(1).trim() || 'The remote scp reported an error');
   }
-  throw new Error(`Unexpected SCP record: ${line}`);
+  throw scpProtocolError(`Unexpected SCP record: ${line}`);
 }
 
 function modeString(mode) {
-  return '0' + (mode & 0o7777).toString(8).padStart(3, '0').slice(-3);
+  const n = checkedMode(mode);
+  return '0' + n.toString(8).padStart(3, '0').slice(-3);
 }
 
 /**
@@ -286,32 +362,47 @@ function modeString(mode) {
  */
 function transferMode(stat, opts, isDir) {
   const override = isDir ? opts.dirMode : opts.mode;
-  if (override !== undefined && override !== null) return Number(override);
+  if (override !== undefined && override !== null) {
+    const mode = checkedMode(override);
+    return isDir && opts.addXToDirectories !== false ? mode | 0o111 : mode;
+  }
   if (process.platform === 'win32') return isDir ? 0o755 : 0o644;
   const mode = stat.mode & 0o7777;
-  return isDir && opts.addXToDirectories !== false ? mode | 0o111 : mode;
+  return checkedMode(isDir && opts.addXToDirectories !== false ? mode | 0o111 : mode);
 }
 
 /** The writable half of an upload: forwards to the channel, then finishes the
  *  SCP record and waits for the server's acknowledgement before 'finish'. */
 class ScpSink extends Writable {
-  constructor(channel, reader, size, onDone) {
+  constructor(channel, reader, size, onDone, onProgress) {
     super();
     this.channel = channel;
     this.reader = reader;
     this.size = size;
     this.written = 0;
     this._onDone = onDone;
+    this._onProgress = onProgress;
   }
   _write(chunk, enc, cb) {
+    if (this.written + chunk.length > this.size) {
+      cb(scpValidationError(`SCP upload exceeded its declared size of ${this.size} bytes.`, 'upload'));
+      return;
+    }
     this.written += chunk.length;
-    if (this.channel.write(chunk)) cb();
-    else this.channel.once('drain', cb);
+    try {
+      if (this.channel.write(chunk)) {
+        if (this._onProgress) this._onProgress(chunk.length);
+        cb();
+      } else this.channel.once('drain', () => {
+        if (this._onProgress) this._onProgress(chunk.length);
+        cb();
+      });
+    } catch (e) { cb(e); }
   }
   _final(cb) {
     (async () => {
       if (this.written !== this.size) {
-        throw new Error(`SCP was told to expect ${this.size} bytes but ${this.written} were written`);
+        throw scpValidationError(`SCP was told to expect ${this.size} bytes but ${this.written} were written.`, 'upload');
       }
       writeAck(this.channel);
       await expectAck(this.reader);
@@ -413,7 +504,13 @@ class ScpAdapter extends Adapter {
       prefix.push('unset LANG LANGUAGE LC_CTYPE LC_COLLATE LC_MONETARY LC_NUMERIC LC_TIME LC_MESSAGES LC_ALL 2>/dev/null; true');
     }
     let full = prefix.length ? `${prefix.join('; ')}; ${command}` : command;
-    if (s.returnVar) full = `${full}; echo "${RETURN_MARKER}$${s.returnVar}"`;
+    if (s.returnVar) {
+      const returnVar = String(s.returnVar).trim().replace(/^\$/, '');
+      if (returnVar !== '?' && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(returnVar)) {
+        throw scpValidationError('SCP returnVar must be "$?"/"?" or a shell variable name.', 'shell');
+      }
+      full = `${full}; echo ${shellQuote(RETURN_MARKER)}"$${returnVar}"`;
+    }
     if (s.shell) full = `${s.shell} -c ${shellQuote(full)}`;
     return full;
   }
@@ -425,7 +522,7 @@ class ScpAdapter extends Adapter {
     if (this.session.returnVar) {
       // The shell's own status is not visible when a return variable is
       // configured, so it is echoed and read back out of the output.
-      const m = new RegExp(`^${RETURN_MARKER}(-?\\d+)\\s*$`, 'm').exec(stdout);
+      const m = new RegExp(`^${RETURN_MARKER.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}(-?\\d+)\\s*$`, 'm').exec(String(stdout || ''));
       if (m) { code = Number(m[1]); stdout = stdout.replace(m[0], ''); }
     }
     return { code, signal: res.signal, stdout, stderr: res.stderr };
@@ -434,7 +531,13 @@ class ScpAdapter extends Adapter {
   async _mustRun(command, what) {
     const res = await this._run(command);
     if (res.code !== 0) {
-      throw new Error(`${what} failed: ${(res.stderr || res.stdout || '').trim() || `exit code ${res.code}`}`);
+      const message = `${what} failed: ${(res.stderr || res.stdout || '').trim() || `exit code ${res.code}`}`;
+      const permission = /\b(permission denied|access denied|not permitted|operation not permitted)\b/i.test(message);
+      throw scpError(new Error(message), {
+        category: permission ? 'permission' : 'protocol',
+        code: permission ? 'EACCES' : 'EPROTO',
+        operation: what,
+      });
     }
     return res;
   }
@@ -473,8 +576,13 @@ class ScpAdapter extends Adapter {
     if (res.code !== 0) {
       throw new Error(`Could not list ${target}: ${(res.stderr || res.stdout || '').trim() || `exit code ${res.code}`}`);
     }
-    if (res.stderr && res.stderr.trim() && !this.session.ignoreLsWarnings) {
-      throw new Error(`The listing command warned: ${res.stderr.trim()}`);
+    if (res.stderr && res.stderr.trim()) {
+      if (!this.session.ignoreLsWarnings) {
+        throw scpError(new Error(`The listing command warned: ${res.stderr.trim()}`), {
+          category: 'protocol', code: 'EPROTO', operation: 'list',
+        });
+      }
+      this._log('warn', `The listing command warned: ${res.stderr.trim()}`);
     }
 
     const { entries, skipped } = parseListing(res.stdout, {
@@ -505,7 +613,9 @@ class ScpAdapter extends Adapter {
     const target = this.normalize(p);
     const fullTime = await this._wantFullTime();
     const res = await this._run(this._lsCommand(target, `-d${fullTime ? ' --full-time' : ''}`));
-    if (res.code !== 0) throw new Error(`Could not stat ${target}: ${(res.stderr || '').trim() || `exit code ${res.code}`}`);
+    if (res.code !== 0) throw scpError(new Error(`Could not stat ${target}: ${(res.stderr || res.stdout || '').trim() || `exit code ${res.code}`}`), {
+      category: 'protocol', code: 'EPROTO', operation: 'stat',
+    });
     const { entries } = parseListing(res.stdout, {
       ignoreWarnings: true,
       timeDifferenceHours: this.session.timeDifference,
@@ -621,9 +731,8 @@ class ScpAdapter extends Adapter {
    * payload then streams straight through.
    */
   async createReadStream(p, opts = {}) {
-    if (Number(opts.start) > 0) {
-      throw new Error('SCP cannot resume a partial download; transfer the file again from the start or use SFTP.');
-    }
+    const start = checkedOffset(opts.start, 'download');
+    if (start > 0) throw scpValidationError('SCP cannot resume a partial download; transfer the file again from the start or use SFTP.', 'download');
     const target = this.normalize(p);
     const flags = ['-f'];
     if (opts.preserveTime !== false) flags.push('-p');
@@ -633,17 +742,21 @@ class ScpAdapter extends Adapter {
     writeAck(channel);
     let times = null;
     let header = null;
-    for (;;) {
-      const line = await reader.readLine();
-      const rec = parseControl(line);
-      if (rec.kind === 'T') { times = rec; writeAck(channel); continue; }
-      if (rec.kind === 'D') {
-        channel.destroy();
-        throw new Error(`${target} is a directory; use downloadDirectory() for a recursive SCP transfer`);
+    try {
+      for (;;) {
+        const line = await reader.readLine();
+        const rec = parseControl(line);
+        if (rec.kind === 'T') { times = rec; writeAck(channel); continue; }
+        if (rec.kind === 'D') {
+          throw scpProtocolError(`${target} is a directory; use downloadDirectory() for a recursive SCP transfer`, 'download');
+        }
+        if (rec.kind === 'E') throw scpProtocolError(`${target} produced no file`, 'download');
+        header = rec;
+        break;
       }
-      if (rec.kind === 'E') { channel.destroy(); throw new Error(`${target} produced no file`); }
-      header = rec;
-      break;
+    } catch (e) {
+      try { channel.destroy(); } catch { /* gone */ }
+      throw e;
     }
     writeAck(channel);
 
@@ -675,9 +788,11 @@ class ScpAdapter extends Adapter {
    */
   async createWriteStream(p, opts = {}) {
     const size = Number(opts.size);
-    if (!Number.isFinite(size) || size < 0) {
-      throw new Error('SCP needs the file size before the upload starts; pass { size } to createWriteStream().');
+    if (!Number.isSafeInteger(size) || size < 0) {
+      throw scpValidationError('SCP needs the file size as a non-negative integer before the upload starts; pass { size } to createWriteStream().', 'upload');
     }
+    const start = checkedOffset(opts.start, 'upload');
+    if (start > 0) throw scpValidationError('SCP cannot resume a partial upload; transfer the file again from the start or use SFTP.', 'upload');
     const target = this.normalize(p);
     const preserve = opts.mtime !== undefined && opts.mtime !== null;
     const flags = ['-t'];
@@ -685,19 +800,24 @@ class ScpAdapter extends Adapter {
     const channel = await this.transport.execRaw(this._scp(flags, target));
     const reader = new ByteReader(channel);
 
-    await expectAck(reader);
-    if (preserve) {
-      const mtime = Math.floor(Number(opts.mtime) / 1000);
-      const atime = Math.floor(Number(opts.atime === undefined ? opts.mtime : opts.atime) / 1000);
-      channel.write(`T${mtime} 0 ${atime} 0\n`);
+    try {
       await expectAck(reader);
+      if (preserve) {
+        const mtime = Math.floor(checkedEpochMilliseconds(opts.mtime, 'modification time') / 1000);
+        const atime = Math.floor(checkedEpochMilliseconds(opts.atime === undefined ? opts.mtime : opts.atime, 'access time') / 1000);
+        channel.write(`T${mtime} 0 ${atime} 0\n`);
+        await expectAck(reader);
+      }
+      const mode = opts.mode === undefined ? 0o644 : opts.mode;
+      channel.write(`C${modeString(mode)} ${size} ${this.basename(target)}\n`);
+      await expectAck(reader);
+    } catch (e) {
+      try { channel.destroy(); } catch { /* gone */ }
+      throw e;
     }
-    const mode = opts.mode === undefined ? 0o644 : opts.mode;
-    channel.write(`C${modeString(mode)} ${size} ${this.basename(target)}\n`);
-    await expectAck(reader);
     this._log('debug', `scp -t ${target}: ${size} bytes`);
 
-    return new ScpSink(channel, reader, size);
+    return new ScpSink(channel, reader, size, null, opts.onProgress);
   }
 
   /**
@@ -718,9 +838,11 @@ class ScpAdapter extends Adapter {
       await fsp.mkdir(localDir, { recursive: true });
       let times = null;
 
+      let rootDirectory = false;
       for (;;) {
+        if (rootDirectory && stack.length === 1) break;
         let line;
-        try { line = await reader.readLine(); } catch { break; }   // the channel closes when the tree is done
+        try { line = await reader.readLine(); } catch (e) { throw e; }
         const rec = parseControl(line);
         if (rec.kind === 'T') { times = rec; writeAck(channel); continue; }
 
@@ -733,13 +855,14 @@ class ScpAdapter extends Adapter {
             await fsp.utimes(done.path, new Date(done.times.atime), new Date(done.times.mtime)).catch(() => {});
           }
           times = null;
-          if (stack.length === 0) break;
+          if (rootDirectory && stack.length === 1) break;
           continue;
         }
 
         const parent = stack[stack.length - 1].path;
         const child = nodePath.join(parent, nodePath.basename(rec.name));
         if (rec.kind === 'D') {
+          if (stack.length === 1) rootDirectory = true;
           await fsp.mkdir(child, { recursive: true });
           stats.dirs++;
           stack.push({ path: child, times });
@@ -757,6 +880,7 @@ class ScpAdapter extends Adapter {
         stats.files++;
         stats.bytes += rec.size;
         if (times) { await fsp.utimes(child, new Date(times.atime), new Date(times.mtime)).catch(() => {}); times = null; }
+        if (!rootDirectory && stack.length === 1) break;
       }
       channel.end();
     } catch (e) {
@@ -833,14 +957,24 @@ class ScpAdapter extends Adapter {
   // ---- optional --------------------------------------------------------
   async exec(command, opts = {}) {
     if (!this.transport) throw new Error('Not connected');
-    return this.transport.exec(this._wrap(command), { encoding: this._encoding, ...opts });
+    const { onStdout, ...rest } = opts;
+    const result = await this._run(command, {
+      encoding: this._encoding,
+      ...rest,
+      ...(this.session.returnVar && onStdout ? {} : (onStdout ? { onStdout } : {})),
+    });
+    if (this.session.returnVar && onStdout && result.stdout) onStdout(result.stdout);
+    return { ...result, exitCode: result.code };
   }
 
   async checksum(p, algorithm = 'sha256') {
     const alg = String(algorithm).toLowerCase().replace(/-/g, '');
-    const tool = alg === 'md5' ? 'md5sum' : alg === 'sha1' ? 'sha1sum' : alg === 'sha512' ? 'sha512sum' : 'sha256sum';
+    const tool = { md5: 'md5sum', sha1: 'sha1sum', sha256: 'sha256sum', sha512: 'sha512sum' }[alg];
+    if (!tool) throw scpValidationError(`SCP does not support the checksum algorithm "${algorithm}".`, 'checksum');
     const res = await this._run(`${tool} -- ${shellQuote(this.normalize(p))}`);
-    if (res.code !== 0) throw new Error(`${tool} failed: ${(res.stderr || '').trim() || `exit code ${res.code}`}`);
+    if (res.code !== 0) throw scpError(new Error(`${tool} failed: ${(res.stderr || res.stdout || '').trim() || `exit code ${res.code}`}`), {
+      category: 'protocol', code: 'EPROTO', operation: 'checksum',
+    });
     const hex = /^([0-9a-f]+)\s/i.exec(res.stdout.trim());
     if (!hex) throw new Error(`${tool} produced no usable output`);
     return hex[1].toLowerCase();

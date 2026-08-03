@@ -12,8 +12,17 @@ rather than decoration.
 | [material-3.md](material-3.md) | The token system, themes, density and the live preview. |
 | [appearance-editor.md](appearance-editor.md) | Per-element "Edit appearance…", Word-depth typography, presets and reset. |
 | [colour-picker.md](colour-picker.md) | The infinite colour picker and the colour translator. |
-| [notifications.md](notifications.md) | Corner toasts, the notification centre, and when a modal is correct. |
+| [overlays.md](overlays.md) | Shared anchored positioning, painted surfaces and viewport scrolling. |
+| [notifications.md](notifications.md) | Corner toasts, persisted notification history, the notification centre, and when a modal is correct. |
 | [panels.md](panels.md) | Commander and Explorer layouts, columns, view styles and file colours. |
+| [panel-keyboard-selection.md](panel-keyboard-selection.md) | Keyboard focus, Insert selection, parent-entry protection, and the last-row boundary. |
+| [error-contract.md](error-contract.md) | Classified failures, safe causes, retry/skip/abort decisions and IPC-safe facts. |
+| [message-resources.md](message-resources.md) | Extracted WinSCP wording, positional and named formatting through IPC, and argument safety. |
+| [usage-and-startup.md](usage-and-startup.md) | Bounded local usage counters, startup milestones, persistence, reset and privacy boundaries. |
+| [preferences.md](preferences.md) | The preference schema, production-consumer audit, live writes, and honest unavailable rows. |
+| [configuration-import-export.md](configuration-import-export.md) | Atomic JSON backups, production-reachable WinSCP INI import/export, hierarchy mapping, and credential handling. |
+| [winapi-boundary.md](winapi-boundary.md) | Cross-platform path, display, keyboard, shell, and unsupported-operation boundaries. |
+| [local-drive-view.md](local-drive-view.md) | Commander local drive roots, UNC share reveal, keyboard navigation and refresh behaviour. |
 
 ## The two rules that decide everything here
 

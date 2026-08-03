@@ -35,7 +35,7 @@ import { notify } from '../notifications.js';
 import { registerDialog, registerCommand, funnySlider } from '../../app.js';
 import {
   PAGES, orderedPages, pageById, flattenControls, renderControl, localized,
-  describeValue, matchPreferences, matchesByPage, getAt, searchFieldsFor,
+  describeValue, matchPreferences, matchesByPage, getAt, searchFieldsFor, isPending,
 } from './prefpages.js';
 import { createCopyParamsFrame, createPresetList, openCopyParamPreset } from './copyparams.js';
 import { createEditorList } from './editorpreferences.js';
@@ -59,7 +59,6 @@ const RENDERER_LIVE = new Set([
   'theme.fontSize', 'theme.fontWeight', 'theme.reduceMotion',
   'language', 'funnyLevel.en', 'funnyLevel.yue',
   'notifications.durationSec', 'notifications.position', 'notifications.centreLimit',
-  'tabs.truncateTitles',
 ]);
 
 /**
@@ -82,7 +81,6 @@ const LIVE_APPLY = {
   'notifications.durationSec': (v) => { store.set('notifications.durationSec', v); persistCurrent('notifications'); },
   'notifications.position': (v) => { store.set('notifications.position', v); persistCurrent('notifications'); },
   'notifications.centreLimit': (v) => { store.set('notifications.centreLimit', v); persistCurrent('notifications'); },
-  'tabs.truncateTitles': (v) => { store.set('tabs.truncateTitles', v); persistCurrent('tabs'); },
 };
 
 /**
@@ -558,7 +556,8 @@ export function createPreferences(opts = {}) {
   const pages = orderedPages(PAGES);
   let currentPageId = opts.pageId && pageById(opts.pageId) ? opts.pageId : pages[0].id;
   let pageBar = null;
-  let hitKey = null;                 // the row to flash after navigating from a result
+  let hitKey = opts.controlKey && entries.some((e) => e.pageId === currentPageId && e.control.key === opts.controlKey)
+    ? opts.controlKey : null;         // the row to flash after navigating from a result
 
   const navList = h('div', { class: 'prefs-tree', role: 'tree', 'aria-label': 'Preference pages' });
   const mainEl = h('main', { class: 'prefs-main', tabindex: '-1' });
@@ -891,6 +890,12 @@ export function createPreferences(opts = {}) {
    * nothing.
    */
   async function commit(control, value, page, repaint) {
+    // The DOM disables pending controls too, but keep the write seam honest if
+    // a synthetic event or a future custom renderer reaches this function.
+    // A pending control itself is read-only. Revert/reset is still allowed to
+    // remove an imported value, because that is a configuration operation and
+    // does not pretend to enable the unavailable capability.
+    if (isPending(control.key) && !repaint) return false;
     if (control.actionId === 'masterPassword') { masterPasswordToggle(control, page, !!value); return; }
     return writeControl(control, value, page, repaint);
   }
@@ -1387,7 +1392,10 @@ function preferencesTitle() {
  * "Configure…" entries elsewhere in the app reach their own settings.
  */
 export function openPreferences(props = {}) {
-  if (openHandle) { if (props.pageId) openHandle.surface.goTo(props.pageId); return openHandle.modal; }
+  if (openHandle) {
+    if (props.pageId) openHandle.surface.goTo(props.pageId, props.controlKey);
+    return openHandle.modal;
+  }
   ensurePreferenceStyles();
   const surface = createPreferences(props);
   const before = surface.snapshot();
@@ -1452,6 +1460,10 @@ export function installPreferences() {
   registerCommand({
     id: 'app.preferences.page', label: 'Open a preferences page', icon: 'settings',
     run: (pageId) => openPreferences({ pageId }),
+  });
+  registerCommand({
+    id: 'app.preferences.setting', label: 'Open a preference setting', icon: 'settings',
+    run: (target) => openPreferences({ pageId: target?.pageId, controlKey: target?.key }),
   });
   registerCommand({
     id: 'app.preferences.transfer', labelKey: 'transferSettingsShort', icon: 'swap_vert',

@@ -10,10 +10,23 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const crypto = require('node:crypto');
+const http = require('node:http');
+const { Readable } = require('node:stream');
 const {
-  parseMultistatus, parseXml, findAll, parseAuthenticate,
+  WebDavAdapter, parseMultistatus, parseXml, findAll, parseAuthenticate,
   buildDigestHeader, encodePath, encodeSegment,
 } = require('../design/main/protocols/webdav');
+
+function listen(server) {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => resolve(server.address().port));
+  });
+}
+
+function close(server) {
+  return new Promise((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+}
 
 // --- Apache mod_dav --------------------------------------------------------
 
@@ -372,6 +385,20 @@ test('Digest SHA-256 with qop=auth matches the RFC 7616 worked example', () => {
   );
 });
 
+test('Digest SHA-512-256 uses the standardized SHA-512/256 function', () => {
+  const params = { realm: 'r', nonce: 'n', qop: 'auth', algorithm: 'SHA-512-256' };
+  const header = buildDigestHeader({
+    username: 'u', password: 'p', method: 'GET', uri: '/x', challenge: { scheme: 'Digest', params },
+    nc: 1, cnonce: 'cn',
+  });
+  const sha512_256 = (s) => crypto.createHash('sha512-256').update(s, 'utf8').digest('hex');
+  const ha1 = sha512_256('u:r:p');
+  const ha2 = sha512_256('GET:/x');
+  const expected = sha512_256(`${ha1}:n:00000001:cn:auth:${ha2}`);
+  assert.match(header, new RegExp(`response="${expected}"`));
+  assert.doesNotMatch(header, /response="a50b7d0d49756b3a35f4a07dd6069179fef2526ea822793948a576dc1ba00ce2"/);
+});
+
 test('Digest without qop falls back to the RFC 2069 response form', () => {
   const challenge = { scheme: 'Digest', params: { realm: 'r', nonce: 'n' } };
   const header = buildDigestHeader({
@@ -395,4 +422,63 @@ test('Digest MD5-sess mixes the nonces into HA1', () => {
   const expected = md5(`${ha1}:n:00000002:cn:auth:${md5('GET:/x')}`);
   assert.match(header, new RegExp(`response="${expected}"`));
   assert.match(header, /nc=00000002/);
+});
+
+test('cross-origin redirects do not forward WebDAV credentials', async () => {
+  let originAuthorization;
+  let redirectedAuthorization;
+  const destination = http.createServer((req, res) => {
+    redirectedAuthorization = req.headers.authorization;
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('redirected safely');
+  });
+  const destinationPort = await listen(destination);
+
+  const origin = http.createServer((req, res) => {
+    originAuthorization = req.headers.authorization;
+    res.writeHead(302, { Location: `http://127.0.0.1:${destinationPort}/final` });
+    res.end();
+  });
+  const originPort = await listen(origin);
+
+  try {
+    const adapter = new WebDavAdapter({
+      hostName: '127.0.0.1',
+      portNumber: originPort,
+      ftps: 'none',
+      userName: 'alice',
+      webDavLiberalEscaping: false,
+      timeout: 2,
+    }, { password: 'correct horse battery staple', allowCrossHostRedirect: true });
+    const result = await adapter.request('GET', '/start');
+
+    assert.strictEqual(result.text, 'redirected safely');
+    assert.match(originAuthorization, /^Basic /);
+    assert.strictEqual(redirectedAuthorization, undefined);
+  } finally {
+    await close(origin);
+    await close(destination);
+  }
+});
+
+test('HTTPS redirects cannot downgrade a WebDAV session to HTTP', async () => {
+  const adapter = new WebDavAdapter({
+    hostName: 'dav.example.test',
+    portNumber: 443,
+    ftps: 'implicit',
+    userName: 'alice',
+    timeout: 2,
+  }, { password: 'secret', allowCrossHostRedirect: true });
+  adapter._send = async () => {
+    const res = Readable.from([]);
+    res.statusCode = 302;
+    res.statusMessage = 'Found';
+    res.headers = { location: 'http://dav.example.test/private' };
+    return { res };
+  };
+
+  await assert.rejects(
+    () => adapter.request('GET', '/start'),
+    /Refusing redirect from HTTPS to HTTP/,
+  );
 });

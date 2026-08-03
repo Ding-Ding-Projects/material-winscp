@@ -66,7 +66,7 @@ test.describe('the reconciled subsystems are reachable from the application', ()
       // design/main/userinterface.js — the message-dialog contract
       'ui:messageDialog', 'ui:resolveAnswer', 'ui:neverAskAgain', 'ui:mayOfferNeverAskAgain',
       // design/main/terminal.js + transfer.js — the foreground transfer path
-      'transfer:copyToRemote', 'transfer:copyToLocal', 'transfer:canParallel',
+      'transfer:copyToRemote', 'transfer:copyToLocal', 'transfer:cancel', 'transfer:canParallel',
     ];
     for (const channel of required) {
       assert.ok(channels.includes(channel), `${channel} is not registered`);
@@ -81,6 +81,7 @@ test.describe('the reconciled subsystems are reachable from the application', ()
       assert.equal(await app.evaluate(`typeof window.api.${ns}`), 'object', `window.api.${ns} is missing`);
     }
     assert.equal(await app.evaluate('typeof window.api.transfer.copyToRemote'), 'function');
+    assert.equal(await app.evaluate('typeof window.api.transfer.cancel'), 'function');
     assert.equal(await app.evaluate('typeof window.api.explorer.delete'), 'function');
   });
 
@@ -101,6 +102,14 @@ test.describe('the reconciled subsystems are reachable from the application', ()
     // The absolute path of the table on this machine is not the renderer's
     // business and must not cross the bridge.
     assert.equal(table.path, undefined);
+  });
+
+  test.it('formats named resource slots through the real renderer bridge', async () => {
+    const text = await app.ok('messages.load', 'NET_TRANSL_TIMEOUT2', {
+      HOST: 'sftp.example.com',
+    });
+    assert.equal(text, 'Network error: Connection to "sftp.example.com" timed out.');
+    assert.ok(!text.includes('%HOST%'), 'the named resource slot leaked into the UI text');
   });
 
   test.it('refuses a resource id it does not have, rather than inventing one', async () => {

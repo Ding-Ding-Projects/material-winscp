@@ -333,6 +333,7 @@ export function fieldVisibility(site = {}, { editable = true } = {}) {
   const noAuth = editable && ((ssh && !!site.sshNoUserAuth) || s3CredentialsEnv);
 
   return {
+    editable: !!editable,
     protocol,
     family: info.family,
     ssh,
@@ -347,9 +348,11 @@ export function fieldVisibility(site = {}, { editable = true } = {}) {
     webDavsLabel: webdav || s3,
     encryptionView: !editable && (ftp || webdav || s3),
     basicSshPanel: ssh,
-    basicFtpPanel: ftp && editable,
-    basicS3Panel: s3 && editable,
-    anonymousCheck: ftp && editable,
+    // Keep protocol panels visible in read-only site views; login.js disables
+    // their controls so the stored state remains inspectable without editing.
+    basicFtpPanel: ftp,
+    basicS3Panel: s3,
+    anonymousCheck: ftp,
     hostNameReadOnly: !editable,
     portNumberReadOnly: !editable,
     userNameEnabled: !noAuth,

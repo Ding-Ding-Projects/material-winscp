@@ -17,6 +17,7 @@
 import { h, icon, layer, anchorTo, focusMemory, uid, clamp, closestAppearanceTarget } from '../dom.js';
 import { t } from '../i18n.js';
 import { bus } from '../state.js';
+import { getCommand, normalizeShortcut as normalizeCommandShortcut } from './commands.js';
 
 const providers = new WeakMap();          // element -> provider(ctx) => items[]
 const contributors = new Set();           // fn(ctx) => items[]
@@ -37,20 +38,127 @@ export function addMenuContributor(fn) {
 
 export const SEPARATOR = { separator: true };
 
+const MAC_PLATFORMS = /(?:darwin|mac|macos|osx)/i;
+const WIN_PLATFORMS = /(?:win32|windows|win)/i;
+
+/**
+ * The action registry stores WinSCP's names (Ctrl+Left, Num +, ...), while a
+ * menu is a user-facing surface. Keep that conversion here so an action
+ * descriptor and a hand-written provider cannot disagree about what the user
+ * should press. `platform` is injectable for deterministic tests.
+ */
+export function menuPlatform(platform) {
+  if (platform) return String(platform).toLowerCase();
+  const reported = typeof navigator !== 'undefined'
+    ? (navigator.userAgentData?.platform || navigator.platform || '')
+    : '';
+  if (reported) {
+    if (MAC_PLATFORMS.test(reported)) return 'darwin';
+    if (WIN_PLATFORMS.test(reported)) return 'win32';
+    return reported.toLowerCase();
+  }
+  if (typeof process !== 'undefined' && process.platform) return process.platform;
+  return 'win32';
+}
+
+function actionName(item) {
+  const value = item?.action ?? item?.actionId ?? item?.command;
+  if (typeof value === 'string') return value;
+  if (value && typeof value.name === 'string') return value.name;
+  return '';
+}
+
+/** Resolve the raw shortcut without applying display-specific notation. */
+export function shortcutForAction(item) {
+  const explicit = item?.shortcut;
+  if (explicit !== undefined && explicit !== null && String(explicit).trim()) return String(explicit).trim();
+  const name = actionName(item);
+  if (!name) return '';
+  try { return getCommand(name)?.shortcut || ''; }
+  catch { return ''; }
+}
+
+function shortcutTokens(raw) {
+  const canonical = normalizeCommandShortcut(raw);
+  if (!canonical) return [];
+  const tokens = [];
+  let rest = canonical;
+  for (;;) {
+    const modifier = rest.match(/^(Ctrl|Alt|Shift|Meta)\+/);
+    if (!modifier) break;
+    tokens.push(modifier[1]);
+    rest = rest.slice(modifier[0].length);
+  }
+  if (rest) tokens.push(rest);
+  return tokens;
+}
+
+function displayKey(key) {
+  return {
+    ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓',
+    Escape: 'Esc', Delete: 'Del', Insert: 'Ins', PageUp: 'PgUp', PageDown: 'PgDn',
+    Enter: '↵', Backspace: '⌫',
+  }[key] || key;
+}
+
+function displayModifier(modifier, platform) {
+  if (!MAC_PLATFORMS.test(platform)) return modifier;
+  return {
+    Ctrl: '⌃', Alt: '⌥', Shift: '⇧', Meta: '⌘',
+  }[modifier] || modifier;
+}
+
+/** The visible, platform-native-looking tokens for one menu shortcut. */
+export function shortcutPartsForMenu(item, options = {}) {
+  const raw = shortcutForAction(item);
+  if (!raw) return [];
+  const platform = menuPlatform(options.platform);
+  const tokens = shortcutTokens(raw);
+  return tokens.map((token, index) =>
+    index < tokens.length - 1
+      ? displayModifier(token, platform)
+      : displayKey(token));
+}
+
+/** A compact text form used by tests, telemetry and non-DOM menu consumers. */
+export function shortcutForMenu(item, options = {}) {
+  return shortcutPartsForMenu(item, options).join('+');
+}
+
+/** ARIA's spelling uses key names rather than the glyphs shown to sighted users. */
+export function ariaShortcutForMenu(item) {
+  const raw = shortcutForAction(item);
+  return raw ? normalizeCommandShortcut(raw) : '';
+}
+
+/** Normalize one descriptor while leaving its behaviour and state untouched. */
+export function normalizeMenuItem(item, options = {}) {
+  const parts = shortcutPartsForMenu(item, options);
+  return {
+    ...item,
+    shortcut: parts.join('+'),
+    shortcutParts: parts,
+    ariaKeyShortcuts: ariaShortcutForMenu(item),
+  };
+}
+
 /** Close every open menu. */
 export function closeAllMenus() {
   while (openStack.length) openStack.pop().dispose(true);
 }
 
-function normalize(items) {
+function normalize(items, options = {}) {
   return (items || []).filter(Boolean).map((it) => {
     if (it === SEPARATOR || it.separator) return { separator: true };
+    const normalized = normalizeMenuItem(it, options);
     return {
       id: it.id || uid('mi'),
       label: it.labelKey ? t(it.labelKey) : (it.label ?? ''),
       description: it.description || '',
       icon: it.icon || null,
-      shortcut: it.shortcut || '',
+      shortcut: normalized.shortcut,
+      shortcutParts: normalized.shortcutParts,
+      ariaKeyShortcuts: normalized.ariaKeyShortcuts || null,
       checked: it.checked,
       radio: !!it.radio,
       disabled: !!it.disabled,
@@ -93,13 +201,18 @@ export function openMenu(opts = {}) {
   if (!isSub) closeAllMenus();
 
   const restoreFocus = isSub ? null : focusMemory();
-  const items = tidy(normalize(typeof opts.items === 'function' ? opts.items() : opts.items));
+  const items = tidy(normalize(typeof opts.items === 'function' ? opts.items() : opts.items, opts));
   if (!items.length) { if (!isSub) restoreFocus?.(); return null; }
 
   const root = h('div', {
     class: 'menu surface-2', role: 'menu', tabindex: '-1',
     'aria-label': opts.label || t('menuSearchPh'),
   });
+  // A long bilingual label plus a shortcut must remain usable on a narrow
+  // window. The component stylesheet supplies the normal 220–420px range;
+  // these caps only make the range viewport-safe.
+  root.style.minWidth = 'min(220px, calc(100vw - 12px))';
+  root.style.maxWidth = 'min(420px, calc(100vw - 12px))';
 
   let subHandle = null;
   let typeahead = '';
@@ -118,6 +231,7 @@ export function openMenu(opts = {}) {
       'aria-disabled': it.disabled ? 'true' : null,
       'aria-haspopup': it.submenu ? 'menu' : null,
       'aria-expanded': it.submenu ? 'false' : null,
+      'aria-keyshortcuts': it.ariaKeyShortcuts || null,
       'data-id': it.id,
       title: it.description || null,
     },
@@ -126,7 +240,7 @@ export function openMenu(opts = {}) {
         ? (it.checked ? icon('check', 16) : h('span', { class: 'menu-lead-blank' }))
         : it.icon ? icon(it.icon, 16) : h('span', { class: 'menu-lead-blank' })),
     h('span', { class: 'menu-label' }, it.label),
-    it.shortcut ? h('span', { class: 'menu-shortcut' }, ...kbdParts(it.shortcut)) : null,
+    it.shortcut ? h('span', { class: 'menu-shortcut', 'aria-label': it.ariaKeyShortcuts || it.shortcut }, ...kbdParts(it.shortcutParts || it.shortcut)) : null,
     it.submenu ? icon('chevron_right', 16) : null);
 
     if (it.checked !== undefined) row.setAttribute('aria-checked', String(!!it.checked));
@@ -151,7 +265,7 @@ export function openMenu(opts = {}) {
     const vh = document.documentElement.clientHeight;
     // Cap the height BEFORE measuring, or a long menu is clamped against a
     // height it will never have and runs off the bottom of the window.
-    root.style.maxHeight = `${vh - 12}px`;
+    root.style.maxHeight = `${Math.max(1, vh - 12)}px`;
     const r = root.getBoundingClientRect();
     const left = clamp(opts.x ?? 0, 6, Math.max(6, vw - r.width - 6));
     const top = clamp(opts.y ?? 0, 6, Math.max(6, vh - r.height - 6));
@@ -188,7 +302,7 @@ export function openMenu(opts = {}) {
     row.setAttribute('aria-expanded', 'true');
     subHandle = openMenu({
       items: it.submenu, anchor: row, placement: 'right-start',
-      label: it.label, parent: handle,
+      label: it.label, parent: handle, platform: opts.platform,
     });
     if (subHandle) subHandle.ownerId = it.id;
   }
@@ -270,7 +384,8 @@ export function openMenu(opts = {}) {
 }
 
 function kbdParts(shortcut) {
-  return String(shortcut).split('+').map((part, i, arr) => [
+  const parts = Array.isArray(shortcut) ? shortcut : String(shortcut).split('+');
+  return parts.map((part, i, arr) => [
     h('kbd', {}, part.trim()),
     i < arr.length - 1 ? h('span', { class: 'kbd-plus' }, '+') : null,
   ]).flat().filter(Boolean);

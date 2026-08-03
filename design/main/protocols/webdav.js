@@ -365,13 +365,12 @@ function parseAuthenticate(header) {
 }
 
 function digestHash(algorithm, data) {
-  const alg = /sha-?256/i.test(algorithm) ? 'sha256'
-    : (/sha-?512/i.test(algorithm) ? 'sha512-256' : 'md5');
-  // SHA-512-256 is SHA-512 truncated to 256 bits; Node has no direct name for
-  // it, so take the first 32 bytes of SHA-512 as RFC 7616 defines.
-  if (alg === 'sha512-256') {
-    return crypto.createHash('sha512').update(data, 'utf8').digest('hex').slice(0, 64);
-  }
+  const alg = /sha-?512-256/i.test(algorithm) ? 'sha512-256'
+    : (/sha-?256/i.test(algorithm) ? 'sha256' : 'md5');
+  // SHA-512/256 is a distinct SHA-2 function with different IVs, not the
+  // first 256 bits of SHA-512. OpenSSL (and Node's crypto wrapper) exposes the
+  // standardized digest directly, which is what RFC 7616's algorithm name
+  // requires.
   return crypto.createHash(alg).update(data, 'utf8').digest('hex');
 }
 
@@ -719,6 +718,23 @@ class WebDavAdapter extends Adapter {
     return `${this.base}${encodePath(this.normalize(p), this.session.webDavLiberalEscaping)}`;
   }
 
+  /**
+   * Compare a redirect target with the configured session origin.
+   *
+   * URL.host is not enough here: `dav.example:443` and
+   * `dav.example:8443` have the same hostname but are different origins, and
+   * an omitted default port is normalized away by WHATWG URL. Keeping this
+   * check in one place prevents both credential leakage and accidental reuse
+   * of the session's keep-alive agent on a different origin.
+   */
+  _sameOrigin(url) {
+    const base = new URL(this.base);
+    const effectivePort = (u) => u.port || (u.protocol === 'https:' ? '443' : '80');
+    return url.protocol === base.protocol
+      && url.hostname.toLowerCase() === base.hostname.toLowerCase()
+      && effectivePort(url) === effectivePort(base);
+  }
+
   _authHeader(method, uri, body) {
     const s = this.session;
     const user = s.anonymous ? '' : (s.userName || '');
@@ -769,7 +785,12 @@ class WebDavAdapter extends Adapter {
     // replayed after a 401, so waiting for a challenge on every request would
     // make uploads unresumable; the first request of the session discovers the
     // scheme and every later one uses it.
-    const auth = this._authHeader(method, uri, body);
+    // A redirect target is allowed to be absolute. Never send the session's
+    // credentials to another origin, even when the user explicitly allowed
+    // following cross-host redirects. The redirect policy below decides
+    // whether to follow; this check decides what may cross the boundary.
+    const sameOrigin = this._sameOrigin(url);
+    const auth = sameOrigin ? this._authHeader(method, uri, body) : null;
     if (auth) headers.Authorization = auth;
 
     return new Promise((resolve, reject) => {
@@ -780,7 +801,7 @@ class WebDavAdapter extends Adapter {
         port: url.port || (isTls ? 443 : 80),
         path: uri,
         headers,
-        agent: url.host === `${this.host}:${this.port}` || url.host === this.host ? this._agent : undefined,
+        agent: sameOrigin ? this._agent : undefined,
         timeout: Math.max(1, Number(this.session.timeout || 15)) * 1000,
         // A redirect can land on a different host, which the session agent
         // must not serve; it gets the session's TLS policy but its own name.
@@ -835,9 +856,13 @@ class WebDavAdapter extends Adapter {
       }
 
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirects < 5) {
-        const next = new URL(res.headers.location, current.startsWith('http') ? current : this._url(current));
-        const sameHost = next.host === `${this.host}:${this.port}` || next.hostname === this.host;
-        if (!sameHost && !this.options.allowCrossHostRedirect) {
+        const currentUrl = new URL(current.startsWith('http') ? current : this._url(current));
+        const next = new URL(res.headers.location, currentUrl);
+        if (currentUrl.protocol === 'https:' && next.protocol !== 'https:') {
+          await WebDavAdapter.readBody(res);
+          throw new Error('Refusing redirect from HTTPS to HTTP');
+        }
+        if (!this._sameOrigin(next) && !this.options.allowCrossHostRedirect) {
           await WebDavAdapter.readBody(res);
           throw new Error(`Refusing redirect to another host (${next.host}); enable cross-host redirects for this site to allow it`);
         }

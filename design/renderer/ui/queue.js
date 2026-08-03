@@ -1645,8 +1645,8 @@ const TRANSFER_CSS = `
    left of wherever anchorTo() had just put it. */
 .tx-q-popover { position: fixed; left: auto; bottom: auto; transform: none;
   width: min(860px, calc(100vw - 32px)); max-height: min(70vh, 720px);
-  display: flex; flex-direction: column; }
-.tx-q-popbody { flex: 1 1 auto; display: flex; min-height: calc(240px * var(--uiscale)); overflow: auto; }
+  min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.tx-q-popbody { flex: 1 1 auto; display: flex; min-height: 0; overflow: hidden; }
 .tx-q-list { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; min-height: 0; min-width: 0; padding: calc(6px * var(--den)); display: flex; flex-direction: column; gap: calc(4px * var(--den)); }
 .tx-q-empty { padding: calc(16px * var(--den)); color: var(--onsv); font-size: var(--type-body-sm); }
 .tx-q-empty-line { line-height: 1.5; }

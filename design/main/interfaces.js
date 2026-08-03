@@ -1233,15 +1233,18 @@ function localPathComboItems(places) {
 }
 
 /**
- * LocalPathComboUpdate — select the first entry whose path is a prefix of the
- * panel's path. WinSCP compares only the first `entry.length` characters, so
- * "C:\" matches "C:\Users\..." without any path walking.
+ * LocalPathComboUpdate — select the first entry whose path is a directory
+ * prefix of the panel's path. A raw character prefix is not enough: a UNC
+ * share called `\\server\\share` must not match the sibling name
+ * `\\server\\sharehouse`.
  */
 function localPathComboIndexFor(path, items) {
   const target = String(path || '');
   for (let index = 0; index < items.length; index++) {
     const entry = String(items[index].path || '');
-    if (entry && C.samePaths(entry, target.slice(0, entry.length))) return index;
+    if (!entry || !C.samePaths(entry, target.slice(0, entry.length))) continue;
+    const next = target[entry.length] || '';
+    if (!next || entry.endsWith('\\') || next === '\\' || next === '/') return index;
   }
   return -1;                                     // "what to do if not?" — WinSCP leaves it alone
 }

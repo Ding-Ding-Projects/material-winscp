@@ -10,7 +10,9 @@ that, see [SCP](scp.md).
 Concretely it provides: directory listing with full POSIX metadata, streaming
 upload and download with resume, `chmod`, `utime`, symbolic and hard links,
 server-side copy where the server implements it, remote checksums, a recycle
-bin, and the parallel request pipelining that makes SFTP fast over long links.
+bin, and bounded request pipelining that makes resumable SFTP fast over long
+links without allowing a large hand-edited queue value to grow memory without
+limit.
 
 ## Configuration
 
@@ -40,7 +42,7 @@ under **Site → Advanced → SSH** and **→ SFTP**.
 | --- | --- | --- |
 | `sftpMaxVersion` | `6` | Highest protocol version to negotiate. Lower it for servers that misreport. |
 | `sftpMinPacketSize` / `sftpMaxPacketSize` | `0` (auto) | Override negotiated packet sizing. |
-| `sftpDownloadQueue` / `sftpUploadQueue` | `32` | Outstanding requests in flight. Raising this helps on high-latency links; lowering it helps on servers with small buffers. |
+| `sftpDownloadQueue` / `sftpUploadQueue` | `32` | Outstanding READ/WRITE requests in flight. Raising this helps on high-latency links; lowering it helps on servers with small buffers. The adapter clamps each direction to 256 requests. |
 | `sftpListingQueue` | `2` | Parallel listing requests. |
 | `sftpRealPath` | `auto` | Whether to canonicalize paths with `SSH_FXP_REALPATH`. |
 | `usePosixRename` | `false` | Use the `posix-rename@openssh.com` extension so rename can overwrite atomically. |
@@ -57,18 +59,24 @@ behaviour, and only then apply it.
 | --- | --- | --- |
 | Host key does not match the cached one | A **blocking** dialog — this is a decision the user must make before continuing, so it is deliberately modal. It shows both fingerprints and refuses to default to "accept". | Yes, by re-verifying out of band |
 | Authentication fails | A persistent error toast naming the method that failed (password, key, keyboard-interactive) and, when the server said so, why. Passwords are never echoed. | Yes |
+| An explicit cipher, KEX or host-key list has no usable algorithm in this build | The connection stops before the SSH handshake with a non-retriable policy error; the adapter never falls back to `ssh2` defaults. | No, until the site policy is changed |
 | Key file needs a passphrase | A modal prompt. If the master password is set, an accepted passphrase can be saved encrypted. | Yes |
 | Server negotiates a version below `sftpMaxVersion` | Silent and normal; the capability set narrows accordingly and affected commands grey out. | n/a |
 | Server ignores `chmod` | The operation is reported as failed rather than assumed to have worked. `ignorePermErrors` in the transfer settings can downgrade it to a warning for bulk transfers. | Yes |
 | Transfer interrupted | The queue item records the byte offset and moves to `failed`. Resume restarts from that offset if `resumeSupport` permits. | Yes |
 | Rekey during a large transfer | Handled by the transport; the transfer pauses for a few hundred milliseconds. No user action. | n/a |
-| `sftpDownloadQueue` too high for the server | Stalls or resets. Lower it to 8 or 16. The error toast suggests this explicitly. | Yes |
+| `sftpDownloadQueue` or `sftpUploadQueue` too high for the server | Stalls or resets. Lower it to 8 or 16. Values above 256 are clamped and logged; the server may still need a smaller value. | Yes |
 
 ## Security considerations
 
 - **Cipher and KEX ordering matters.** Everything listed *after* the `WARN`
   marker is considered weak. Selecting one produces an explicit warning naming
   the algorithm; the marker is not decorative and must not be reordered casually.
+- **Explicit algorithm policy fails closed.** If a configured cipher, KEX or
+  host-key list resolves to no algorithm implemented by this build, the adapter
+  closes the socket before the SSH identification exchange and reports a
+  non-retriable policy error. It never silently replaces the site policy with
+  `ssh2`'s defaults.
 - **Agent forwarding is off by default**, and correctly so: a forwarded agent
   lets anyone with root on the remote host use your keys for as long as you are
   connected. The option's UI states this.
@@ -87,9 +95,13 @@ behaviour, and only then apply it.
 
 - Path arithmetic, mask matching and listing normalization are unit-tested.
 - Bug-workaround detection is tested against recorded server banners.
-- Live-server behaviour (resume, rekey, permission handling) is exercised
-  manually against OpenSSH; there is no in-process SFTP server in the test suite
-  today, and this article does not claim one.
+- Live-server behaviour (resume, bounded request pipelining, rekey and
+  permission handling) is exercised against the in-process SSH server over a
+  real TCP socket. The streaming tests verify ordered bytes and the first four
+  offsets in each configured request window.
+- Explicit unusable cipher, KEX and host-key policies are verified against a
+  TCP listener: each fails before any SSH bytes or authentication can occur,
+  and its error is classified as non-retriable.
 
 To check a real connection by hand: connect, run **Commands → Server/protocol
 information**, and confirm the negotiated SFTP version and extension list match

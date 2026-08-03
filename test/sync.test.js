@@ -698,6 +698,33 @@ test('the watcher uses a native adapter watch when one is offered', async () => 
   assert.strictEqual(closed, true, 'the native watcher is closed on stop');
 });
 
+test('stopping during an in-flight comparison cannot enqueue its late result', async () => {
+  const local = new MemoryAdapter('local');
+  const remote = new MemoryAdapter('remote');
+  local.putDir('/l'); remote.putDir('/r');
+  local.put('/l/late.txt', 'late', T);
+  const originalList = local.list.bind(local);
+  let release;
+  const blocked = new Promise((resolve) => { release = resolve; });
+  let blockedOnce = true;
+  local.list = async (dir) => {
+    if (blockedOnce) {
+      blockedOnce = false;
+      await blocked;
+    }
+    return originalList(dir);
+  };
+  const q = makeQueue();
+  const watcher = sync.startWatch(local, '/l', remote, '/r', q, {
+    direction: 'remote', criteria: 'time', intervalMs: 20,
+  });
+  sync.stopWatch(watcher);
+  release();
+  await sleep(30);
+  assert.strictEqual(q.items.length, 0, 'a stopped watcher must discard late comparison results');
+  assert.strictEqual(remote.has('/r/late.txt'), false);
+});
+
 // ---------------------------------------------------------------------------
 // units
 // ---------------------------------------------------------------------------

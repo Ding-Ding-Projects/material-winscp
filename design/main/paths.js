@@ -39,6 +39,8 @@ const P = {
   themes: () => ensure(path.join(root(), 'themes')),
   /** Known host keys / certificates. */
   hostkeys: () => path.join(root(), 'hostkeys.json'),
+  /** Local, non-sensitive startup and usage facts. */
+  usage: () => path.join(root(), 'usage.json'),
   ensure,
 };
 

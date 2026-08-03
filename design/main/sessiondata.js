@@ -2420,11 +2420,28 @@ function importSessionsFromIni(text, { useDefaults = false } = {}) {
     ? loadSession(defaultSettings.values, { name: DEFAULT_SETTINGS_NAME }).data
     : null;
 
+  // A Password= value is encrypted for the Windows profile that wrote the
+  // file. It is not a plaintext password and must never be handed to a
+  // caller as if it were one. PasswordPlain is the only portable secret form
+  // WinSCP's INI importer can consume; the configuration store re-protects it
+  // before it reaches disk again. Other credential fields have no portable
+  // plaintext counterpart in this format, so clear them at the boundary.
+  const hasKey = (values, wanted) => Object.keys(values || {})
+    .some((key) => key.toLowerCase() === wanted.toLowerCase());
+  const sanitizeImportedSecrets = (data, values) => {
+    if (!hasKey(values, 'PasswordPlain')) data.password = '';
+    for (const field of ['passphrase', 'proxyPassword', 'tunnelPassword',
+      'tunnelPassphrase', 'encryptKey', 's3SessionToken']) data[field] = '';
+    return data;
+  };
+  if (defaultSettings) sanitizeImportedSecrets(defaults, defaultSettings.values);
+
   const sessions = raw.map((entry) => {
     const base = (useDefaults && defaults) ? cloneSessionData(defaults) : defaultSessionData();
     base.name = entry.name;
     const storage = new KeyValueStorage(entry.values);
     doLoad(base, storage, {});
+    sanitizeImportedSecrets(base, entry.values);
     base.modified = false;
     base.source = SOURCE.STORED;
     return base;

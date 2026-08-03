@@ -28,6 +28,7 @@ const STATUS = {
   na: { icon: '➖', label: 'Not applicable' },
   todo: { icon: '⬜', label: 'Not started' },
 };
+const VALID_STATUSES = new Set(Object.keys(STATUS));
 
 function lineCount(file) {
   try {
@@ -135,13 +136,37 @@ function main() {
   const rows = [];
   const problems = [];
 
+  const mappedStems = new Set(Object.keys(map.units || {}));
+  const sourceStems = new Set(units.map((u) => u.stem));
+  for (const stem of mappedStems) {
+    const mapping = map.units[stem];
+    // Directory-level exclusions are intentionally represented in the ledger
+    // even though they do not have a one-to-one source translation unit.
+    if (!sourceStems.has(stem) && (!mapping || mapping.status !== 'na')) {
+      problems.push(`${stem}: mapping has no matching WinSCP source unit`);
+    }
+  }
+
   for (const u of units) {
     totalLines += u.lines;
     const logic = Math.max(0, u.lines - u.resource);
     totalLogic += logic;
     const m = map.units[u.stem];
     const status = m ? (m.status || 'todo') : 'todo';
-    const targets = (m && m.targets) || [];
+    const rawTargets = m && m.targets;
+    const targets = Array.isArray(rawTargets) ? rawTargets : [];
+    if (!VALID_STATUSES.has(status)) problems.push(`${u.stem}: unknown status ${JSON.stringify(status)}`);
+    const requiresTargets = status === 'done' || status === 'partial' || status === 'replaced';
+    if (requiresTargets && (!Array.isArray(rawTargets) || targets.some((t) => typeof t !== 'string' || !t.trim()))) {
+      problems.push(`${u.stem}: targets must be an array of non-empty strings`);
+    }
+    if (m && Object.prototype.hasOwnProperty.call(m, 'progress') &&
+        (!Number.isFinite(m.progress) || m.progress < 0 || m.progress > 1)) {
+      problems.push(`${u.stem}: progress must be a finite number between 0 and 1`);
+    }
+    if (m && status !== 'partial' && Object.prototype.hasOwnProperty.call(m, 'progress')) {
+      problems.push(`${u.stem}: progress is only valid for partial mappings`);
+    }
     // A mapping that names a file which does not exist is a broken claim, not
     // coverage — surface it loudly instead of counting it.
     const missing = targets.filter((t) => !fileExists(t));
@@ -153,9 +178,14 @@ function main() {
       coveredLines += u.lines * p; coveredLogic += logic * p;
     }
 
+    const declaredProgress = m && m.progress;
+    const progress = status === 'partial' && Number.isFinite(declaredProgress) &&
+      declaredProgress >= 0 && declaredProgress <= 1 ? declaredProgress :
+      (status === 'partial' ? 0.5 : 1);
     rows.push({
       stem: u.stem, area: u.area, lines: u.lines, resource: u.resource, status,
-      targets, note: (m && m.note) || '', missing,
+      targets, progress,
+      note: (m && m.note) || '', missing,
     });
   }
 
@@ -167,7 +197,7 @@ function main() {
     const a = byArea[r.area] || (byArea[r.area] = { lines: 0, covered: 0, units: 0, done: 0 });
     a.lines += r.lines; a.units++;
     if (r.status === 'done' || r.status === 'replaced') { a.covered += r.lines; a.done++; }
-    else if (r.status === 'partial') a.covered += r.lines * 0.5;
+    else if (r.status === 'partial') a.covered += r.lines * r.progress;
   }
 
   const esc = (s) => String(s).replace(/\|/g, '\\|');
@@ -235,10 +265,17 @@ function main() {
   }
   lines.push('');
 
-  fs.mkdirSync(path.dirname(OUT), { recursive: true });
-  fs.writeFileSync(OUT, lines.join('\n'), 'utf8');
+  const report = lines.join('\n');
+  if (check) {
+    let current = '';
+    try { current = fs.readFileSync(OUT, 'utf8'); } catch { current = ''; }
+    if (current !== report) problems.push('docs/port-coverage.md is stale; run node tools/port-matrix.js');
+  } else {
+    fs.mkdirSync(path.dirname(OUT), { recursive: true });
+    fs.writeFileSync(OUT, report, 'utf8');
+  }
 
-  console.log(`Wrote ${path.relative(ROOT, OUT)}`);
+  console.log(check ? `Checked ${path.relative(ROOT, OUT)}` : `Wrote ${path.relative(ROOT, OUT)}`);
   console.log(`  units:     ${units.length}`);
   console.log(`  lines:     ${totalLines.toLocaleString()} (WinSCP's own code)`);
   console.log(`  LOGIC coverage:  ${logicPct.toFixed(1)}%  (of ${totalLogic.toLocaleString()} real code lines)`);

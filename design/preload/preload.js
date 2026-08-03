@@ -271,6 +271,7 @@ const api = {
   // sentences asks for it by resource id rather than re-typing the English,
   // which is how the wording stays the wording the original ships.
   messages: {
+    // `args` is a positional array or a named object for `%NAME%` resources.
     load: (id, args) => call('messages:load', id, args),
     meta: (id) => call('messages:meta', id),
     table: () => call('messages:table'),
@@ -393,6 +394,7 @@ const api = {
   transfer: {
     copyToRemote: (request) => call('transfer:copyToRemote', request),
     copyToLocal: (request) => call('transfer:copyToLocal', request),
+    cancel: (sessionId) => call('transfer:cancel', sessionId),
     canParallel: (request) => call('transfer:canParallel', request),
     changeFileName: (copyParam, name, side, firstLevel) =>
       call('transfer:changeFileName', copyParam, name, side, firstLevel),

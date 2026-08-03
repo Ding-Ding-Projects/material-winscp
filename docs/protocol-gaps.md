@@ -17,7 +17,7 @@ Last reviewed against `ssh2` 1.17.0 and `basic-ftp` 5.3.1.
 |---|---|---|---|
 | **GSSAPI / Kerberos** authentication and key exchange | `authGSSAPI`, `authGSSAPIKEX`, `gssapiFwdTGT`, `gssLibList` | ⬜ Not available | `ssh2` implements no GSSAPI mechanism. The flags are accepted, a warning is logged, and the remaining authentication methods are tried. Single-sign-on against a Kerberos realm does not work. |
 | **SFTP protocol versions 4–6** | `sftpMaxVersion` | ⬜ Not available | `ssh2`'s client hard-codes `SSH_FXP_INIT` at version 3 and parses only the version 3 attribute block, so raising the number would make it misread every reply. `sftpMaxVersion` therefore selects nothing. What *is* ported (`design/main/protocols/sftp-extensions.js`) is everything that decision feeds: the version ceiling WinSCP would ask for per server, the `supported`/`supported2` capability structures, the version-dependent capability answers, and the version-dependent workarounds. They are exercised by tests but a real server will never drive them, because it will never be offered a version above 3. The user's practical loss is SFTP 6's `SSH_FXP_LINK` (hard links without the OpenSSH extension), the `SSH_FXP_RENAME` overwrite flag, and named owner/group attributes. |
-| **Request pipelining depth** | `sftpDownloadQueue`, `sftpUploadQueue` | ⬜ Not available | `ssh2` pipelines only inside `fastGet`/`fastPut`, which cannot resume or report progress. The streaming path issues one request at a time. Throughput on high-latency links is lower than WinSCP's. A warning is logged rather than pretending the setting applies. |
+| **Request pipelining depth** | `sftpDownloadQueue`, `sftpUploadQueue` | ✅ Implemented in the adapter | The SFTP streaming path now keeps a bounded window of ordered, resumable READ/WRITE requests in flight. The user value is honoured up to the adapter's hard safety bound of 256 requests; values above it are clamped with a warning. |
 | **`ed448` host keys**, **RSA key exchange** | `hostKeyList`, `kexList` | ⬜ Not offered | Not in `ssh2`'s supported algorithm lists. Logged as not offered rather than silently dropped from the preference order. |
 | **`des`, `blowfish`, `arcfour` ciphers** | `cipherList` | ➖ Deliberate | Unsupported by `ssh2`, and all three sit below the `WARN` marker in WinSCP's own defaults. Not a gap worth closing. |
 | **`proxyMethod: 'system'`** | proxy settings | ⬜ Not available | No reliable cross-version way to read Windows system proxy configuration from Node. Throws a message naming the working alternatives instead of silently connecting direct — which would be a privacy failure, not a convenience. |
@@ -43,10 +43,10 @@ reversing for ProFTPD 1.x at SFTP 6).
 
 **What the end-to-end run could not reach, and why.**
 `test/e2e-sftp.test.js` drives both adapters against a real `ssh2` server over a
-real socket, and the "Request pipelining depth" row above is now *measured*
-rather than asserted: the server records every READ offset, and a streamed
-download produces one contiguous, strictly increasing sequence — exactly the
-shape a one-request-at-a-time client makes.
+real socket. The SFTP streaming tests set an 8 KiB packet and four-request
+window, then verify the server sees the first four READ and WRITE offsets before
+the transfer completes. The adapter still publishes downloaded bytes in order,
+keeps resume offsets exact, and bounds speculative requests and their buffers.
 
 **Closed: the SFTP extension layer.** Three rows used to sit here saying that
 `statvfs@openssh.com`, `hardlink@openssh.com` and `posix-rename@openssh.com`
@@ -151,6 +151,7 @@ verifies the SigV4 signature of every request (`test/e2e-s3.test.js`).
 | Gap | WinSCP option affected | Status | Consequence today |
 |---|---|---|---|
 | **Resuming a transfer** | `resumeSupport`, `parallelTransfers` | ➖ Matches the original | Every `PutObject` replaces the whole object, and a multipart part cannot be appended to. WinSCP answers `false` to `fcResumeSupport` and `fcParallelFileTransfers` for S3, and `caps.resume` is `false` here for the same reason. An interrupted upload restarts; a large one still goes out as a real multipart upload, and a failed part triggers `AbortMultipartUpload` so no orphan parts are billed. |
+| **Server-side copy above 5 GiB** | `CopyObject` / multipart copy | ✅ Resolved | The >5 GiB path now uses the existing bounded part-size calculation for contiguous `UploadPartCopy` ranges, then completes the multipart copy. The regression is secret-free and mocks only the request seam; a live 5 GiB fixture remains untested. |
 | **Plain-HTTP endpoints depend on the shared `ftps` field** | Encryption | 🚧 Partial | WinSCP gives S3 its own `Ftps` default (implicit TLS) and derives the port from it. Our `SESSION_DEFAULTS` carries one `ftps: 'none'` for every protocol, so the adapter treats a site as plaintext only when it says `ftps: 'none'` **and** is not on port 443 — otherwise an S3 site left at its defaults would silently drop to HTTP. Closing this properly means a per-protocol default in `defaults.js` plus the Encryption control on the S3 site page. |
 | **Setting a modification time** | `preserveTime` | ➖ By design | `Last-Modified` is assigned by S3. |
 | **Checksums for multipart objects** | `checksum` | ➖ By design | The ETag of a multipart object is `<md5-of-part-md5s>-<count>`, which is not an MD5 of the content. It is refused rather than presented as one. |
@@ -252,7 +253,7 @@ Follow-up to issue #26: the queued local-upload collector now preserves the fore
 | **The command-line operations** | `/upload`, `/download`, `/edit`, `/synchronize`, `/keepuptodate`, `/refresh` | ⬜ Not available | `startupPlan()` selects the right branch and nothing executes it. A user passing one of those switches gets a branch decision and no work. |
 | **A `/ini` that names a missing file is not reported** | `/ini=FILE` | ⬜ Not available | WinSCP shows a `qtError` dialog before choosing any maintenance branch. A user with a typo in `/ini` gets silence and their real configuration instead of the warning. |
 | **The Explorer icon cache, thumbnails and drive notification** | the file panels and the drive tree | ⬜ Not available | `components/DirView.cpp`'s asynchronous icon-update queue, `IEDriveInfo`'s drive enumeration and `WM_DEVICECHANGE` registration, volume labels and serial numbers, and `ThemePageControl` are not ported. A USB drive plugged in while the application is running does not appear in the drive list until the list is rebuilt. |
-| **The file-editing round trip** | editing a remote file from the explorer shell | ⬜ Not available | `ExecutedFileChanged`, `ExecutedFileReload`, `ExecutedFileEarlyClosed` and `EditedFileUploaded` are not ported — "the file you edited changed, upload it back?", "the remote file changed under you", and "you closed the editor before the upload finished". `explorershell.js` ports only the decisions taken *before* the editor opens; `editors.js` owns the editor registry and its own upload path, and nothing bridges the two. |
+| **The file-editing round trip** | editing a remote file from the explorer shell | 🚧 Partial | `ExecutedFileChanged` and `EditedFileUploaded` now share the editor manager's conflict-checked upload path, and the renderer bus opens the existing-file internal editor from `ExecuteFile`; panel listings refresh after a successful upload. `EditNew` remains unavailable: `commands.js` creates a remote new file through `fs:writeFile`, while the existing `editor:open` IPC contract only accepts an already-existing remote path, and those ownership boundaries are intentionally outside this slice. `ExecutedFileReload` and `ExecutedFileEarlyClosed` remain unported. |
 | **Workspaces are decided but not saved** | "Save workspace" on close | ⬜ Not available | `SaveWorkspace`, `DoCollectWorkspace`, `CloneCurrentSessionData` and `DoOpenFolderOrWorkspace` are not ported in `explorershell.js`. Its close-query branch that exists to *prevent* losing a multi-tab layout calls out to an operation that saves nothing, so answering "No, save it" on close saves nothing. |
 
 ## How to use this page

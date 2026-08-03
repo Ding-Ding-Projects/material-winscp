@@ -489,6 +489,9 @@ class Watcher extends EventEmitter {
     this._timer = null;
     this._ticking = false;
     this._again = false;
+    // Invalidate comparisons that are still awaiting adapter I/O when the
+    // watcher is stopped, so a late result cannot enqueue new work.
+    this._generation = 0;
     this._native = null;
     // Paths already handed to the queue and not yet finished, so a slow upload
     // is not queued again on the next tick.
@@ -525,6 +528,7 @@ class Watcher extends EventEmitter {
   stop() {
     if (!this.running) return this;
     this.running = false;
+    this._generation += 1;
     if (this._timer) { clearInterval(this._timer); this._timer = null; }
     if (this._native) {
       if (typeof this._native.close === 'function') this._native.close();
@@ -555,9 +559,11 @@ class Watcher extends EventEmitter {
   }
 
   async _runOnce() {
+    const generation = this._generation;
     try {
       const checklist = await compare(
         this.localAdapter, this.localPath, this.remoteAdapter, this.remotePath, this.options);
+      if (!this.running || generation !== this._generation) return null;
       const fresh = {
         ...checklist,
         items: checklist.items.filter((i) => {

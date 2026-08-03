@@ -18,7 +18,7 @@ const T = require('../design/main/terminal');
 const {
   Terminal, OperationProgress, DirectoryCache, DirectoryChangesCache,
   SkipFileError, AbortError, FatalError, TerminalError,
-  classifyException, OPERATIONS, CANCEL, ANSWERS, DELETE_FLAGS, CALC_FLAGS, SIDES,
+  classifyException, OPERATIONS, CANCEL, ANSWERS, DELETE_FLAGS, CALC_FLAGS, LOOP_FLAGS, SIDES,
 } = T;
 
 // ---------------------------------------------------------------------------
@@ -376,6 +376,20 @@ test('clearing by source and by target both work, including the symlink hack', (
   assert.strictEqual(c3.getDirectoryChange('/home/me', 'link'), null);
 });
 
+test('directory-change invalidation respects path boundaries', () => {
+  const bySource = new DirectoryChangesCache(100);
+  bySource.addDirectoryChange('/a', 'one', '/target-one');
+  bySource.addDirectoryChange('/ab', 'two', '/target-two');
+  bySource.clearDirectoryChange('/a');
+  assert.strictEqual(bySource.getDirectoryChange('/ab', 'two'), '/target-two');
+
+  const byTarget = new DirectoryChangesCache(100);
+  byTarget.addDirectoryChange('/x', 'link', '/var/data');
+  byTarget.addDirectoryChange('/y', 'link', '/var/database');
+  byTarget.clearDirectoryChangeTarget('/var/data');
+  assert.strictEqual(byTarget.getDirectoryChange('/y', 'link'), '/var/database');
+});
+
 test('the changes cache serializes only its newest maxSize entries', () => {
   const c = new DirectoryChangesCache(2);
   c.addDirectoryChange('/a', 'x', '/1');
@@ -455,6 +469,27 @@ test('cancel never downgrades and a stopped transfer folds its remainder into sk
   q.addTransferred(400);
   q.stop();
   assert.strictEqual(q.totalSkipped, 600, 'the 600 bytes never transferred must be accounted for');
+});
+
+test('a direct cancellation request also cannot downgrade an operation', () => {
+  const p = new OperationProgress();
+  p.start(OPERATIONS.copy, SIDES.remote, 1);
+  p.setCancel(CANCEL.cancel);
+  p.setCancel(CANCEL.cancelFile);
+  assert.strictEqual(p.cancel, CANCEL.cancel);
+  p.stop();
+  assert.strictEqual(p.done, true);
+  assert.strictEqual(p.snapshot().done, true);
+});
+
+test('the terminal cancellation seam reaches the active foreground progress', () => {
+  const { terminal } = makeTerminal();
+  const progress = new OperationProgress();
+  terminal.operationStart(progress, OPERATIONS.copy, SIDES.remote, 1);
+  assert.strictEqual(terminal.cancelOperation(), true);
+  assert.strictEqual(progress.cancel, CANCEL.cancel);
+  terminal.operationStop(progress);
+  assert.strictEqual(terminal.cancelOperation(), false, 'a finished operation cannot be cancelled');
 });
 
 test('suspending shifts the start time so a modal question does not wreck the rate', () => {
@@ -749,6 +784,23 @@ test('a robust loop with no flag has no reconnect budget at all', async () => {
   assert.strictEqual(await loop.tryReopen(lost), true, 'still reconnects');
   assert.strictEqual(session.reconnects, 1);
   assert.ok(!session.lines.some((l) => /Retry interval expired/.test(l)));
+});
+
+test('retryOnFatal reconnects before retrying the command', async () => {
+  const { terminal, adapter, session } = makeTerminal({ answers: [ANSWERS.retry] });
+  let attempts = 0;
+  const value = await terminal.fileOperationLoop(async () => {
+    attempts++;
+    if (attempts === 1) {
+      adapter.connected = false;
+      const e = new Error('read ECONNRESET'); e.code = 'ECONNRESET';
+      throw e;
+    }
+    return 'ok';
+  }, { flags: LOOP_FLAGS.retryOnFatal, message: 'The command failed.' });
+  assert.strictEqual(value, 'ok');
+  assert.strictEqual(attempts, 2);
+  assert.strictEqual(session.reconnects, 1);
 });
 
 test('the reconnect budget is one function, and zero still means forever', () => {
@@ -1687,6 +1739,16 @@ test('clearCaches empties both caches and the session panel cache', async () => 
   terminal.clearCaches();
   assert.ok(terminal.areCachesEmpty);
   assert.strictEqual(session.cleared, 1);
+});
+
+test('refresh after cache clearing rereads the current directory', async () => {
+  const { terminal, adapter } = makeTerminal({ cwd: '/d' });
+  adapter.add('/d/a', {});
+  await terminal.readDirectory(false);
+  adapter.add('/d/b', {});
+  terminal.clearCaches();
+  await terminal.refreshDirectory();
+  assert.deepStrictEqual(terminal.files.files.map((f) => f.name).sort(), ['a', 'b']);
 });
 
 // ===========================================================================

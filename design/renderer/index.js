@@ -23,6 +23,11 @@
 
 import './app.js';
 
+// The keyboard route to every registered command and every declared
+// Preferences destination. It is imported before boot so its title-bar entry
+// and command are present when the shell first renders.
+import './ui/commandpalette.js';
+
 // The file panels, the 301-action command layer, the toolbars, the menu bars,
 // the column model, the drive tree and the per-panel status bars.
 import './ui/panels.js';

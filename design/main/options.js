@@ -172,6 +172,23 @@ class Options {
 
   get empty() { return this._options.length === 0; }
 
+  /**
+   * A read-only snapshot for consumers that need to preserve command-line
+   * order.  The C++ object keeps this sequence internally; exposing copies
+   * lets the Electron entry point share the same parser without reaching into
+   * private state or silently changing duplicate-switch semantics.
+   */
+  entries() {
+    return this._options.map((o) => ({
+      type: o.type,
+      name: o.name,
+      value: o.value,
+      valueSet: o.valueSet,
+      used: o.used,
+      switchMark: o.switchMark,
+    }));
+  }
+
   parse(cmdLine) {
     for (const token of tokenizeCommandLine(cmdLine)) this.add(token);
   }

@@ -1118,7 +1118,11 @@ class S3Adapter extends Adapter {
     const uploadId = await this._createMultipartUpload(dstBucket, dstKey, {});
     try {
       const parts = [];
-      const partSize = Math.max(DEFAULT_PART_SIZE, Math.ceil(size / MAX_PARTS));
+      // Keep copy parts under S3's 10,000-part limit while preserving the
+      // same 5 MiB floor used by streamed uploads.  DEFAULT_PART_SIZE was
+      // never defined here, so every real copy above 5 GiB previously failed
+      // before the first UploadPartCopy request was sent.
+      const partSize = partSizeFor(size);
       let offset = 0;
       let n = 0;
       while (offset < size) {

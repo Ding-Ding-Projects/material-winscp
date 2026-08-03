@@ -10,10 +10,12 @@ counts, which is why pausing, throttling and resuming work uniformly.
 | Article | Covers |
 | --- | --- |
 | [queue.md](queue.md) | Queue mechanics: parallelism, ordering, pause/resume, on-empty actions. |
+| [file-buffer.md](file-buffer.md) | Byte-level EOL conversion, split BOM/Ctrl-Z handling, bounded buffering, and transfer metadata. |
 | [transfer-settings.md](transfer-settings.md) | Every transfer option, and the named presets that bundle them. |
 | [resume.md](resume.md) | Resume, `.filepart` files, overwrite modes and what each protocol can actually do. |
 | [speed-limits.md](speed-limits.md) | Per-transfer and global throttling, and how the limit is enforced. |
 | [overwrite-decision.md](overwrite-decision.md) | What happens when the file is already there: the batch-mode ladder, the per-file question, and every refusal behind the Append and Resume buttons. |
+| [queue-controller.md](queue-controller.md) | The production command surface for accessible queue actions, model reconciliation, retries, and once-done choices. |
 
 ## The shape of a transfer
 
@@ -38,6 +40,11 @@ An item carries its own copy of the transfer settings it was created with, so
 changing the defaults mid-queue never retroactively alters something already
 queued. That is deliberate: a user who lowers a speed limit expects it to apply
 to what happens next, not to reinterpret what they already asked for.
+
+The same mask predicate is used for a directory's children and for a single
+file selected directly. A selected file that does not match `includeFileMask`
+never enters the plan, so the queue and foreground transfer paths cannot
+disagree about whether that file should move.
 
 ## Postman
 

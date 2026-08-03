@@ -779,7 +779,18 @@ class ConsoleRunner {
               externalTimestampVar: this.externalTimestampVar,
             });
 
-            if (this.script.groups && this.xmlLog) this.xmlLog.beginGroup(expanded);
+            if (this.script.groups && this.xmlLog) {
+              // The script logger masks credentials in `open` commands. Use
+              // that same boundary for XML group names; otherwise /xmlgroups
+              // would write the raw expanded command (including a URL
+              // password or -password= value) even when console output and
+              // the session log were redacted.
+              const commandToken = cutToken(expanded);
+              const safeCommand = commandToken.ok && this.script.getLogCmd
+                ? this.script.getLogCmd(expanded, commandToken.token, commandToken.rest)
+                : expanded;
+              this.xmlLog.beginGroup(safeCommand);
+            }
             try {
               await this.script.command(expanded);
             } finally {

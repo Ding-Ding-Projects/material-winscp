@@ -30,6 +30,8 @@ const P = require('./paths');
 const { Config } = require('./config');
 const { Ipc } = require('./ipc');
 const dimsum = require('./dimsum');
+const { UsageStore } = require('./usage');
+const { parseSwitches } = require('./progparams');
 
 const IS_WIN = process.platform === 'win32';
 const DEV = process.argv.includes('--dev') || !!process.env.WINSCP_MATERIAL_DEV;
@@ -44,6 +46,7 @@ const state = {
   queuedCommands: [],
   shuttingDown: false,
   placementTimer: null,
+  usage: null,
 };
 
 // =============================================== 2. single instance lock
@@ -63,50 +66,6 @@ if (!gotLock) {
 }
 
 // ====================================================== command line
-
-/**
- * WinSCP's switch syntax (vendor/winscp/source/core/Option.cpp):
- *   * switches begin with `/` or `-`;
- *   * a value is attached with `=` or `:`;
- *   * a switch name is letters and `?` only, which is what stops `/home/martin`
- *     from being read as a switch;
- *   * a bare `//` or `--` means "no more switches".
- */
-function parseSwitches(argv) {
-  const switches = new Map();
-  const params = [];
-  let noMore = false;
-
-  for (const raw of argv) {
-    const value = String(raw);
-    if (!noMore && value.length === 2 && value[0] === value[1] && '/-'.includes(value[0])) { noMore = true; continue; }
-
-    let isSwitch = false;
-    let i = 1;
-    let delimiter = '';
-    if (!noMore && value.length >= 2 && '/-'.includes(value[0])) {
-      isSwitch = true;
-      const mark = value[0];
-      for (; i < value.length; i++) {
-        const c = value[i];
-        if (c === '=' || c === ':') { delimiter = c; break; }
-        // `--long-switch` is allowed; `/home/martin` is not a switch.
-        if (c === '?' || /[A-Za-z]/.test(c) || (c === '-' && mark === '-' && value[1] === '-')) continue;
-        isSwitch = false;
-        break;
-      }
-    }
-
-    if (isSwitch) {
-      const name = value.slice(1, i).toLowerCase();
-      const val = delimiter ? value.slice(i + 1) : '';
-      switches.set(name, { value: val, valueSet: i < value.length });
-    } else {
-      params.push(value);
-    }
-  }
-  return { switches, params };
-}
 
 /** `sftp://user:pass@host:22/path`, `winscp://…`, `s3://…`, `ftps://…`. */
 function parseSessionUrl(url) {
@@ -372,6 +331,10 @@ function createWindow() {
   win.webContents.on('did-finish-load', () => {
     flushQueuedCommands();
     maybeShowDimSum();
+    try {
+      state.usage?.markStartup('renderer-loaded');
+      state.usage?.completeStartup();
+    } catch { /* diagnostics never block startup */ }
   });
 
   const index = path.join(__dirname, '..', 'renderer', 'index.html');
@@ -579,6 +542,20 @@ function start() {
       P.setRoot(fs.existsSync(target) && fs.statSync(target).isDirectory() ? target : path.dirname(target));
     }
 
+    // Keep only bounded, local startup facts. Usage persistence is diagnostic,
+    // never telemetry, and a damaged usage file must not block a usable launch.
+    try {
+      state.usage = new UsageStore(P.usage()).load();
+      state.usage.beginStartup({
+        firstRun: state.usage.counter('launches') === 0,
+        mode: early.console || early.script || early.command ? 'console' : 'gui',
+      });
+      state.usage.markStartup('config-root');
+    } catch (error) {
+      state.usage = null;
+      console.warn('[usage] startup facts unavailable:', error && error.code ? error.code : 'write-failed');
+    }
+
     // EventEmitter treats an unhandled `error` event as an exception. Attach
     // this BEFORE load(): a malformed configuration is recoverable (Config
     // backs it up and resets to defaults), and must not abort startup before
@@ -591,6 +568,7 @@ function start() {
     });
     state.config.load();
     state.config.appVersion = app.getVersion();
+    try { state.usage?.markStartup('config-loaded'); } catch { /* diagnostics never block startup */ }
 
     // `/log=FILE` and `/loglevel=N` turn logging on for this run only.
     if (early.log) {
@@ -616,6 +594,7 @@ function start() {
 
     buildMenu();
     state.window = createWindow();
+    try { state.usage?.markStartup('window-created'); } catch { /* diagnostics never block startup */ }
 
     // The console and scripting entry points are not GUI sessions: hand them
     // to the renderer, which owns the console panel.

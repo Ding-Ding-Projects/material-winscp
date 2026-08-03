@@ -232,9 +232,16 @@ class Ipc {
     };
 
     this.sessions = new SessionManager({ config: this.config, emit: this.emit });
-    this.editors = new EditorManager({ config: this.config, sessions: this.sessions, emit: this.emit });
     this.history = new History(P.history(), {
       getPrefs: () => (this.config ? this.config.prefs.versionHistory : {}),
+    });
+    this.editors = new EditorManager({
+      config: this.config,
+      sessions: this.sessions,
+      history: this.history,
+      historyState: () => this.config && typeof this.config.exportState === 'function'
+        ? this.config.exportState() : {},
+      emit: this.emit,
     });
     this.updates = new Updates({ config: this.config, currentVersion: this.version, emit: this.emit });
     // Silent background updating, Chrome-style: it downloads and stages on its
@@ -1051,10 +1058,10 @@ class Ipc {
 
     this.handle('config:export', async (file) => {
       const target = path.resolve(str(file, 'file', LIMITS.path));
-      // Secrets are exported in their PROTECTED form, never in clear: an
-      // exported config is a file people email to themselves.
-      const state = cfg().exportState();
-      await fsp.writeFile(target, JSON.stringify(state, null, 2), 'utf8');
+      // Config owns format selection so a .ini path reaches the same
+      // WinSCP-compatible serializer used by the core store. JSON backups
+      // retain protected values; INI exports omit credentials entirely.
+      cfg().exportFile(target);
       return target;
     });
 
@@ -1062,9 +1069,7 @@ class Ipc {
       const source = path.resolve(str(file, 'file', LIMITS.path));
       const st = await fsp.stat(source);
       need(st.size <= 32 * 1024 * 1024, 'The configuration file is too large.');
-      const state = JSON.parse(await fsp.readFile(source, 'utf8'));
-      obj(state, 'configuration');
-      cfg().importState(state, optStr(label, 'label', 256) || `Imported settings from ${path.basename(source)}`);
+      cfg().importFile(source, optStr(label, 'label', 256) || `Imported settings from ${path.basename(source)}`);
       return true;
     });
   }
@@ -1541,6 +1546,8 @@ class Ipc {
       direction: optStr(r.direction, 'direction', 32) || undefined,
       criteria: optStr(r.criteria, 'criteria', 32) || undefined,
       recursive: r.recursive === undefined ? undefined : bool(r.recursive, 'recursive'),
+      deleteFiles: r.deleteFiles === undefined ? undefined : bool(r.deleteFiles, 'deleteFiles'),
+      existingOnly: r.existingOnly === undefined ? undefined : bool(r.existingOnly, 'existingOnly'),
       fileMask: optStr(r.fileMask, 'fileMask', LIMITS.small) || undefined,
       caseSensitive: r.caseSensitive === undefined ? undefined : bool(r.caseSensitive, 'caseSensitive'),
       transferMode: optStr(r.transferMode, 'transferMode', 32) || undefined,
@@ -1718,13 +1725,21 @@ class Ipc {
       return !!dict;
     });
 
-    /** One message, formatted. `fmtLoad` throws on a missing argument, by design. */
+    /**
+     * One message, formatted. Positional resources receive an array; resources
+     * with `%NAME%` slots receive a plain object such as `{ HOST: 'server' }`.
+     * `fmtLoad` throws on a missing argument, by design.
+     */
     this.handle('messages:load', (id, args) => {
       const m = M();
       const key = str(id, 'id', 128);
       need(m.has(key), `No such message resource: ${key}`);
-      const list = args === undefined || args === null ? [] : arr(args, 'args', 32);
-      return list.length ? m.fmtLoad(key, ...list) : m.loadStr(key);
+      if (args === undefined || args === null) return m.loadStr(key);
+      if (Array.isArray(args)) {
+        const list = arr(args, 'args', 32);
+        return list.length ? m.fmtLoad(key, ...list) : m.loadStr(key);
+      }
+      return m.fmtLoad(key, obj(args, 'args'));
     });
 
     /** The metadata a caller needs before it can format: arity and shape. */
@@ -2252,6 +2267,11 @@ class Ipc {
       const completed = await t.copyToLocal(files, target, copyParamOf(r.copyParam),
         r.params === undefined ? 0 : num(r.params, 'params', 0));
       return { completed: completed !== false, target };
+    });
+
+    this.handle('transfer:cancel', (sessionId) => {
+      const session = this.session(str(sessionId, 'sessionId', 128));
+      return { cancelled: this.terminalFor(session).cancelOperation() };
     });
 
     /**

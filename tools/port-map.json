@@ -12,13 +12,14 @@
   "units": {
     "core/Configuration": {
       "status": "partial",
-      "progress": 0.6,
+      "progress": 0.75,
       "targets": [
         "design/main/config.js",
         "design/main/defaults.js",
-        "design/main/paths.js"
+        "design/main/paths.js",
+        "design/main/sessiondata.js"
       ],
-      "note": "Store, atomic writes, defaults. INI import/export still to do."
+      "note": "Atomic JSON store plus production-reachable WinSCP INI export/import and one-time legacy INI migration; non-session GUI configuration remains a gap."
     },
     "core/SessionData": {
       "status": "partial",
@@ -50,11 +51,12 @@
     },
     "core/HierarchicalStorage": {
       "status": "partial",
-      "progress": 0.5,
+      "progress": 0.75,
       "targets": [
-        "design/main/config.js"
+        "design/main/config.js",
+        "design/main/sessiondata.js"
       ],
-      "note": "JSON store replaces INI/registry hierarchy; INI compatibility layer pending."
+      "note": "WinSCP session hierarchy, defaults-vs-explicit serialization, folder reconstruction and credential boundary are live; registry and non-session GUI sections remain."
     },
     "forms/NonVisual": {
       "status": "partial",
@@ -77,11 +79,11 @@
     },
     "core/ScpFileSystem": {
       "status": "partial",
-      "progress": 0.4,
+      "progress": 0.48,
       "targets": [
         "design/main/protocols/scp.js"
       ],
-      "note": "SCP over the shared SSH transport, with listing-command parsing."
+      "note": "SCP over the shared SSH transport with shell-safe path quoting, real -f/-t file and tree transfers, bounded control records, validated modes/sizes, progress, classified errors and honest no-resume capability. Remaining: startup/banner and return-variable autodetection, batch overwrite semantics, ASCII/EOL transfer modes, user/group enumeration, portable checksum/copy fallbacks and the broader WinSCP transfer UI."
     },
     "core/SecureShell": {
       "status": "partial",
@@ -454,12 +456,13 @@
       ],
       "note": "Protocol, capabilities and space, rendered from session:fsInfo so the greyed-out commands and this list are one object read twice. Full certificate is not built."
     },
-    "forms/FullSynchronize": {
-      "status": "partial",
-      "progress": 0.7,
-      "targets": [
-        "design/renderer/ui/dialogs/synchronize.js",
-        "design/renderer/ui/dialogs/checklist.js"
+  "forms/FullSynchronize": {
+    "status": "partial",
+    "progress": 0.72,
+    "targets": [
+      "design/renderer/ui/dialogs/synchronize.js",
+      "design/renderer/ui/dialogs/checklist.js",
+      "design/main/ipc.js"
       ],
       "note": "Direction, mode, criteria, masks and transfer settings, with forbidden combinations refused in words before the call. Timestamp options are greyed from caps. The OK split menu and the transfer-settings button are not built."
     },
@@ -629,11 +632,12 @@
       ],
       "note": "Keep remote directory up to date as a non-modal watcher with an activity log. main Watcher emits changes/tick while ipc.js forwards change/synchronized, so the change events never arrive."
     },
-    "forms/SynchronizeChecklist": {
-      "status": "partial",
-      "progress": 0.6,
-      "targets": [
-        "design/renderer/ui/dialogs/checklist.js"
+  "forms/SynchronizeChecklist": {
+    "status": "partial",
+    "progress": 0.62,
+    "targets": [
+      "design/renderer/ui/dialogs/checklist.js",
+      "design/main/ipc.js"
       ],
       "note": "The checklist arranged around one question, with per-row overrides only where legal and deletions needing a second explicit yes. Check/uncheck-all, Move and the Calculate and Commands menus are not built."
     },
@@ -664,20 +668,20 @@
     },
     "core/Script": {
       "status": "partial",
-      "progress": 0.6,
+      "progress": 0.62,
       "targets": [
         "design/main/script.js",
         "design/main/consolerunner.js"
       ],
-      "note": "The scripting command set with switch parsing, masks and the exit-code contract. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
+      "note": "The scripting command set with switch parsing, masks, batch exit-code semantics, and credential redaction reused by XML group output. Remaining: broader command parity and the unported WinSCP console process boundary."
     },
     "windows/ConsoleRunner": {
       "status": "partial",
-      "progress": 0.4,
+      "progress": 0.45,
       "targets": [
         "design/main/consolerunner.js"
       ],
-      "note": "Batch/non-interactive script driving. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
+      "note": "Batch/non-interactive script driving with /script and /command composition, stable 0/1 status accumulation, stdin handling, and credential-free /xmlgroups command names. Remaining: the out-of-process WinSCP console transport and broader switch/console parity."
     },
     "windows/WinConfiguration": {
       "status": "partial",
@@ -714,20 +718,30 @@
     },
     "core/Option": {
       "status": "partial",
-      "progress": 0.6,
+      "progress": 0.72,
       "targets": [
-        "design/main/options.js"
+        "design/main/options.js",
+        "design/main/progparams.js"
       ],
-      "note": "Switch parsing and command-line semantics. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
+      "note": "Shared switch tokenizer, delimiters, parameter consumption and production adapter; session option call sites and broader command operations remain partial."
+    },
+    "windows/ProgParams": {
+      "status": "partial",
+      "progress": 0.85,
+      "targets": [
+        "design/main/progparams.js",
+        "design/main/main.js"
+      ],
+      "note": "Startup and second-instance arguments use the shared TOptions-compatible adapter; maintenance dispatch and missing-/ini warning behavior remain gaps."
     },
     "core/FileBuffer": {
       "status": "partial",
-      "progress": 0.6,
+      "progress": 0.65,
       "targets": [
         "design/main/filebuffer.js",
         "design/main/queue.js"
       ],
-      "note": "EOL state machine surviving chunk boundaries, BOM and Ctrl-Z handling. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
+      "note": "EOL state machine, raw buffer cursor metadata, version-resource parsing, and stream-safe CR/LF, split-BOM, and Ctrl-Z handling are covered. Remaining gaps are native blocking stream callbacks, editor-side non-UTF-8 decoding, and the queue's still-private production converter seam."
     },
     "core/FileSystems": {
       "status": "partial",
@@ -863,21 +877,26 @@
       ],
       "note": "The path-keyed tree model, UpdatePath reconciliation, expanded-state save/restore and NodeTryDelete. Not ported: Change/CanChange, LoadDirectory, RebuildTree, node colours and overlays, the terminal wiring and the drag file list."
     },
-    "components/DirView": {
-      "status": "partial",
-      "progress": 0.2,
-      "targets": [
-        "design/main/dirview.js"
-      ],
-      "note": "PathChanged and the per-drive last-path memory only. The rest of the file is the Win32 shell icon-update queue, which has no counterpart here."
-    },
+      "components/DirView": {
+        "status": "partial",
+        "progress": 0.35,
+        "targets": [
+          "design/main/dirview.js",
+          "design/renderer/ui/panels.js",
+          "test/e2e-panel-keyboard.test.js"
+        ],
+        "note": "PathChanged, per-drive last-path memory, and a production-reachable keyboard selection boundary in the real Commander/Explorer panel. The Win32 shell icon-update queue still has no counterpart here."
+      },
     "components/DriveView": {
       "status": "partial",
-      "progress": 0.25,
+      "progress": 0.45,
       "targets": [
-        "design/main/dirview.js"
+        "design/main/dirview.js",
+        "design/renderer/ui/driveview.js",
+        "test/driveview.test.js",
+        "docs/interface-and-appearance/local-drive-view.md"
       ],
-      "note": "The drive naming, key, root and fixed-drive rules. The per-drive TDriveStatus array and its A..Z seeding are not ported."
+      "note": "The drive naming, key, root and fixed-drive rules plus a production Commander tree with keyboard navigation, refresh and synthetic UNC roots. The per-drive TDriveStatus array, A..Z seeding details and native device-change notifications are not ported."
     },
     "components/IEDriveInfo": {
       "status": "partial",
@@ -906,13 +925,16 @@
     },
     "windows/WinInterface": {
       "status": "partial",
-      "progress": 0.45,
+      "progress": 0.48,
       "targets": [
         "design/main/userinterface.js",
         "design/main/ipc.js",
-        "design/renderer/ui/dialogs/messagedlg.js"
+        "design/renderer/ui/dialogs/messagedlg.js",
+        "design/main/interfaces.js",
+        "test/interfaces.test.js",
+        "docs/interface-and-appearance/local-drive-view.md"
       ],
-      "note": "The message-dialog contract in full — answer bits, button building, the Yes>OK>Retry default, CancelAnswer fall-through, split buttons, the never-ask-again enablement rule and its catalogue of 21 questions, timeouts, and the exception dialogs — reachable over ui:*. Not ported: the tray icon and balloons, the transfer-preset popup, the toolbar layout strings, the shortcut combo helpers and DumpCallstack."
+      "note": "The message-dialog contract in full — answer bits, button building, the Yes>OK>Retry default, CancelAnswer fall-through, split buttons, the never-ask-again enablement rule and its catalogue of 21 questions, timeouts, and the exception dialogs — plus Commander local path-combo boundary handling for drive and UNC roots. Not ported: the tray icon and balloons, the transfer-preset popup, the toolbar layout strings, the shortcut combo helpers and DumpCallstack."
     },
     "windows/UserInterface": {
       "status": "partial",
@@ -930,6 +952,125 @@
         "design/main/userinterface.js"
       ],
       "note": "Only the portable subset: accessible names from labels, caption formatting, control sizing, ResizeForm/CutFormToDesktop/CenterFormOn and the path word-break algorithm. Everything DPI-, theme- or WindowProc-shaped is listed as deliberately not ported at the top of the module."
+    },
+    "core/SessionInfo": {
+      "status": "partial",
+      "progress": 0.7,
+      "targets": [
+        "design/main/sessioninfo.js",
+        "design/main/session.js",
+        "design/renderer/ui/dialogs/fileysteminfo.js"
+      ],
+      "note": "Secret-free SessionInfo and FileSystemInfo snapshots are now the canonical live-session identity seam; Session.info retains renderer aliases while publishing the canonical fields."
+    },
+    "core/PuttyIntf": {
+      "status": "partial",
+      "progress": 0.65,
+      "targets": [
+        "design/main/putty.js",
+        "design/main/setup.js",
+        "design/renderer/ui/dialogs/importsessions.js"
+      ],
+      "note": "Bounded PuTTY PPK/config metadata parsing, supported algorithm normalization and fail-closed secret redaction. The ssh2 transport remains the engine; unsupported PuTTY-only features stay explicit gaps."
+    },
+    "core/PuttyTools": {
+      "status": "partial",
+      "progress": 0.5,
+      "targets": [
+        "design/main/security.js",
+        "design/main/putty.js",
+        "design/main/setup.js"
+      ],
+      "note": "Secret-free key-type/encryption metadata, fingerprints and checksums plus bounded PPK v2/v3 envelope validation, Argon2 metadata parsing and external-PuTTY launch preflight. Private-key loading, conversion, comment/certificate mutation and public-key export remain delegated or explicit gaps."
+    },
+    "components/ThemePageControl": {
+      "status": "partial",
+      "progress": 0.7,
+      "targets": [
+        "design/renderer/ui/theme-page.js",
+        "design/renderer/ui/dialogs/prefpages.js",
+        "design/renderer/ui/dialogs/preferences.js"
+      ],
+      "note": "Theme mode and reduced-motion controls have validated persisted state, accessible keyboard radio navigation and high-contrast/system handling; the complete upstream visual control surface remains broader than this page."
+    },
+    "windows/QueueController": {
+      "status": "partial",
+      "progress": 0.9,
+      "targets": [
+        "design/main/queue-controller.js",
+        "design/main/queue.js",
+        "design/renderer/ui/queue.js"
+      ],
+      "note": "Queue command/reconciliation state is exposed with truthful availability, retry/once-done seams, per-item/global actions and focused regressions. Electron IPC wiring for every controller command remains to be completed."
+    },
+    "core/Exceptions": {
+      "status": "partial",
+      "progress": 0.75,
+      "targets": [
+        "design/main/exceptions.js",
+        "design/main/userinterface.js",
+        "design/main/ipc.js"
+      ],
+      "note": "Error classification, safe facts, retry/skip/abort decisions and secret-free serialization are implemented; broader call-site adoption remains to be audited."
+    },
+    "core/Bookmarks": {
+      "status": "partial",
+      "progress": 0.85,
+      "targets": [
+        "design/main/bookmarks.js",
+        "design/main/winconfig.js",
+        "design/renderer/ui/dialogs/locationprofiles.js"
+      ],
+      "note": "Ordered shared/per-session bookmark model with duplicate and shortcut rules, deterministic secret-free persistence, and existing site-manager/location-profile surfaces covered by focused tests."
+    },
+    "core/Usage": {
+      "status": "partial",
+      "progress": 0.75,
+      "targets": [
+        "design/main/usage.js",
+        "design/main/main.js"
+      ],
+      "note": "Bounded local counters and startup milestones persist atomically with rollback and no telemetry; remaining WinSCP usage categories need call-site coverage."
+    },
+    "core/NamedObjs": {
+      "status": "partial",
+      "progress": 0.65,
+      "targets": [
+        "design/main/named-objects.js",
+        "design/main/session.js",
+        "design/main/queue.js"
+      ],
+      "note": "Lifecycle-safe named-object registry with bounded deterministic names, collision handling, explicit disposal and secret-free identifier export; broader object ownership adoption remains."
+    },
+    "windows/WinApi": {
+      "status": "partial",
+      "progress": 0.75,
+      "targets": [
+        "design/main/winapi.js",
+        "design/main/setup.js",
+        "design/renderer/ui/contextmenu.js"
+      ],
+      "note": "Cross-platform path, display, keyboard, shell and unsupported-operation boundary with truthful non-Windows results; native Windows integration remains deliberately isolated."
+    },
+    "core/Global": {
+      "status": "partial",
+      "progress": 0.55,
+      "targets": [
+        "design/main/messages.js",
+        "design/main/usage.js",
+        "design/main/main.js"
+      ],
+      "note": "Global resource resolution and local startup facts are wired to the main lifecycle; the remaining upstream process-wide globals are represented by narrower module contracts."
+    },
+    "core/Interface": {
+      "status": "partial",
+      "progress": 0.8,
+      "targets": [
+        "design/main/interfaces.js",
+        "design/main/ipc.js",
+        "design/renderer/ui/panels.js"
+      ],
+      "note": "The portable interface contracts and panel/session bridge are live through IPC and renderer panels; platform-specific VCL plumbing remains outside this boundary."
     }
   }
 }

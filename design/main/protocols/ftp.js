@@ -397,6 +397,19 @@ function encodingFor(codePage) {
   return CODE_PAGES[String(codePage).toLowerCase()] || 'latin1';
 }
 
+/**
+ * Translate WinSCP's three-way passive-host policy into basic-ftp's option.
+ *
+ * basic-ftp defaults `allowSeparateTransferHost` to true. That is the right
+ * choice for `auto` (it still repairs the common private-PASV-address/NAT
+ * case) and for `off`, but it is not the meaning of WinSCP's explicit `on`:
+ * `on` must always reuse the control connection's host.
+ */
+function passiveClientOptions(forcePasvIp) {
+  const force = forcePasvIp === true || forcePasvIp === 'on' || forcePasvIp === 0;
+  return { allowSeparateTransferHost: !force };
+}
+
 /** `rwxr-xr-x` or `755` → the octal number SITE CHMOD wants. */
 function rightsToOctal(rights) {
   if (/^[0-7]{3,4}$/.test(String(rights))) return String(rights);
@@ -623,7 +636,10 @@ class FtpAdapter extends Adapter {
     // for passive mode connections". Left at true, basic-ftp still ignores a
     // private address advertised by a public server, which is the 'auto'
     // behaviour WinSCP defaults to.
-    this.client = new Client(timeoutMs);
+    // `ftpForcePasvIp` used to be documented and rendered by Preferences but
+    // never reached basic-ftp, whose default is to honour a separate PASV
+    // host. That made the explicit "on" choice a no-op.
+    this.client = new Client(timeoutMs, passiveClientOptions(s.ftpForcePasvIp));
     this.client.ftp.verbose = false;
     // basic-ftp writes its protocol dialogue to `console.log`, and only when
     // `verbose` is on, so the application never sees it. WinSCP's FTP session
@@ -1222,5 +1238,6 @@ module.exports = { normalizeTimes,
   ftpTimestamp,
   parseHashReply,
   normalizeChecksumAlg,
+  passiveClientOptions,
   CHECKSUM_ALGS,
 };

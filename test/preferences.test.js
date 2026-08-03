@@ -660,9 +660,24 @@ test('every option either has a consumer or says on its own row that it has none
   // nobody reads.
   const prefpages = fs.readFileSync(
     path.join(repoRoot, 'design', 'renderer', 'ui', 'dialogs', 'prefpages.js'), 'utf8');
-  assert.match(prefpages, /if \(isPending\(control\.key\)\) \{/,
+  assert.match(prefpages, /if \(opts\.pending\) \{/,
     'the pending note is no longer rendered on the row');
-  assert.match(prefpages, /nothing in this build acts on it yet/);
+  assert.match(prefpages, /pendingMessage\(language\)/,
+    'the row no longer renders the honest unavailable message');
+  assert.match(prefpages, /is-unavailable/,
+    'an unavailable preference is no longer visibly marked');
+});
+
+test('every unavailable preference has a bilingual read-only explanation', async () => {
+  const { schema } = await load();
+  const controls = schema.flattenControls().map((entry) => entry.control)
+    .filter((control) => schema.isPending(control.key));
+  assert.deepEqual(controls.map((control) => control.key).sort(),
+    [...schema.PENDING_KEYS].sort());
+  assert.match(schema.pendingMessage('en'), /read-only/i);
+  assert.match(schema.pendingMessage('yue'), /唯讀/);
+  assert.match(schema.pendingMessage('both'), /read-only/i);
+  assert.match(schema.pendingMessage('both'), /唯讀/);
 });
 
 test('the guard fails when a dead option is not declared', async () => {
@@ -681,12 +696,12 @@ test('the guard fails when a dead option is not declared', async () => {
 
 test('a test that names an option is not a consumer of it', async () => {
   const { schema } = await load();
-  // The eight options of issue #27. Each is stored, has a control, and is read
+  // The remaining options of issue #27. Each is stored, has a control, and is read
   // by nothing — yet the guard was green, because it walked test/ and THIS FILE
   // names every one of them (mustCover above, the controlEnabled cases, the
   // value-search case). The guard was proving its own subject matter consumed.
   const namedOnlyByTests = [
-    'beepOnFinish', 'beepOnFinishAfter', 'refreshRemotePanelInterval',
+    'beepOnFinish', 'beepOnFinishAfter',
     'queue.keepDoneItemsFor', 'window.minimizeToTray', 'dDFakeFile', 'dDDrives',
     'integration.dragExtEnabled',
   ];
@@ -704,7 +719,7 @@ test('a test that names an option is not a consumer of it', async () => {
   const outside = files.filter((f) => !f.startsWith(designRoot));
   assert.deepEqual(outside, [], 'the consumer scan is reading something that is not the application');
 
-  // Three of the eight are read now — the transfer queue honours them — so they
+  // Three of the remaining options are read now — the transfer queue honours them — so they
   // are named by production code and not by this list.
   const corpus = scan.readCorpus(repoRoot);
   for (const key of ['queue.keepDoneItemsFor', 'beepOnFinish', 'beepOnFinishAfter']) {
@@ -712,9 +727,9 @@ test('a test that names an option is not a consumer of it', async () => {
       `${key} is no longer read by the queue`);
     assert.ok(!schema.PENDING_KEYS.has(key), `${key} is honoured and still claims it is not`);
   }
-  // The other five are declared, so their rows say plainly that nothing acts
+  // The other four are declared, so their rows say plainly that nothing acts
   // on them.
-  for (const key of ['refreshRemotePanelInterval', 'window.minimizeToTray',
+  for (const key of ['window.minimizeToTray',
     'dDFakeFile', 'dDDrives', 'integration.dragExtEnabled']) {
     assert.deepEqual(scan.consumersOf(key, corpus), [], `${key} has a consumer now`);
     assert.ok(schema.PENDING_KEYS.has(key), `${key} is read by nothing and says so on no row`);

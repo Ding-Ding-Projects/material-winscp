@@ -20,11 +20,12 @@ run time.
 | Article | Covers |
 | --- | --- |
 | [adapter-contract.md](adapter-contract.md) | The interface every backend implements, and how `caps` drives the UI. |
+| [remote-files.md](remote-files.md) | Shared remote listing rows, POSIX/VMS path rules, metadata, symlink refusal, and directory-size semantics. |
 | [sftp.md](sftp.md) | SFTP over SSH — versions 3–6, packet sizing, queueing, server bugs. |
 | [scp.md](scp.md) | SCP and the shell session it depends on. |
-| [ftp.md](ftp.md) | FTP, FTPS (explicit and implicit), passive mode, MLSD, TLS session reuse. |
-| [webdav.md](webdav.md) | WebDAV and WebDAVS, escaping, legacy authentication. |
-| [s3.md](s3.md) | Amazon S3 and S3-compatible endpoints, URL styles, storage classes. |
+| [ftp.md](ftp.md) | FTP, FTPS (explicit and implicit), passive-host policy, active mode, MLSD, TLS session reuse, resume and encoding/error behaviour. |
+| [webdav.md](webdav.md) | WebDAV and WebDAVS, XML listings, escaping, redirect origin isolation, and legacy authentication. |
+| [s3.md](s3.md) | Amazon S3 and S3-compatible endpoints, URL styles, pagination, multipart copy, and storage classes. |
 | [local.md](local.md) | The local filesystem backend and Windows path handling. |
 
 ## Capability matrix

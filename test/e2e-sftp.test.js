@@ -505,32 +505,32 @@ describe('SFTP: file operations against a real server', () => {
     assert.equal((await a.stat('/stamped.txt')).mtime, second);
   });
 
-  it('downloads a file as a stream, byte for byte, one request at a time', async () => {
+  it('downloads a file as a stream, byte for byte, with bounded request pipelining', async () => {
     const payload = crypto.randomBytes(300_000);
     await fsp.writeFile(nodePath.join(srv.root, 'download.bin'), payload);
+    // Keep the assertion independent of the default packet ceiling and make
+    // the four-request window visible on the server's wire log.
+    a.session.sftpMaxPacketSize = 8192;
+    a.session.sftpDownloadQueue = 4;
     srv.stats.reads.length = 0;
     const rs = await a.createReadStream('/download.bin');
     const chunks = [];
     for await (const c of rs) chunks.push(c);
     assert.deepEqual(Buffer.concat(chunks), payload);
 
-    // docs/protocol-gaps.md records that the streaming path does NOT pipeline,
-    // which is a real throughput difference from WinSCP. Measure it here rather
-    // than asserting it in prose: a client with one request in flight produces
-    // a contiguous, strictly increasing run of offsets, and a pipelining one
-    // would not.
     const reads = srv.stats.reads.filter((r) => r.path === '/download.bin');
-    assert.ok(reads.length > 1, 'the file needed more than one READ');
-    let at = 0;
-    for (const r of reads) {
-      assert.equal(r.offset, at, 'each READ starts exactly where the last one ended');
-      at += r.returned;      // what the server RETURNED, which is short at EOF
-    }
-    assert.equal(at, payload.length, 'the reads add up to the whole file');
+    assert.ok(reads.length > 4, 'the file needed more than one request window');
+    assert.deepEqual(reads.slice(0, 4).map((r) => r.offset), [0, 8192, 16384, 24576],
+      'the first four reads are in flight before the first response drains the window');
+    assert.equal(reads.reduce((total, r) => total + r.returned, 0), payload.length,
+      'the server returned the whole file, including the short EOF read');
   });
 
-  it('uploads a file as a stream, byte for byte', async () => {
+  it('uploads a file as a stream, byte for byte, with bounded request pipelining', async () => {
     const payload = crypto.randomBytes(250_000);
+    a.session.sftpMaxPacketSize = 8192;
+    a.session.sftpUploadQueue = 4;
+    srv.stats.writes.length = 0;
     const ws = await a.createWriteStream('/upload.bin');
     await new Promise((resolve, reject) => {
       ws.on('error', reject);
@@ -538,6 +538,12 @@ describe('SFTP: file operations against a real server', () => {
       ws.end(payload);
     });
     assert.deepEqual(await fsp.readFile(nodePath.join(srv.root, 'upload.bin')), payload);
+    const writes = srv.stats.writes.filter((w) => w.path === '/upload.bin');
+    assert.ok(writes.length > 4, 'the file needed more than one request window');
+    assert.deepEqual(writes.slice(0, 4).map((w) => w.offset), [0, 8192, 16384, 24576],
+      'the first four writes are in flight before the first response drains the window');
+    assert.equal(writes.reduce((total, w) => total + w.length, 0), payload.length,
+      'the server received every uploaded byte');
   });
 
   it('resumes a download from a non-zero offset — the server sees the offset, not zero', async () => {

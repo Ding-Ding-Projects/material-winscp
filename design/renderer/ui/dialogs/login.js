@@ -47,6 +47,16 @@ import { openImportSessions } from './importsessions.js';
 /** Where the site-search mode is remembered between sessions. */
 const SEARCH_MODE_PATH = 'search.siteSearchMode';
 
+/** Saved sites are views until the user explicitly chooses Edit. */
+export function sessionFormEditable({ sourceId = null, editing = false } = {}) {
+  return !sourceId || editing === true;
+}
+
+/** The visibility contract the renderer uses for the selected site. */
+export function sessionFieldVisibility(site, state = {}) {
+  return fieldVisibility(site, { editable: sessionFormEditable(state) });
+}
+
 function storedSearchMode() {
   const all = store.get('search') || {};
   return SITE_SEARCH_MODES.some((m) => m.id === all.siteSearchMode)
@@ -259,18 +269,18 @@ export function createLoginPanel(opts = {}) {
       return;
     }
 
-    const vis = fieldVisibility(state.site, { editable: true });
+    const vis = sessionFieldVisibility(state.site, state);
 
     const grid = h('div', { class: 'sd-grid' });
     grid.append(...protocolRow(vis));
-    grid.append(...hostRow());
+    grid.append(...hostRow(vis));
     grid.append(...credentialRows(vis));
     formEl.appendChild(h('fieldset', { class: 'sd-group' },
       h('legend', {}, 'Session'), grid,
       ...protocolExtras(vis)));
 
-    formEl.appendChild(noteGroup());
-    formEl.appendChild(saveGroup());
+    formEl.appendChild(noteGroup(vis));
+    formEl.appendChild(saveGroup(vis));
     renderButtons();
   }
 
@@ -321,39 +331,47 @@ export function createLoginPanel(opts = {}) {
     }, ...PROTOCOLS.map((p) => h('option', { value: p.id }, p.label)));
     protocolSelect.value = state.site.protocol;
 
+    const protocolControl = vis.transferProtocolView
+      ? h('span', { id: protocolId, class: 'sd-input sd-readonly', 'aria-readonly': 'true' },
+        protocolInfo(state.site.protocol).label)
+      : protocolSelect;
     const rows = [
       h('label', { class: 'sd-label', for: protocolId }, t('fileProtocol')),
-      protocolSelect,
+      protocolControl,
     ];
 
     // FtpsCombo and WebDavsCombo are two different controls in the original,
     // shown for different protocols and holding different item lists.
     const options = encryptionOptions(state.site.protocol);
-    if (options.length && (vis.ftpsCombo || vis.webDavsCombo)) {
+    if (options.length && (vis.ftpsCombo || vis.webDavsCombo || vis.encryptionView)) {
       const encId = uid('lg-enc');
-      const encSelect = h('select', {
-        id: encId, class: 'sd-input',
-        'data-control': vis.ftpsCombo ? 'FtpsCombo' : 'WebDavsCombo',
-        onchange: () => {
-          const previous = { ...state.site };
-          state.site.ftps = encSelect.value;
-          state.site = normalizeSite(state.site, previous);
-          state.dirty = true;
-          renderForm();
-        },
-      }, ...options.map((e) => h('option', { value: e.id }, e.label)));
-      encSelect.value = state.site.ftps;
-      rows.push(h('label', { class: 'sd-label', for: encId }, t('encryption')), encSelect);
+      const current = options.find((entry) => entry.id === state.site.ftps) || options[0];
+      const encControl = vis.encryptionView
+        ? h('span', { id: encId, class: 'sd-input sd-readonly', 'aria-readonly': 'true' }, current.label)
+        : h('select', {
+          id: encId, class: 'sd-input',
+          'data-control': vis.ftpsCombo ? 'FtpsCombo' : 'WebDavsCombo',
+          onchange: (event) => {
+            const previous = { ...state.site };
+            state.site.ftps = event.target.value;
+            state.site = normalizeSite(state.site, previous);
+            state.dirty = true;
+            renderForm();
+          },
+        }, ...options.map((e) => h('option', { value: e.id }, e.label)));
+      if (!vis.encryptionView) encControl.value = state.site.ftps;
+      rows.push(h('label', { class: 'sd-label', for: encId }, t('encryption')), encControl);
     }
     return rows;
   }
 
-  function hostRow() {
+  function hostRow(vis) {
     const hostId = uid('lg-host');
     const portId = uid('lg-port');
     const hostInput = h('input', {
       type: 'text', id: hostId, class: 'sd-input', spellcheck: 'false',
       autocomplete: 'off', placeholder: 'example.com', required: true, 'aria-required': 'true',
+      readonly: vis.hostNameReadOnly, 'aria-readonly': String(vis.hostNameReadOnly),
       autofocus: !state.sourceId,
       oninput: () => { state.site.hostName = hostInput.value; state.dirty = true; syncButtons(); },
     });
@@ -361,6 +379,7 @@ export function createLoginPanel(opts = {}) {
 
     const portInput = h('input', {
       type: 'number', id: portId, class: 'sd-input sd-num', min: '1', max: '65535',
+      readonly: vis.portNumberReadOnly, 'aria-readonly': String(vis.portNumberReadOnly),
       oninput: () => { state.site.portNumber = Number(portInput.value) || 0; state.dirty = true; },
       onchange: () => {
         const n = Math.min(65535, Math.max(1, Number(portInput.value) || defaultPortFor(state.site.protocol, state.site.ftps)));
@@ -372,6 +391,7 @@ export function createLoginPanel(opts = {}) {
 
     const resetPort = h('button', {
       type: 'button', class: 'btn-text',
+      disabled: vis.portNumberReadOnly,
       title: `Reset to the protocol default (${defaultPortFor(state.site.protocol, state.site.ftps)})`,
       onclick: () => setField('portNumber', defaultPortFor(state.site.protocol, state.site.ftps)),
     }, icon('restart_alt', 15));
@@ -393,7 +413,7 @@ export function createLoginPanel(opts = {}) {
       oninput: () => { state.site.userName = userInput.value; state.dirty = true; syncButtons(); },
     });
     userInput.value = state.site.userName;
-    userInput.disabled = !vis.userNameEnabled;
+    userInput.disabled = !vis.editable || !vis.userNameEnabled;
 
     const stored = state.site.password === SECRET_SENTINEL;
     const passInput = h('input', {
@@ -414,7 +434,7 @@ export function createLoginPanel(opts = {}) {
       },
     });
     passInput.value = state.touchedSecrets.has('password') ? String(state.site.password || '') : '';
-    passInput.disabled = !vis.passwordEnabled;
+    passInput.disabled = !vis.editable || !vis.passwordEnabled;
 
     const revealBtn = h('button', {
       type: 'button', class: 'icon-btn', 'aria-pressed': 'false',
@@ -428,7 +448,7 @@ export function createLoginPanel(opts = {}) {
         announce(on ? 'Password hidden.' : 'Password shown.');
       },
     }, icon('visibility', 16));
-    revealBtn.disabled = !vis.passwordEnabled;
+    revealBtn.disabled = !vis.editable || !vis.passwordEnabled;
 
     const rows = [
       h('label', { class: `sd-label${vis.userNameEnabled ? '' : ' is-disabled'}`, for: userId },
@@ -460,7 +480,7 @@ export function createLoginPanel(opts = {}) {
     if (vis.basicFtpPanel) {
       const id = uid('lg-anon');
       const box = h('input', {
-        type: 'checkbox', id,
+        type: 'checkbox', id, disabled: !vis.editable,
         onchange: () => {
           if (box.checked) {
             state.touchedSecrets.add('password');
@@ -489,7 +509,7 @@ export function createLoginPanel(opts = {}) {
       const envId = uid('lg-s3env');
       const profileId = uid('lg-s3profile');
       const envBox = h('input', {
-        type: 'checkbox', id: envId,
+        type: 'checkbox', id: envId, disabled: !vis.editable,
         onchange: () => setField('s3CredentialsEnv', envBox.checked),
       });
       envBox.checked = !!state.site.s3CredentialsEnv;
@@ -499,7 +519,7 @@ export function createLoginPanel(opts = {}) {
         oninput: () => { state.site.s3Profile = profileInput.value; state.dirty = true; },
       });
       profileInput.value = state.site.s3Profile || '';
-      profileInput.disabled = !vis.s3ProfileEnabled;
+      profileInput.disabled = !vis.editable || !vis.s3ProfileEnabled;
       out.push(h('div', { class: 'sd-row' },
         h('label', { class: 'sd-check', for: envId }, envBox,
           h('span', { class: 'sd-check-text' }, t('credAws'))),
@@ -512,11 +532,13 @@ export function createLoginPanel(opts = {}) {
       const keyInput = h('input', {
         type: 'text', id: keyId, class: 'sd-input', spellcheck: 'false',
         placeholder: s('noKeyFile'),
+        readonly: !vis.editable,
         oninput: () => { state.site.publicKeyFile = keyInput.value; state.dirty = true; },
       });
       keyInput.value = state.site.publicKeyFile || '';
       const browse = h('button', {
         type: 'button', class: 'btn-tonal',
+        disabled: !vis.editable,
         onclick: async () => {
           const picked = await pickLocalPath({ title: 'Private key file' });
           if (picked) { keyInput.value = picked; setField('publicKeyFile', picked); }
@@ -530,10 +552,11 @@ export function createLoginPanel(opts = {}) {
     return out;
   }
 
-  function noteGroup() {
+  function noteGroup(vis) {
     const id = uid('lg-note');
     const area = h('textarea', {
       id, class: 'sd-input', rows: '3', spellcheck: 'true',
+      readonly: !vis.editable,
       oninput: () => { state.site.note = area.value; state.dirty = true; },
     });
     area.value = state.site.note || '';
@@ -544,11 +567,12 @@ export function createLoginPanel(opts = {}) {
       h('p', { class: 'sd-hint' }, 'Searched by the "all major site fields" mode, alongside the host and user name.'));
   }
 
-  function saveGroup() {
+  function saveGroup(vis) {
     const nameId = uid('lg-name');
     const folderId = uid('lg-folder');
     const nameInput = h('input', {
       type: 'text', id: nameId, class: 'sd-input',
+      readonly: !vis.editable,
       placeholder: t('siteNamePh'),
       oninput: () => { state.site.name = nameInput.value; state.dirty = true; },
     });
@@ -557,13 +581,14 @@ export function createLoginPanel(opts = {}) {
     const folders = ['', ...(tree.data.folders || [])];
     const folderSelect = h('select', {
       id: folderId, class: 'sd-input',
+      disabled: !vis.editable,
       onchange: () => setField('folder', folderSelect.value),
     }, ...folders.map((f) => h('option', { value: f }, f || '(top level)')));
     folderSelect.value = folders.includes(state.site.folder) ? state.site.folder : '';
 
     const saveId = uid('lg-savepw');
     const saveBox = h('input', {
-      type: 'checkbox', id: saveId,
+      type: 'checkbox', id: saveId, disabled: !vis.editable,
       onchange: () => {
         // From here on the choice is the user's, not the form's.
         state.savePasswordExplicit = true;
@@ -588,8 +613,10 @@ export function createLoginPanel(opts = {}) {
       alpha: false,
       onChange: (hex) => { state.site.color = hex; state.dirty = true; },
     });
+    swatch.element.disabled = !vis.editable;
     const clearColor = h('button', {
       type: 'button', class: 'btn-text',
+      disabled: !vis.editable,
       onclick: () => setField('color', ''),
     }, t('none'));
 
@@ -630,9 +657,16 @@ export function createLoginPanel(opts = {}) {
       icon('tune', 15), h('span', {}, t('advancedBtn')));
     const closeBtn = h('button', { type: 'button', class: 'btn-text', onclick: () => opts.onClose?.() },
       h('span', {}, t('close')));
+    const editable = sessionFormEditable(state);
+    const editBtn = h('button', {
+      type: 'button', class: 'btn-tonal',
+      onclick: () => { state.editing = true; renderForm(); announce(t('edit')); },
+    }, icon('edit', 15), h('span', {}, t('edit')));
 
     if (isContainer) {
       buttonsEl.append(loginBtn, h('span', { class: 'spacer' }), closeBtn);
+    } else if (!editable && state.sourceId) {
+      buttonsEl.append(loginBtn, editBtn, h('span', { class: 'spacer' }), closeBtn);
     } else {
       buttonsEl.append(loginBtn, saveBtn, saveAsBtn, advancedBtn,
         h('span', { class: 'spacer' }), closeBtn);
@@ -766,6 +800,10 @@ export function createLoginPanel(opts = {}) {
   }
 
   function openAdvanced(pageId) {
+    if (!sessionFormEditable(state)) {
+      notify.info(t('edit'), 'Choose Edit before changing advanced session settings.');
+      return null;
+    }
     const working = { ...state.site };
     let panel = null;
     const modal = openModal({
@@ -886,9 +924,9 @@ export function createLoginPanel(opts = {}) {
     const sessionSub = {
       label: s('sessionMenu'), icon: 'dns',
       submenu: [
-        { label: t('advancedBtn'), icon: 'tune', onSelect: () => openAdvanced() },
-        { label: t('editRaw'), icon: 'code', onSelect: openRawSettings },
-        { label: s('transferRule'), icon: 'swap_vert', onSelect: openTransferRule },
+        { label: t('advancedBtn'), icon: 'tune', disabled: !sessionFormEditable(state), onSelect: () => openAdvanced() },
+        { label: t('editRaw'), icon: 'code', disabled: !sessionFormEditable(state), onSelect: openRawSettings },
+        { label: s('transferRule'), icon: 'swap_vert', disabled: !sessionFormEditable(state), onSelect: openTransferRule },
       ],
     };
     const globalSub = {

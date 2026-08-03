@@ -16,7 +16,7 @@ Under **Transfer settings** (in any transfer dialog) and
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `transferMode` | `automatic` | `text` converts line endings, `binary` never does, `automatic` decides per file using `asciiFileMask`. |
+| `transferMode` | `binary` | `text` converts line endings, `binary` never does, `automatic` decides per file using `asciiFileMask`. |
 | `asciiFileMask` | a long list of source and markup extensions | Which files count as text in `automatic` mode. |
 | `fileNameCase` | `noChange` | `upper`, `lower`, `firstUpper`. |
 | `replaceInvalidChars` | `true` | Substitute characters Windows cannot store. |
@@ -33,7 +33,7 @@ Under **Transfer settings** (in any transfer dialog) and
 | `preserveRights` | `false` | Apply `rights` to uploaded files. |
 | `rights` | `rw-r--r--` | The permission string used when `preserveRights` is on. |
 | `addXToDirectories` | `true` | Directories get `x` wherever `r` is set; without it, a directory you can read but not enter. |
-| `preserveReadOnly` | `true` | Carry the read-only attribute across. |
+| `preserveReadOnly` | `false` | Carry the read-only attribute across when enabled. |
 | `ignorePermErrors` | `false` | Downgrade a failed `chmod` to a warning. |
 | `clearArchive` | `false` | Clear the Windows archive bit after a successful upload. |
 
@@ -75,6 +75,7 @@ Presets are ordinary user-managed records, so they are covered by
 | Situation | What the user sees | Recoverable |
 | --- | --- | --- |
 | `automatic` picks text mode for a binary file | The file is corrupted by line-ending conversion — the single most damaging misconfiguration here. Extensions not in `asciiFileMask` default to binary, and a mismatch between extension and content is reported when detected. | Yes, re-transfer in binary |
+| A directly selected file does not match `includeFileMask` | It is omitted before the queue opens a destination. Directory children and directly selected files use the same mask predicate as the foreground transfer path. | Yes, remove or correct the mask |
 | `preserveRights` on a protocol without permissions | The option is greyed out; `caps.permissions` decides. | n/a |
 | `preserveTimeDirs` on a protocol that cannot set directory times | Silently skipped for directories, reported once per transfer rather than per directory. | n/a |
 | `fileNameCase` collides two names | The second transfer hits the overwrite rule. The confirmation names the case change as the cause. | Yes |

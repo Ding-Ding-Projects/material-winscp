@@ -840,7 +840,17 @@ export function createFilePanel(opts = {}) {
       case 'Home': e.preventDefault(); setFocus(0, { extend }); return;
       case 'End': e.preventDefault(); setFocus(view.length - 1, { extend }); return;
       case 'Enter': e.preventDefault(); activate(focusIndex); return;
-      case 'Insert': e.preventDefault(); setFocus(focusIndex + 1, { toggle: false }); toggleFocusedSelection(focusIndex - 1); return;
+      case 'Insert': {
+        e.preventDefault();
+        // Capture the row before advancing. At the end of a listing setFocus()
+        // clamps to the last row; deriving the old row from the new focus then
+        // toggles the previous file, which makes Insert select the wrong item
+        // precisely where keyboard users most need a stable boundary.
+        const current = focusIndex;
+        toggleFocusedSelection(current);
+        if (current + 1 < view.length) setFocus(current + 1, { toggle: false });
+        return;
+      }
       case ' ':
         if (!searchState.active) { e.preventDefault(); toggleFocusedSelection(); return; }
         break;
@@ -1377,13 +1387,28 @@ export function createFilePanel(opts = {}) {
   if (treeShown) ensureTree();
   load(defaultPath(), { pushHistory: true });
 
+  // EditedFileUploaded invalidates main's directory cache, but the panel also
+  // needs to repaint its own listing. Match the event to this panel so an edit
+  // in another tab or directory cannot reset the user's selection here.
+  const offEditor = backend.on('event:editor', (event) => {
+    if (!event || !['uploaded', 'saved'].includes(event.type)) return;
+    if (!isLocal && event.type === 'saved') return;
+    if (!isLocal && event.sessionId !== sessionId()) return;
+    const changedPath = isLocal ? event.localPath : event.remotePath;
+    if (!changedPath) return;
+    const changedDirectory = driveParentOf(side, changedPath);
+    const currentDirectory = isLocal ? normalizeLocal(path) : String(path || '/');
+    if (changedDirectory !== currentDirectory) return;
+    refresh(true).catch(() => { /* the editor already reports its own failure */ });
+  });
+
   const offPrefs = bus.on('prefs:changed', (e) => {
     if (!e) return;
     if (e.path === 'showHiddenFiles') { showHidden = e.value === true; applyView(); render(); }
     if (e.path === 'formatSizeBytes' || e.path === 'panel.fullRowSelect') render();
   });
   const baseDestroy = handle.destroy;
-  handle.destroy = () => { offPrefs(); baseDestroy(); };
+  handle.destroy = () => { offEditor(); offPrefs(); baseDestroy(); };
 
   return handle;
 }
@@ -1420,6 +1445,7 @@ export function createWorkspace(opts = {}) {
   let menuBar = null;
   let toolbars = null;
   let splitDrag = null;
+  let remoteRefreshTimer = null;
 
   const workspace = {
     element: root,
@@ -1515,6 +1541,27 @@ export function createWorkspace(opts = {}) {
       root.remove();
     },
   };
+
+  function restartRemoteRefresh() {
+    if (remoteRefreshTimer) {
+      clearInterval(remoteRefreshTimer);
+      remoteRefreshTimer = null;
+    }
+    const seconds = Number(readPref('refreshRemotePanelInterval', 0));
+    if (!Number.isFinite(seconds) || seconds <= 0) return;
+    remoteRefreshTimer = setInterval(() => {
+      // A disconnected tab has no useful remote listing to refresh. Once a
+      // session is attached, force the adapter cache to be bypassed so this
+      // preference means fresh remote data rather than a local repaint.
+      if (!sessionInfoValue || !panels.remote) return;
+      panels.remote.refresh(true).catch(() => { /* the panel reports its own error */ });
+    }, Math.max(1, seconds) * 1000);
+    remoteRefreshTimer.unref?.();
+  }
+
+  const offRemoteRefreshPref = bus.on('prefs:changed', (e) => {
+    if (e?.path === 'refreshRemotePanelInterval') restartRemoteRefresh();
+  });
 
   /* ---- the command line ---- */
   const cmdHistory = [];
@@ -1686,6 +1733,7 @@ export function createWorkspace(opts = {}) {
   }
 
   rebuild();
+  restartRemoteRefresh();
   // Alt+L, Alt+R, Alt+F … open the menu they open in WinSCP. The disposer is
   // held by the workspace so a rebuilt or closed tab does not leave a listener
   // driving a menu bar that no longer exists.
@@ -1694,7 +1742,12 @@ export function createWorkspace(opts = {}) {
     () => mode,
   );
   const workspaceDestroy = workspace.destroy;
-  workspace.destroy = () => { disposeMnemonics(); workspaceDestroy(); };
+  workspace.destroy = () => {
+    disposeMnemonics();
+    offRemoteRefreshPref();
+    if (remoteRefreshTimer) { clearInterval(remoteRefreshTimer); remoteRefreshTimer = null; }
+    workspaceDestroy();
+  };
   return workspace;
 }
 

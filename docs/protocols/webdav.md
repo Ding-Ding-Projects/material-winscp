@@ -53,10 +53,12 @@ The remote path is the URL path. A site whose `hostName` is
 - **Plain HTTP WebDAV is as exposed as plain FTP.** Selecting `none` for
   encryption raises the same non-dismissible warning.
 - **Redirects are not followed blindly.** A cross-origin redirect drops
-  credentials, and a redirect from HTTPS to HTTP is refused outright.
-- **The XML parser is bounded** — entity expansion is disabled and document size
-  is capped, so a hostile server cannot use `PROPFIND` output as a denial of
-  service (the "billion laughs" class of attack).
+  credentials and the session's keep-alive agent, even when the user permits
+  following it. A redirect from HTTPS to HTTP is refused outright.
+- **The XML parser does not expand declarations** — DTDs and external entity
+  declarations are ignored. A hard byte cap for non-streaming response bodies
+  remains a follow-up gap before hostile, very large `PROPFIND` output is fully
+  bounded against denial of service.
 - **ETags are the only concurrency signal available.** The editor compares them
   before writing back; when the server does not send one, the editor says the
   file could not be checked rather than implying it was.
@@ -68,7 +70,15 @@ The remote path is the URL path. A site whose `hostName` is
   namespace-defaulted XML.
 - Escaping is tested for both the conservative and liberal sets across a
   filename corpus containing spaces, `+`, `#`, `%`, `&` and CJK characters.
-- Redirect refusal and the entity-expansion bound have direct tests.
+- Digest authentication covers MD5, SHA-256 and SHA-512/256; the last uses the
+  standardized SHA-512/256 function (not a truncated SHA-512 digest), as
+  required by RFC 7616.
+- Redirect refusal has direct tests; declaration handling is covered by the
+  parser fixtures, while the non-streaming response byte cap remains untested
+  and unimplemented.
+- Cross-origin redirect handling is exercised with two local HTTP servers: the
+  original request is authenticated, while the redirected request carries no
+  `Authorization` header.
 
 Manual check: connect over HTTPS, open the session log, and confirm the
 `PROPFIND` for the root directory returns `207 Multi-Status` with a `D:multistatus`

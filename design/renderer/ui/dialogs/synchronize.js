@@ -11,15 +11,11 @@
 //     dialog refuses them in words BEFORE the call, so the user is told which
 //     two settings disagree instead of being handed an exception.
 //
-//   * `applySelectionPolicy`. design/main/ipc.js's `sync:compare` forwards only
-//     mode, direction, criteria, recursive, fileMask, caseSensitive,
-//     transferMode, copyParam, timeTolerance, dstMode and timeDifference — it
-//     drops `deleteFiles` and `existingOnly`. The comparison therefore always
-//     comes back with deletion rows UNTICKED and new-file rows TICKED. Rather
-//     than showing two checkboxes that quietly do nothing, the renderer applies
-//     exactly the tick policy sync.js would have applied, on the way into the
-//     checklist. Same result, and nothing is deleted without a tick the user
-//     can see.
+//   * `applySelectionPolicy`. The comparison request carries `deleteFiles` and
+//     `existingOnly` through the real IPC boundary, so sync.js can include the
+//     right rows and apply the same checked policy. The renderer repeats that
+//     policy after the bridge for selected-only runs; nothing is deleted without
+//     a tick the user can see.
 
 import {
   h, icon, clear, uid, appearanceTarget, openModal, layer, focusMemory, oneLine,
@@ -164,6 +160,8 @@ export function compareRequest(options, context) {
     mode: options.mode,
     criteria: criteriaOf(options),
     recursive: !!options.recursive,
+    deleteFiles: !!options.deleteFiles,
+    existingOnly: !!options.existingOnly,
     caseSensitive: !!options.caseSensitive,
     fileMask: options.fileMask || undefined,
     transferMode: options.transferMode,
@@ -177,7 +175,7 @@ export function compareRequest(options, context) {
 
 /**
  * The tick policy sync.js applies when it is given `deleteFiles` and
- * `existingOnly` — reproduced here because ipc.js does not forward them.
+ * `existingOnly` — reproduced here for the renderer's selected-only filter.
  * Returns NEW items; the comparison itself is never altered, only which rows
  * arrive at the checklist already ticked.
  */

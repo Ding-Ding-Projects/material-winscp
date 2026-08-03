@@ -10,6 +10,11 @@ tunnels, proxies and automatic reconnection.
 | Article | Covers |
 | --- | --- |
 | [site-manager.md](site-manager.md) | Sites, folders, colour tags, import/export and the session URL format. |
+| [import-sessions.md](import-sessions.md) | Bounded PuTTY/KiTTY, FileZilla, OpenSSH, WinSCP INI and known_hosts imports, including UTF-8 session-name compatibility. |
+| [bookmarks.md](bookmarks.md) | Ordered shared and per-site local/remote location profiles, duplicate policies and safe JSON persistence. |
+| [session-info.md](session-info.md) | Secret-free protocol, endpoint, display and live-session information snapshots. |
+| [terminal-lifecycle.md](terminal-lifecycle.md) | Foreground operation ownership, cancellation, reconnect backoff/budgets, prompt refusal, and directory-cache invalidation. |
+| [named-objects.md](named-objects.md) | Bounded names for sessions, queue items, operations and UI bridges, with weak or explicit ownership and identifier-only export. |
 | [workspaces.md](workspaces.md) | Saving and restoring sets of sessions, and the auto-workspace. |
 | [tunnels-and-proxies.md](tunnels-and-proxies.md) | SSH tunnels, every proxy method, and how they compose. |
 | [reconnection.md](reconnection.md) | Automatic reconnect, stall detection and idle handling. |

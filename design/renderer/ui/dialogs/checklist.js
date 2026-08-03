@@ -56,6 +56,8 @@ defineStrings({
   txClNothingSelected: ['Nothing to synchronize: the two directories already match.', '冇嘢要同步：兩邊目錄已經一樣。'],
   txClCheckAll: ['Tick everything', '全部剔'],
   txClUncheckAll: ['Untick everything', '全部唔剔'],
+  txClCheckDirectory: ['Tick every actionable item in this directory', '呢個目錄入面可以做嘅全部剔'],
+  txClUncheckDirectory: ['Untick every item in this directory', '呢個目錄入面全部唔剔'],
   txClReverse: ['Reverse the direction', '調轉方向'],
   txClGroup: ['Group by directory', '按目錄分組'],
   txClSearchPh: ['Search the checklist', '搵清單'],
@@ -183,6 +185,19 @@ export function overrideAction(item, action) {
 
 /** Tick or untick without changing the action. */
 export function setChecked(item, checked) { return { ...item, checked: !!checked }; }
+
+/**
+ * Apply the checklist's directory scope to selection without changing any
+ * proposed actions. `nothing` rows have no checkbox in the UI, so a scoped
+ * check must leave them unticked just like the global Check All action.
+ */
+export function setCheckedInDirectory(items, directory, checked) {
+  return (items || []).map((item) => {
+    if (rowDirectory(item) !== directory) return item;
+    if (checked && item.action === 'nothing') return item;
+    return setChecked(item, checked);
+  });
+}
 
 /**
  * WinSCP's "Reverse": upload <-> download, deleteLocal <-> deleteRemote.
@@ -369,11 +384,21 @@ export function openChecklistDialog(result = {}) {
     render();
   }
 
+  function applyToDirectory(directory, checked) {
+    rows = setCheckedInDirectory(rows, directory, checked);
+    render();
+  }
+
+  function directoryItems(directory) {
+    return rows.filter((r) => rowDirectory(r) === directory);
+  }
+
   function rowElement(item) {
     const index = rows.indexOf(item);
     const cbId = uid('tx-cl-cb');
     const name = item.local?.name || item.remote?.name || item.local?.path || item.remote?.path || '';
     const size = item.action === 'download' ? item.remote?.size : item.local?.size;
+    const directory = rowDirectory(item);
 
     const checkbox = h('input', {
       type: 'checkbox', id: cbId,
@@ -440,6 +465,20 @@ export function openChecklistDialog(result = {}) {
           if (r.ok) setRow(index, r.item);
           else notify.warning(t('txClReverse'), t('txClNoReverse', t(r.reasonKey)));
         },
+      },
+      SEPARATOR,
+      {
+        labelKey: 'txClCheckDirectory',
+        icon: 'done_all',
+        disabled: !directoryItems(directory).some((r) => r.action !== 'nothing')
+          || directoryItems(directory).filter((r) => r.action !== 'nothing').every((r) => r.checked),
+        onSelect: () => applyToDirectory(directory, true),
+      },
+      {
+        labelKey: 'txClUncheckDirectory',
+        icon: 'remove_done',
+        disabled: !directoryItems(directory).some((r) => r.checked),
+        onSelect: () => applyToDirectory(directory, false),
       },
       SEPARATOR,
       {

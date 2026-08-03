@@ -128,15 +128,25 @@ function installer() {
   return out;
 }
 
-/** The outstanding units, largest first — what a successor should pick up. */
+/** The outstanding units, largest remaining weighted slice first. */
 function outstanding() {
   const text = fs.readFileSync(path.join(ROOT, 'docs', 'port-coverage.md'), 'utf8');
+  const ledger = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools', 'port-map.json'), 'utf8'));
   const rows = [];
   for (const line of text.split('\n')) {
     const m = /^\| (⬜|🚧) [\w ]+ \| `([^`]+)` \| (\w+) \| ([\d,]+) \|/.exec(line);
-    if (m) rows.push({ state: m[1] === '⬜' ? 'not started' : 'in progress', stem: m[2], area: m[3], lines: +m[4].replace(/,/g, '') });
+    if (!m) continue;
+    const state = m[1] === '⬜' ? 'not started' : 'in progress';
+    const lines = +m[4].replace(/,/g, '');
+    const mapping = ledger.units && ledger.units[m[2]];
+    const progress = state === 'in progress' && mapping && Number.isFinite(mapping.progress)
+      ? Math.min(1, Math.max(0, mapping.progress)) : 0;
+    rows.push({
+      state, stem: m[2], area: m[3], lines,
+      progress, remaining: lines * (1 - progress),
+    });
   }
-  rows.sort((a, b) => b.lines - a.lines);
+  rows.sort((a, b) => b.remaining - a.remaining || b.lines - a.lines);
   return rows;
 }
 
@@ -206,14 +216,14 @@ function buildHandoff(d) {
 
   L.push('## What a successor should pick up next');
   L.push('');
-  L.push('The largest outstanding units, by lines of the original still unported.');
+  L.push('The largest outstanding units, ranked by weighted lines still unported.');
   L.push('`in progress` means some behaviour landed and the ledger records how much;');
   L.push('`not started` means nothing is mapped to it at all.');
   L.push('');
-  L.push('| Lines | State | Unit |');
+  L.push('| Remaining lines (weighted) | State | Unit |');
   L.push('|---:|---|---|');
   for (const r of d.outstanding.slice(0, 20)) {
-    L.push(`| ${r.lines.toLocaleString()} | ${r.state} | \`${r.stem}\` |`);
+    L.push(`| ${Math.round(r.remaining).toLocaleString()} | ${r.state} | \`${r.stem}\` |`);
   }
   L.push('');
   L.push(`${d.outstanding.length} units remain outstanding in total. The full list is in`);
@@ -299,12 +309,12 @@ function buildRoadmap(d) {
   L.push('## In progress');
   L.push('');
   const wip = d.outstanding.filter((r) => r.state === 'in progress').slice(0, 12);
-  for (const r of wip) L.push(`- \`${r.stem}\` — ${r.lines.toLocaleString()} lines`);
+  for (const r of wip) L.push(`- \`${r.stem}\` — ${Math.round(r.remaining).toLocaleString()} weighted lines remaining`);
   L.push('');
   L.push('## Not started');
   L.push('');
   const todo = d.outstanding.filter((r) => r.state === 'not started').slice(0, 12);
-  for (const r of todo) L.push(`- \`${r.stem}\` — ${r.lines.toLocaleString()} lines`);
+  for (const r of todo) L.push(`- \`${r.stem}\` — ${Math.round(r.remaining).toLocaleString()} weighted lines remaining`);
   L.push('');
   if (d.issues) {
     L.push('## Tracked as issues');

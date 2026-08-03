@@ -34,6 +34,7 @@ const fs = require('fs');
 const os = require('os');
 const cp = require('child_process');
 const net = require('net');
+const putty = require('./putty');
 
 let electron = null;
 try { electron = require('electron'); } catch { /* headless tests + tooling */ }
@@ -1304,6 +1305,28 @@ function puttyArgs(session, opts) {
 }
 
 /**
+ * Validate a local PuTTY key before launching the external client. This is a
+ * metadata-only preflight: the key bytes and passphrase stay out of this
+ * module, and OpenSSH/other key formats remain PuTTY's responsibility. A
+ * missing path is also left to PuTTY, because relative paths are resolved by
+ * the child process from its own working directory.
+ */
+function preflightPuttyKey(session, program, env) {
+  const s = session || {};
+  const configured = s.publicKeyFile || s.privateKeyFile || '';
+  if (!configured || !/\.ppk$/iu.test(String(configured))) return;
+  const expanded = expandEnvironmentVariables(String(configured), env);
+  const candidate = path.isAbsolute(expanded)
+    ? expanded
+    : path.resolve(path.dirname(program), expanded);
+  if (!fs.existsSync(candidate)) return;
+  const metadata = putty.readPuttyKeyMetadata(candidate);
+  if (!metadata.ok) {
+    throw new SetupError('The PuTTY private key file could not be validated.', 'INVALID_KEY');
+  }
+}
+
+/**
  * TPuttyPasswordThread (GUITools.cpp:302-404). WinSCP hands PuTTY a named pipe
  * rather than putting the password on the command line, where every other
  * process on the machine can read it out of the process list. Node's net server
@@ -1355,6 +1378,7 @@ async function openSessionInPutty(session, opts) {
     || (o.exists ? (o.exists(program) ? program : null) : (fs.existsSync(program) ? program : null));
   if (!resolved) throw new SetupError(`File '${program}' does not exist.`, 'FILE_NOT_FOUND', program);
 
+  preflightPuttyKey(session, resolved, o.env);
   const built = puttyArgs(session, o);
   const args = [...built.args];
 

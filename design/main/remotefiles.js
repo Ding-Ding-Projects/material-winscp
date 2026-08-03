@@ -182,11 +182,11 @@ function extractShortName(path, unix) {
  */
 function extractCommonPath(files) {
   if (!files || files.length === 0) return { ok: false, path: '' };
-  let path = C.extractFilePath(String(files[0]));
+  let path = C.extractFilePath(fileListItemPath(files[0]));
   let ok = path !== '';
   if (ok) {
     for (let index = 1; index < files.length; index++) {
-      const item = String(files[index]);
+      const item = fileListItemPath(files[index]);
       while (path !== '' && item.slice(0, path.length) !== path) {
         const prevLen = path.length;
         path = C.extractFilePath(C.excludeTrailingBackslash(path));
@@ -202,6 +202,13 @@ function extractCommonPath(files) {
 
 function fileListItemPath(item) {
   if (item && typeof item === 'object') {
+    // cloneStrings mirrors TStrings.Objects as { name, file }.  The object is
+    // the authoritative path for a remote selection; its display name alone
+    // is only a basename and cannot produce a common directory.
+    if (item.file && typeof item.file === 'object' &&
+        item.file.fullFileName !== undefined) {
+      return item.file.fullFileName;
+    }
     return item.fullFileName !== undefined ? item.fullFileName : String(item.name || '');
   }
   return String(item);
@@ -245,7 +252,11 @@ function isUnixHiddenFile(fileName) {
 function absolutePath(base, path) {
   const p = String(path === undefined ? '' : path);
   if (p === '') return String(base);
-  if (p[0] === '/') return unixExcludeTrailingBackslash(p);
+  // FTP on Windows can return an absolute path in drive-qualified Unix
+  // spelling (C:/dir).  UnixIsAbsolutePath deliberately recognises that
+  // shape; AbsolutePath must honour the same contract or it turns an
+  // absolute target into base/C:/target.
+  if (unixIsAbsolutePath(p)) return unixExcludeTrailingBackslash(p);
 
   let result = unixIncludeTrailingBackslash(unixIncludeTrailingBackslash(base) + p);
   let at;
@@ -352,7 +363,9 @@ function trimVmsVersion(fileName, trim) {
 
 /** True when the name carries a VMS revision suffix, e.g. 'LOGIN.COM;3'. */
 function hasVmsVersion(fileName) {
-  return /;\d+$/.test(String(fileName)) && String(fileName).indexOf(';') > 1;
+  // A valid VMS name may be a single character (A;1).  The semicolon must
+  // not be the first character, but it may be at index 1.
+  return /;\d+$/.test(String(fileName)) && String(fileName).indexOf(';') > 0;
 }
 
 /**
@@ -1650,6 +1663,9 @@ class TRemoteFile {
 
     try {
       const linked = resolver ? resolver(this) : null;
+      if (linked && !(linked instanceof TRemoteFile)) {
+        throw new TypeError('Symlink resolver returned an invalid remote file.');
+      }
       if (linked) {
         linked.linkedByFile = this;
         linked.terminal = this.terminal;
@@ -1828,6 +1844,11 @@ class TRemoteFileList {
 
   reset() {
     this.timestamp = Date.now();
+    // A reset releases the listing.  Keeping the old back-reference makes
+    // removed entries continue to manufacture full names from a directory
+    // they no longer belong to, and leaves hidden parent entries alive across
+    // a refresh.
+    for (const file of this.files) file.directory = null;
     this.files = [];
   }
 
@@ -1911,9 +1932,10 @@ class TRemoteDirectory extends TRemoteFileList {
   }
 
   reset() {
-    if (this.parentDirectory !== null && !this._includeParentDirectory) {
-      this.parentDirectory = null;
+    if (this.parentDirectory !== null && this.parentDirectory.directory === this) {
+      this.parentDirectory.directory = null;
     }
+    this.parentDirectory = null;
     super.reset();
   }
 

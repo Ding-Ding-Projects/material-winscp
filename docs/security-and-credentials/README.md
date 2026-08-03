@@ -12,6 +12,8 @@ proof safe on disk.
 | [master-password.md](master-password.md) | The master password, its derivation, and what it does and does not cover. |
 | [file-encryption.md](file-encryption.md) | At-rest encryption of transferred files. |
 | [logging.md](logging.md) | Session logs, redaction, and what debug levels expose. |
+| [putty-interop.md](putty-interop.md) | Safe PuTTY key and session metadata import, normalization, and failure handling. |
+| [putty-key-preflight.md](putty-key-preflight.md) | Bounded PPK v2/v3 metadata validation before launching external PuTTY. |
 
 ## The three rules
 

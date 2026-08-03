@@ -43,6 +43,8 @@ const T = require('./transfer');
 const { continueReopen } = require('./terminal');
 
 const STATES = ['queued', 'active', 'paused', 'done', 'error', 'query', 'prompt'];
+const ONCE_DONE_ACTIONS = new Set(['none', 'disconnect', 'suspend', 'shutdown', 'idle']);
+const ITEM_ONCE_DONE_ACTIONS = new Set(['none', 'disconnect', 'suspend', 'shutdown']);
 
 /** Characters Windows refuses in a file name, replaced on the way down. */
 const LOCAL_INVALID_CHARS = '/\\:*?"<>|';
@@ -605,6 +607,55 @@ class TransferQueue extends EventEmitter {
     this._pump();
   }
 
+  /** Change the action requested when the whole queue becomes idle. */
+  setOnceDone(action) {
+    if (!ONCE_DONE_ACTIONS.has(action)) {
+      throw new Error(`Unknown once-done action "${action}".`);
+    }
+    this.onceDone = action;
+    this.emit('queue-updated', { enabled: this.enabled, paused: this.paused, onceDone: action });
+    return action;
+  }
+
+  /** Change one item's post-transfer action without replacing its copy params. */
+  setItemOnceDone(id, action) {
+    const item = this.get(id);
+    if (!item) return false;
+    if (!ITEM_ONCE_DONE_ACTIONS.has(action)) {
+      throw new Error(`Unknown item once-done action "${action}".`);
+    }
+    item.copyParam.onceDoneOperation = action;
+    this.emit('item-updated', this.view(item));
+    return action;
+  }
+
+  /**
+   * Requeue a failed item. Its plan, entry index and partial target remain in
+   * place so the transfer engine can resume the failed entry where possible;
+   * only attempt-local state is reset. A done or active item is never silently
+   * duplicated by this command.
+   */
+  retry(id) {
+    const item = this.get(id);
+    if (!item || item.state !== 'error') return false;
+    item.error = null;
+    item.finishedAt = 0;
+    item._cancelled = false;
+    item._reconnects = 0;
+    item._reopenStart = null;
+    item._transferAny = null;
+    item._pendingQuery = null;
+    item._pendingPrompt = null;
+    item._pendingRename = '';
+    item._pendingAppendOrResume = null;
+    item._cpsWindow = [];
+    item._lastProgressAt = 0;
+    item._gate.open();
+    this._setState(item, 'queued');
+    this._pump();
+    return true;
+  }
+
   /** Resolves once nothing is running and nothing is waiting to run. */
   idle() {
     if (this._isIdle()) return Promise.resolve();
@@ -1057,12 +1108,30 @@ class TransferQueue extends EventEmitter {
       }
     };
 
-    await walk(item.source, targetPath, {
+    const rootInfo = {
       isDir: rootIsDir,
       size: rootStat.size,
       mtime: rootStat.mtime,
       rights: rootStat.rights,
-    });
+    };
+
+    // The foreground transfer path asks AllowLocalFileTransfer / the remote
+    // equivalent about EVERY selected entry, including a single file selected
+    // outside a directory walk. The queue used to apply includeFileMask only
+    // to directory children, so `*.txt` still uploaded a directly selected
+    // `notes.log`. Keep the root directory as the traversal anchor, but apply
+    // the same mask predicate before a root file can enter the plan.
+    if (!rootIsDir && !mask.matches(src.basename(item.source), {
+      isDir: false,
+      size: rootStat.size,
+      mtime: rootStat.mtime,
+      path: item.source,
+      root: item.source,
+    })) {
+      return { entries: [], bytes: 0, files: 0 };
+    }
+
+    await walk(item.source, targetPath, rootInfo);
 
     if (cp.excludeEmptyDirectories) {
       // Drop directory entries that ended up with nothing under them. The root

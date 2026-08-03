@@ -24,13 +24,36 @@ import { naturalCompare } from './panelcolumns.js';
 function sepFor(side) { return side === 'local' ? '\\' : '/'; }
 
 function normalizeLocal(p) {
-  return String(p || '').replace(/\//g, '\\').replace(/\\+$/, (m, i) => (i <= 2 ? m : '')) || '';
+  let s = String(p || '').replace(/\//g, '\\');
+  // Win32's long-path spellings are aliases, not additional tree roots. Keep
+  // one canonical shape so an address-bar navigation can reveal the same UNC
+  // share as a path returned by fs.localDrives/localList.
+  if (/^\\\\[?.]\\UNC\\/i.test(s)) s = s.replace(/^\\\\[?.]\\UNC\\/i, '\\\\');
+  else if (/^\\\\[?.]\\[A-Za-z]:/.test(s)) s = s.replace(/^\\\\[?.]\\/i, '');
+  return s.replace(/\\+$/, (m, i) => (i <= 2 ? m : '')) || '';
+}
+
+/** The UNC server/share (or server) that owns a local tree path. */
+function uncRootOf(p) {
+  const s = normalizeLocal(p).replace(/\\+$/, '');
+  const m = s.match(/^\\\\([^\\]+)(?:\\([^\\]+))?/);
+  if (!m) return null;
+  return `\\\\${m[1]}${m[2] ? `\\${m[2]}` : ''}`;
 }
 
 function parentOf(side, p) {
   if (side === 'local') {
     const s = normalizeLocal(p);
     if (/^[a-zA-Z]:\\?$/.test(s)) return null;
+    const uncRoot = uncRootOf(s);
+    if (uncRoot) {
+      // A server/share is a root in the local tree. Returning `\\server`
+      // here makes `..` leave a valid share and produces a path the shell may
+      // not be able to enumerate.
+      if (s.toLowerCase() === uncRoot.toLowerCase()) return null;
+      const i = s.lastIndexOf('\\');
+      return i <= uncRoot.length ? uncRoot : s.slice(0, i);
+    }
     const i = s.lastIndexOf('\\');
     if (i < 0) return null;
     return i <= 2 ? s.slice(0, i + 1) : s.slice(0, i);
@@ -241,6 +264,15 @@ export function createDriveView(opts = {}) {
   async function refresh() {
     nodes.clear();
     await loadInto(null, root);
+    // The OS drive list is necessarily finite and often omits a UNC share.
+    // If the panel is already inside one, add a temporary root so setPath can
+    // expand it and keep the tree synchronized with the address bar.
+    if (side === 'local') {
+      const uncRoot = uncRootOf(currentPath);
+      if (uncRoot && !nodes.has(uncRoot)) {
+        root.appendChild(makeNode({ name: uncRoot, path: uncRoot, drive: true }, 0).el);
+      }
+    }
     if (currentPath) await setPath(currentPath);
   }
 
@@ -412,4 +444,4 @@ export function createBrowsingSync(opts = {}) {
   };
 }
 
-export { parentOf as driveParentOf, joinPath as driveJoinPath, normalizeLocal };
+export { parentOf as driveParentOf, joinPath as driveJoinPath, normalizeLocal, uncRootOf };

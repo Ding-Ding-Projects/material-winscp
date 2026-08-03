@@ -2009,6 +2009,15 @@ function classifySshError(error, ctx = {}) {
     return result;
   }
 
+  if (err.code === 'ERR_SSH_ALGORITHM_POLICY') {
+    return Object.assign(result, {
+      kind: 'policy',
+      key: 'sshAlgorithmPolicy',
+      help: 'ssh_policy',
+      retriable: false,
+    });
+  }
+
   const net = translatePuttyMessage(NETWORK_ERRORS, raw);
   if (net) {
     result.kind = 'network';

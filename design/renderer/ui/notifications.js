@@ -20,7 +20,7 @@
 
 import { h, icon, layer, uid, announce, trapFocus, focusMemory, anchorTo, appearanceTarget } from '../dom.js';
 import { t, bindText } from '../i18n.js';
-import { store, bus } from '../state.js';
+import { store, bus, persistCurrent } from '../state.js';
 import { createSearchBar, filterBy, noMatchMessage } from './searchbar.js';
 
 const KIND_META = {
@@ -35,12 +35,68 @@ const history = [];              // newest first
 const live = new Map();          // id -> toast record
 const listeners = new Set();
 let stackEl = null;
+let historyHydrated = false;
 
-function centreLimit() { return store.get('notifications.centreLimit') || 200; }
+function centreLimit() {
+  const n = Number(store.get('notifications.centreLimit'));
+  return Number.isFinite(n) ? Math.max(1, Math.min(1000, Math.floor(n))) : 200;
+}
 function defaultDuration() { return Math.max(2, Number(store.get('notifications.durationSec')) || 6) * 1000; }
 function reducedMotion() {
   return !!store.get('theme.reduceMotion')
     || (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+}
+
+function boundedProgress(value) {
+  if (value === true) return true;
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : null;
+}
+
+/**
+ * Keep only reviewable data in the persisted notification history. Action
+ * callbacks are executable renderer state and must never cross a config write
+ * or be revived after a reload.
+ */
+export function serializeNotification(record) {
+  if (!record || typeof record !== 'object' || !String(record.id || '')) return null;
+  const snapshot = {
+    id: String(record.id),
+    kind: KIND_META[record.kind] ? record.kind : 'info',
+    title: String(record.title || ''),
+    body: String(record.body || ''),
+    at: Number.isFinite(Number(record.at)) ? Number(record.at) : Date.now(),
+    read: record.read === true,
+    dismissed: record.dismissed === true,
+  };
+  if (record.progress != null) {
+    const progress = boundedProgress(record.progress);
+    if (progress != null) snapshot.progress = progress;
+  }
+  return snapshot;
+}
+
+/** Restore a safe, action-free history row from the stored preference. */
+export function restoreNotification(snapshot) {
+  const restored = serializeNotification(snapshot);
+  return restored ? { ...restored, actions: [] } : null;
+}
+
+function hydrateHistory() {
+  if (historyHydrated) return;
+  historyHydrated = true;
+  const saved = store.get('notifications.history');
+  if (!Array.isArray(saved)) return;
+  for (const snapshot of saved) {
+    const restored = restoreNotification(snapshot);
+    if (restored) history.push(restored);
+  }
+  if (history.length > centreLimit()) history.length = centreLimit();
+}
+
+function persistHistory() {
+  store.set('notifications.history', history.map(serializeNotification).filter(Boolean));
+  persistCurrent('notifications');
 }
 
 function stack() {
@@ -55,6 +111,7 @@ function stack() {
 }
 
 function emitChange() {
+  hydrateHistory();
   const unread = history.filter((n) => !n.read).length;
   bus.emit('notifications:changed', { unread, total: history.length });
   for (const fn of Array.from(listeners)) { try { fn({ unread, total: history.length, history }); } catch (err) { console.error(err); } }
@@ -62,15 +119,26 @@ function emitChange() {
 
 /** subscribe(fn) — the title bar badge and the centre both use this. */
 export function subscribeNotifications(fn) {
+  hydrateHistory();
   listeners.add(fn);
   fn({ unread: history.filter((n) => !n.read).length, total: history.length, history });
   return () => listeners.delete(fn);
 }
 
-export function notificationHistory() { return history.slice(); }
-export function unreadCount() { return history.filter((n) => !n.read).length; }
-export function markAllRead() { history.forEach((n) => { n.read = true; }); emitChange(); }
-export function clearHistory() { history.length = 0; emitChange(); }
+export function notificationHistory() { hydrateHistory(); return history.slice(); }
+export function unreadCount() { hydrateHistory(); return history.filter((n) => !n.read).length; }
+export function markAllRead() {
+  hydrateHistory();
+  history.forEach((n) => { n.read = true; });
+  persistHistory();
+  emitChange();
+}
+export function clearHistory() {
+  hydrateHistory();
+  history.length = 0;
+  persistHistory();
+  emitChange();
+}
 
 /* ------------------------------------------------------------------ */
 /* toasts                                                              */
@@ -89,6 +157,7 @@ export function clearHistory() { history.length = 0; emitChange(); }
  *   id        reuse an id to UPDATE an existing toast in place
  */
 export function show(opts = {}) {
+  hydrateHistory();
   const kind = KIND_META[opts.kind] ? opts.kind : 'info';
   const meta = KIND_META[kind];
   const id = opts.id || uid('toast');
@@ -188,6 +257,7 @@ export function show(opts = {}) {
     record.dismissed = true;
     clearTimeout(timer);
     live.delete(id);
+    persistHistory();
     el.classList.add('is-leaving');
     const finish = () => { el.remove(); bus.emit('notifications:dismissed', { id, reason }); };
     if (reducedMotion()) finish();
@@ -206,6 +276,7 @@ export function show(opts = {}) {
       bar.querySelector('.toast-progress-fill').style.width = `${Math.round(record.progress * 100)}%`;
     }
     remaining = total;
+    persistHistory();
     resume();
   }
 
@@ -218,6 +289,7 @@ export function show(opts = {}) {
 
   history.unshift(record);
   if (history.length > centreLimit()) history.length = centreLimit();
+  persistHistory();
   emitChange();
 
   announce(`${record.title}${record.body ? `. ${record.body}` : ''}`, meta.assertive);
@@ -249,6 +321,7 @@ let centre = null;
  * the app's standard search bar (and therefore the regex builder) over it.
  */
 export function openNotificationCentre(anchorEl) {
+  hydrateHistory();
   if (centre) { centre.close(); return null; }
   const restoreFocus = focusMemory();
 

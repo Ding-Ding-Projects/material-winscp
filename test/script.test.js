@@ -2144,6 +2144,22 @@ test('no /xmlgroups means no group elements', async () => {
   assert.ok(xml.includes('<failure>'));
 });
 
+test('XML group names redact credentials from /command open lines', async () => {
+  const dir = tempDir('xmllog-redaction');
+  const f = nodePath.join(dir, 'log.xml');
+  const c = new CR.BufferConsole({});
+  const code = await CR.runConsole([
+    '/command', 'open sftp://martin:hunter2@example.com -password=second-secret',
+    `/xmllog=${f}`, '/xmlgroups',
+  ], { console: c, env: {} });
+
+  assert.equal(code, CR.RESULT_ANY_ERROR, 'the fixture has no session manager, so open must fail');
+  const xml = fs.readFileSync(f, 'utf8');
+  assert.ok(xml.includes('open sftp://martin:***@example.com -password=***'));
+  assert.ok(!xml.includes('hunter2'));
+  assert.ok(!xml.includes('second-secret'));
+});
+
 test('a ScriptXmlLog that cannot be written is fatal only when it is required', () => {
   const bad = nodePath.join(tempDir('xmllog-bad'), 'sub', 'x.xml');
   const optional = new CR.ScriptXmlLog(bad, {

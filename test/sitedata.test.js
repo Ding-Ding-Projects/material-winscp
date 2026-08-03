@@ -1,6 +1,6 @@
 // sitedata.test.js — the DOM-free half of the session dialogs.
 //
-// design/renderer/ui/dialogs/{sitetree,generateurl,importsessions,siteadvanced}.js
+// design/renderer/ui/dialogs/{login,sitetree,generateurl,importsessions,siteadvanced}.js
 // each keep their pure logic above their widgets, and none of it touches
 // `document`. That is what lets this file exercise the real modules in plain
 // Node instead of a re-implementation that can quietly drift from them.
@@ -19,6 +19,7 @@ const R = (rel) => pathToFileURL(path.join(__dirname, '..', 'design', 'renderer'
 // The renderer is ES modules and this file is CommonJS, so the modules load
 // once through a shared promise every test awaits.
 const modules = (async () => ({
+  login: await import(R('ui/dialogs/login.js')),
   tree: await import(R('ui/dialogs/sitetree.js')),
   url: await import(R('ui/dialogs/generateurl.js')),
   imp: await import(R('ui/dialogs/importsessions.js')),
@@ -157,6 +158,20 @@ test('a read-only view swaps the combos for their text views', async () => {
   assert.strictEqual(vis.ftpsLabel, true);
   assert.strictEqual(vis.encryptionView, true);
   assert.strictEqual(vis.hostNameReadOnly, true);
+  assert.strictEqual(vis.editable, false);
+  assert.strictEqual(vis.basicFtpPanel, true, 'the protocol panel remains visible while its controls are disabled');
+});
+
+test('saved login forms stay read-only until the reachable Edit action', async () => {
+  const { login } = await modules;
+  const saved = login.sessionFieldVisibility(await siteOf({ protocol: 'ftp' }), {
+    sourceId: 'site-1', editing: false,
+  });
+  assert.strictEqual(saved.editable, false);
+  assert.strictEqual(saved.transferProtocolView, true);
+  assert.strictEqual(saved.encryptionView, true);
+  assert.strictEqual(login.sessionFormEditable({ sourceId: 'site-1', editing: true }), true);
+  assert.strictEqual(login.sessionFormEditable({ sourceId: null, editing: false }), true);
 });
 
 test('isAnonymous recognises WinSCP’s anonymous FTP pair, case-insensitively', async () => {
@@ -683,6 +698,22 @@ test('parsePuttyRegistry also accepts KiTTY’s key path', async () => {
   assert.strictEqual(found.length, 1);
   assert.strictEqual(found[0].site.hostName, 'kitty.example');
   assert.strictEqual(found[0].source, 'kitty');
+});
+
+test('decodePuttySessionName matches WinSCP UTF-8 percent decoding', async () => {
+  const { imp } = await modules;
+  assert.strictEqual(
+    imp.decodePuttySessionName('%E9%A6%99%E6%B8%AF%20%2B%20Prod+1'),
+    '香港 + Prod 1',
+  );
+
+  const reg = [
+    String.raw`[HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions\%E9%A6%99%E6%B8%AF%20%2B%20Prod+1]`,
+    '"HostName"="example.test"',
+  ].join('\r\n');
+  const [entry] = imp.parsePuttyRegistry(reg);
+  assert.strictEqual(entry.site.name, '香港 + Prod 1');
+  assert.strictEqual(imp.decodePuttySessionName('%E9%A6%99%E6%B8%AF%ZZ'), '香港%ZZ');
 });
 
 test('decodeRegValue handles strings, dwords and hex(2) expandable strings', async () => {

@@ -38,6 +38,17 @@ Dismissed notifications remain reviewable. The centre is a tab, with:
 - Actions that are still valid remain available from the history; ones that have
   expired are shown disabled with the reason.
 
+### History persistence
+
+The centre stores its bounded history in the existing `notifications`
+configuration object, so a renderer reload does not erase a failure the user
+has not reviewed yet. Each row is restored as review data: kind, title, body,
+timestamp, read state and progress are retained, while action callbacks are
+deliberately discarded because executable renderer functions cannot safely be
+written to configuration or revived after a reload. A restored row therefore
+has no stale Retry/Undo action; the live toast may still offer its action for
+the current session.
+
 ## Configuration
 
 | Option | Default | Meaning |
@@ -55,7 +66,7 @@ Notification appearance is editable per element like everything else, through
 
 | Situation | What the user sees | Recoverable |
 | --- | --- | --- |
-| Many notifications at once (a batch failing file by file) | Coalesced into one with a count and a details action, rather than 400 toasts. | n/a |
+| Many notifications at once (a batch failing file by file) | The centre keeps a bounded, persisted history; the current implementation does not revive executable actions after reload. | Yes |
 | A notification appears while a modal is open | Toasts render above the scrim but do not take focus. The modal keeps focus, because it is a decision in progress. | n/a |
 | The app is minimized | Notifications queue and are shown on restore; the centre has them regardless. Nothing important is lost to being minimized. | Yes |
 | An action is invoked after it expires (Undo, hours later) | Disabled with the reason, not silently failing. | n/a |
@@ -84,6 +95,8 @@ Notification appearance is editable per element like everything else, through
 - Stacking, bounding and coalescing are tested with synthetic bursts.
 - Live-region politeness is asserted per category, with no duplicate
   announcements.
+- Persisted history is sanitized and restored with malformed rows ignored;
+  executable action callbacks never enter configuration.
 - The centre's search, date filter and kind filter are tested for composition —
   they must compose rather than override one another — and for an honest
   no-match state.

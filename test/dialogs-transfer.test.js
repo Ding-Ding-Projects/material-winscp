@@ -556,6 +556,25 @@ test('setChecked leaves the action alone', () => {
   assert.equal(it.checked, true);
 });
 
+test('directory-scoped check and uncheck preserve other directories and actions', () => {
+  const rows = [
+    item({ checked: false, local: { ...item().local, directory: '/local/a' } }),
+    item({ action: 'download', checked: false, reason: 'remote-newer',
+      local: { ...item().local, directory: '/local/a', exists: true },
+      remote: { ...item().remote, directory: '/remote/a', exists: true, size: 80 } }),
+    item({ checked: false, local: { ...item().local, directory: '/local/b' } }),
+    item({ action: 'nothing', checked: false, local: { ...item().local, directory: '/local/a' } }),
+  ];
+
+  const checked = CL.setCheckedInDirectory(rows, '/local/a', true);
+  assert.deepEqual(checked.map((r) => r.checked), [true, true, false, false]);
+  assert.deepEqual(checked.map((r) => r.action), rows.map((r) => r.action));
+
+  const unchecked = CL.setCheckedInDirectory(checked, '/local/a', false);
+  assert.deepEqual(unchecked.map((r) => r.checked), [false, false, false, false]);
+  assert.deepEqual(unchecked[2], checked[2], 'a different directory is untouched');
+});
+
 // ---------------------------------------------------------------------------
 // what will happen — the statement above the OK button
 // ---------------------------------------------------------------------------
@@ -744,12 +763,15 @@ test('each refusal names a real message key', () => {
   assert.equal(SY.syncCombinationError(SY.SYNC_DEFAULTS), '');
 });
 
-test('the compare request carries only fields ipc forwards', () => {
-  const req = SY.compareRequest({ ...SY.SYNC_DEFAULTS, bySize: true, fileMask: '*.txt' },
+test('the compare request carries destructive and creation policy through ipc', () => {
+  const req = SY.compareRequest({ ...SY.SYNC_DEFAULTS, bySize: true, fileMask: '*.txt',
+    deleteFiles: true, existingOnly: true },
     { sessionId: 's1', localPath: '/l', remotePath: '/r' });
   assert.equal(req.sessionId, 's1');
   assert.equal(req.criteria, 'either');
   assert.equal(req.fileMask, '*.txt');
+  assert.equal(req.deleteFiles, true, 'the engine must be allowed to include deletion rows');
+  assert.equal(req.existingOnly, true, 'the engine must be allowed to suppress new-file rows');
   assert.equal(req.copyParam.preserveTime, true);
 });
 

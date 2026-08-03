@@ -188,6 +188,16 @@ const HANDLERS = {
     return win.webContents.executeJavaScript(m.src, true);
   },
 
+  /** Resize the real renderer viewport; window.resizeTo is ignored in this
+   * hidden frameless harness window, so tests must use the BrowserWindow API. */
+  resize(m) {
+    const width = Math.max(1, Math.floor(Number(m.width) || 1));
+    const height = Math.max(1, Math.floor(Number(m.height) || 1));
+    state.main.setContentSize(width, height);
+    const [actualWidth, actualHeight] = state.main.getContentSize();
+    return { width: actualWidth, height: actualHeight };
+  },
+
   /** Take everything collected so far and start a fresh window. */
   async events() {
     return state.main.webContents.executeJavaScript(

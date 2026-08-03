@@ -108,6 +108,8 @@ test('absolutePath collapses .. and ., and stops at the root', () => {
   // The root has no parent; asking for one lands back on the root.
   assert.equal(R.absolutePath('/', '../x'), '/');
   assert.equal(R.absolutePath('/a/b/c', '../../d'), '/a/d');
+  // FTP on Windows uses Unix separators in drive-qualified absolute paths.
+  assert.equal(R.absolutePath('C:/home/u', 'C:/other/file'), 'C:/other/file');
 });
 
 test('extractCommonPath finds the deepest shared directory, or fails', () => {
@@ -121,6 +123,20 @@ test('extractCommonPath finds the deepest shared directory, or fails', () => {
   assert.deepEqual(
     R.unixExtractCommonPath([{ fullFileName: '/a/b/x' }, { fullFileName: '/a/b/y' }]),
     { ok: true, path: '/a/b/' });
+  const remoteList = new R.TRemoteFileList();
+  remoteList.directory = '/a/b';
+  const remoteX = fileNamed('x', false, 1);
+  const remoteY = fileNamed('y', false, 1);
+  remoteList.addFile(remoteX);
+  remoteList.addFile(remoteY);
+  const cloned = R.TRemoteFileList.cloneStrings([
+    { name: 'x', file: remoteX }, { name: 'y', file: remoteY },
+  ]);
+  assert.deepEqual(R.unixExtractCommonPath(cloned), { ok: true, path: '/a/b/' });
+  assert.deepEqual(R.extractCommonPath([
+    { fullFileName: 'C:' + BS + 'a' + BS + 'x' },
+    { fullFileName: 'C:' + BS + 'a' + BS + 'y' },
+  ]), { ok: true, path: 'C:' + BS + 'a' + BS });
   assert.deepEqual(R.extractCommonPath(['C:' + BS + 'a' + BS + 'x', 'C:' + BS + 'a' + BS + 'y']),
     { ok: true, path: 'C:' + BS + 'a' + BS });
 });
@@ -147,6 +163,7 @@ test('VMS revision suffixes are trimmed only when the session asks', () => {
   // A leading semicolon is not a version — position must be past the first char.
   assert.equal(R.trimVmsVersion(';3', true), ';3');
   assert.equal(R.hasVmsVersion('LOGIN.COM;3'), true);
+  assert.equal(R.hasVmsVersion('A;1'), true);
   assert.equal(R.hasVmsVersion('LOGIN.COM'), false);
 });
 
@@ -762,6 +779,20 @@ test('symlink resolution reports a broken link rather than throwing', () => {
   assert.equal(link.brokenLink, false);
 });
 
+test('a malformed symlink resolver result is refused as a broken link', () => {
+  const link = new R.TRemoteFile();
+  link.terminal = { resolvingSymlinks: true };
+  link.type = 'l';
+  link.fileName = 'bad-link';
+  link.linkTo = '/target';
+  const errors = [];
+  link.complete(() => ({ type: 'dir' }), (error) => errors.push(error));
+  assert.equal(link.linkedFile, null);
+  assert.equal(link.brokenLink, true);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0].message, /invalid remote file/);
+});
+
 test('a symlink loop is detected and marks the whole chain', () => {
   const terminal = { userName: 'martin', resolvingSymlinks: true };
   const first = new R.TRemoteFile();
@@ -1097,6 +1128,29 @@ test('a directory drops the . entry and can hide the .. entry', () => {
   const next = new R.TRemoteDirectory(terminal, dir);
   assert.equal(next.includeParentDirectory, false);
   assert.equal(next.loaded, false, 'an unread directory is not loaded');
+});
+
+test('reset detaches old entries and forgets a hidden parent', () => {
+  const dir = new R.TRemoteDirectory({ userName: 'martin', active: true });
+  dir.directory = '/home/martin';
+  const parent = new R.TRemoteParentDirectory();
+  const child = fileNamed('child.txt', false, 1);
+  dir.addFile(parent);
+  dir.addFile(child);
+  dir.includeParentDirectory = false;
+  dir.reset();
+  assert.equal(dir.count, 0);
+  assert.equal(dir.parentDirectory, null);
+  assert.equal(parent.directory, null);
+  assert.equal(child.directory, null);
+  assert.equal(child.haveFullFileName, false);
+
+  // A fresh parent can now be added without the old hidden entry reappearing.
+  dir.includeParentDirectory = true;
+  const freshParent = new R.TRemoteParentDirectory();
+  dir.addFile(freshParent);
+  assert.equal(dir.parentDirectory, freshParent);
+  assert.equal(dir.count, 1);
 });
 
 test('files added to a directory inherit its terminal', () => {

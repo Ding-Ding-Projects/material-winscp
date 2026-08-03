@@ -12,6 +12,9 @@ files any of it applies to.
 | [custom-commands.md](custom-commands.md) | Command patterns, argument expansion, quoting and extensions. |
 | [file-masks.md](file-masks.md) | The WinSCP mask language — wildcards, exclusion, size and time filters. |
 | [console.md](console.md) | The remote terminal, and which protocols can offer one. |
+| [script-runner.md](script-runner.md) | Batch scripting, `/script` and `/command` execution, exit status, and secure XML output. |
+| [command-line.md](command-line.md) | The `/` and `-` switch parser shared by startup and second-instance launches. |
+| [command-palette.md](command-palette.md) | The persisted keyboard palette: every registered command, Preferences destinations, regex search and exact setting teleport. |
 
 ## Postman
 

@@ -27,6 +27,7 @@ const fs = require('fs');
 const { EventEmitter } = require('events');
 
 const { SessionLog } = require('./logging');
+const { SessionInfo } = require('./sessioninfo');
 
 /** Protocol name -> adapter module, resolved lazily so a session that never
  *  uses S3 does not pay for loading it (and a missing module is reported when
@@ -98,6 +99,7 @@ class Session extends EventEmitter {
     /** How the session talks to the outside world. Injected so this class is
      *  testable without Electron. */
     this._send = d.emit || (() => {});
+    this._now = d.now || (() => Date.now());
 
     this.state = {
       status: 'closed',            // closed | connecting | connected | reconnecting | failed
@@ -132,6 +134,10 @@ class Session extends EventEmitter {
     this._cache = new Map();       // remote dir -> { at, entries }
     this._reconnect = { attempts: 0, timer: null, wanted: false, startedAt: 0 };
     this._closing = false;
+    this._connectPromise = null;
+    this._connectGeneration = 0;
+    this._promptRefused = false;
+    this._promptCancelled = false;
   }
 
   // ------------------------------------------------------------ identity
@@ -141,7 +147,20 @@ class Session extends EventEmitter {
   get connected() { return !!(this.adapter && this.adapter.connected); }
 
   info() {
+    const canonical = new SessionInfo({
+      session: this.data,
+      runtime: {
+        id: this.id,
+        siteId: this.data.id || '',
+        sessionName: this.name,
+        state: this.state,
+        connected: this.connected,
+        adapter: this.adapter,
+        loginTime: this.state.openedAt || 0,
+      },
+    }).toJSON();
     return {
+      ...canonical,
       id: this.id,
       // A stored site's id is stable across sessions; the runtime session id
       // is not. The renderer needs both so a connected tab can be restored and
@@ -262,6 +281,7 @@ class Session extends EventEmitter {
 
     // answer: { accept: boolean, remember: boolean } — anything else is a no.
     if (!answer || !answer.accept) {
+      this._promptRefused = true;
       this.log.add('error', `The host key for ${hostPort} was rejected.`);
       return false;
     }
@@ -302,6 +322,7 @@ class Session extends EventEmitter {
       pem: cert.pem || '',
     });
     if (!answer || !answer.accept) {
+      this._promptRefused = true;
       this.log.add('error', `The certificate for ${hostPort} was rejected.`);
       return false;
     }
@@ -345,6 +366,7 @@ class Session extends EventEmitter {
     });
 
     if (!answer || !Array.isArray(answer.results)) {
+      this._promptCancelled = true;
       this.log.add('error', 'The credential prompt was cancelled.');
       return null;
     }
@@ -360,7 +382,23 @@ class Session extends EventEmitter {
   // ------------------------------------------------------------- connect
   async connect() {
     if (this.connected) return this.info();
+    if (this._connectPromise) return this._connectPromise;
+    const promise = this._connect();
+    this._connectPromise = promise;
+    try {
+      return await promise;
+    } finally {
+      if (this._connectPromise === promise) this._connectPromise = null;
+    }
+  }
+
+  async _connect() {
+    if (this.connected) return this.info();
+    const generation = ++this._connectGeneration;
     this._closing = false;
+    this._promptRefused = false;
+    this._promptCancelled = false;
+    if (this._reconnect.timer) { clearTimeout(this._reconnect.timer); this._reconnect.timer = null; }
     this.state.status = 'connecting';
     this.state.lastError = null;
     this._emitState();
@@ -368,6 +406,7 @@ class Session extends EventEmitter {
     this.log.startupInfo({ version: (this.config && this.config.appVersion) || '' });
     this.log.add('info', `Connecting to ${this.hostPort} over ${this.protocol.toUpperCase()}…`);
 
+    let adapter = null;
     try {
       const mod = requireAdapterModule(this.protocol);
       const Cls = adapterClassOf(mod, this.protocol);
@@ -377,24 +416,42 @@ class Session extends EventEmitter {
       // ask a human a question. Handing it this Session object instead left
       // every adapter reading `hostName` off the wrong shape and left every
       // security question with nobody to ask.
-      this.adapter = new Cls(this.data, this._adapterCallbacks());
-      this._wireAdapter(this.adapter);
+      adapter = new Cls(this.data, this._adapterCallbacks());
+      this.adapter = adapter;
+      this._wireAdapter(adapter);
 
-      await this.adapter.connect(this.data);
-      this.adapter.connected = true;
+      await adapter.connect(this.data);
+      if (generation !== this._connectGeneration || this._closing || this.adapter !== adapter) {
+        try { await adapter.disconnect(); } catch { /* the caller is already closing */ }
+        adapter.removeAllListeners();
+        if (this.adapter === adapter) this.adapter = null;
+        const cancelled = new Error('The connection attempt was cancelled.');
+        cancelled.code = 'CONNECT_CANCELLED';
+        throw cancelled;
+      }
+      adapter.connected = true;
 
       this.state.status = 'connected';
-      this.state.openedAt = Date.now();
+      this.state.openedAt = this._now();
       this._reconnect.attempts = 0;
+      this._reconnect.startedAt = 0;
       if (!this.state.remotePath) {
         this.state.remotePath = this.data.remoteDirectory ||
-          (this.config && this.config.prefs.defaultDirIsHome === false ? '/' : (this.adapter.home || '/'));
+          (this.config && this.config.prefs.defaultDirIsHome === false ? '/' : (adapter.home || '/'));
       }
-      this.log.add('info', `Connected. ${this.adapter.protocolName} — ${describeServer(this.adapter.serverInfo)}`);
+      this.log.add('info', `Connected. ${adapter.protocolName} — ${describeServer(adapter.serverInfo)}`);
       this.log.actions.record('cwd', { path: this.state.remotePath });
       this._emitState();
       return this.info();
     } catch (e) {
+      if (generation !== this._connectGeneration || this._closing) {
+        if (adapter && this.adapter === adapter) {
+          try { await adapter.disconnect(); } catch { /* best effort during cancellation */ }
+          adapter.removeAllListeners();
+          this.adapter = null;
+        }
+        throw e;
+      }
       this.state.status = 'failed';
       this.state.lastError = { message: e.message, code: e.code || 'CONNECT_FAILED' };
       this.log.exception(e);
@@ -412,7 +469,19 @@ class Session extends EventEmitter {
           body: e.ftpSuggestion.message,
         });
       }
-      this._scheduleReconnect(e);
+      if (adapter && this.adapter === adapter) {
+        adapter.removeAllListeners();
+        try { await adapter.disconnect(); } catch { /* the failed attempt is already reported */ }
+        this.adapter = null;
+      }
+      const promptRefused = this._promptRefused || this._promptCancelled;
+      if (promptRefused) {
+        e.promptRefused = true;
+        this._reconnect.startedAt = 0;
+        this.log.add('error', 'Automatic reconnect stopped because the security prompt was refused or cancelled.');
+      } else {
+        this._scheduleReconnect(e);
+      }
       throw e;
     }
   }
@@ -512,14 +581,15 @@ class Session extends EventEmitter {
     });
     a.on('banner', (text) => this.banner(text));
     a.on('progress', (p) => this._send('event:progress', { sessionId: this.id, ...p }));
-    a.on('close', (reason) => this._onAdapterClosed(reason));
+    a.on('close', (reason) => this._onAdapterClosed(a, reason));
     a.on('error', (e) => {
       this.log.exception(e);
       this._send('event:session', { sessionId: this.id, type: 'error', message: e.message });
     });
   }
 
-  _onAdapterClosed(reason) {
+  _onAdapterClosed(adapter, reason) {
+    if (adapter !== this.adapter) return;
     if (this.adapter) this.adapter.connected = false;
     if (this._closing) return;
     this.state.status = 'closed';
@@ -538,8 +608,14 @@ class Session extends EventEmitter {
    */
   _scheduleReconnect(cause) {
     const sec = (this.config && this.config.prefs.security) || {};
-    const delay = Number(sec.sessionReopenAuto) || 0;
-    if (!delay || this._closing || !this._reconnectWanted()) return;
+    const baseDelay = Number(sec.sessionReopenAuto) || 0;
+    if (!baseDelay || this._closing || !this._reconnectWanted()) return;
+    if (this._reconnect.timer) return;
+
+    if (this._promptRefused || this._promptCancelled || (cause && cause.promptRefused)) {
+      this.log.add('error', 'Not reconnecting after a refused or cancelled security prompt.');
+      return;
+    }
 
     // A REJECTED CREDENTIAL is not a dropped connection, and retrying it on a
     // timer is actively harmful: the same wrong password goes back to the same
@@ -557,15 +633,24 @@ class Session extends EventEmitter {
       return;
     }
 
-    if (!this._reconnect.startedAt) this._reconnect.startedAt = Date.now();
+    const now = this._now();
+    if (!this._reconnect.startedAt) this._reconnect.startedAt = now;
     const budget = Number(sec.sessionReopenTimeout) || 0;
-    if (budget && Date.now() - this._reconnect.startedAt > budget) {
+    const elapsed = now - this._reconnect.startedAt;
+    if (budget && elapsed >= budget) {
       this.log.add('error', 'Giving up reconnecting: the reconnect timeout elapsed.');
       this._reconnect.startedAt = 0;
       return;
     }
 
-    this._reconnect.attempts++;
+    const attempt = this._reconnect.attempts + 1;
+    const delay = Math.min(baseDelay * (2 ** Math.min(attempt - 1, 5)), 60000);
+    if (budget && elapsed + delay >= budget) {
+      this.log.add('error', 'Giving up reconnecting: the next backoff would exceed the reconnect timeout.');
+      this._reconnect.startedAt = 0;
+      return;
+    }
+    this._reconnect.attempts = attempt;
     this.state.status = 'reconnecting';
     this._emitState();
     this.log.add('info', `Reconnecting in ${Math.round(delay / 1000)}s (attempt ${this._reconnect.attempts})… — ${cause ? cause.message : ''}`);
@@ -594,7 +679,9 @@ class Session extends EventEmitter {
     this._reconnect.startedAt = 0;
     this._passwordUsed = false;
     this._passphraseUsed = false;
+    const inFlight = this._connectPromise;
     await this.disconnect({ keepOpen: true });
+    if (inFlight) await inFlight.catch(() => undefined);
     return this.connect();
   }
 
@@ -614,6 +701,8 @@ class Session extends EventEmitter {
   async disconnect(options) {
     const o = options || {};
     this._closing = true;
+    this._connectGeneration++;
+    if (this._connectPromise) this._connectPromise.catch(() => undefined);
     if (this._reconnect.timer) { clearTimeout(this._reconnect.timer); this._reconnect.timer = null; }
     this._cancelPrompts('disconnected');
     if (this.adapter) {
@@ -622,6 +711,9 @@ class Session extends EventEmitter {
       this.adapter = null;
     }
     this._cache.clear();
+    if (this.__terminal && typeof this.__terminal.clearCaches === 'function') {
+      this.__terminal.clearCaches();
+    }
     this.state.status = 'closed';
     this.log.add('info', 'Session closed.');
     this._emitState();
@@ -645,21 +737,29 @@ class Session extends EventEmitter {
     const useCache = this.data.cacheDirectories !== false && !o.refresh;
     if (useCache) {
       const hit = this._cache.get(p);
-      if (hit) { this.log.debug(`Directory listing for ${p} served from the cache.`); return hit.entries; }
+      if (hit) { this.log.debug(`Directory listing for ${p} served from the cache.`); return hit.entries.slice(); }
     }
     const entries = await this.adapter.list(p);
-    if (this.data.cacheDirectories !== false) this._cache.set(p, { at: Date.now(), entries });
+    if (this.data.cacheDirectories !== false) this._cache.set(p, { at: this._now(), entries: entries.slice() });
     this.log.actions.record('ls', { destination: p });
-    return entries;
+    return entries.slice();
   }
 
   /** After a write, the affected directory's cached listing is a lie. */
-  invalidate(remotePath) {
+  invalidate(remotePath, options) {
+    const o = options || {};
     if (!remotePath) { this._cache.clear(); return; }
     if (!this.adapter) { this._cache.clear(); return; }
     const p = this.adapter.normalize(remotePath);
     this._cache.delete(p);
     this._cache.delete(this.adapter.dirname(p));
+    if (o.subDirs) {
+      const sep = this.adapter.sep || '/';
+      const prefix = p === sep ? p : `${p}${sep}`;
+      for (const key of [...this._cache.keys()]) {
+        if (key === p || key.startsWith(prefix)) this._cache.delete(key);
+      }
+    }
   }
 
   clearCache() { this._cache.clear(); }
@@ -941,7 +1041,13 @@ class SessionManager extends EventEmitter {
     }
     const s = new Session(data, { config: this.config, emit: this._send });
     this.sessions.set(s.id, s);
-    s.once('closed', () => this.sessions.delete(s.id));
+    s.once('closed', () => {
+      this.sessions.delete(s.id);
+      if (this._activeId === s.id) {
+        this._activeId = '';
+        this.emit('active', this.active());
+      }
+    });
     this.emit('opened', s);
     if (o.connect !== false) {
       try {
@@ -950,7 +1056,10 @@ class SessionManager extends EventEmitter {
         // Keep the session object so the UI can show the error and offer
         // Reconnect; a failed connect is not a reason to lose the tab.
         this.emit('failed', s, e);
-        if (o.closeOnFailure) { this.sessions.delete(s.id); throw e; }
+        if (o.closeOnFailure) {
+          await s.disconnect();
+          throw e;
+        }
         throw e;
       }
     }
@@ -985,8 +1094,16 @@ class SessionManager extends EventEmitter {
   /** Follow the renderer's tab selection. An unknown id clears the choice. */
   setActive(id) {
     const key = id === undefined || id === null ? '' : String(id);
-    this._activeId = this.sessions.has(key) ? key : '';
-    if (key && this._activeId) this.emit('active', this.sessions.get(key));
+    if (!key) {
+      this._activeId = '';
+      this.emit('active', this.active());
+      return this._activeId;
+    }
+    // A late renderer update must never redirect a command to the fallback
+    // first session. Keep the currently owned session when the id is stale.
+    if (!this.sessions.has(key)) return this._activeId;
+    this._activeId = key;
+    this.emit('active', this.sessions.get(key));
     return this._activeId;
   }
 
@@ -1012,6 +1129,7 @@ class SessionManager extends EventEmitter {
     const all = [...this.sessions.values()];
     await Promise.all(all.map((s) => s.disconnect().catch(() => undefined)));
     this.sessions.clear();
+    this._activeId = '';
   }
 
   /** A workspace is the open sessions plus where each one is looking. */

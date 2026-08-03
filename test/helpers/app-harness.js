@@ -242,6 +242,9 @@ class AppUnderTest {
   /** Read-only inspection of a page (DOM assertions). */
   evaluate(src, target) { return this._send('eval', { src, target: target || 'main' }); }
 
+  /** Set the real BrowserWindow content viewport for narrow-layout smoke tests. */
+  resize(width, height) { return this._send('resize', { width, height }); }
+
   /**
    * Wait until the renderer has actually built its interface.
    *

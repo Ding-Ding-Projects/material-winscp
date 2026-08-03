@@ -421,6 +421,26 @@ test('recursive directory upload, correct ordering and mask filtering', async ()
   assert.ok(order.indexOf('file:/r/tree/a.txt') < order.indexOf('dir:/r/tree/sub'));
 });
 
+test('a directly selected file obeys the include mask like the foreground path', async () => {
+  const { local, remote } = makePair();
+  local.put('/l/notes.log', 'do not send');
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'upload',
+    source: '/l/notes.log',
+    target: '/r/notes.log',
+    sourceAdapter: local,
+    targetAdapter: remote,
+    copyParam: { includeFileMask: '*.txt' },
+  });
+  await q.idle();
+
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.strictEqual(item._plan.files, 0, 'the masked root file is not planned');
+  assert.strictEqual(remote.read('/r/notes.log'), null, 'the masked root file is not transferred');
+});
+
 // ---------------------------------------------------------------------------
 // excludeEmptyDirectories (cpNoEmptyDirectories)
 // ---------------------------------------------------------------------------

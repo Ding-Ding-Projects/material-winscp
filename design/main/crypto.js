@@ -16,51 +16,106 @@ let safeStorage = null;
 try { ({ safeStorage } = require('electron')); } catch { /* tests run headless */ }
 
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 32 };
+const MASTER_PROBE = 'winscp-material-master-probe';
+const AES_GCM_IV_LENGTH = 12;
+const AES_GCM_TAG_LENGTH = 16;
+const AES_GCM_OVERHEAD = AES_GCM_IV_LENGTH + AES_GCM_TAG_LENGTH;
 
 /** Session-scoped master key; null until the master password is entered. */
 let masterKey = null;
 
 function hasMaster() { return masterKey !== null; }
-function lockMaster() { masterKey = null; }
+
+/** Clear key material before dropping the last JavaScript reference to it. */
+function wipe(buffer) {
+  if (Buffer.isBuffer(buffer)) buffer.fill(0);
+}
+
+function lockMaster() {
+  wipe(masterKey);
+  masterKey = null;
+}
+
+function decodeSalt(saltB64) {
+  if (typeof saltB64 !== 'string' || !/^[A-Za-z0-9+/]{22}==$/u.test(saltB64)) {
+    throw new Error('Master-password verifier has an invalid salt.');
+  }
+  const salt = Buffer.from(saltB64, 'base64');
+  if (salt.length !== 16) throw new Error('Master-password verifier has an invalid salt.');
+  return salt;
+}
 
 function deriveKey(password, saltB64) {
-  const salt = Buffer.from(saltB64, 'base64');
-  return crypto.scryptSync(Buffer.from(password, 'utf8'), salt, SCRYPT.keylen, {
-    N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p, maxmem: 128 * SCRYPT.N * SCRYPT.r * 2,
-  });
+  const salt = decodeSalt(saltB64);
+  const passwordBytes = Buffer.from(String(password), 'utf8');
+  try {
+    return crypto.scryptSync(passwordBytes, salt, SCRYPT.keylen, {
+      N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p, maxmem: 128 * SCRYPT.N * SCRYPT.r * 2,
+    });
+  } finally {
+    wipe(passwordBytes);
+    wipe(salt);
+  }
 }
 
 /** Create the verifier blob stored in config so a master password can be checked. */
 function makeVerifier(password) {
   const salt = crypto.randomBytes(16);
   const key = deriveKey(password, salt.toString('base64'));
-  const probe = encryptWithKey(key, 'winscp-material-master-probe');
-  return { salt: salt.toString('base64'), probe };
+  try {
+    return { salt: salt.toString('base64'), probe: encryptWithKey(key, MASTER_PROBE) };
+  } finally {
+    wipe(key);
+    wipe(salt);
+  }
 }
 
 /** Verify and, on success, unlock the session master key. */
 function unlockMaster(password, verifier) {
   if (!verifier || !verifier.salt) return false;
-  const key = deriveKey(password, verifier.salt);
+  let key;
   try {
-    if (decryptWithKey(key, verifier.probe) !== 'winscp-material-master-probe') return false;
-  } catch { return false; }
+    key = deriveKey(password, verifier.salt);
+  } catch {
+    return false;
+  }
+  let accepted = false;
+  try {
+    accepted = decryptWithKey(key, verifier.probe) === MASTER_PROBE;
+  } catch { accepted = false; }
+  if (!accepted) {
+    wipe(key);
+    return false;
+  }
+  wipe(masterKey);
   masterKey = key;
   return true;
 }
 
 function encryptWithKey(key, plain) {
-  const iv = crypto.randomBytes(12);
+  if (!Buffer.isBuffer(key) || key.length !== 32) {
+    throw new Error('AES-GCM requires a 32-byte key.');
+  }
+  const input = Buffer.isBuffer(plain) ? Buffer.from(plain) : Buffer.from(String(plain), 'utf8');
+  const iv = crypto.randomBytes(AES_GCM_IV_LENGTH);
   const c = crypto.createCipheriv('aes-256-gcm', key, iv);
-  const ct = Buffer.concat([c.update(Buffer.from(plain, 'utf8')), c.final()]);
-  return Buffer.concat([iv, c.getAuthTag(), ct]).toString('base64');
+  try {
+    const ct = Buffer.concat([c.update(input), c.final()]);
+    return Buffer.concat([iv, c.getAuthTag(), ct]).toString('base64');
+  } finally {
+    wipe(input);
+  }
 }
 
 function decryptWithKey(key, blob) {
+  if (!Buffer.isBuffer(key) || key.length !== 32) {
+    throw new Error('AES-GCM requires a 32-byte key.');
+  }
   const buf = Buffer.from(blob, 'base64');
-  const d = crypto.createDecipheriv('aes-256-gcm', key, buf.subarray(0, 12));
-  d.setAuthTag(buf.subarray(12, 28));
-  return Buffer.concat([d.update(buf.subarray(28)), d.final()]).toString('utf8');
+  if (buf.length < AES_GCM_OVERHEAD) throw new Error('AES-GCM envelope is truncated.');
+  const d = crypto.createDecipheriv('aes-256-gcm', key, buf.subarray(0, AES_GCM_IV_LENGTH));
+  d.setAuthTag(buf.subarray(AES_GCM_IV_LENGTH, AES_GCM_OVERHEAD));
+  return Buffer.concat([d.update(buf.subarray(AES_GCM_OVERHEAD)), d.final()]).toString('utf8');
 }
 
 /**
@@ -99,9 +154,16 @@ function needsMaster(stored) { return typeof stored === 'string' && stored.start
 
 /** Available for the "encrypt files" site option (WinSCP file encryption). */
 function fileKeyFromPassphrase(passphrase, salt) {
-  return crypto.scryptSync(Buffer.from(passphrase, 'utf8'), Buffer.from(salt), 32, {
-    N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p, maxmem: 128 * SCRYPT.N * SCRYPT.r * 2,
-  });
+  const passwordBytes = Buffer.from(String(passphrase), 'utf8');
+  const saltBytes = Buffer.from(salt);
+  try {
+    return crypto.scryptSync(passwordBytes, saltBytes, 32, {
+      N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p, maxmem: 128 * SCRYPT.N * SCRYPT.r * 2,
+    });
+  } finally {
+    wipe(passwordBytes);
+    wipe(saltBytes);
+  }
 }
 
 module.exports = {

@@ -268,6 +268,76 @@ export function layer(kind = 'popover') {
 /* ------------------------------------------------------------------ */
 
 /**
+ * Calculate a viewport-safe anchored surface layout from measured boxes.
+ *
+ * Keeping this arithmetic separate from the DOM measurement makes the edge
+ * cases testable without pretending that a headless DOM has real layout.  In
+ * particular, a surface must never grow past the space available on its
+ * chosen side merely because the viewport is smaller than an arbitrary
+ * minimum height.
+ */
+export function overlayLayout({
+  anchor, width, height, viewportWidth, viewportHeight,
+  placement = 'bottom-start', gap = 6, padding = 8,
+} = {}) {
+  const vw = Math.max(1, Number(viewportWidth) || 1);
+  const vh = Math.max(1, Number(viewportHeight) || 1);
+  const a = {
+    left: Number(anchor?.left) || 0,
+    right: Number(anchor?.right) || 0,
+    top: Number(anchor?.top) || 0,
+    bottom: Number(anchor?.bottom) || 0,
+    width: Math.max(0, Number(anchor?.width) || 0),
+    height: Math.max(0, Number(anchor?.height) || 0),
+  };
+  const w = Math.min(Math.max(1, Number(width) || 1), Math.max(1, vw - 2 * padding));
+  const requestedHeight = Math.max(1, Number(height) || 1);
+  let [side, align] = String(placement).split('-');
+  if (!['top', 'bottom', 'left', 'right'].includes(side)) side = 'bottom';
+  // An anchor can be outside the visible viewport when a window is resized or
+  // when its scroll container moves.  Do not mistake the distance to that
+  // off-screen anchor for usable surface space: the surface still has only the
+  // viewport's interior to paint in.
+  const usableHeight = Math.max(1, vh - 2 * padding);
+  const usableWidth = Math.max(1, vw - 2 * padding);
+  const spaces = {
+    bottom: Math.min(usableHeight, vh - a.bottom - gap - padding),
+    top: Math.min(usableHeight, a.top - gap - padding),
+    right: Math.min(usableWidth, vw - a.right - gap - padding),
+    left: Math.min(usableWidth, a.left - gap - padding),
+  };
+  const fits = {
+    bottom: spaces.bottom >= requestedHeight,
+    top: spaces.top >= requestedHeight,
+    right: spaces.right >= w,
+    left: spaces.left >= w,
+  };
+  if (!fits[side]) {
+    const flip = { bottom: 'top', top: 'bottom', right: 'left', left: 'right' }[side];
+    if (fits[flip]) side = flip;
+    else if (spaces[flip] > spaces[side]) side = flip;
+  }
+
+  const availableHeight = side === 'bottom' || side === 'top'
+    ? spaces[side]
+    : usableHeight;
+  const maxHeight = Math.max(1, Math.floor(availableHeight));
+  const finalHeight = Math.min(requestedHeight, maxHeight);
+  let top;
+  let left;
+  if (side === 'bottom' || side === 'top') {
+    top = side === 'bottom' ? a.bottom + gap : a.top - gap - finalHeight;
+    left = align === 'end' ? a.right - w : align === 'center' ? a.left + (a.width - w) / 2 : a.left;
+  } else {
+    left = side === 'right' ? a.right + gap : a.left - gap - w;
+    top = align === 'end' ? a.bottom - finalHeight : align === 'center' ? a.top + (a.height - finalHeight) / 2 : a.top;
+  }
+  left = clamp(left, padding, Math.max(padding, vw - w - padding));
+  top = clamp(top, padding, Math.max(padding, vh - finalHeight - padding));
+  return { side, left, top, width: w, maxHeight, height: finalHeight, maxWidth: Math.max(1, vw - 2 * padding) };
+}
+
+/**
  * Anchor `el` to `anchorEl`, tracking scroll/resize until dispose() is called.
  * Collision handling flips the placement and, as a last resort, clamps inside
  * the viewport — the surface never becomes visually detached from its anchor,
@@ -285,52 +355,41 @@ export function anchorTo(el, anchorEl, opts = {}) {
     if (disposed || !el.isConnected) return;
     if (!anchorEl.isConnected) { opts.onDetach?.(); return; }
     const a = anchorEl.getBoundingClientRect();
-    const vw = document.documentElement.clientWidth;
-    const vh = document.documentElement.clientHeight;
+    const vw = window.innerWidth || document.documentElement.clientWidth;
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    // A long unbroken label must not make an anchored surface wider than the
+    // viewport.  This is set before measuring so the resulting height includes
+    // any wrapping caused by the safe width.
+    el.style.maxWidth = `${Math.max(1, vw - 2 * pad)}px`;
     if (opts.matchWidth) el.style.minWidth = `${Math.round(a.width)}px`;
     // measure after width is applied
     el.style.maxHeight = '';
     const r = el.getBoundingClientRect();
     const w = r.width, hgt = r.height;
 
-    let [side, align] = String(opts.placement || 'bottom-start').split('-');
-    const fits = {
-      bottom: vh - a.bottom - gap >= hgt + pad,
-      top: a.top - gap >= hgt + pad,
-      right: vw - a.right - gap >= w + pad,
-      left: a.left - gap >= w + pad,
-    };
-    if (!fits[side]) {
-      const flip = { bottom: 'top', top: 'bottom', right: 'left', left: 'right' }[side];
-      if (fits[flip]) side = flip;
-    }
-
-    // Cap the height FIRST, then re-measure. Clamping against the uncapped
-    // height is what makes a tall popover jump to the top of the window and
-    // cover the chrome it was supposed to sit under.
-    if (side === 'bottom' || side === 'top') {
-      const avail = side === 'bottom' ? vh - a.bottom - gap - pad : a.top - gap - pad;
-      el.style.maxHeight = `${Math.max(160, Math.floor(avail))}px`;
-    } else {
-      el.style.maxHeight = `${Math.max(160, vh - 2 * pad)}px`;
+    // Cap the height FIRST, then re-measure.  The cap is the actual available
+    // space, not an arbitrary minimum that can exceed a short viewport.
+    const layout = overlayLayout({
+      anchor: a, width: w, height: hgt, viewportWidth: vw, viewportHeight: vh,
+      placement: opts.placement || 'bottom-start', gap, padding: pad,
+    });
+    el.style.maxHeight = `${layout.maxHeight}px`;
+    // A surface may deliberately keep its root clipped so an inner list owns
+    // scrolling (the queue popover does this).  Give only otherwise-visible
+    // roots the generic scroll contract.
+    if (typeof getComputedStyle !== 'undefined' && getComputedStyle(el).overflowY === 'visible') {
+      el.style.overflowY = 'auto';
     }
     const r2 = el.getBoundingClientRect();
-    const hFinal = r2.height;
-
-    let top, left;
-    if (side === 'bottom' || side === 'top') {
-      top = side === 'bottom' ? a.bottom + gap : a.top - gap - hFinal;
-      left = align === 'end' ? a.right - w : align === 'center' ? a.left + (a.width - w) / 2 : a.left;
-    } else {
-      left = side === 'right' ? a.right + gap : a.left - gap - w;
-      top = align === 'end' ? a.bottom - hFinal : align === 'center' ? a.top + (a.height - hFinal) / 2 : a.top;
-    }
-    left = clamp(left, pad, Math.max(pad, vw - w - pad));
-    top = clamp(top, pad, Math.max(pad, vh - hFinal - pad));
+    const final = overlayLayout({
+      anchor: a, width: r2.width, height: r2.height, viewportWidth: vw, viewportHeight: vh,
+      placement: layout.side + (String(opts.placement || 'bottom-start').includes('-')
+        ? `-${String(opts.placement || 'bottom-start').split('-')[1]}` : ''), gap, padding: pad,
+    });
     el.style.position = 'fixed';
-    el.style.left = `${Math.round(left)}px`;
-    el.style.top = `${Math.round(top)}px`;
-    el.dataset.side = side;
+    el.style.left = `${Math.round(final.left)}px`;
+    el.style.top = `${Math.round(final.top)}px`;
+    el.dataset.side = final.side;
   }
 
   const relayout = throttleRaf(place);

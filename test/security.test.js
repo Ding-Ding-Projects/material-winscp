@@ -16,6 +16,7 @@ const { Readable } = require('node:stream');
 
 const S = require('../design/main/security');
 const FB = require('../design/main/filebuffer');
+const C = require('../design/main/crypto');
 
 const zeroRng = () => 0;
 
@@ -164,6 +165,49 @@ test('getExternalEncryptedPassword declines an ordinary obfuscated password', ()
   const blob = S.encryptPassword('secret', 'key');
   assert.strictEqual(S.getExternalEncryptedPassword(blob), null);
   assert.strictEqual(S.getExternalEncryptedPassword(''), null);
+});
+
+// ===========================================================================
+// design/main/crypto.js — session master-key handling
+// ===========================================================================
+
+test('master-password protection round-trips and lock removes session access', () => {
+  C.lockMaster();
+  const verifier = C.makeVerifier('correct horse battery staple');
+  assert.strictEqual(C.unlockMaster('correct horse battery staple', verifier), true);
+  const stored = C.protect('session-secret-fixture');
+  assert.match(stored, /^mp:/);
+  assert.strictEqual(C.unprotect(stored), 'session-secret-fixture');
+
+  C.lockMaster();
+  assert.strictEqual(C.hasMaster(), false);
+  assert.strictEqual(C.unprotect(stored), '');
+  assert.strictEqual(C.unlockMaster('correct horse battery staple', verifier), true);
+  assert.strictEqual(C.unprotect(stored), 'session-secret-fixture');
+  C.lockMaster();
+});
+
+test('malformed master-password verifiers fail closed without throwing', () => {
+  C.lockMaster();
+  assert.strictEqual(C.unlockMaster('anything', { salt: 'not-base64', probe: 'x' }), false);
+  assert.strictEqual(C.unlockMaster('anything', { salt: 'AAAAAAAAAAAAAAAAAAAAAA==', probe: 'x' }), false);
+  assert.strictEqual(C.hasMaster(), false);
+});
+
+test('a failed unlock cannot replace an already-unlocked session key', () => {
+  C.lockMaster();
+  const verifier = C.makeVerifier('right password');
+  assert.strictEqual(C.unlockMaster('right password', verifier), true);
+  const stored = C.protect('still-private');
+  assert.strictEqual(C.unlockMaster('wrong password', verifier), false);
+  assert.strictEqual(C.unprotect(stored), 'still-private');
+  C.lockMaster();
+});
+
+test('AES-GCM helpers reject invalid key sizes and truncated envelopes', () => {
+  assert.throws(() => C.encryptWithKey(Buffer.alloc(31), 'x'), /32-byte key/);
+  assert.throws(() => C.decryptWithKey(Buffer.alloc(31), 'x'), /32-byte key/);
+  assert.throws(() => C.decryptWithKey(Buffer.alloc(32), 'AA=='), /truncated/);
 });
 
 test('hexToBytes clears the whole result on any bad input', () => {

@@ -109,9 +109,55 @@ export function decodeRegValue(raw) {
   return { kind: 'string', value };
 }
 
-/** PuTTY encodes a session name with %XX for anything awkward. */
+/**
+ * PuTTY/WinSCP encode session names as URL-style UTF-8 bytes. This mirrors
+ * vendor/winscp/source/core/Common.cpp's DecodeUrlChars: '+' is a space and a
+ * consecutive run of %XX values is decoded as one UTF-8 string. Decoding each
+ * byte as a JavaScript character turns names such as 香港 into mojibake.
+ * Invalid runs stay escaped so a damaged registry export never throws or
+ * silently invents a different site name.
+ */
 export function decodePuttySessionName(name) {
-  return String(name || '').replace(/%([0-9A-Fa-f]{2})/g, (m, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
+  const encoded = String(name ?? '');
+  let decoded = '';
+  let index = 0;
+
+  while (index < encoded.length) {
+    if (encoded[index] === '+') {
+      decoded += ' ';
+      index += 1;
+      continue;
+    }
+
+    const first = encoded.slice(index, index + 3);
+    if (first.length !== 3 || first[0] !== '%' || !/^[0-9A-Fa-f]{2}$/u.test(first.slice(1))) {
+      decoded += encoded[index];
+      index += 1;
+      continue;
+    }
+
+    const start = index;
+    const bytes = [];
+    while (index + 2 < encoded.length && encoded[index] === '%') {
+      const hex = encoded.slice(index + 1, index + 3);
+      if (!/^[0-9A-Fa-f]{2}$/u.test(hex)) break;
+      bytes.push(Number.parseInt(hex, 16));
+      index += 3;
+    }
+
+    const escapedRun = encoded.slice(start, index);
+    try {
+      if (typeof TextDecoder === 'function') {
+        decoded += new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(bytes));
+      } else {
+        decoded += decodeURIComponent(escapedRun);
+      }
+    } catch {
+      decoded += escapedRun;
+    }
+  }
+
+  return decoded;
 }
 
 /**

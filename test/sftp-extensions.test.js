@@ -1467,6 +1467,46 @@ test('the transport reports why a connection failed', async (t) => {
   });
 });
 
+test('explicit SSH algorithm policies fail closed', async (t) => {
+  for (const [label, setting] of [
+    ['cipher', { cipherList: ['des'] }],
+    ['key exchange', { kexList: ['WARN', 'dh-group1-sha1'] }],
+    ['host-key', { hostKeyList: ['ed448'] }],
+  ]) {
+    await t.test(`does not fall back when the ${label} list is unusable`, async () => {
+      const server = net.createServer();
+      const sockets = new Set();
+      let wireBytes = 0;
+      server.on('connection', (socket) => {
+        sockets.add(socket);
+        socket.on('data', (data) => { wireBytes += data.length; });
+        socket.on('close', () => sockets.delete(socket));
+      });
+      await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+      const port = server.address().port;
+      const transport = new SshTransport({
+        hostName: '127.0.0.1', portNumber: port, userName: 'test', password: 'not-a-secret',
+        timeout: 5, ...setting,
+      }, { hostKeyVerifier: () => true });
+      try {
+        await assert.rejects(() => transport.connect(), (error) => {
+          assert.equal(error.code, 'ERR_SSH_ALGORITHM_POLICY');
+          assert.equal(error.ssh.kind, 'policy');
+          assert.equal(error.ssh.retriable, false);
+          assert.match(error.message, new RegExp(`SSH ${label} policy`));
+          return true;
+        });
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.equal(wireBytes, 0, 'the SSH client must not fall back and start a handshake');
+      } finally {
+        await transport.disconnect();
+        for (const socket of sockets) socket.destroy();
+        await new Promise((resolve) => server.close(resolve));
+      }
+    });
+  }
+});
+
 // --------------------------------------------------------- window accounting
 
 test('the raw send path respects the SSH window', async (t) => {

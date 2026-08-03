@@ -5,31 +5,31 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `8935691`** — Record the packaging guard in the changelog
+**At commit `20c2b38`** — Refresh the post-packaging handoff
 
 ## Where the work stands
 
 | | |
 |---|---|
-| **Port coverage (logic)** | **55.3%** of 209,889 lines that are actually code |
-| Port coverage (raw) | 67.9% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3021 run, **3020 pass, 0 fail**, 1 skipped |
-| Hand-written code | 201,747 lines across 302 files |
-| Commits | 68 on `main` |
-| Working tree | **1 uncommitted change(s)** |
-| Remote | `origin/main` at `8f3b126` — **differs from HEAD** |
+| **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
+| Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
+| Tests | not run in this regeneration |
+| Hand-written code | 212,185 lines across 369 files |
+| Commits | 69 on `main` |
+| Working tree | **151 uncommitted change(s)** |
+| Remote | `origin/main` at `20c2b38` — in sync |
 
 ### Coverage by area
 
 | Area | Units ported | Coverage |
 |---|---:|---:|
-| `forms` | 10 / 51 | 74.9% |
-| `core` | 1 / 36 | 46.1% |
-| `windows` | 0 / 20 | 48.2% |
-| `resource` | 0 / 9 | 50.0% |
-| `components` | 0 / 6 | 38.2% |
-| `console` | 0 / 2 | 50.0% |
-| `dragext` | 0 / 1 | 50.0% |
+| `forms` | 10 / 51 | 82.1% |
+| `core` | 1 / 36 | 52.5% |
+| `windows` | 0 / 20 | 44.3% |
+| `resource` | 0 / 9 | 66.0% |
+| `components` | 0 / 6 | 49.1% |
+| `console` | 0 / 2 | 75.8% |
+| `dragext` | 0 / 1 | 35.0% |
 
 ## Verification evidence
 
@@ -49,32 +49,32 @@ npm test && node tools/port-matrix.js && node tools/count-lines.js
 
 ## What a successor should pick up next
 
-The largest outstanding units, by lines of the original still unported.
+The largest outstanding units, ranked by weighted lines still unported.
 `in progress` means some behaviour landed and the ledger records how much;
 `not started` means nothing is mapped to it at all.
 
-| Lines | State | Unit |
+| Remaining lines (weighted) | State | Unit |
 |---:|---|---|
-| 14,045 | in progress | `forms/CustomScpExplorer` |
-| 10,449 | in progress | `core/Terminal` |
-| 8,977 | in progress | `forms/Login` |
-| 8,171 | in progress | `forms/Preferences` |
-| 8,150 | in progress | `forms/Editor` |
-| 6,884 | in progress | `core/SessionData` |
-| 6,486 | in progress | `forms/NonVisual` |
-| 6,290 | in progress | `forms/SiteAdvanced` |
-| 6,074 | in progress | `core/SftpFileSystem` |
-| 5,850 | in progress | `forms/SynchronizeChecklist` |
-| 5,807 | in progress | `forms/ScpCommander` |
-| 5,234 | in progress | `core/Common` |
-| 5,106 | in progress | `core/FtpFileSystem` |
-| 4,989 | in progress | `windows/WinConfiguration` |
-| 4,841 | in progress | `forms/Progress` |
-| 4,145 | in progress | `core/RemoteFiles` |
-| 3,760 | in progress | `core/Queue` |
-| 3,336 | in progress | `core/Script` |
-| 3,331 | in progress | `windows/GUITools` |
-| 3,323 | in progress | `windows/VCLCommon` |
+| 7,023 | in progress | `forms/CustomScpExplorer` |
+| 6,792 | in progress | `core/Terminal` |
+| 3,677 | in progress | `forms/Preferences` |
+| 3,667 | in progress | `forms/Editor` |
+| 3,341 | in progress | `core/SftpFileSystem` |
+| 3,064 | in progress | `core/FtpFileSystem` |
+| 2,830 | in progress | `forms/SiteAdvanced` |
+| 2,825 | in progress | `windows/VCLCommon` |
+| 2,754 | in progress | `core/SessionData` |
+| 2,693 | in progress | `forms/Login` |
+| 2,617 | in progress | `core/Common` |
+| 2,613 | in progress | `forms/ScpCommander` |
+| 2,245 | in progress | `windows/WinConfiguration` |
+| 2,223 | in progress | `forms/SynchronizeChecklist` |
+| 2,068 | in progress | `core/Queue` |
+| 1,925 | in progress | `core/SecureShell` |
+| 1,802 | in progress | `windows/TerminalManager` |
+| 1,674 | in progress | `windows/ConsoleRunner` |
+| 1,666 | in progress | `windows/GUITools` |
+| 1,658 | in progress | `core/RemoteFiles` |
 
 114 units remain outstanding in total. The full list is in
 [`docs/port-coverage.md`](docs/port-coverage.md).
@@ -98,11 +98,8 @@ bite a successor who assumes otherwise:
 
 ## Open issues
 
-25 open on the tracker.
+22 open on the tracker.
 
-- [#28](https://github.com/Ding-Ding-Projects/material-winscp/issues/28) 🐛 The queue ignores "Keep reconnecting for" — five hardcoded attempts on the path most transfers take · 佇列唔理重連設定
-- [#27](https://github.com/Ding-Ding-Projects/material-winscp/issues/27) 🐛 Eight preferences are stored, rendered, and read by nothing — with no row warning the user · 八個設定得個樣
-- [#26](https://github.com/Ding-Ding-Projects/material-winscp/issues/26) 🐛 isEmptyDirectory recurses through symlinks WinSCP refuses to follow, and the remote size calculation still ignores the rule · 空目錄判斷會經 symlink 行落去
 - [#23](https://github.com/Ding-Ding-Projects/material-winscp/issues/23) 🗺️ Roadmap: truthful empty states and auditable discards · 真實空白狀態同可追蹤嘅捨棄
 - [#22](https://github.com/Ding-Ding-Projects/material-winscp/issues/22) 🚫 Policy: no promotional nags — do not port WinSCP's donation prompts · 唔好扭錢
 - [#21](https://github.com/Ding-Ding-Projects/material-winscp/issues/21) 🗺️ Roadmap: changelog entries link to their commits · 更新日誌要連到 commit
@@ -130,6 +127,7 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `20c2b38` | 2026-08-02 | Refresh the post-packaging handoff |
 | `8935691` | 2026-08-02 | Record the packaging guard in the changelog |
 | `12dd655` | 2026-08-02 | Exclude agent worktrees from Electron packages |
 | `5788976` | 2026-08-02 | Record the final smoke-tested handoff |
@@ -137,7 +135,6 @@ bite a successor who assumes otherwise:
 | `883b33f` | 2026-08-02 | Count handoff dirt from Git name lists |
 | `225b7ae` | 2026-08-02 | Trim Windows status paths before counting handoff dirt |
 | `cb56f8a` | 2026-08-02 | Keep generated handoff state self-consistent |
-| `5853825` | 2026-08-02 | Refresh the verified handoff and roadmap |
 
 ## Notes from whoever worked on this last
 

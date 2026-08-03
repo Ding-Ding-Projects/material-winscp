@@ -21,7 +21,7 @@ Under **Site → Advanced → FTP** and **→ TLS/SSL**.
 | --- | --- | --- |
 | `ftps` | `none` | `none`, `explicitTls`, or `implicit`. |
 | `ftpPasvMode` | `true` | Passive mode. Turn it off only on networks where active works and passive does not. |
-| `ftpForcePasvIp` | `auto` | Ignore the address the server returns for PASV and reuse the control connection's address — the standard fix for a server behind NAT. |
+| `ftpForcePasvIp` | `auto` | `auto` uses basic-ftp's NAT-aware replacement for private PASV addresses; `on` always reuses the control connection's address; `off` honours the server's advertised address. |
 | `ftpUseMlsd` | `auto` | Prefer `MLSD` (machine-readable) over `LIST` (human-readable, ambiguous). |
 | `ftpAccount` | `''` | The `ACCT` value, for the rare servers that want one. |
 | `ftpPingInterval` / `ftpPingType` | `30` / `dummy` | Keepalive on the control channel: `off`, `dummy` (`NOOP`), or `directory` (`PWD`). |
@@ -46,6 +46,13 @@ Under **Site → Advanced → FTP** and **→ TLS/SSL**.
 | Non-UTF-8 filenames without `UTF8` in `FEAT` | Names decoded through the site's `codePage`. Mis-set, they appear as mojibake but remain openable. | Yes |
 | Resume on a server without `REST` | `caps.resume` stays false; the queue restarts the file rather than offering a broken resume. | n/a |
 | Idle disconnect | Detected on the next command; auto-reconnect follows `security.sessionReopen*`. | Yes |
+
+The passive-host choice is applied when the FTP client is constructed, before
+the first `PASV`/`EPSV` negotiation. In particular, `on` is not merely a UI
+label: it sets basic-ftp's `allowSeparateTransferHost` to false, so a server
+cannot redirect the data socket to a different host. `auto` remains the
+default because basic-ftp already replaces a private PASV address when the
+control connection is public.
 
 ## Security considerations
 
@@ -72,6 +79,9 @@ Under **Site → Advanced → FTP** and **→ TLS/SSL**.
   ambiguous year/time columns.
 - TLS option plumbing is unit-tested; live FTPS behaviour is checked manually
   against vsftpd and FileZilla Server.
+- Passive-host policy plumbing is covered by
+  `test/ftp-adapter-options.test.js`; the end-to-end suite exercises passive
+  and active listing/download/upload/resume paths over real sockets.
 
 Manual check: connect, open the session log at debug level 1, and confirm the
 `FEAT` response matches the capabilities the UI has enabled.

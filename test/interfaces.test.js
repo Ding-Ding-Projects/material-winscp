@@ -647,6 +647,15 @@ test('the path box selects the longest matching place, and gives up quietly', ()
   assert.equal(I.localPathComboIndexFor('\\\\server\\share', items), -1);
 });
 
+test('the path box does not confuse a UNC share with a longer sibling name', () => {
+  const items = [
+    { path: '\\\\server\\share' },
+    { path: 'C:\\' },
+  ];
+  assert.equal(I.localPathComboIndexFor('\\\\server\\share\\folder', items), 0);
+  assert.equal(I.localPathComboIndexFor('\\\\server\\sharehouse\\folder', items), -1);
+});
+
 test('picking the drive the other panel is on opens that panel directory, not the root', () => {
   const items = [
     { path: 'C:\\Users\\me\\Documents', special: true },

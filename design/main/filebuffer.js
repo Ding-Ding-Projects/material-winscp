@@ -356,7 +356,22 @@ class EolConverter {
     this.token = false;      // WinSCP's ConvertToken, for the explicit-source path
     this.pendingCR = false;  // a trailing CR whose partner may open the next chunk
     this.pendingZ = false;   // a trailing Ctrl-Z that may be the last byte of all
+    // A stream read is allowed to split the three-byte UTF-8 BOM. Keep at most
+    // two bytes until the marker can be confirmed or rejected; otherwise the
+    // first read permanently turns a split BOM into ordinary file data.
+    this._bomPending = removeBOM ? Buffer.alloc(0) : null;
     this.sourceStr = this.source === 'auto' ? null : eolToStr(this.source);
+  }
+
+  _prepareBOM(buf) {
+    if (this._bomPending === null) return buf;
+    if (this._bomPending.length) buf = Buffer.concat([this._bomPending, buf]);
+    if (buf.length < BOM.length) {
+      this._bomPending = Buffer.from(buf);
+      return null;
+    }
+    this._bomPending = null;
+    return buf.subarray(0, BOM.length).equals(BOM) ? buf.subarray(BOM.length) : buf;
   }
 
   /** Feed one chunk; returns the converted bytes (possibly empty). */
@@ -374,10 +389,12 @@ class EolConverter {
     if (this.pendingCR) { held.push(0x0D); this.pendingCR = false; }
     if (held.length) buf = Buffer.concat([Buffer.from(held), buf]);
 
-    if (this.first) {
-      this.first = false;
-      if (this.removeBOM && buf.length >= 3 && buf.subarray(0, 3).equals(BOM)) buf = buf.subarray(3);
-    }
+    if (this.first) this.first = false;
+    const prepared = this._prepareBOM(buf);
+    // No bytes are safe to emit until a short first read is known not to be a
+    // BOM. Empty reads do not consume the prefix budget.
+    if (prepared === null) return Buffer.alloc(0);
+    buf = prepared;
 
     if (this.sourceStr === null) {
       // Hold a trailing CR: we cannot yet tell a lone CR from the first half of
@@ -405,7 +422,15 @@ class EolConverter {
     if (this.pendingCR) tail.push(0x0D);
     this.pendingCR = false;
     this.pendingZ = false;
-    return this._translate(Buffer.from(tail), true);
+    const prefix = this._bomPending || Buffer.alloc(0);
+    this._bomPending = null;
+    let final = prefix.length ? Buffer.concat([prefix, Buffer.from(tail)]) : Buffer.from(tail);
+    // An incomplete BOM candidate can itself be the final Ctrl-Z marker. It
+    // must go through the same EOF scrubber as an ordinary final chunk.
+    if (this.removeCtrlZ && final.length && final[final.length - 1] === CTRL_Z) {
+      final = final.subarray(0, final.length - 1);
+    }
+    return this._translate(final, true);
   }
 
   _translate(buf, last) {
