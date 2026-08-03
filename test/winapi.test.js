@@ -113,6 +113,16 @@ test('Windows backend calls are structured and backend failures are not successe
   assert.equal(await api.callWindows('missing').then((value) => value.code), W.UNSUPPORTED_OPERATION);
 });
 
+test('Windows backend calls do not reach inherited or malformed operations', async () => {
+  const api = W.createWinApi({ platform: 'win32', windows: { ownOperation: () => 'ok' } });
+  assert.equal((await api.callWindows('constructor')).code, W.UNSUPPORTED_OPERATION);
+  assert.equal((await api.callWindows('')).code, 'INVALID_INPUT');
+  assert.equal((await api.callWindows(null)).code, 'INVALID_INPUT');
+  assert.deepEqual(await api.callWindows('ownOperation'), {
+    ok: true, operation: 'win32:ownOperation', platform: 'win32', value: 'ok',
+  });
+});
+
 test('external URL opening is scheme-restricted and unavailable shells fail cleanly', async () => {
   const calls = [];
   const api = W.createWinApi({ platform: 'darwin', shell: { async openExternal(url) { calls.push(url); } } });

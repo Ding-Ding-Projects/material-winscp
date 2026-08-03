@@ -20,7 +20,9 @@ porting label, not a promise that every host has a Win32 implementation.
   success.
 - An injected Windows-only backend through `callWindows`. On every non-Windows
   platform it is ignored without probing or enumerating it, and calls return a
-  structured `UNSUPPORTED_PLATFORM` result.
+  structured `UNSUPPORTED_PLATFORM` result. On Windows, only non-empty string
+  names of own callable backend properties are reachable; inherited properties
+  such as `constructor` are rejected as `UNSUPPORTED_OPERATION`.
 
 ## Integration and failure behaviour
 

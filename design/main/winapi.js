@@ -311,7 +311,15 @@ function createWinApi(options) {
     },
     async callWindows(operation, ...args) {
       if (platform !== 'win32') return unsupported(`win32:${operation}`, platform, 'Windows-only operation was requested on a non-Windows platform');
-      if (!windows || typeof windows[operation] !== 'function') return unsupported(`win32:${operation}`, platform, 'No Windows backend implements this operation');
+      if (typeof operation !== 'string' || operation.length === 0) {
+        return failure('INVALID_INPUT', 'win32', 'Windows operation must be a non-empty string', { platform });
+      }
+      // Match capabilities(): injected adapters expose only their own methods.
+      // This prevents prototype properties (for example constructor) becoming
+      // accidental native call routes.
+      if (!windows || !Object.prototype.hasOwnProperty.call(windows, operation) || typeof windows[operation] !== 'function') {
+        return unsupported(`win32:${operation}`, platform, 'No Windows backend implements this operation');
+      }
       try {
         const value = await windows[operation](...args);
         if (value && typeof value === 'object' && value.ok === false) return value;

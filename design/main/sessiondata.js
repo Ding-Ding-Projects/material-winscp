@@ -401,7 +401,16 @@ class KeyValueStorage {
    */
   _reindex() {
     this._index = new Map();
-    for (const k of Object.keys(this.values)) this._index.set(k.toLowerCase(), k);
+    // TIniFile/TStringList treats names case-insensitively.  Imported line
+    // lists can nevertheless contain both `HostName` and `hostname`; keep
+    // the last value (the reader's effective value) but remove the shadowed
+    // physical entry so a later export cannot write an ambiguous duplicate.
+    for (const k of Object.keys(this.values)) {
+      const folded = k.toLowerCase();
+      const previous = this._index.get(folded);
+      if (previous !== undefined) delete this.values[previous];
+      this._index.set(folded, k);
+    }
   }
 
   _key(name) {

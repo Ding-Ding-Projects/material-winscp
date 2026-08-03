@@ -70,6 +70,20 @@ function isIniConfiguration(file, text) {
   return path.extname(file).toLowerCase() === '.ini' || /^\s*\[Sessions\\/im.test(text);
 }
 
+/** Normalize an imported/loaded site before it can be persisted. */
+function normalizeSite(site) {
+  const normalized = deepMerge(clone(SESSION_DEFAULTS), site || {});
+  for (const field of SECRET_FIELDS) {
+    const value = normalized[field];
+    if (!value) { normalized[field] = ''; continue; }
+    if (typeof value !== 'string') { normalized[field] = ''; continue; }
+    if (value.startsWith('mp:') || value.startsWith('os:')) continue;
+    normalized[field] = normalized.savePassword || field !== 'password' ? crypt.protect(value) : '';
+  }
+  if (!normalized.savePassword) normalized.password = '';
+  return normalized;
+}
+
 let nextId = 1;
 function newId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${(nextId++).toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -109,7 +123,7 @@ class Config extends EventEmitter {
         if (!raw.prefs || !raw.prefs.customCommands || !raw.prefs.customCommands.length) {
           this.data.prefs.customCommands = clone(DEFAULT_CUSTOM_COMMANDS);
         }
-        this.data.sites = (raw.sites || []).map((s) => deepMerge(clone(SESSION_DEFAULTS), s));
+        this.data.sites = (raw.sites || []).map(normalizeSite);
         this.data.folders = raw.folders || [];
         this.data.workspaces = raw.workspaces || [];
         this.data.version = raw.version || 1;
@@ -271,7 +285,7 @@ class Config extends EventEmitter {
   /** Restore is itself a new revision — history stays append-only. */
   importState(state, label) {
     if (state.prefs) this.data.prefs = deepMerge(clone(PREF_DEFAULTS), state.prefs);
-    if (state.sites) this.data.sites = state.sites.map((s) => deepMerge(clone(SESSION_DEFAULTS), s));
+    if (state.sites) this.data.sites = state.sites.map(normalizeSite);
     if (state.folders) this.data.folders = state.folders;
     if (state.workspaces) this.data.workspaces = state.workspaces;
     this.flush();

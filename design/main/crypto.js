@@ -111,7 +111,15 @@ function decryptWithKey(key, blob) {
   if (!Buffer.isBuffer(key) || key.length !== 32) {
     throw new Error('AES-GCM requires a 32-byte key.');
   }
+  // Buffer.from(value, 'base64') silently ignores non-base64 characters and
+  // accepts impossible padding. Reject those inputs before authentication so
+  // damaged config cannot be normalized into a different ciphertext.
+  if (typeof blob !== 'string' || blob.length === 0 || blob.length % 4 !== 0 ||
+      !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(blob)) {
+    throw new Error('AES-GCM envelope is not valid base64.');
+  }
   const buf = Buffer.from(blob, 'base64');
+  if (buf.toString('base64') !== blob) throw new Error('AES-GCM envelope is not canonical base64.');
   if (buf.length < AES_GCM_OVERHEAD) throw new Error('AES-GCM envelope is truncated.');
   const d = crypto.createDecipheriv('aes-256-gcm', key, buf.subarray(0, AES_GCM_IV_LENGTH));
   d.setAuthTag(buf.subarray(AES_GCM_IV_LENGTH, AES_GCM_OVERHEAD));

@@ -210,6 +210,26 @@ test('AES-GCM helpers reject invalid key sizes and truncated envelopes', () => {
   assert.throws(() => C.decryptWithKey(Buffer.alloc(32), 'AA=='), /truncated/);
 });
 
+test('AES-GCM rejects permissively decoded envelope text', () => {
+  const key = crypto.randomBytes(32);
+  const blob = C.encryptWithKey(key, 'secret');
+  assert.throws(() => C.decryptWithKey(key, ` ${blob}`), /valid base64/);
+  assert.throws(() => C.decryptWithKey(key, `${blob}!`), /valid base64/);
+  assert.throws(() => C.decryptWithKey(key, blob.replace(/=+$/u, '')), /valid base64/);
+  assert.strictEqual(C.decryptWithKey(key, blob), 'secret');
+});
+
+test('AES-GCM storage rejects malformed base64 before decoding', () => {
+  C.lockMaster();
+  const verifier = C.makeVerifier('strict envelope password');
+  assert.strictEqual(C.unlockMaster('strict envelope password', verifier), true);
+  const stored = C.protect('keep this secret');
+  const payload = stored.slice(3);
+  assert.strictEqual(C.unprotect(`mp:${payload.slice(0, 4)}!${payload.slice(4)}`), '');
+  assert.strictEqual(C.unprotect(`mp:${payload.replace(/=+$/u, '')}`), '');
+  C.lockMaster();
+});
+
 test('hexToBytes clears the whole result on any bad input', () => {
   assert.deepStrictEqual(S.hexToBytes('4142'), Buffer.from('AB'));
   assert.deepStrictEqual(S.hexToBytes('4142ab'), Buffer.from([0x41, 0x42, 0xAB]));

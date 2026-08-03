@@ -52,3 +52,10 @@ discarded rather than written in clear.
 The store remains one atomic JSON file for normal operation. An INI discovered
 beside app data is imported once at startup and then migrated into that JSON
 store, so a crash cannot leave a half-written configuration.
+
+JSON backups are treated as untrusted input at the same boundary: loading an
+older backup or importing a backup re-normalizes every session secret. Tagged
+`mp:` and `os:` ciphertext is retained, while clear-text values are immediately
+protected when platform protection is available and otherwise discarded. This
+prevents a hand-edited or legacy backup from turning the durable store into a
+clear-text credential file.

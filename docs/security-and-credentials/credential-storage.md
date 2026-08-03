@@ -58,6 +58,7 @@ believe something false.
 | Keychain entry deleted externally | The site's password is gone; connecting prompts. The stale handle is cleaned up rather than reported as corruption. | Yes |
 | Config copied to another machine | Keychain-protected secrets do not travel — by design. Master-password-protected ones do, and need the master password. The import summary states how many secrets could not be carried. | Yes |
 | Decryption fails (wrong key, damaged bytes) | Authenticated encryption makes this detectable. The app reports that the stored secret could not be read and prompts, rather than sending garbage as a password. | Yes |
+| Protected envelope text is malformed (including whitespace, ignored characters, or missing padding) | The envelope is rejected before decryption; no repaired or partially decoded value is accepted. The app prompts again. | Yes |
 | A secret is needed while the app is locked | One prompt for the master password, not one per secret. | Yes |
 | Master password removed | Every secret is re-wrapped with the keychain if available, or **deleted** if not. The confirmation states which, and how many. | n/a |
 
@@ -72,6 +73,10 @@ believe something false.
   a false header or return a partial password.
 - **Authenticated encryption everywhere.** A modified ciphertext fails to
   decrypt rather than decrypting to something else.
+- **Envelope text is validated before decoding.** Invalid base64, padding, or
+  non-text ciphertext is rejected before AES-GCM authentication; the caller
+  receives an empty secret and prompts again rather than accepting a decoder's
+  permissive normalization.
 - **AAD is bound to a stable identifier**, not to a row id or array index. A
   record that is deleted and restored from history keeps its identifier, so its
   secret still decrypts. Binding to an autoincrement id produces data that

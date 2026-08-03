@@ -457,6 +457,14 @@ test('keys are matched case-insensitively, like a TIniFile and a TStringList', (
   assert.strictEqual(S.loadSession({ TIMEOUT: '9' }).data.timeout, 9);
 });
 
+test('case-variant duplicate storage keys keep the last value without re-exporting the shadowed key', () => {
+  const storage = new S.KeyValueStorage({ HostName: 'old', hostname: 'new' });
+  assert.strictEqual(storage.readString('HostName', ''), 'new');
+  assert.deepStrictEqual(storage.toLines(), ['hostname=new']);
+  storage.writeString('HOSTNAME', 'latest');
+  assert.deepStrictEqual(storage.toLines(), ['hostname=latest']);
+});
+
 /* ================================================================== */
 /* raw settings                                                        */
 /* ================================================================== */

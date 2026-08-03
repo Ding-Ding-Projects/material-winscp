@@ -90,18 +90,34 @@ export function editorFor(name, list) {
 
 /** `;`-separated masks with * and ? wildcards, case-insensitive. */
 export function matchesMask(mask, name) {
-  const list = String(mask ?? '').split(';').map((m) => m.trim()).filter(Boolean);
-  if (!list.length) return true;
+  const source = String(mask ?? '');
+  const parts = source.split('|');
+  const includes = parts[0].split(/[;,]/).map((m) => m.trim()).filter(Boolean);
+  const excludes = parts.slice(1).join('|').split(/[;,]/).map((m) => m.trim()).filter(Boolean)
+    .concat(includes.filter((m) => m.startsWith('-')).map((m) => m.slice(1).trim()));
+  const positive = includes.filter((m) => !m.startsWith('-'));
+  if (!positive.length) positive.push('*');
   const subject = String(name ?? '');
-  return list.some((m) => {
+  const matchOne = (raw) => {
+    const m = raw === '*.*' ? '*' : raw;
     let out = '';
-    for (const ch of m) {
+    for (let i = 0; i < m.length; i++) {
+      const ch = m[i];
       if (ch === '*') out += '.*';
       else if (ch === '?') out += '.';
+      else if (ch === '[') {
+        const end = m.indexOf(']', i + 1);
+        if (end < 0) return false;
+        let body = m.slice(i + 1, end);
+        if (body.startsWith('!')) body = `^${body.slice(1)}`;
+        out += `[${body.replace(/\\/g, '\\\\')}]`;
+        i = end;
+      }
       else out += ch.replace(/[.+^${}()|[\]\\]/g, '\\$&');
     }
     return new RegExp(`^${out}$`, 'i').test(subject);
-  });
+  };
+  return positive.some(matchOne) && !excludes.some((m) => m && matchOne(m));
 }
 
 /* ================================================================== */

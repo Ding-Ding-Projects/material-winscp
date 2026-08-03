@@ -509,6 +509,18 @@ test('an editor mask honours wildcards, alternatives and case', async () => {
   assert.equal(editors.matchesMask('read?e.txt', 'readme.txt'), true);
 });
 
+test('editor masks keep WinSCP catch-all and exclusion semantics in the live probe', async () => {
+  const { editors } = await load();
+  assert.equal(editors.matchesMask('*.*', 'README'), true,
+    'WinSCP treats *.* as every file, including extensionless names');
+  assert.equal(editors.matchesMask('[ab]*.txt', 'cuild.txt'), false);
+  assert.equal(editors.matchesMask('[ab]*.txt', 'alpha.txt'), true);
+  assert.equal(editors.matchesMask('*.txt | *.bak', 'notes.txt'), true);
+  assert.equal(editors.matchesMask('*.txt | *.bak', 'notes.bak'), false);
+  assert.equal(editors.matchesMask('-*.bak', 'notes.txt'), true);
+  assert.equal(editors.matchesMask('-*.bak', 'notes.bak'), false);
+});
+
 // ------------------------------------------------------ custom commands
 
 test('a custom command is normalised with every behaviour flag present', async () => {

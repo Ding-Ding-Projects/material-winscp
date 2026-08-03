@@ -88,3 +88,16 @@ test('a portable WinSCP INI beside app data is migrated into the JSON store on l
   assert.equal(stored.sites[0].password === 'p@ss', false);
   assert.equal(stored.sites[0].password === 'machine-bound-cipher', false);
 }));
+
+test('JSON load and import re-protect clear-text session secrets', () => withRoot((root) => {
+  const clearSite = { name: 'Clear', hostName: 'clear.example.com', password: 'plain-password', savePassword: true };
+  fs.writeFileSync(P.config(), JSON.stringify({ sites: [clearSite] }), 'utf8');
+  const loaded = new Config().load();
+  assert.notEqual(loaded.sites[0].password, 'plain-password');
+  loaded.flush();
+  assert.doesNotMatch(fs.readFileSync(P.config(), 'utf8'), /plain-password/);
+
+  loaded.importState({ sites: [{ name: 'Imported', hostName: 'imported.example.com', password: 'another-password', savePassword: true }] });
+  assert.notEqual(loaded.sites[0].password, 'another-password');
+  assert.doesNotMatch(fs.readFileSync(P.config(), 'utf8'), /another-password/);
+}));
