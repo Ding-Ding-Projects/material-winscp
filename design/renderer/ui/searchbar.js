@@ -19,7 +19,7 @@
 // using this one.
 
 import { h, icon, uid, appearanceTarget, debounce, announce } from '../dom.js';
-import { t, bindText } from '../i18n.js';
+import { t, bindText, bindRender } from '../i18n.js';
 import { store, persistCurrent } from '../state.js';
 import { openRegexBuilder, makePredicate, compile, escapeLiteral } from './regexbuilder.js';
 
@@ -82,12 +82,12 @@ export function createSearchBar(opts = {}) {
     spellcheck: 'false', 'aria-describedby': hintId,
   });
   const modeChip = h('button', {
-    type: 'button', class: 'sb-mode', 'aria-pressed': 'false',
+    type: 'button', class: 'sb-mode', 'aria-pressed': 'false', 'aria-label': t('matchMode'),
     onclick: () => setMode(state.mode === 'regex' ? 'text' : 'regex'),
   }, h('span', { class: 'mono' }, '.*'));
 
   const builderBtn = h('button', {
-    type: 'button', class: 'sb-rb icon-btn',
+    type: 'button', class: 'sb-rb icon-btn', 'aria-haspopup': 'dialog', 'aria-expanded': 'false',
     onclick: (e) => { e.stopPropagation(); toggleBuilder(); },
   }, icon('manage_search', 18));
 
@@ -96,10 +96,11 @@ export function createSearchBar(opts = {}) {
     onclick: () => { clear(); input.focus(); },
   }, icon('close', 16));
 
-  const hint = h('span', { id: hintId, class: 'sb-hint sr-only' });
+  const hint = h('span', { id: hintId, class: 'sb-hint sr-only', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' });
 
   const root = h('div', {
     class: `sb${opts.compact ? ' is-compact' : ''}`, role: 'search',
+    'aria-label': t(opts.labelKey || 'search'),
     'data-search-id': id,
   },
   icon('search', 18, { weight: 1.7 }),
@@ -109,8 +110,10 @@ export function createSearchBar(opts = {}) {
 
   // Accessible name + placeholder stay bound so they follow the language mode.
   bindText(input, opts.labelKey || 'search', { attr: 'aria-label' });
+  bindText(root, opts.labelKey || 'search', { attr: 'aria-label' });
   if (opts.placeholder) input.placeholder = opts.placeholder;
   else bindText(input, opts.placeholderKey || 'search', { attr: 'placeholder' });
+  bindText(modeChip, 'matchMode', { attr: 'aria-label' });
   bindText(modeChip, 'rbTitle', { attr: 'title' });
   bindText(builderBtn, 'rbTitle', { attr: 'aria-label' });
   bindText(builderBtn, 'rbTitle', { attr: 'title' });
@@ -140,10 +143,10 @@ export function createSearchBar(opts = {}) {
     input.setAttribute('aria-invalid', String(!state.valid));
     hint.textContent = state.mode === 'regex'
       ? (state.valid
-        ? `Regular expression mode, JavaScript RegExp, flags ${state.flags || 'none'}.`
-        : `Invalid regular expression: ${state.error}`)
-      : 'Plain text search. Press the .* button for regular expressions.';
-    root.title = state.mode === 'regex' && !state.valid ? `Invalid pattern: ${state.error}` : '';
+        ? t('searchRegexHint', state.flags || 'none')
+        : t('invalidPattern', state.error))
+      : t('searchPlainHint');
+    root.title = state.mode === 'regex' && !state.valid ? t('invalidPattern', state.error) : '';
   }
 
   const notify = () => {
@@ -200,9 +203,7 @@ export function createSearchBar(opts = {}) {
       state.mode = 'text';
     }
     paint();
-    announce(state.mode === 'regex'
-      ? 'Regular expression mode on.'
-      : 'Plain text search mode on.');
+    announce(t(state.mode === 'regex' ? 'searchRegexModeOn' : 'searchPlainModeOn'));
     builder?.setPattern?.(state.pattern);
     emit.flush();
     notify();
@@ -237,8 +238,14 @@ export function createSearchBar(opts = {}) {
         else { paint(); emit.flush(); notify(); savePersist(); }
         input.focus();
       },
-      onClose: () => { builder = null; },
+      onClose: () => {
+        builder = null;
+        builderBtn.setAttribute('aria-expanded', 'false');
+        builderBtn.removeAttribute('aria-controls');
+      },
     });
+    builderBtn.setAttribute('aria-expanded', 'true');
+    builderBtn.setAttribute('aria-controls', builder.element.id);
   }
 
   function setQuery(value) {
@@ -279,6 +286,7 @@ export function createSearchBar(opts = {}) {
     emit.cancel();
     savePersist.cancel();
     persistState();
+    unbindI18n();
     builder?.close();
     subscribers.clear();
     registry.delete(id);
@@ -299,7 +307,7 @@ export function createSearchBar(opts = {}) {
   };
 
   registry.set(id, handle);
-  paint();
+  const unbindI18n = bindRender(root, paint);
   return handle;
 }
 
@@ -321,5 +329,5 @@ export function filterBy(items, predicate, fields) {
 /** An honest empty-state message naming what was filtered out. */
 export function noMatchMessage(predicate, scopeLabel) {
   const what = predicate?.mode === 'regex' ? `pattern ${predicate.describe}` : predicate?.describe || 'that search';
-  return `Nothing in ${scopeLabel} matches ${what}.`;
+  return t('searchNoMatch', scopeLabel, what);
 }

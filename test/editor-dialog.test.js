@@ -68,6 +68,18 @@ test('modeless close serializes an async unsaved-changes decision', async () => 
   assert.match(close, /if \(okToClose === false\) \{ closing = false; return false; \}/);
 });
 
+test('discard waits for the main-process audit and avoids a duplicate close', async () => {
+  const source = await fs.readFile(sourcePath, 'utf8');
+  const closeStart = source.indexOf('const win = openModelessWindow({');
+  const eventStart = source.indexOf('onClose: () => {', closeStart);
+  const confirmStart = source.indexOf('function confirmClose()', eventStart);
+  const confirmEnd = source.indexOf('\n  /* ---------------- events from main', confirmStart);
+  assert.ok(closeStart >= 0 && eventStart > closeStart && confirmStart > eventStart && confirmEnd > confirmStart);
+  assert.match(source.slice(eventStart, confirmStart), /if \(!state\.closedInMain\)/);
+  assert.match(source.slice(confirmStart, confirmEnd), /callMain\('editor\.close', state\.id, \{ discard: true, text: state\.text \}\)/);
+  assert.match(source.slice(confirmStart, confirmEnd), /state\.closedInMain = true/);
+});
+
 test('modeless editor resize and keyboard growth stay inside the viewport', async () => {
   const source = await fs.readFile(sourcePath, 'utf8');
   assert.match(source, /const w = clamp\(opts\.width \|\| 880, minWidth, Math\.max\(minWidth, vw - 8\)\)/);

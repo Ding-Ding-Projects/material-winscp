@@ -21,6 +21,8 @@ The requirements themselves live in
 | Pinned tabs are protected from bulk closes | Automatic — `test/tabs-logic.test.js` |
 | Tab roles, roving focus, pinned accessible name | Automatic (source contract) — `test/tabs-logic.test.js` |
 | A runaway regex is stopped, not waited for | Automatic — `test/renderer-logic.test.js` |
+| Shared search/regex controls stay localized and stateful while open | Automatic (source contract) — `test/issue16-contract.test.js` |
+| OS reduced-motion mode disables animation and smooth preference scrolling | Automatic (source contract) — `test/issue16-contract.test.js` |
 | Alpha survives the colour translator | Automatic — `test/renderer-logic.test.js` |
 | Visible focus, focus order, focus return | **Human pass** |
 | Screen-reader names, states and announcements | **Human pass** |

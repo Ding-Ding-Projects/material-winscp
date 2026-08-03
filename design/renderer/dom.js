@@ -505,6 +505,15 @@ export function shouldFocusModal(isClosed, isConnected) {
   return !isClosed && isConnected;
 }
 
+/** True when either the persisted preference or the OS asks for no motion. */
+export function isReducedMotion() {
+  const root = typeof document !== 'undefined' ? document.documentElement : null;
+  if (root?.dataset?.rm === '1' || root?.dataset?.osrm === '1') return true;
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && !!window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 /* ------------------------------------------------------------------ */
 /* live region                                                         */
 /* ------------------------------------------------------------------ */

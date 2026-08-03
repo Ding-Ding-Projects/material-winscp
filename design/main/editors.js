@@ -655,15 +655,29 @@ class EditorManager extends EventEmitter {
     const keep = this.prefs().keepTemporaryFiles === true ||
       this.globalPrefs().temporaryDirectoryCleanup === false ||
       o.keep === true;
-    const orphan = rec.dirty && !rec.localOnly;
+    // The renderer owns the unsaved textarea buffer. A deliberate discard must
+    // therefore cross the bridge explicitly: without this marker the main
+    // record still looks clean and would delete the only recovery copy.
+    const discardRequested = o.discard === true && rec.remotePath && !rec.localOnly;
+    let discardTextError = null;
+    if (discardRequested && typeof o.text === 'string') {
+      try {
+        await fsp.writeFile(rec.localPath, encode(o.text, rec.encoding));
+      } catch (e) {
+        // The history action remains best effort and close must still finish;
+        // the orphan event below tells the caller that recovery may be absent.
+        discardTextError = e;
+      }
+    }
+    const orphan = (rec.dirty || discardRequested) && !rec.localOnly;
 
     // A discard is itself an auditable user action. Write it before the close
     // notification and before deleting the record. History is best effort by
     // contract: a broken history repository must never trap the user's close.
     let discardAudit = orphan ? { status: 'not-recorded', reason: 'history-unavailable' } : null;
     if (orphan && this.history && typeof this.history.snapshot === 'function') {
-      const state = this.historyState() || {};
       try {
+        const state = this.historyState() || {};
         const result = await this.history.snapshot(`Discarded unsaved document "${rec.fileName}"`, {
           ...state,
           editorDiscard: {
@@ -680,10 +694,15 @@ class EditorManager extends EventEmitter {
       } catch { discardAudit = { status: 'not-recorded', reason: 'history-write-failed' }; }
     }
 
+    let recoveryAvailable = !discardRequested || !discardTextError;
+    if (recoveryAvailable) {
+      try { await fsp.access(rec.localPath); } catch { recoveryAvailable = false; }
+    }
     if (orphan) {
       this._send('event:editor', {
         type: 'orphan', id: rec.id, localPath: rec.localPath, remotePath: rec.remotePath,
         discardAudit,
+        recoveryAvailable,
         message: 'The edit was not uploaded; the temporary file has been kept.',
       });
     } else if (!keep && !rec.localOnly) {

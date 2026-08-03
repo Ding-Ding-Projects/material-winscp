@@ -366,6 +366,7 @@ function actionOf(label) {
   if (l.startsWith('restored')) return 'restored';
   if (l.startsWith('undid') || l.startsWith('undone')) return 'undone';
   if (l.startsWith('deleted') || l.startsWith('removed') || l.startsWith('forgot')) return 'deleted';
+  if (l.startsWith('discarded')) return 'discarded';
   if (l.startsWith('added') || l.startsWith('created') || l.startsWith('duplicated')) return 'created';
   if (l.startsWith('imported')) return 'imported';
   if (l.startsWith('changed setting') || l.startsWith('changed settings')) return 'settings';

@@ -51,6 +51,11 @@ user typed.
 This is stated in the builder's own UI, not only in this document, because a
 pattern written for PCRE and pasted here is the most common source of confusion.
 
+All builder controls, guided-construction labels, status messages and
+accessibility names are live-bound to the common language engine. Changing
+language or either funny-level slider while the popover is open updates the
+copy in place; the pattern, flags, sample and match facts remain untouched.
+
 ## Live feedback
 
 - **Sample text** — editable, and pre-filled from the search's own domain (the
@@ -107,6 +112,9 @@ pattern written for PCRE and pasted here is the most common source of confusion.
   [search surfaces](search-surfaces.md), not only from one.
 - Anchoring, edge collision and focus return are tested.
 - Localization of every builder control is tested in all three language modes.
+- The search trigger exposes `aria-haspopup="dialog"`, `aria-expanded` and
+  `aria-controls`; the builder exposes a labelled dialog, invalid state and a
+  polite live preview.
 
 ## Suggested articles
 

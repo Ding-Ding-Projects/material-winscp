@@ -137,6 +137,10 @@ function installMenuDom() {
 
 function keyEvent(key) { return { type: 'keydown', key, target: null }; }
 
+function nodeText(node) {
+  return node.textContent || (node.children || []).map((child) => nodeText(child)).join('');
+}
+
 test('action descriptors resolve through the shared registry and use platform notation', () => {
   assert.equal(C.shortcutForAction({ action: 'LocalBackAction' }), 'Alt+Left');
   assert.equal(C.shortcutForMenu({ action: 'LocalBackAction' }, { platform: 'win32' }), 'Alt+←');
@@ -303,6 +307,39 @@ test('anchored menus cap height before positioning so long dropdowns scroll', ()
   assert.match(source, /const viewportHeight = document\.documentElement\.clientHeight \|\| window\.innerHeight \|\| 0;/);
   assert.match(source, /root\.style\.maxHeight = `\$\{Math\.max\(1, viewportHeight - 12\)\}px`;/);
   assert.match(source, /if \(opts\.anchor\) \{/);
+});
+
+test('nested shortcut rows expose normalized visual and accessible key text', () => {
+  const restore = installMenuDom();
+  try {
+    const parent = C.openMenu({
+      platform: 'darwin',
+      items: [{
+        id: 'parent', label: 'Parent', shortcut: 'Ctrl+Shift+F7',
+        submenu: [{ id: 'child', label: 'Back', shortcut: 'Alt+Left' }],
+      }],
+      x: 10, y: 10,
+    });
+    const parentRow = parent.element.children[0];
+    const parentShortcut = parentRow.children[2];
+    assert.equal(parentRow.getAttribute('aria-keyshortcuts'), 'Ctrl+Shift+F7');
+    assert.equal(parentRow.getAttribute('aria-describedby'), parentShortcut.getAttribute('id'));
+    assert.equal(parentShortcut.getAttribute('aria-label'), 'Ctrl+Shift+F7');
+    assert.equal(nodeText(parentShortcut), '⌃+⇧+F7');
+
+    parent.focusFirst();
+    parent.element.dispatchEvent(keyEvent('ArrowRight'));
+    const menuLayer = document.getElementById('layer-menu');
+    const childMenu = menuLayer.children.find((menu) => menu !== parent.element);
+    const childRow = childMenu.children[0];
+    const childShortcut = childRow.children[2];
+    assert.equal(childRow.getAttribute('aria-keyshortcuts'), 'Alt+ArrowLeft');
+    assert.equal(childRow.getAttribute('aria-describedby'), childShortcut.getAttribute('id'));
+    assert.equal(childShortcut.getAttribute('aria-label'), 'Alt+ArrowLeft');
+    assert.equal(nodeText(childShortcut), '⌥+←');
+  } finally {
+    restore();
+  }
 });
 
 test('submenu dismissal returns focus and clears the parent expanded state', () => {

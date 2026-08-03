@@ -318,6 +318,7 @@ export function buildMenuItems(nodes, over = {}) {
       const state = commandState(node.action, over);
       if (!state.visible) continue;
       const item = {
+        action: node.action,
         label: actionLabel(node.action),
         // No glyph rather than a generic one: an icon in a menu is a hint, and
         // a wrong hint is worse than none.

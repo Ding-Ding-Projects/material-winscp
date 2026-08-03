@@ -19,7 +19,7 @@ flowchart TD
   G --> H[npm run make]
   H --> I{Setup.exe exists<br/>and is non-empty?}
   I -- no --> J[Fail the run]
-  I -- yes --> K[Stage the dim sum photo<br/>verify the COPY decodes]
+  I -- yes --> K[Stage a tracked dim sum photo<br/>verify the COPY decodes]
   K --> L[build/release-notes.js]
   L --> M[gh release create<br/>one non-draft release]
 ```
@@ -41,12 +41,14 @@ Node is pinned to 22 (see [building](building.md) for why).
 ## The tag
 
 ```
-v<version>-build.<run_number>
+v<major>.<minor>.<run_number>
 ```
 
-`github.run_number` increases by one for every run of this workflow in this
-repository and is never reused, so two builds cannot collide on a tag and no
-earlier release can be recycled or overwritten.
+The release job copies the package's major and minor components, uses
+`github.run_number` as the patch component, and creates a plain semver tag.
+That keeps the Squirrel package version increasing and avoids prerelease tags
+that update feeds skip. The workflow's `tags-ignore: ['**']` prevents the tag
+created by publication from starting another build.
 
 ## The token chain
 
@@ -76,7 +78,7 @@ The [Pages workflow](../../.github/workflows/pages.yml) deploys through
 | --- | --- |
 | A test fails | The `release` job never starts. No tag, no release, no assets. |
 | `npm run make` produces no Setup.exe | The "Locate the built artefacts" step fails the run explicitly rather than publishing an empty release. |
-| The dim sum photo does not decode | `pick-codename.js` skips that record. If none is eligible, the release ships without a photo and the run logs a warning — a release is never blocked by the catalog. |
+| The dim sum photo is missing, untracked, outside `design/assets/*.png`, or does not decode | The release job fails before `gh release create`; issue #15 requires a real tracked photo asset. |
 | The code-name sequence is exhausted | The release ships with its version alone and the notes say so. No dish is ever reused. |
 | `gh release create` is refused | The run fails visibly. The artefacts are still available from the uploaded build artifact, so nothing is lost. |
 | Two pushes in quick succession | `concurrency` groups by ref **without** cancelling in progress, so both produce their own release under their own run number. |
@@ -106,7 +108,8 @@ appears**. What *has* been verified locally, with real output:
 - `build/pick-codename.js` resolves a dish and decodes all six catalog images
   (`1254x1254` each).
 - `build/pick-codename.js --index 7` correctly reports the sequence exhausted
-  rather than reusing a dish.
+  rather than reusing a dish, while still selecting a verified photo for the
+  mandatory release asset.
 - `build/release-notes.js` composes notes from a real artefact path and a real
   catalog entry.
 

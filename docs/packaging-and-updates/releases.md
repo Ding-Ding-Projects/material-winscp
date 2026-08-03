@@ -19,7 +19,8 @@ run, is not a release. The workflow fails rather than publishing one.
 
 ## The tag
 
-`v<version>-build.<run_number>`. Monotonic, never recycled, never overwritten.
+`v<major>.<minor>.<run_number>`. Plain semver, monotonic within this workflow,
+never recycled, never overwritten.
 
 ## The dim sum code name
 
@@ -62,9 +63,10 @@ the workflow run summary.
 ### When the sequence runs out
 
 The release **ships with its version alone**, and the notes say so plainly. A
-release is never blocked, delayed or renamed because the catalog is exhausted —
-and no dish is reused, because two builds sharing a code name defeats the one
-job a code name has.
+release is never blocked, delayed or renamed because the *unused code-name*
+sequence is exhausted — and no dish is reused, because two builds sharing a
+code name defeats the one job a code name has. The workflow still requires a
+verified tracked photograph, which is a separate release asset requirement.
 
 Verified locally: with six eligible dishes, `--index 7` reports
 
@@ -96,7 +98,8 @@ screen-reader users too.
 
 | Situation | What happens |
 | --- | --- |
-| No eligible dish | Release ships with its version alone; a warning is logged. |
+| No unused code name but a verified photo exists | Release ships with its version alone; the photo is labelled as a catalog photo, not a reused code name. |
+| No verified photo exists | The release job fails before publication; issue #15 requires a real photo asset. |
 | The staged photo copy fails to decode | The run fails rather than attaching a corrupt image. The copy is verified, not just the source. |
 | A tag already exists | Cannot happen — `run_number` is monotonic. If it somehow did, `gh release create` fails visibly rather than overwriting. |
 | The release notes reference a missing asset | `release-notes.js` only lists assets whose files exist at compose time. |

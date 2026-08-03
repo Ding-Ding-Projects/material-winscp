@@ -25,7 +25,7 @@
 
 import { REGEX_CONSTRUCTS, RB_FLAGS } from '../../winscp-data.js';
 import { h, icon, layer, anchorTo, trapFocus, focusMemory, announce, copyText, downloadText, uid, clamp } from '../dom.js';
-import { t } from '../i18n.js';
+import { t, bindRender, RB_CONSTRUCT_KEYS, RB_CONSTRUCT_DESCRIPTION_KEYS, RB_FLAG_KEYS, RB_CATEGORY_KEYS } from '../i18n.js';
 import { appearanceTarget } from '../dom.js';
 
 export const MAX_SAMPLE = 20000;
@@ -236,7 +236,7 @@ export function openRegexBuilder(opts = {}) {
   const restoreFocus = focusMemory();
   const ids = {
     root: uid('rb'), pattern: uid('rb-pat'), sample: uid('rb-sample'),
-    status: uid('rb-status'), matches: uid('rb-matches'),
+    status: uid('rb-status'), matches: uid('rb-matches'), title: uid('rb-title'),
   };
 
   let pattern = opts.pattern || '';
@@ -250,26 +250,28 @@ export function openRegexBuilder(opts = {}) {
   const patternInput = h('input', {
     type: 'text', id: ids.pattern, class: 'rb-pattern mono', spellcheck: 'false',
     autocomplete: 'off', autocapitalize: 'off',
-    'aria-describedby': ids.status, 'aria-label': 'Regular expression pattern',
+    'aria-describedby': ids.status, 'aria-label': t('rbPatternAria'),
     placeholder: '\\.(jpe?g|png)$',
   });
   patternInput.value = pattern;
 
   const statusEl = h('div', { id: ids.status, class: 'rb-status', role: 'status', 'aria-live': 'polite' });
-  const flagsRow = h('div', { class: 'rb-flags', role: 'group', 'aria-label': 'Flags' });
-  const constructsEl = h('div', { class: 'rb-constructs', role: 'group', 'aria-label': 'Insert a construct' });
+  const flagsRow = h('div', { class: 'rb-flags', role: 'group', 'aria-label': t('rbFlagsAria') });
+  const constructsEl = h('div', { class: 'rb-constructs', role: 'group', 'aria-label': t('rbConstructsAria') });
   const sampleInput = h('textarea', {
     id: ids.sample, class: 'rb-sample mono', spellcheck: 'false', rows: 5,
-    'aria-label': 'Sample text', placeholder: 'Paste sample text to test against',
+    'aria-label': t('rbSampleAria'), placeholder: t('rbSamplePlaceholder'),
   });
   sampleInput.value = sample;
-  const previewEl = h('div', { class: 'rb-preview mono', 'aria-label': 'Live matches', tabindex: '0' });
+  const previewEl = h('div', { class: 'rb-preview mono', role: 'region', 'aria-live': 'polite', 'aria-atomic': 'false', 'aria-label': t('rbLiveMatches'), tabindex: '0' });
   const groupsEl = h('div', { id: ids.matches, class: 'rb-groups' });
 
   const flagButtons = new Map();
   for (const { f, d } of RB_FLAGS) {
     const b = h('button', {
-      type: 'button', class: 'rb-flag', 'data-flag': f, title: `${f} — ${d}`,
+      type: 'button', class: 'rb-flag', 'data-flag': f,
+      title: `${f} — ${t(RB_FLAG_KEYS[f] || 'rbFlagsAria')}`,
+      'aria-label': `${f}: ${t(RB_FLAG_KEYS[f] || 'rbFlagsAria')}`,
       'aria-pressed': String(flags.includes(f)),
       onclick: () => toggleFlag(f),
     }, h('span', { class: 'mono' }, f));
@@ -293,13 +295,17 @@ export function openRegexBuilder(opts = {}) {
     grouped.get(cat).push(c);
   }
   for (const [cat, list] of grouped) {
-    constructsEl.appendChild(h('div', { class: 'rb-cat' }, cat));
+    const catKey = RB_CATEGORY_KEYS[cat];
+    constructsEl.appendChild(h('div', { class: 'rb-cat', 'data-rb-cat-key': catKey || '' }, catKey ? t(catKey) : cat));
     const row = h('div', { class: 'rb-cat-row' });
     for (const c of list) {
+      const key = RB_CONSTRUCT_KEYS[c.l];
+      const descKey = RB_CONSTRUCT_DESCRIPTION_KEYS[c.l];
       row.appendChild(h('button', {
-        type: 'button', class: 'rb-chip', title: `${c.l} — ${c.d}`,
+        type: 'button', class: 'rb-chip', 'data-rb-key': key || '', 'data-rb-desc-key': descKey || '',
+        title: `${key ? t(key) : c.l} — ${descKey ? t(descKey) : c.d}`,
         onclick: () => insertConstruct(c),
-      }, c.l));
+      }, key ? t(key) : c.l));
     }
     constructsEl.appendChild(row);
   }
@@ -315,31 +321,38 @@ export function openRegexBuilder(opts = {}) {
     type: 'button', class: 'icon-btn', 'aria-label': t('close'), title: t('close'), onclick: () => close(),
   }, icon('close', 18));
 
+  const titleMain = h('div', { class: 'rb-title-main', id: ids.title }, opts.title || t('rbTitle'));
+  const engineEl = h('div', { class: 'rb-engine' }, t('rbEngine'));
+  const patternLabel = h('label', { class: 'rb-label', for: ids.pattern }, t('rbPattern'));
+  const flagsTitle = h('div', { class: 'rb-section-title' }, t('rbFlags'));
+  const insertTitle = h('div', { class: 'rb-section-title' }, t('rbInsert'));
+  const sampleLabel = h('label', { class: 'rb-label', for: ids.sample }, t('rbSample'));
+  const matchesTitle = h('div', { class: 'rb-section-title' }, t('rbMatches'));
+
   const root = h('div', {
     id: ids.root, class: 'rb-popover surface-3', role: 'dialog', 'aria-modal': 'false',
-    'aria-label': opts.title || t('rbTitle'), tabindex: '-1',
+    'aria-labelledby': ids.title, tabindex: '-1',
   },
   h('header', { class: 'rb-head' },
     icon('code', 18),
     h('div', { class: 'rb-title' },
-      h('div', { class: 'rb-title-main' }, opts.title || t('rbTitle')),
-      h('div', { class: 'rb-engine' }, t('rbEngine'))),
+      titleMain, engineEl),
     closeBtn),
   h('div', { class: 'rb-body' },
-    h('label', { class: 'rb-label', for: ids.pattern }, t('rbPattern')),
+    patternLabel,
     h('div', { class: 'rb-pattern-row' },
       h('span', { class: 'rb-slash mono', 'aria-hidden': 'true' }, '/'),
       patternInput,
       h('span', { class: 'rb-slash mono', 'aria-hidden': 'true' }, '/'),
       h('span', { class: 'rb-flagview mono', 'aria-hidden': 'true' })),
     statusEl,
-    h('div', { class: 'rb-section-title' }, t('rbFlags')),
+    flagsTitle,
     flagsRow,
-    h('div', { class: 'rb-section-title' }, t('rbInsert')),
+    insertTitle,
     constructsEl,
-    h('label', { class: 'rb-label', for: ids.sample }, t('rbSample')),
+    sampleLabel,
     sampleInput,
-    h('div', { class: 'rb-section-title' }, t('rbMatches')),
+    matchesTitle,
     previewEl,
     groupsEl),
   h('footer', { class: 'rb-foot' }, clearBtn, copyBtn, exportBtn, h('div', { class: 'spacer' }), applyBtn));
@@ -350,6 +363,38 @@ export function openRegexBuilder(opts = {}) {
   layer('popover').appendChild(root);
   const anchoring = anchorTo(root, opts.anchor, { placement: opts.placement || 'bottom-start', gap: 8, onDetach: () => close() });
   const untrap = trapFocus(root);
+  const unbindI18n = bindRender(root, () => {
+    titleMain.textContent = opts.title || t('rbTitle');
+    engineEl.textContent = t('rbEngine');
+    patternLabel.textContent = t('rbPattern');
+    flagsTitle.textContent = t('rbFlags');
+    insertTitle.textContent = t('rbInsert');
+    sampleLabel.textContent = t('rbSample');
+    sampleInput.setAttribute('aria-label', t('rbSampleAria'));
+    sampleInput.placeholder = t('rbSamplePlaceholder');
+    matchesTitle.textContent = t('rbMatches');
+    flagsRow.setAttribute('aria-label', t('rbFlagsAria'));
+    constructsEl.setAttribute('aria-label', t('rbConstructsAria'));
+    previewEl.setAttribute('aria-label', t('rbLiveMatches'));
+    closeBtn.setAttribute('aria-label', t('close'));
+    closeBtn.title = t('close');
+    copyBtn.lastChild.nodeValue = t('rbCopy');
+    exportBtn.lastChild.nodeValue = t('export_');
+    clearBtn.lastChild.nodeValue = t('reset');
+    applyBtn.textContent = t('rbUse');
+    for (const [f, b] of flagButtons) {
+      const label = t(RB_FLAG_KEYS[f] || 'rbFlagsAria');
+      b.title = `${f} — ${label}`;
+      b.setAttribute('aria-label', `${f}: ${label}`);
+    }
+    constructsEl.querySelectorAll('[data-rb-key]').forEach((el) => {
+      const key = el.dataset.rbKey;
+      const descKey = el.dataset.rbDescKey;
+      if (key) { const label = t(key); el.textContent = label; el.title = `${label}${descKey ? ` — ${t(descKey)}` : ''}`; }
+    });
+    renderStatus(lastResult);
+    renderPreview(lastResult);
+  });
 
   /* ---------- behaviour ---------- */
 
@@ -379,7 +424,7 @@ export function openRegexBuilder(opts = {}) {
       // "Text (escaped)" — take the current selection, or ask for the literal.
       const start = patternInput.selectionStart ?? 0, end = patternInput.selectionEnd ?? 0;
       const selected = patternInput.value.slice(start, end);
-      const literal = selected || window.prompt('Literal text to match (it will be escaped):', '');
+      const literal = selected || window.prompt(t('rbLiteralPrompt'), '');
       if (literal == null) return;
       const escaped = escapeLiteral(literal);
       if (selected) {
@@ -406,33 +451,32 @@ export function openRegexBuilder(opts = {}) {
     statusEl.textContent = '';
     statusEl.classList.remove('is-error', 'is-warn', 'is-ok');
     const c = currentValidity();
+    patternInput.setAttribute('aria-invalid', String(!c.ok));
     if (!patternInput.value) {
       statusEl.classList.add('is-ok');
-      statusEl.append(icon('info', 14), h('span', {}, 'Empty pattern — everything matches. Type or use Build below.'));
+      statusEl.append(icon('info', 14), h('span', {}, t('rbEmptyPattern')));
       return;
     }
     if (!c.ok) {
       statusEl.classList.add('is-error');
-      statusEl.append(icon('error', 14), h('span', {}, `Invalid pattern: ${c.error}`));
+      statusEl.append(icon('error', 14), h('span', {}, t('invalidPattern', c.error)));
       return;
     }
     if (result?.timedOut) {
       statusEl.classList.add('is-error');
-      statusEl.append(icon('warning', 14), h('span', {},
-        `Runaway pattern — evaluation was stopped after ${TIME_BUDGET_MS} ms. This pattern backtracks catastrophically on this sample; simplify a nested quantifier such as (a+)+ before using it.`));
+      statusEl.append(icon('warning', 14), h('span', {}, t('rbRunaway', TIME_BUDGET_MS)));
       return;
     }
     if (backtrackingRisk(patternInput.value)) {
       statusEl.classList.add('is-warn');
-      statusEl.append(icon('warning', 14), h('span', {},
-        'Valid, but this shape (a quantifier applied to a group that already repeats) can backtrack catastrophically on longer input.'));
+      statusEl.append(icon('warning', 14), h('span', {}, t('rbRisk')));
       return;
     }
     statusEl.classList.add('is-ok');
     const n = result ? result.matches.length : 0;
-    const capped = result?.truncated ? ` (first ${MAX_MATCHES} shown)` : '';
-    statusEl.append(icon('check_circle', 14), h('span', {},
-      `Valid. ${n} ${n === 1 ? 'match' : 'matches'}${capped} in ${result ? Math.round(result.elapsedMs) : 0} ms.`));
+    const label = n === 1 ? t('rbMatchOne') : t('rbMatchMany');
+    const suffix = result?.truncated ? ` (${t('rbFirstShown', MAX_MATCHES)})` : '';
+    statusEl.append(icon('check_circle', 14), h('span', {}, `${t('rbValid', n, label, result ? Math.round(result.elapsedMs) : 0)}${suffix}`));
   }
 
   function renderPreview(result) {
@@ -440,7 +484,7 @@ export function openRegexBuilder(opts = {}) {
     groupsEl.textContent = '';
     const text = sampleInput.value.slice(0, MAX_SAMPLE);
     if (!result || !result.ok || !result.matches.length) {
-      previewEl.appendChild(h('span', { class: 'rb-plain' }, text || '(no sample text)'));
+      previewEl.appendChild(h('span', { class: 'rb-plain' }, text || t('rbNoSample')));
       if (result && result.ok && patternInput.value && !result.timedOut) {
         groupsEl.appendChild(h('div', { class: 'rb-nomatch' }, t('rbNoMatch')));
       }
@@ -450,7 +494,7 @@ export function openRegexBuilder(opts = {}) {
     result.matches.forEach((m, i) => {
       if (m.start > cursor) previewEl.appendChild(h('span', { class: 'rb-plain' }, text.slice(cursor, m.start)));
       const cls = m.end === m.start ? 'rb-hit rb-zero' : 'rb-hit';
-      previewEl.appendChild(h('mark', { class: cls, 'data-m': String(i), title: `Match ${i + 1}` },
+      previewEl.appendChild(h('mark', { class: cls, 'data-m': String(i), title: t('rbMatchTitle', i + 1) },
         m.end === m.start ? '​' : text.slice(m.start, m.end)));
       cursor = Math.max(cursor, m.end);
     });
@@ -464,16 +508,16 @@ export function openRegexBuilder(opts = {}) {
         m.groups.forEach((g) => {
           row.appendChild(h('span', { class: 'rb-group' },
             h('span', { class: 'rb-group-name' }, String(g.index)),
-            h('span', { class: 'rb-group-val mono' }, g.value === null ? '(unmatched)' : g.value || '(empty)')));
+            h('span', { class: 'rb-group-val mono' }, g.value === null ? t('rbUnmatched') : g.value || t('rbEmpty'))));
         });
         m.named.forEach((g) => {
           row.appendChild(h('span', { class: 'rb-group is-named' },
             h('span', { class: 'rb-group-name' }, g.name),
-            h('span', { class: 'rb-group-val mono' }, g.value === null ? '(unmatched)' : g.value || '(empty)')));
+            h('span', { class: 'rb-group-val mono' }, g.value === null ? t('rbUnmatched') : g.value || t('rbEmpty'))));
         });
         groupsEl.appendChild(row);
       });
-      if (withGroups.length > 20) groupsEl.appendChild(h('div', { class: 'rb-nomatch' }, `…and ${withGroups.length - 20} more.`));
+      if (withGroups.length > 20) groupsEl.appendChild(h('div', { class: 'rb-nomatch' }, t('rbMoreGroups', withGroups.length - 20)));
     }
   }
 
@@ -496,12 +540,12 @@ export function openRegexBuilder(opts = {}) {
     lastResult = result;
     renderStatus(result);
     renderPreview(result);
-    if (result.timedOut) announce('Runaway regular expression stopped. Simplify the pattern.', true);
+    if (result.timedOut) announce(t('rbRunawayShort'), true);
   }
 
   async function onCopy() {
     const ok = await copyText(`/${patternInput.value}/${flags}`);
-    announce(ok ? 'Pattern copied to the clipboard.' : 'Copy failed.');
+    announce(ok ? t('rbCopyAnnounce') : t('rbCopyFailed'));
   }
 
   function onExport() {
@@ -514,12 +558,12 @@ export function openRegexBuilder(opts = {}) {
       exportedAt: new Date().toISOString(),
     };
     downloadText('regex-pattern.json', JSON.stringify(payload, null, 2));
-    announce('Pattern exported.');
+    announce(t('rbExportAnnounce'));
   }
 
   function apply() {
     const c = currentValidity();
-    if (!c.ok) { announce(`Cannot apply: ${c.error}`, true); patternInput.focus(); return; }
+    if (!c.ok) { announce(t('rbApplyInvalid', c.error), true); patternInput.focus(); return; }
     opts.onApply?.({ pattern: patternInput.value, flags });
     close();
   }
@@ -553,6 +597,7 @@ export function openRegexBuilder(opts = {}) {
     document.removeEventListener('pointerdown', onDocPointer, true);
     clearTimeout(scheduleTimer);
     evalToken += 1;
+    unbindI18n();
     untrap();
     anchoring.dispose();
     root.remove();

@@ -2,9 +2,13 @@
 
 ## What it does
 
-`design/main/updates.js` checks whether a newer version exists and offers it.
-The download and swap are performed by Squirrel's `Update.exe` — see
-[the installer](installer.md) for the on-disk mechanics.
+`design/main/updates.js` checks whether a newer published release exists and
+offers its notes. It only considers releases carrying the complete Squirrel
+`Setup.exe` + `.nupkg` + `RELEASES` set, so a notes-only GitHub release cannot be
+mistaken for an installable update. The installed Windows build also wires
+Electron's Squirrel updater for a quiet background download and a staged,
+user-initiated apply; see [the installer](installer.md) for the on-disk
+mechanics.
 
 ## Configuration
 
@@ -29,8 +33,10 @@ period.
 - **Checks are never blocking.** They run in the background; a result arrives as
   a [corner notification](../interface-and-appearance/notifications.md) with a
   details action, never as a modal that interrupts work.
-- **Nothing installs itself.** An available update is offered. The user decides
-  when to apply it, and applying it restarts the app.
+- **Manual checks do not install anything.** An available update is offered. The
+  installed Windows updater may download and stage it quietly in the
+  background, but applying it still requires an explicit user action and
+  restarts the app.
 - **The offer includes the version, the release date and the dim sum code name**,
   with a link to the full release notes and to the in-app
   [changelog](changelog.md).
@@ -60,7 +66,8 @@ period.
 - **The check sends the current version and platform.** Nothing else — no site
   inventory, no usernames, no paths. `authenticationEmail` is only sent when the
   user has set it for a channel that requires it, and it is optional.
-- **Nothing is installed without consent.** There is no silent auto-update.
+- **Nothing is applied without consent.** Background download is silent, but
+  `quitAndInstall()` is reachable only through the explicit apply path.
 - **A restart to apply an update can lose queued transfers**, since the queue is
   deliberately not persisted (see [the queue](../transfers-and-queue/queue.md)).
   The restart prompt says so.

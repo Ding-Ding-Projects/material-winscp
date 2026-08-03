@@ -10,6 +10,12 @@ The file browser itself. Two layouts, as in WinSCP:
 
 `interface` (default `commander`) selects between them, live, without a restart.
 
+On first launch the local side reads the actual local directory and the remote
+side has no invented listing: without an attached session it shows a truthful
+no-session message such as **This tab has no session open.** and a **New
+connection** action. A remote directory becomes listable only after a real
+session is attached; a mock server tree is never used as startup content.
+
 ## Configuration
 
 ### Layout

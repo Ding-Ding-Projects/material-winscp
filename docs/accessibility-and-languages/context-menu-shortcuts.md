@@ -22,6 +22,12 @@ does not infer a shortcut from the label or borrow one from the opposite panel.
 This keeps a right-click on the local panel and one on the remote panel tied to
 the action that actually owns the shortcut.
 
+The command registry may also supply a runtime descriptor shortcut when the
+extracted action metadata has no default. `OpenedTabsAction` is the current
+example (`Ctrl+Shift+Tab`); its menu parent and any nested menu path use the
+same formatter as the 79 extracted defaults. Descriptor values are not copied
+into a second renderer-specific format.
+
 The display formatter canonicalizes WinSCP names before rendering:
 
 | Registry value | Windows/Linux display | macOS display |
@@ -32,8 +38,10 @@ The display formatter canonicalizes WinSCP names before rendering:
 | `Meta+S` | `Win` + `S` (Windows), `Super` + `S` (Linux) | `⌘` + `S` |
 
 The visible glyphs are accompanied by `aria-keyshortcuts` using canonical key
-names, and the `<kbd>` group has an accessible label. This means a screen
-reader gets `Alt+ArrowLeft` while a sighted Windows user sees `Alt+←`.
+names, and each menu row references its shortcut span through
+`aria-describedby`; the `<kbd>` group carries the canonical accessible label.
+This means a screen reader gets `Alt+ArrowLeft` while a sighted Windows user
+sees `Alt+←`, including when the row is inside a submenu.
 
 ## Layout and state
 
@@ -62,8 +70,12 @@ node --test test/contextmenu.test.js
 ```
 
 It audits the real file/panel context providers, both declarative menu trees,
-all direct shortcut literals in registered provider modules, action fallback,
-special keys, accessibility metadata, and the narrow-layout contract.
+their nested rendered children, all 79 extracted shortcut descriptors, all
+direct shortcut literals in registered provider modules, action fallback,
+special keys, accessibility metadata, and the narrow-layout contract. The
+audit reports menu-bearing action references separately from keyboard-only
+actions; an issue is not considered closed merely because the formatter can
+render a synthetic descriptor.
 It also runs a DOM-light lifecycle regression covering child-menu dismissal,
 focus return, `aria-expanded`, and reopening the same submenu.
 

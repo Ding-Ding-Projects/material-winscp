@@ -18,6 +18,21 @@ const DEFAULT_FEED = 'https://api.github.com/repos/Ding-Ding-Projects/material-w
 
 const USER_AGENT = 'WinSCP-Material-UpdateCheck';
 
+/**
+ * A GitHub release is updateable only when it carries the complete
+ * Squirrel.Windows feed. A release page can exist with notes or source assets
+ * alone; offering that as an update leaves the installed app with nothing it
+ * can download or apply.
+ */
+function hasSquirrelUpdateSet(release) {
+  const names = new Set((Array.isArray(release && release.assets) ? release.assets : [])
+    .map((asset) => String(asset && asset.name || '').trim())
+    .filter(Boolean));
+  return [...names].some((name) => /setup\.exe$/i.test(name))
+    && [...names].some((name) => /\.nupkg$/i.test(name))
+    && [...names].some((name) => name.toUpperCase() === 'RELEASES');
+}
+
 // ------------------------------------------------------------------ semver
 
 /** Split a version into its comparable parts. Returns null for nonsense. */
@@ -195,6 +210,9 @@ class Updates extends EventEmitter {
     this.currentVersion = d.currentVersion || '0.0.0';
     this._send = d.emit || (() => {});
     this.feedUrl = d.feedUrl || DEFAULT_FEED;
+    // Injection keeps the release-selection contract testable without making
+    // a network request. Production still uses the HTTPS implementation above.
+    this._fetch = d.fetch || fetchJson;
     this._timer = null;
     this._inFlight = null;
   }
@@ -249,7 +267,7 @@ class Updates extends EventEmitter {
       const p = this.prefs();
       try {
         this.emit('checking');
-        const feed = await fetchJson(this.feedUrl, {
+        const feed = await this._fetch(this.feedUrl, {
           connectionType: p.connectionType || 'auto',
           timeoutMs: o.timeoutMs,
         });
@@ -257,6 +275,7 @@ class Updates extends EventEmitter {
         const releases = (Array.isArray(feed) ? feed : [feed])
           .filter((r) => r && !r.draft)
           .filter((r) => (this.wantsBeta() ? true : !r.prerelease))
+          .filter(hasSquirrelUpdateSet)
           .map((r) => ({
             version: String(r.tag_name || r.name || '').replace(/^v/, ''),
             name: r.name || r.tag_name || '',
@@ -276,6 +295,10 @@ class Updates extends EventEmitter {
           checkedAt: Date.now(),
           currentVersion: this.currentVersion,
           available,
+          // Keep the small legacy shape consumed by the renderer command while
+          // retaining the richer `latest` record for the About/update surface.
+          version: latest ? latest.version : null,
+          newVersion: available ? latest.version : null,
           latest,
           beta: this.wantsBeta(),
           error: null,
@@ -335,4 +358,6 @@ class Updates extends EventEmitter {
   lastResult() { return this.prefs().results || null; }
 }
 
-module.exports = { Updates, compareVersions, parseVersion, isNewer, fetchJson, DEFAULT_FEED };
+module.exports = {
+  Updates, compareVersions, parseVersion, isNewer, fetchJson, hasSquirrelUpdateSet, DEFAULT_FEED,
+};

@@ -370,6 +370,38 @@ test('discarding an unsaved edit reports when the audit could not be recorded', 
   }
 });
 
+test('renderer discard sends its latest buffer before close and keeps recovery bytes', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-renderer-discard-'));
+  P.setRoot(root);
+  const f = fixture();
+  const order = [];
+  const revisions = [];
+  f.manager.history = {
+    snapshot: async (label, state) => {
+      order.push('history');
+      revisions.push({ label, state });
+      assert.equal(await fs.readFile(state.editorDiscard.localPath, 'utf8'), 'typed in renderer');
+      return { ok: true, value: { oid: 'discard-revision' } };
+    },
+  };
+  f.manager.historyState = () => ({ prefs: { versionHistory: { enabled: true } }, sites: [] });
+  try {
+    const opened = await f.manager.openRemote({ sessionId: f.session.id, remotePath: '/notes.txt', mode: 'internal' });
+    await f.manager.close(opened.id, { discard: true, text: 'typed in renderer' });
+    order.push('close-returned');
+
+    assert.deepEqual(order, ['history', 'close-returned']);
+    assert.equal(revisions.length, 1);
+    assert.match(revisions[0].label, /^Discarded unsaved document/);
+    const orphan = f.emitted.find((e) => e.type === 'orphan' && e.id === opened.id);
+    assert.equal(orphan.discardAudit.status, 'recorded');
+    assert.equal(orphan.recoveryAvailable, true);
+    assert.equal(await fs.readFile(opened.localPath, 'utf8'), 'typed in renderer');
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('the renderer bridge consumes command-layer editor:opened records and panels repaint uploads', async () => {
   const editorSource = await fs.readFile(path.join(__dirname, '..', 'design/renderer/ui/dialogs/editor.js'), 'utf8');
   const panelSource = await fs.readFile(path.join(__dirname, '..', 'design/renderer/ui/panels.js'), 'utf8');

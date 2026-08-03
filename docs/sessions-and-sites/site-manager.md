@@ -9,6 +9,16 @@ option — plus presentation: a name, a folder, a colour tag and a note.
 The site list is searchable, foldered, importable and exportable, and every
 change to it is recorded in version history.
 
+### Truthful first launch
+
+The application starts with no saved sites, folders or workspaces unless the
+user already has real configuration to load. It does not seed a demo site,
+mock session or sample credentials. The first site-tree entry is an explicit
+`New Site` action, and the initial workspace uses the real local filesystem;
+its remote side says **This tab has no session open.** and offers **New
+connection** until the user creates or opens a real site. The simulated filesystem in
+`design/WinSCP Material 3.dc.html` remains a design reference only.
+
 ## Configuration
 
 ### Identity and presentation

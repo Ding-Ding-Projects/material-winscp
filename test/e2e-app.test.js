@@ -108,6 +108,16 @@ test.describe('the application boots and stays usable', () => {
       'the renderer must have no Node primitives');
   });
 
+  test.it('starts with truthful empty saved/session state', async () => {
+    assert.deepEqual(await app.ok('config.sites'), [], 'startup must not seed fake saved sites');
+    assert.deepEqual(await app.ok('session.list'), [], 'startup must not invent a connected session');
+    await waitFor(async () => await app.evaluate('!!document.querySelector(".fp-remote .fp-empty")'), 8000,
+      'the disconnected remote empty state');
+    const remoteText = await app.evaluate('document.querySelector(".fp-remote")?.innerText || ""');
+    assert.match(remoteText, /no session open/i);
+    assert.match(remoteText, /new connection/i);
+  });
+
   test.it('registers the whole IPC surface', async () => {
     const channels = await app.channels();
     assert.ok(channels.length >= 120, `only ${channels.length} channels registered`);
@@ -966,6 +976,7 @@ test.describe('the IPC contract holds against a hostile renderer', () => {
       ['config:setPref', [123, 'x'], /must be a string/i],
       ['queue:setLimit', ['many'], /must be a number/i],
       ['queue:setEnabled', ['yes'], /must be true or false/i],
+      ['editor:close', ['missing-editor', { discard: 'yes' }], /options\.discard must be true or false/i],
       ['config:siteAdd', ['not an object'], /must be an object/i],
       ['config:siteAdd', [{ protocol: 'gopher', hostName: 'h' }], /Unknown protocol/i],
       ['config:siteAdd', [{ protocol: 'sftp' }], /needs a host name/i],

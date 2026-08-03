@@ -67,6 +67,9 @@ tabs away is the failure this rule exists to prevent.
 - An honest no-match message naming what was searched.
 - Full keyboard operation with visible focus, an accessible name for the field,
   and a result count announced to assistive technology.
+- The search landmark, regex affordance, mode hint and no-match message follow
+  the active language mode and both funny-level sliders; switching language
+  while a builder is open updates its copy without discarding the pattern.
 - Results identify enough context to act on them.
 - All three language modes, with the builder's own controls localized.
 

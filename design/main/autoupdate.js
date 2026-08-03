@@ -32,7 +32,7 @@ try { electron = require('electron'); } catch { /* headless tests */ }
  * these is a silent no-update if we get it wrong:
  *   * the repository must be public;
  *   * the release must NOT be a draft and NOT a prerelease;
- *   * the tag must be plain semver — `v0.1.0-build.7` is a PRERELEASE and is
+ *   * the tag must be plain semver — `v0.1.0-build.7` would be a PRERELEASE and is
  *     skipped, which is why CI tags `v0.1.<run>`;
  *   * the release must carry the Squirrel trio: Setup.exe, the .nupkg, RELEASES;
  *   * and the app version must actually increase, or Squirrel sees nothing new.

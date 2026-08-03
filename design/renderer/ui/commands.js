@@ -3237,7 +3237,12 @@ function buildRegistry() {
       category: action.category,
       side: (spec && spec.side) || action.side,
       focused: action.focused,
-      shortcut: action.shortcut || '',
+      // A few runtime-only bindings are deliberately declared by the handler
+      // descriptor rather than the extracted WinSCP action metadata. Menus and
+      // the command palette still need the same authoritative shortcut, so do
+      // not discard that descriptor-level value (OpenedTabsAction is the
+      // current example).
+      shortcut: (spec && spec.shortcut) || action.shortcut || '',
       kind: (spec && spec.kind) || 'command',
       // `hasIcon` is what menus consult; `icon` is always renderable so a
       // toolbar button is never an empty rectangle.

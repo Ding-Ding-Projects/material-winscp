@@ -250,9 +250,16 @@ jobs:
           set -euo pipefail
           src=$(node -p "require('./codename.json').imagePath || ''")
           if [ -z "$src" ] || [ ! -f "$src" ]; then
-            echo "::warning::No verified dim sum photo is available; the release will ship without one."
-            echo "photo=" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::No verified dim sum photo is available; issue #15 requires every release to carry one."
+            exit 1
+          fi
+          case "$src" in
+            design/assets/*.png) ;;
+            *) echo "::error::Refusing a dim sum asset outside tracked design/assets/*.png: $src"; exit 1 ;;
+          esac
+          if ! git ls-files --error-unmatch -- "$src" >/dev/null 2>&1; then
+            echo "::error::Dim sum asset is not tracked in the repository: $src"
+            exit 1
           fi
           mkdir -p out/release
           dest="out/release/dim-sum-$(node -p "require('./codename.json').id || 'photo'").png"

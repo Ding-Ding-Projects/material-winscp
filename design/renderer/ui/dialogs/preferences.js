@@ -24,7 +24,7 @@
 // and the two search bars (all pages / this page) are the shared
 // createSearchBar with its anchored regex builder — never a hand-rolled field.
 
-import { h, icon, clear, appearanceTarget, announce, openModal, anchorTo, layer, focusMemory, rovingFocus, copyText } from '../../dom.js';
+import { h, icon, clear, appearanceTarget, announce, openModal, anchorTo, layer, focusMemory, rovingFocus, copyText, isReducedMotion } from '../../dom.js';
 import { store, bus, api, persistCurrent, session } from '../../state.js';
 import { t, getLanguage, bindRender, disclosureText, setLanguage, setFunnyLevel } from '../../i18n.js';
 import { theme as themeApi, styleSheet } from '../../theme.js';
@@ -838,7 +838,7 @@ export function createPreferences(opts = {}) {
       const row = body.querySelector(`[data-pref-key="${cssEscape(hitKey)}"]`);
       if (row) {
         row.classList.add('is-hit');
-        row.scrollIntoView({ block: 'center', behavior: store.get('theme.reduceMotion') ? 'auto' : 'smooth' });
+        row.scrollIntoView({ block: 'center', behavior: isReducedMotion() ? 'auto' : 'smooth' });
         requestAnimationFrame(() => focusPreferenceControl(row));
         setTimeout(() => row.classList.remove('is-hit'), 2600);
       }

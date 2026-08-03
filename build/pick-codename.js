@@ -10,9 +10,10 @@
 // Nothing here generates, downloads or substitutes an image. The only source is
 // design/assets/, which is tracked in this repository.
 //
-// Exit status is always 0. A release must never be blocked because the catalog
-// could not supply a name; when nothing can be resolved the output says so and
-// the caller ships the version alone.
+// Exit status remains 0 when the catalog cannot supply an UNUSED name: the
+// code-name slot is decoration, not a release gate. CI separately requires a
+// verified photo asset, because issue #15 does make that attached artifact a
+// release requirement.
 'use strict';
 
 const fs = require('fs');

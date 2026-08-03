@@ -248,6 +248,11 @@ export function openMenu(opts = {}) {
       continue;
     }
     const role = it.checked !== undefined ? (it.radio ? 'menuitemradio' : 'menuitemcheckbox') : (it.submenu ? 'menuitem' : 'menuitem');
+    // `aria-keyshortcuts` is useful metadata, but assistive technology does
+    // not have to announce it as part of the menu item's accessible name.
+    // Reference the visible shortcut as a description so the label and the
+    // canonical key spelling are announced together in every menu depth.
+    const shortcutId = it.shortcut ? uid('menu-shortcut') : null;
     const row = h('div', {
       class: `menu-item${it.disabled ? ' is-disabled' : ''}${it.danger ? ' is-danger' : ''}`,
       role, tabindex: '-1',
@@ -255,6 +260,7 @@ export function openMenu(opts = {}) {
       'aria-haspopup': it.submenu ? 'menu' : null,
       'aria-expanded': it.submenu ? 'false' : null,
       'aria-keyshortcuts': it.ariaKeyShortcuts || null,
+      'aria-describedby': shortcutId,
       'data-id': it.id,
       title: it.description || null,
     },
@@ -263,7 +269,10 @@ export function openMenu(opts = {}) {
         ? (it.checked ? icon('check', 16) : h('span', { class: 'menu-lead-blank' }))
         : it.icon ? icon(it.icon, 16) : h('span', { class: 'menu-lead-blank' })),
     h('span', { class: 'menu-label' }, it.label),
-    it.shortcut ? h('span', { class: 'menu-shortcut', 'aria-label': it.ariaKeyShortcuts || it.shortcut }, ...kbdParts(it.shortcutParts || it.shortcut)) : null,
+    it.shortcut ? h('span', {
+      id: shortcutId, class: 'menu-shortcut',
+      'aria-label': it.ariaKeyShortcuts || it.shortcut,
+    }, ...kbdParts(it.shortcutParts || it.shortcut)) : null,
     it.submenu ? icon('chevron_right', 16) : null);
 
     if (it.checked !== undefined) row.setAttribute('aria-checked', String(!!it.checked));

@@ -3,10 +3,13 @@
 ## What it does
 
 Closing an unsaved remote edit records a `Discarded unsaved document` revision
-before the editor close event completes. The revision carries only the editor
-identifier, file name, session id and owned temporary/remote paths; the document
-contents and credentials never enter the history record. The temporary copy is
-kept and reported as an orphan so the user can recover it later.
+before the editor close event completes. The renderer sends its latest buffer to
+the main process as part of the deliberate discard; the main process writes that
+buffer to the owned temporary file, records the append-only revision, and only
+then reports the orphan. The revision carries only the editor identifier, file
+name, session id and owned temporary/remote paths; document contents and
+credentials never enter the history record. The temporary copy is kept so the
+discard can be recovered from the orphan surface.
 
 ## Configuration
 
@@ -20,9 +23,10 @@ blocks the requested close.
 If the history write fails, the editor still closes, emits the orphan event and
 keeps the temporary file. That event explicitly reports `discardAudit.status:
 not-recorded` (and the failure reason), so the UI or another consumer cannot
-mistake a close for a durable audit. A successful write reports `recorded`. If
-the temporary file has already disappeared, a recorded audit still proves the
-discard action occurred, but there is no local content to recover.
+mistake a close for a durable audit. A successful write reports `recorded` and
+the history action is categorized as `discarded`. If writing the latest buffer
+fails, the close still completes and `recoveryAvailable` is false; the audit is
+not overstated.
 
 ## Security considerations
 
@@ -32,11 +36,13 @@ copy, and the history repository lives in the app-owned data root.
 
 ## Verification
 
-`test/editors.test.js` asserts that the history snapshot happens before close,
-contains the discard metadata, emits the audit status, and still closes when
-the history write fails. Run
-`node --test test/editors.test.js test/history.test.js` when changing editor
-close or history restore behavior.
+`test/editors.test.js` asserts that the renderer buffer is written before the
+history snapshot and close return, contains the discard metadata, emits the
+audit status, and still closes when the history write fails. The renderer
+close contract is covered by `test/editor-dialog.test.js`; action filtering is
+covered by `test/history.test.js`. Run
+`node --test test/editors.test.js test/editor-dialog.test.js test/history.test.js`
+when changing editor close or history restore behavior.
 
 ## Suggested articles
 

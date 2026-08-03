@@ -187,6 +187,23 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "e11458b", kind: 'commit', ref: "e11458b", oid: "e11458b3debbaf2d6b0bc0c8b6d39d3e9cce03b3", date: "2026-08-03",
+    title: "Refresh handoff after parity wave",
+    changes: [
+      { category: "removed", text: "English: Record the pushed CLI, drag/drop, palette, overlay, and changelog evidence with the final local test count. The handoff has receipts, not interpretive dance." },
+      { category: "removed", text: "廣東話: 記低今次 CLI、drag/drop、palette、overlay 同 changelog 嘅推送證據同最新測試數；handoff 而家有收據，唔使再跳 interpretive dance。" },
+    ],
+  },
+  {
+    id: "937ecb0", kind: 'commit', ref: "937ecb0", oid: "937ecb0c93cab3635ffcacd50a8059350f161547", date: "2026-08-03",
+    title: "Expand CLI drag palette and overlay parity",
+    refs: ["#14", "#17", "#18", "#19"],
+    changes: [
+      { category: "added", text: "English: Add script URL aliases and redacted file logging, harden Explorer clipboard and drag/drop boundaries, expose inline preference controls in the command palette, and give overlays explicit surfaces, scrolling and viewport-safe resizing. The UI goblins now have fewer transparent escape routes." },
+      { category: "removed", text: "廣東話: 加強 script URL alias 同 redacted log，收緊 Explorer clipboard 同 drag/drop 邊界，command palette 可以 inline 改 preference，浮層亦有底色、捲軸同 viewport-safe resize；啲 UI 小妖怪而家少咗透明走佬位。Refs #14, #17, #18, #19." },
+    ],
+  },
+  {
     id: "b53723c", kind: 'commit', ref: "b53723c", oid: "b53723c510699a586491e4e0c3947eb35d390dda", date: "2026-08-03",
     title: "Keep changelog linked to current history",
     changes: [
@@ -644,26 +661,6 @@ export const DEVELOPMENT = [
     ],
     changesYue: [
       { category: "changed", text: "廣東話：更新日誌終於追得返最新 CLI 同安全修正，仲有完整 commit 連結，唔使靠估邊粒包點心先係真。" },
-    ],
-  },
-  {
-    id: "a281c72", kind: 'commit', ref: "a281c72", oid: "a281c72a0093def1bf5d55d5a77001aec9f20555", date: "2026-08-03",
-    title: "Expand headless CLI and harden transfer boundaries",
-    changes: [
-      { category: "removed", text: "English: The CLI now parses and generates redacted session URLs, while drag/drop, SFTP, sync, queue, configuration, editor, terminal, palette, S3, and SCP paths reject malformed or unsafe state. The code had been doing tiny numeric gymnastics; this gives it fewer chances to juggle knives." },
-    ],
-    changesYue: [
-      { category: "changed", text: "廣東話：CLI 而家識得安全解析同生成 session URL；拖放、傳輸、同步、設定、編輯器、終端機、指令面板同協定層都少啲歧路。啲細數字唔再玩雜技，免得 code 一邊搬檔案一邊踩香蕉皮。" },
-    ],
-  },
-  {
-    id: "2d7e22f", kind: 'commit', ref: "2d7e22f", oid: "2d7e22f52df4f8d39e29f7845f4175b5ef3d783a", date: "2026-08-03",
-    title: "Reset command palette selection on search",
-    changes: [
-      { category: "changed", text: "English: Keep the keyboard target at the first fresh match, because stale indexes made the palette pick a surprise command after filtering." },
-    ],
-    changesYue: [
-      { category: "changed", text: "廣東話: 搜尋一改就由第一個結果開始，唔好畀舊 index 帶個指令去食茶點。" },
     ],
   },
 ];

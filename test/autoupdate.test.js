@@ -12,6 +12,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const { AutoUpdater, FEED_HOST, REPO } = require('../design/main/autoupdate');
+const { Updates, hasSquirrelUpdateSet } = require('../design/main/updates');
 
 test('the feed URL is the shape update.electronjs.org expects', () => {
   const u = new AutoUpdater({ isPackaged: true });
@@ -135,4 +136,56 @@ test('the update feed points at a public repository', () => {
   // private, silent updates stop working and the failure is invisible.
   assert.match(REPO, /^[\w.-]+\/[\w.-]+$/);
   assert.strictEqual(FEED_HOST, 'https://update.electronjs.org');
+});
+
+test('a release is updateable only when the complete Squirrel set is present', () => {
+  const good = {
+    assets: [
+      { name: 'WinSCP Material 0.1.9 Setup.exe' },
+      { name: 'winscp_material-0.1.9-full.nupkg' },
+      { name: 'RELEASES' },
+    ],
+  };
+  assert.equal(hasSquirrelUpdateSet(good), true);
+  assert.equal(hasSquirrelUpdateSet({ assets: [{ name: 'RELEASES' }, { name: 'notes.md' }] }), false);
+  assert.equal(hasSquirrelUpdateSet({ assets: [{ name: 'Setup.exe' }, { name: 'RELEASES' }] }), false);
+});
+
+test('manual update results expose the renderer-compatible version and skip incomplete releases', async () => {
+  const saved = [];
+  const updater = new Updates({
+    currentVersion: '0.1.4',
+    config: {
+      prefs: { updates: { betaVersions: 'off' } },
+      setPrefs(value) { saved.push(value); },
+    },
+    fetch: async () => [
+      {
+        tag_name: 'v0.1.9',
+        name: 'notes-only release',
+        draft: false,
+        prerelease: false,
+        assets: [{ name: 'notes.md' }],
+      },
+      {
+        tag_name: 'v0.1.5',
+        name: 'complete release',
+        draft: false,
+        prerelease: false,
+        html_url: 'https://github.com/Ding-Ding-Projects/material-winscp/releases/tag/v0.1.5',
+        assets: [
+          { name: 'WinSCP Material 0.1.5 Setup.exe', size: 10, browser_download_url: 'https://example.test/setup.exe' },
+          { name: 'winscp_material-0.1.5-full.nupkg', size: 11, browser_download_url: 'https://example.test/app.nupkg' },
+          { name: 'RELEASES', size: 12, browser_download_url: 'https://example.test/RELEASES' },
+        ],
+      },
+    ],
+  });
+
+  const result = await updater.check({ reason: 'user' });
+  assert.equal(result.available, true);
+  assert.equal(result.version, '0.1.5');
+  assert.equal(result.newVersion, '0.1.5');
+  assert.equal(result.latest.version, '0.1.5');
+  assert.equal(saved.length, 1);
 });

@@ -149,6 +149,7 @@ test('actionOf derives the action from the label', () => {
   assert.equal(actionOf('Restored revision abc'), 'restored');
   assert.equal(actionOf('Changed setting language'), 'settings');
   assert.equal(actionOf('Updated the site "X"'), 'updated');
+  assert.equal(actionOf('Discarded unsaved document "notes.txt"'), 'discarded');
 });
 
 // ------------------------------------------------------------------- read

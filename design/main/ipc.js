@@ -1728,7 +1728,15 @@ class Ipc {
     // Native/editor integrations report saves through the same conflict-checked
     // path as fs.watch without receiving the EditorManager itself.
     this.handle('editor:fileChanged', (id) => this.editors.executedFileChanged(str(id, 'id', 64)));
-    this.handle('editor:close', (id, options) => this.editors.close(str(id, 'id', 64), optObj(options, 'options')));
+    this.handle('editor:close', (id, options) => {
+      const o = optObj(options, 'options');
+      const closeOptions = {
+        keep: o.keep === undefined ? false : bool(o.keep, 'options.keep'),
+        discard: o.discard === undefined ? false : bool(o.discard, 'options.discard'),
+      };
+      if (o.text !== undefined) closeOptions.text = str(o.text, 'options.text', LIMITS.text);
+      return this.editors.close(str(id, 'id', 64), closeOptions);
+    });
     this.handle('editor:list', () => this.editors.list());
     this.handle('editor:orphans', () => this.editors.findOrphans());
     this.handle('editor:discardOrphans', (paths) => this.editors.discardOrphans(strArr(paths, 'paths', 20000)));

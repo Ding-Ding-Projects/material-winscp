@@ -517,6 +517,7 @@ export function createEditorWindow(record, initial, opts = {}) {
     encodingDetected: initial.encodingDetected,
     bytes: initial.bytes,
     readOnly: !!opts.readOnly,
+    closedInMain: false,
     wordWrap: opts.wordWrap !== false,
     tabSize: Number(opts.tabSize) || 8,
     tabInserts: true,
@@ -1149,7 +1150,9 @@ export function createEditorWindow(record, initial, opts = {}) {
       unbind();
       find.destroy();
       openEditors.delete(state.id);
-      callMain('editor.close', state.id, {}).catch(() => { /* main reports an orphan if the edit never landed */ });
+      if (!state.closedInMain) {
+        callMain('editor.close', state.id, {}).catch(() => { /* main reports an orphan if the edit never landed */ });
+      }
     },
   });
 
@@ -1181,7 +1184,22 @@ export function createEditorWindow(record, initial, opts = {}) {
         onClose: (reason) => { if (reason === 'scrim' || reason === 'escape') resolve(false); },
         actions: [
           { label: t('cancel'), kind: 'text', onSelect: () => resolve(false) },
-          { label: t('discard'), kind: 'danger', onSelect: () => { state.saved = state.text; resolve(true); } },
+          {
+            label: t('discard'),
+            kind: 'danger',
+            onSelect: async () => {
+              try {
+                const closed = await callMain('editor.close', state.id, { discard: true, text: state.text });
+                if (closed !== true) { resolve(false); return; }
+                state.closedInMain = true;
+                state.saved = state.text;
+                resolve(true);
+              } catch (err) {
+                notify.error(t('editorTitle'), err.message);
+                resolve(false);
+              }
+            },
+          },
           {
             label: t('saveAndClose'),
             kind: 'filled',

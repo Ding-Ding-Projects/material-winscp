@@ -216,6 +216,95 @@ levelStrings({
     '站點「{0}」執包袱走人喇。']],
 });
 
+/* Shared search and regex-builder copy belongs in the common dictionary so
+ * every search surface follows the same language and funny-level contract. */
+defineStrings({
+  searchPlainHint: ['Plain text search. Press the .* button for regular expressions.', '純文字搜尋。撳 .* 按鈕用正規表達式。'],
+  searchRegexHint: ['Regular expression mode, JavaScript RegExp, flags {0}.', '正規表達式模式，JavaScript RegExp，旗標 {0}。'],
+  rbPatternAria: ['Regular expression pattern', '正規表達式模式'],
+  rbFlagsAria: ['Flags', '旗標'], rbConstructsAria: ['Insert a construct', '插入構件'],
+  rbSampleAria: ['Sample text', '樣本文字'], rbSamplePlaceholder: ['Paste sample text to test against', '貼上要測試嘅樣本文字'],
+  rbLiveMatches: ['Live matches', '即時配對'], rbNoSample: ['(no sample text)', '（冇樣本文字）'],
+  rbUnmatched: ['(unmatched)', '（未配對）'], rbEmpty: ['(empty)', '（空白）'],
+  rbMatchTitle: ['Match {0}', '配對 {0}'], rbMoreGroups: ['…and {0} more.', '……仲有 {0} 個。'], rbFirstShown: ['first {0} shown', '頭 {0} 個顯示'],
+  rbLiteralPrompt: ['Literal text to match (it will be escaped):', '要配對嘅文字（會自動跳脫）：'],
+  rbMatchOne: ['match', '個配對'], rbMatchMany: ['matches', '個配對'],
+  rbCopyFailed: ['Copy failed.', '複製失敗。'],
+  rbRunawayShort: ['Runaway regular expression stopped. Simplify the pattern.', '失控嘅正規表達式已停止。請簡化表達式。'],
+  rbCatLiterals: ['Literals', '文字常值'], rbCatClasses: ['Character classes', '字元類別'],
+  rbCatAnchors: ['Anchors', '錨點'], rbCatGroups: ['Groups', '群組'],
+  rbCatAlternation: ['Alternation', '交替'], rbCatLookaround: ['Lookaround', '前後查找'],
+  rbCatQuantifiers: ['Quantifiers', '量詞'],
+  rbConstructText: ['Text (escaped)', '文字（自動跳脫）'], rbConstructAny: ['Any character', '任何字元'],
+  rbConstructDigit: ['Digit', '數字'], rbConstructNonDigit: ['Non-digit', '非數字'],
+  rbConstructWord: ['Word character', '文字字元'], rbConstructWhitespace: ['Whitespace', '空白字元'],
+  rbConstructClass: ['Character class', '字元類別'], rbConstructNegatedClass: ['Negated class', '反向字元類別'],
+  rbConstructRange: ['Range', '範圍'], rbConstructStart: ['Start of line', '行首'], rbConstructEnd: ['End of line', '行尾'],
+  rbConstructBoundary: ['Word boundary', '文字邊界'], rbConstructGroup: ['Group', '群組'],
+  rbConstructNamedGroup: ['Named group', '命名群組'], rbConstructNonCapturing: ['Non-capturing', '唔擷取'],
+  rbConstructAlternation: ['Alternation', '交替'], rbConstructZeroOrMore: ['0 or more', '零次或以上'],
+  rbConstructOneOrMore: ['1 or more', '一次或以上'], rbConstructOptional: ['Optional', '可選'],
+  rbConstructExactly: ['Exactly n', '剛好 n 次'], rbConstructBetween: ['Between n,m', 'n 至 m 次'],
+  rbConstructLazy: ['Lazy', '懶惰配對'], rbConstructLookahead: ['Lookahead', '向前查找'],
+  rbConstructNegLookahead: ['Neg. lookahead', '反向向前查找'], rbConstructLookbehind: ['Lookbehind', '向後查找'],
+  rbConstructUnicode: ['Unicode letter', 'Unicode 字母'],
+  rbDescText: ['Literal text, special characters escaped', '文字常值，特殊字元會自動跳脫'],
+  rbDescAny: ['Matches any single character except newline', '配對除換行外嘅任何單一字元'],
+  rbDescDigit: ['0-9', '數字 0-9'], rbDescNonDigit: ['Anything but 0-9', '除 0-9 之外嘅任何字元'],
+  rbDescWord: ['Letter, digit or underscore', '字母、數字或者底線'], rbDescWhitespace: ['Space, tab, newline', '空格、Tab、換行'],
+  rbDescClass: ['Any one of the listed characters', '列出字元其中一個'], rbDescNegatedClass: ['Any character NOT listed', '未列出嘅任何字元'],
+  rbDescRange: ['Any character in the range', '範圍內任何字元'], rbDescStart: ['Anchor: start', '錨點：開頭'], rbDescEnd: ['Anchor: end', '錨點：結尾'],
+  rbDescBoundary: ['Between word and non-word', '文字同非文字之間'], rbDescGroup: ['Capture group', '擷取群組'],
+  rbDescNamedGroup: ['Capture group with a name', '有名稱嘅擷取群組'], rbDescNonCapturing: ['Group without capturing', '唔擷取嘅群組'],
+  rbDescAlternation: ['Either the left or the right side', '左邊或者右邊其中一邊'], rbDescZeroOrMore: ['Quantifier', '量詞'],
+  rbDescOneOrMore: ['Quantifier', '量詞'], rbDescOptional: ['0 or 1', '0 或 1 次'], rbDescExactly: ['Quantifier {n}', '量詞 {n}'],
+  rbDescBetween: ['Quantifier {n,m}', '量詞 {n,m}'], rbDescLazy: ['Match as little as possible', '盡量配對最少'],
+  rbDescLookahead: ['Followed by, without consuming', '後面跟住，但唔消耗文字'], rbDescNegLookahead: ['NOT followed by', '後面唔可以跟住'],
+  rbDescLookbehind: ['Preceded by', '前面跟住'], rbDescUnicode: ['Any letter (needs u flag)', '任何字母（需要 u 旗標）'],
+  rbFlagGlobal: ['global — all matches', '全域——配對全部'], rbFlagIgnoreCase: ['ignore case', '忽略大小寫'],
+  rbFlagMultiline: ['multiline ^ $', '多行 ^ $'], rbFlagDotAll: ['dot matches newline', '點號配對換行'],
+  rbFlagUnicode: ['unicode', 'Unicode'], rbFlagSticky: ['sticky', '黏性'],
+});
+
+export const RB_CONSTRUCT_KEYS = Object.freeze({
+  'Text (escaped)': 'rbConstructText', 'Any character': 'rbConstructAny', Digit: 'rbConstructDigit',
+  'Non-digit': 'rbConstructNonDigit', 'Word character': 'rbConstructWord', Whitespace: 'rbConstructWhitespace',
+  'Character class': 'rbConstructClass', 'Negated class': 'rbConstructNegatedClass', Range: 'rbConstructRange',
+  'Start of line': 'rbConstructStart', 'End of line': 'rbConstructEnd', 'Word boundary': 'rbConstructBoundary',
+  Group: 'rbConstructGroup', 'Named group': 'rbConstructNamedGroup', 'Non-capturing': 'rbConstructNonCapturing',
+  Alternation: 'rbConstructAlternation', '0 or more': 'rbConstructZeroOrMore', '1 or more': 'rbConstructOneOrMore',
+  Optional: 'rbConstructOptional', 'Exactly n': 'rbConstructExactly', 'Between n,m': 'rbConstructBetween',
+  Lazy: 'rbConstructLazy', Lookahead: 'rbConstructLookahead', 'Neg. lookahead': 'rbConstructNegLookahead',
+  Lookbehind: 'rbConstructLookbehind', 'Unicode letter': 'rbConstructUnicode',
+});
+export const RB_CONSTRUCT_DESCRIPTION_KEYS = Object.freeze({
+  'Text (escaped)': 'rbDescText', 'Any character': 'rbDescAny', Digit: 'rbDescDigit', 'Non-digit': 'rbDescNonDigit',
+  'Word character': 'rbDescWord', Whitespace: 'rbDescWhitespace', 'Character class': 'rbDescClass',
+  'Negated class': 'rbDescNegatedClass', Range: 'rbDescRange', 'Start of line': 'rbDescStart', 'End of line': 'rbDescEnd',
+  'Word boundary': 'rbDescBoundary', Group: 'rbDescGroup', 'Named group': 'rbDescNamedGroup', 'Non-capturing': 'rbDescNonCapturing',
+  Alternation: 'rbDescAlternation', '0 or more': 'rbDescZeroOrMore', '1 or more': 'rbDescOneOrMore', Optional: 'rbDescOptional',
+  'Exactly n': 'rbDescExactly', 'Between n,m': 'rbDescBetween', Lazy: 'rbDescLazy', Lookahead: 'rbDescLookahead',
+  'Neg. lookahead': 'rbDescNegLookahead', Lookbehind: 'rbDescLookbehind', 'Unicode letter': 'rbDescUnicode',
+});
+export const RB_FLAG_KEYS = Object.freeze({ g: 'rbFlagGlobal', i: 'rbFlagIgnoreCase', m: 'rbFlagMultiline', s: 'rbFlagDotAll', u: 'rbFlagUnicode', y: 'rbFlagSticky' });
+export const RB_CATEGORY_KEYS = Object.freeze({
+  Literals: 'rbCatLiterals', 'Character classes': 'rbCatClasses', Anchors: 'rbCatAnchors', Groups: 'rbCatGroups',
+  Alternation: 'rbCatAlternation', Lookaround: 'rbCatLookaround', Quantifiers: 'rbCatQuantifiers',
+});
+
+levelStrings({
+  searchPlainModeOn: [['Plain text search mode on.', 'Plain text mode on.', 'Plain text search is on.', 'The search is sticking with plain text.', 'Plain text is steering this search now!'], ['純文字搜尋模式開咗。', '純文字模式開咗。', '而家用緊純文字搜尋。', '個搜尋決定返用純文字。', '呢個搜尋而家由純文字揸車！']],
+  searchRegexModeOn: [['Regular expression mode on.', 'Regex mode on.', 'Regular expressions are on.', 'The search is ready for regex gymnastics.', 'Regex has entered the search arena!'], ['正規表達式模式開咗。', 'Regex 模式開咗。', '而家用緊正規表達式。', '個搜尋準備好做 regex 體操。', 'Regex 入咗搜尋競技場！']],
+  searchNoMatch: [['Nothing in {0} matches {1}.', 'No match in {0}: {1}.', 'Nothing in {0} matches {1}.', 'Nothing in {0} can dodge {1}.', 'Nothing in {0} survived the search net for {1}.'], ['{0} 入面冇嘢配對到 {1}。', '{0} 入面搵唔到 {1}：冇配對。', '{0} 入面冇嘢配對到 {1}。', '{0} 入面冇嘢走得甩 {1}。', '{0} 入面冇一樣嘢避得過 {1} 個搜尋網。']],
+  rbEmptyPattern: [['Empty pattern — everything matches. Type or use Build below.', 'Empty pattern — everything matches.', 'The pattern is empty, so everything matches. Type or use Build below.', 'No pattern yet — the whole sample gets a friendly hello.', 'An empty pattern! Every sample character gets invited to the party.'], ['表達式係空嘅——全部都會配對。打字或者用下面嘅建構器。', '表達式空咗——全部配對。', '表達式冇內容，所以全部都配對。打字或者用下面嘅建構器。', '重未有表達式——成份樣本都收到友善招呼。', '空表達式！樣本每個字元都收到派對邀請。']],
+  rbRunaway: [['Runaway pattern — evaluation was stopped after {0} ms. Simplify the pattern.', 'Pattern evaluation stopped after {0} ms; simplify it.', 'This pattern was stopped after {0} ms because it backtracks too much.', 'The pattern took a detour after {0} ms. Simplify its nested quantifiers.', 'The regex sprinted into the bushes after {0} ms; simplify the nested quantifiers.'], ['失控表達式——{0} 毫秒後停止測試。請簡化表達式。', '表達式測試喺 {0} 毫秒後停止；請簡化佢。', '呢個表達式回溯太多，所以 {0} 毫秒後停止。', '個表達式喺 {0} 毫秒後行咗遠路。請簡化入面嘅量詞。', '個 regex 喺 {0} 毫秒後衝入草叢；請簡化入面嘅量詞。']],
+  rbRisk: [['Valid, but this shape can backtrack catastrophically on longer input.', 'Valid, but this shape may backtrack heavily on longer input.', 'Valid, though this shape can do a lot of backtracking on longer input.', 'Valid, but the nested quantifiers may send it on a long backtracking hike.', 'Valid, but this pattern has a talent for getting lost in backtracking.'], ['表達式正確，但輸入較長時呢個形狀可能會災難式回溯。', '表達式正確，但輸入較長時呢個形狀可能大量回溯。', '表達式正確，不過輸入較長時呢個形狀可能做好多回溯。', '表達式正確，但入面嘅量詞可能帶佢行一轉漫長回溯山路。', '表達式正確，但呢個模式好有天份喺回溯入面迷路。']],
+  rbValid: [['Valid. {0} {1} in {2} ms.', 'Valid: {0} {1}, {2} ms.', 'Valid. {0} {1} found in {2} ms.', 'Valid — {0} {1} arrived in {2} ms.', 'Valid! {0} {1} crossed the finish line in {2} ms.'], ['正確。{0} {1}，用咗 {2} 毫秒。', '正確：{0} {1}，{2} 毫秒。', '正確。搵到 {0} {1}，用咗 {2} 毫秒。', '正確——{0} {1} 用 {2} 毫秒到埗。', '正確！{0} {1} 用 {2} 毫秒衝過終點。']],
+  rbCopyAnnounce: [['Pattern copied to the clipboard.', 'Pattern copied.', 'The pattern is on the clipboard.', 'Pattern copied — the clipboard has adopted it.', 'Pattern copied! The clipboard is now wearing regex.'], ['表達式已複製到剪貼簿。', '表達式複製咗。', '表達式已經喺剪貼簿。', '表達式複製咗——剪貼簿收養咗佢。', '表達式複製成功！剪貼簿而家著住 regex。']],
+  rbExportAnnounce: [['Pattern exported.', 'Pattern exported.', 'The pattern was exported.', 'Pattern has left the builder in an export file.', 'Pattern exported! It is off on a file-shaped adventure.'], ['表達式已匯出。', '表達式匯出咗。', '表達式已經匯出。', '表達式離開建構器，入咗匯出檔案。', '表達式匯出成功！而家展開檔案形狀嘅冒險。']],
+  rbApplyInvalid: [['Cannot apply: {0}', 'Cannot apply: {0}', 'The pattern cannot be applied: {0}', 'The pattern tripped at the apply gate: {0}', 'Apply declined — the regex fell over first: {0}'], ['未能套用：{0}', '套用唔到：{0}', '呢個表達式未能套用：{0}', '個表達式喺套用閘口跣低咗：{0}', '拒絕套用——regex 自己先仆低咗：{0}']],
+});
+
 /** Every key, for the changelog/settings search surfaces to index. */
 export function keys() { return Object.keys(I18N); }
 

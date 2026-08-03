@@ -1,6 +1,6 @@
 // build/release-notes.js — compose the GitHub Release notes for one CI run.
 //
-//   node build/release-notes.js --tag v0.1.0-build.7 --out RELEASE_NOTES.md
+//   node build/release-notes.js --tag v0.1.7 --out RELEASE_NOTES.md
 //
 // Reads codename.json (written by build/pick-codename.js) and the environment
 // that .github/workflows/ci.yml sets. Every claim it prints is derived from a
@@ -81,7 +81,8 @@ function main() {
     L.push('');
     L.push('> [!NOTE]');
     L.push(`> ${cn.reason || 'The bundled dim sum catalog could not supply an unused dish.'}`);
-    L.push('> A release is never blocked or renamed because the catalog is unavailable, so this one ships with its version alone.');
+    L.push('> The code-name slot is not a release gate when the catalog cannot supply an unused dish.');
+    L.push('> CI still requires a separate verified dim sum photo asset for every published release.');
   }
   L.push('');
   L.push('---');
