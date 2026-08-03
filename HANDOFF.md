@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `1bd52d3`** — Document remaining protocol capability limits
+**At commit `d788b02`** — Harden drag CLI and trust boundaries
 
 ## Where the work stands
 
@@ -15,9 +15,9 @@
 | Port coverage (raw) | 71.5% — includes embedded hex resources, **do not quote this one** |
 | Tests | 3558 run, **3557 pass, 0 fail**, 1 skipped |
 | Hand-written code | 224,314 lines across 444 files |
-| Commits | 239 on `main` |
-| Working tree | **33 uncommitted change(s)** |
-| Remote | `origin/main` at `1bd52d3` — in sync |
+| Commits | 241 on `main` |
+| Working tree | clean |
+| Remote | `origin/main` at `1bd52d3` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `d788b02` | 2026-08-03 | Harden drag CLI and trust boundaries |
+| `6541962` | 2026-08-03 | Refresh handoff after capability and CLI fixes |
 | `1bd52d3` | 2026-08-03 | Document remaining protocol capability limits |
 | `ad2fc20` | 2026-08-03 | Align SiteAdvanced capability ledger and site identity |
 | `7ebde98` | 2026-08-03 | Harden CLI configuration and foreground settings paths |
 | `55c3cb9` | 2026-08-03 | Refresh verified handoff after CLI and protocol fixes |
 | `ca67b21` | 2026-08-03 | Document sorted checklist identity preservation |
 | `fc7938a` | 2026-08-03 | Fix reconnect and sorted checklist identity |
-| `485a1d0` | 2026-08-03 | Harden SCP WebDAV and foreground queue paths |
-| `a855217` | 2026-08-03 | Refresh handoff after FTPS coverage |
 
 ## Notes from whoever worked on this last
 
