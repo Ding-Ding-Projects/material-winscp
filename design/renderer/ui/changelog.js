@@ -187,6 +187,35 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "afbe57d", kind: 'commit', ref: "afbe57d", oid: "afbe57d891913aa7d1c1c9d7bcf929541213be4c", date: "2026-08-03",
+    title: "Fix repeated CLI batches and drag-name collisions",
+    changes: [
+      { category: "changed", text: "Group repeated /command and /parameter values before the console parser so every batch command is consumed without an implicit session or prompt. Reject remote names that collide after Windows filename conversion instead of allowing a staged file to overwrite another." },
+      { category: "changed", text: "English humour: The parser stops leaving later commands loitering in a fake prompt, and the drag folder stops playing filename musical chairs." },
+    ],
+    changesYue: [
+      { category: "changed", text: "廣東話玩笑：命令唔再喺假 prompt 入面留低等人餵，拖放檔名撞車就即刻煞停，唔畀檔案玩消失魔術。" },
+    ],
+  },
+  {
+    id: "1bf3275", kind: 'commit', ref: "1bf3275", oid: "1bf32755f5770d0a66b02b10527cf4a3cf350180", date: "2026-08-03",
+    title: "Record the latest startup and protocol handoff",
+    changes: [
+      { category: "changed", text: "English: The handoff now names the pushed second wave, its 3,417-test evidence, and the still-open 114-unit map; the paperwork remains stubbornly factual." },
+    ],
+    changesYue: [
+      { category: "changed", text: "粵語：handoff 而家跟足第二輪 push、3417 測試同仲有 114 units；文件繼續老實到有少少頑固。" },
+    ],
+  },
+  {
+    id: "a5a2c7e", kind: 'commit', ref: "a5a2c7e", oid: "a5a2c7e058b921243236291d3b8b30e0d004828b", date: "2026-08-03",
+    title: "Refresh the startup and protocol changelog",
+    changes: [
+      { category: "security", text: "English: The generated history now records the latest startup, security, protocol, and preference repairs with verified commit links; the timeline has acquired another honest pothole marker." },
+      { category: "security", text: "粵語：changelog 更新咗最新 startup、security、protocol 同 preference 修正，commit link 全部驗過；條時間線又插多支真路牌，唔係紙紮終點。" },
+    ],
+  },
+  {
     id: "d008db8", kind: 'commit', ref: "d008db8", oid: "d008db882c5475cadc8d3ae7ac95eb052efb72fe", date: "2026-08-03",
     title: "Harden startup, security, protocol, and preference edges",
     changes: [
@@ -640,30 +669,6 @@ export const DEVELOPMENT = [
     changes: [
       { category: "added", text: "English: Open nested Login folders in tree order, reopen the queue surface, validate SiteAdvanced encryption keys, cap WebDAV buffered responses, reject incomplete AssumeRole credentials, and add accessible LocationProfiles duplication. Add focused tests and documentation. The protocol edges now bring a clipboard, a seatbelt, and a very strict bouncer." },
       { category: "security", text: "廣東話：Login folder 會按 tree order 開 nested sites、queue surface 會重開、SiteAdvanced encryption key 會驗、WebDAV response 有上限、AssumeRole 唔完整就拒絕，同 LocationProfiles 有 accessible duplicate。加 tests 同 docs，protocol edges 而家有 clipboard、安全帶，同一個好嚴嘅門口保安。" },
-    ],
-  },
-  {
-    id: "046c0df", kind: 'commit', ref: "046c0df", oid: "046c0df3a34b70af5933c58f0d8d5cd949c74722", date: "2026-08-03",
-    title: "Refresh session-wave handoff metadata",
-    changes: [
-      { category: "changed", text: "English: Record the verified 3,305/3,306 test result, unchanged 59.0% logic coverage, 114 remaining units, and the current session/surface checkpoint. The handoff keeps the expedition log factual while the trail continues." },
-      { category: "changed", text: "廣東話：記低已驗證嘅 3,305/3,306 測試、仍然 59.0% logic coverage、剩低 114 個 units 同今次 session/surface checkpoint。交更紙繼續講真話，隊伍照行。" },
-    ],
-  },
-  {
-    id: "6ae0377", kind: 'commit', ref: "6ae0377", oid: "6ae0377e85f37f32c774a2b29eab0e5f726458d9", date: "2026-08-03",
-    title: "Refresh in-app changelog for session and surface hardening",
-    changes: [
-      { category: "changed", text: "English: Record the session, panel, search, bookmark, tooling, and About surface wave in the in-app history. The diary now remembers the buttons that finally learned to speak." },
-      { category: "changed", text: "廣東話：將 session、panel、search、bookmark、tooling 同 About surface 呢輪寫入 app history，日記終於記得啲掣學識開口講嘢。" },
-    ],
-  },
-  {
-    id: "f61f353", kind: 'commit', ref: "f61f353", oid: "f61f353115f24bedc01661f5412845578aa409d3", date: "2026-08-03",
-    title: "Harden session, panel, search, bookmark, and About surfaces",
-    changes: [
-      { category: "added", text: "English: Expose panel tree visibility, fail closed on empty PATH components, publish live certificate facts safely, add bookmark shortcut enumeration, make FileFind export keyboard reachable, and add About detail copying. Add focused tests and documentation. The small surfaces have stopped hiding useful facts behind one very shy button." },
-      { category: "changed", text: "廣東話：補返 panel tree visibility、empty PATH fail-closed、live certificate facts 安全輸出、bookmark shortcut enumeration、FileFind 鍵盤 export，同 About copy details。加 tests 同 docs，細細粒 surface 終於唔再將有用資料收埋喺一粒怕醜掣後面。" },
     ],
   },
 ];
