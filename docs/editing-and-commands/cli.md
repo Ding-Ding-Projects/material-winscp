@@ -16,6 +16,8 @@ winscp drop classify report.txt folder --allow-move=false
 winscp drop target --queue --default-download-target C:\\Downloads
 winscp drag stage report.txt --temp-root C:\\Temp
 winscp drag extension-status
+winscp url parse sftp://alice:secret@example.com:2222/home/report.txt --want-file
+winscp url generate --protocol sftp --host example.com --username alice --specific
 ```
 
 The `script` and `command` forms forward the console runner's practical
@@ -31,6 +33,14 @@ prompt:
 slash-switch equivalents before the existing console engine runs. For exact
 WinSCP command-line compatibility, pass those slash switches directly to
 `winscp run` or invoke `winscp-com`.
+
+The URL utilities use the same session-data parser and generator as the app.
+`url parse` returns the protocol, host, port, user, directory and optional file
+name as JSON; it always prints the masked URL and a `hasPassword` boolean, never
+the password itself. `url generate` creates a credential-free URL from a
+protocol, host, optional port and user. `--specific` selects WinSCP's
+`winscp-<scheme>://` handler form. Both commands are local-only and do not open
+Electron, connect to a server, or read a stored session.
 
 The simulation commands print JSON. `drag plan` applies the same safe
 copy-versus-move rules as the application. `drop classify` uses the real local
@@ -49,7 +59,7 @@ returns the target, queue-forcing decision, and refusal counter as JSON without
 starting Electron, Explorer, or a network connection.
 
 Help is available at every simulation level: `winscp drag --help`,
-`winscp drop --help`, and `winscp drag plan --help` all return the same command
+`winscp drop --help`, `winscp drag plan --help`, and `winscp url --help` all return the same command
 reference with exit code `0`, without starting the console runner or a GUI.
 
 Explorer drag payloads fail closed when a preserved remote name contains `/`,
@@ -85,6 +95,9 @@ There is no stored preference. The command line is the configuration boundary:
 | `--queue` | Mark the planned operation as background work. |
 | `--file PATH` | Repeatable path input for `drop classify` or `drag stage`. |
 | `--windows-build N` | Override the Windows build used by extension-status output. |
+| `--protocol SCHEME` | URL scheme for `url generate`: `scp`, `sftp`, `ftp`, `ftps`, `ftpes`, `dav`, `davs`, `s3`, or `s3plain`. |
+| `--host HOST`, `--port N`, `--username USER` | Connection fields for `url generate`; no password option is provided. |
+| `--want-file` | Ask `url parse` to split the final path component into `session.fileName`. |
 
 All simulation output is structured JSON so a CI job or another process can
 assert the decision without scraping prose. `drag stage` removes its temporary
@@ -109,6 +122,7 @@ accepted as an explicit synonym for the default machine-readable format.
 | Different remote names sanitize to the same Windows name | The command fails with a collision error before staging; it never overwrites one item with another. | Yes — choose a transfer naming rule or drag the items separately |
 | An empty stage path is supplied | The command fails with an input error; it never resolves the empty value to the current directory. | Yes — provide a file or directory path |
 | A console script fails | The existing console engine returns its normal non-zero script result. | Yes — inspect its log/XML output |
+| A URL is malformed or has no host | `url parse` returns exit code `2` without opening a session. | Yes — provide a supported session URL |
 
 ## Security considerations
 
@@ -133,6 +147,11 @@ accepted as an explicit synonym for the default machine-readable format.
 - `node --check bin/winscp.js` checks the executable syntax.
 - `node bin/winscp.js drag plan --source remote --result invalid --last-effect move`
   is a smoke check for the safe MOVE branch.
+- `node bin/winscp.js url parse sftp://alice:secret@example.com/home/a.txt --want-file`
+  is a smoke check for the redacted URL parser; its output must not contain
+  `secret`.
+- `node bin/winscp.js url generate --protocol sftp --host example.com --username alice`
+  is a smoke check for credential-free URL generation.
 - `npm run smoke:docker` exercises the real SFTP and FTP transfer engine with
   throwaway local Docker servers; it is separate from this local-only CLI
   simulation.

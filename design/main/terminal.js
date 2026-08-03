@@ -1693,8 +1693,11 @@ class Terminal extends EventEmitter {
     try {
       this.logEvent('Changing directory to home directory.');
       const home = (typeof a.getHomeDirectory === 'function' ? await a.getHomeDirectory() : a.home) || '/';
-      if (typeof a.changeDirectory === 'function') await a.changeDirectory(home);
-      this._currentDirectory = excludeTrailingSlash(home);
+      const landed = typeof a.changeDirectory === 'function'
+        ? await a.changeDirectory(home)
+        : null;
+      // Protocols may canonicalize the home path through an alias or symlink.
+      this._currentDirectory = excludeTrailingSlash(landed || home) || '/';
       if (this.session && this.session.state) this.session.state.remotePath = this._currentDirectory;
       // Deliberately NOT recorded as a directory change: HomeDirectory does not
       // set FLastDirectoryChange, so the cache is never keyed on "home".

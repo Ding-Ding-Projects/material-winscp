@@ -66,6 +66,13 @@ missing, `Session.exec()` returns the standard `NOT_SUPPORTED` error instead of
 invoking an absent method. This protects reconnecting sessions from stale or
 partially initialized capability metadata.
 
+`homeDirectory()` records the directory actually returned by the adapter's
+home-directory change, after removing its trailing slash. This matters for
+servers that canonicalize a home alias or symlink: panel state and subsequent
+relative paths must follow the server's landing directory, not the requested
+alias. Adapters that do not return a landing path continue to use their home
+path as the fallback.
+
 ## Directory-cache invalidation
 
 The session listing cache returns copies, and Terminal invalidation clears the

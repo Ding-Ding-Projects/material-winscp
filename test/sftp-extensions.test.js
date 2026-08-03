@@ -1477,6 +1477,49 @@ test('the transport reports why a connection failed', async (t) => {
     } finally { await srv.close(); }
   });
 
+  await t.test('copy-data removes a partial destination when the copy fails', async () => {
+    const srv = await startRawSftpServer({ extensions: [['copy-data', '']] });
+    try {
+      const { adapter } = await connectAdapter(srv);
+      const calls = [];
+      adapter._call = async (method, path) => {
+        calls.push([method, path]);
+        if (method === 'open' && path === '/src') return 'read-handle';
+        if (method === 'open' && path === '/dst') return 'write-handle';
+        if (method === 'close') return undefined;
+        if (method === 'unlink') return undefined;
+        throw new Error('copy refused');
+      };
+      adapter.ext.copyData = async () => { throw new Error('copy refused'); };
+      await assert.rejects(() => adapter.copyRemote('/src', '/dst'), /copy refused/);
+      assert.deepEqual(calls, [
+        ['open', '/src'], ['open', '/dst'],
+        ['close', 'read-handle'], ['close', 'write-handle'],
+        ['unlink', '/dst'],
+      ]);
+      await adapter.disconnect();
+    } finally { await srv.close(); }
+  });
+
+  await t.test('copy-data does not remove an existing destination when exclusive create fails', async () => {
+    const srv = await startRawSftpServer({ extensions: [['copy-data', '']] });
+    try {
+      const { adapter } = await connectAdapter(srv);
+      const calls = [];
+      adapter._call = async (method, path) => {
+        calls.push([method, path]);
+        if (method === 'open' && path === '/src') return 'read-handle';
+        if (method === 'open' && path === '/dst') throw new Error('destination exists');
+        if (method === 'close') return undefined;
+        if (method === 'unlink') throw new Error('unlink must not run');
+        throw new Error(`unexpected ${method}`);
+      };
+      await assert.rejects(() => adapter.copyRemote('/src', '/dst'), /destination exists/);
+      assert.deepEqual(calls, [['open', '/src'], ['open', '/dst'], ['close', 'read-handle']]);
+      await adapter.disconnect();
+    } finally { await srv.close(); }
+  });
+
   await t.test('failed host-key verification aborts the socket and leaves retry state clean', async () => {
     const srv = await startRawSftpServer({ extensions: [] });
     try {

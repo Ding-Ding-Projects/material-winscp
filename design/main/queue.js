@@ -614,7 +614,8 @@ class TransferQueue extends EventEmitter {
   }
 
   setTransfersLimit(n) {
-    this.transfersLimit = Math.max(1, n | 0);
+    const parsed = Number(n);
+    this.transfersLimit = Number.isFinite(parsed) ? Math.max(1, Math.floor(parsed)) : 1;
     this._pump();
   }
 

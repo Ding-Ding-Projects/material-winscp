@@ -376,6 +376,7 @@ class Config extends EventEmitter {
     const s = deepMerge(clone(SESSION_DEFAULTS), site || {});
     s.id = s.id || newId('site');
     for (const f of SECRET_FIELDS) {
+      if (typeof s[f] !== 'string') s[f] = '';
       if (s[f] && !s[f].startsWith('mp:') && !s[f].startsWith('os:')) s[f] = s.savePassword || f !== 'password' ? crypt.protect(s[f]) : '';
     }
     this.data.sites.push(s);
@@ -391,7 +392,7 @@ class Config extends EventEmitter {
     for (const f of SECRET_FIELDS) {
       const v = patch[f];
       if (v !== undefined) {
-        merged[f] = v === '' ? '' : (v.startsWith('mp:') || v.startsWith('os:') ? v : crypt.protect(v));
+        merged[f] = typeof v !== 'string' || v === '' ? '' : (v.startsWith('mp:') || v.startsWith('os:') ? v : crypt.protect(v));
       }
     }
     if (patch.savePassword === false) merged.password = '';

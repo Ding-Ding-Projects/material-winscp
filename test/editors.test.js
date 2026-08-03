@@ -146,6 +146,38 @@ test('ExecutedFileChanged uses the same conflict guard as an internal save', asy
   }
 });
 
+test('overlapping file-changed callbacks serialize uploads and keep the final edit', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-watch-'));
+  P.setRoot(root);
+  const f = fixture();
+  try {
+    const opened = await f.manager.openRemote({ sessionId: f.session.id, remotePath: '/notes.txt', mode: 'internal' });
+    const originalWrite = f.session.adapter.writeFile;
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    let writes = 0;
+    f.session.adapter.writeFile = async (...args) => {
+      writes++;
+      if (writes === 1) await gate;
+      return originalWrite(...args);
+    };
+    await fs.writeFile(opened.localPath, 'first');
+    const first = f.manager.executedFileChanged(opened.id);
+    await new Promise((resolve) => setImmediate(resolve));
+    await fs.writeFile(opened.localPath, 'second');
+    const second = f.manager.executedFileChanged(opened.id);
+    release();
+    const results = await Promise.all([first, second]);
+    assert.equal(results[0].uploaded, true);
+    assert.equal(results[1].uploaded, true);
+    assert.equal(writes, 2);
+    assert.equal((await f.session.adapter.readFile('/notes.txt')).toString(), 'second');
+    await f.manager.close(opened.id, {});
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('a failed external launch rolls back its watcher, registry record, and temporary copy', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-launch-'));
   P.setRoot(root);

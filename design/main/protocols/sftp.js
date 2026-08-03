@@ -1919,13 +1919,23 @@ class SftpAdapter extends Adapter {
 
     let readHandle = null;
     let writeHandle = null;
+    let destinationCreated = false;
+    let copied = false;
     try {
       readHandle = await this._call('open', src, 'r');
       writeHandle = await this._call('open', dst, 'wx');
+      destinationCreated = true;
       await this.ext.copyData(readHandle, writeHandle, { length: 0 });
+      copied = true;
     } finally {
       for (const h of [readHandle, writeHandle]) {
         if (h) { try { await this._call('close', h); } catch { /* the session may already be gone */ } }
+      }
+      // copy-data creates the destination before streaming bytes. Remove a
+      // partial file when the server rejects the copy, so it cannot look
+      // like a completed remote copy to the next operation.
+      if (destinationCreated && !copied) {
+        try { await this._call('unlink', dst); } catch { /* preserve the copy error */ }
       }
     }
     // WinSCP copies the source's permissions and modification time across,

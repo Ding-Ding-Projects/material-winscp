@@ -275,6 +275,7 @@ class EditorManager extends EventEmitter {
       uploads: 0,
       lastError: null,
       watcher: null,
+      changePromise: null,
       child: null,
       closed: false,
     };
@@ -316,6 +317,7 @@ class EditorManager extends EventEmitter {
       uploads: 0,
       lastError: null,
       watcher: null,
+      changePromise: null,
       child: null,
       closed: false,
       localOnly: true,
@@ -567,6 +569,18 @@ class EditorManager extends EventEmitter {
   }
 
   async _onFileChanged(rec) {
+    // Windows can report truncate/write/rename as overlapping callbacks.
+    // Queue them per editor so each callback observes the latest stamp only
+    // after the previous upload/conflict check has settled.
+    const previous = rec.changePromise || Promise.resolve();
+    const current = previous.then(() => this._processFileChanged(rec));
+    rec.changePromise = current.finally(() => {
+      if (rec.changePromise === current) rec.changePromise = null;
+    });
+    return current;
+  }
+
+  async _processFileChanged(rec) {
     if (rec.closed) return { changed: false, reason: 'closed' };
     let st;
     try { st = await fsp.stat(rec.localPath); } catch { return { changed: false, reason: 'missing' }; }

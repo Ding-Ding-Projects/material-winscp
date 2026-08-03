@@ -457,6 +457,12 @@ test('keys are matched case-insensitively, like a TIniFile and a TStringList', (
   assert.strictEqual(S.loadSession({ TIMEOUT: '9' }).data.timeout, 9);
 });
 
+test('blank floating-point values keep the supplied default', () => {
+  const storage = new S.KeyValueStorage({ PingInterval: '' });
+  assert.strictEqual(storage.readFloat('PingInterval', 17.5), 17.5);
+  assert.strictEqual(storage.readFloat('PingInterval', 0), 0);
+});
+
 test('case-variant duplicate storage keys keep the last value without re-exporting the shadowed key', () => {
   const storage = new S.KeyValueStorage({ HostName: 'old', hostname: 'new' });
   assert.strictEqual(storage.readString('HostName', ''), 'new');

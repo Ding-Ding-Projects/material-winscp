@@ -27,6 +27,10 @@ Already protected `mp:` and `os:` values are preserved. A failed migration
 write leaves the existing file in place and emits a configuration error; the
 loader continues with the normalized in-memory state.
 
+Site mutations also fail closed for malformed non-string secret values from
+IPC or imported payloads: the value is discarded rather than causing a raw
+`startsWith` error or being written as a credential.
+
 ## Failure modes
 
 Malformed JSON is preserved as a timestamped `.corrupt-*` copy and the loader
@@ -50,6 +54,8 @@ node --test test/config-ini.test.js
 
 The regression test verifies that loading a legacy clear-text password both
 protects it in memory and persists the protected value and generated site ID.
+It also verifies that add and update operations discard non-string password
+values safely.
 
 ## Suggested articles
 

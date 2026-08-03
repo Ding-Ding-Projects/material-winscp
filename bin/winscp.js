@@ -14,6 +14,7 @@ const packageInfo = require('../package.json');
 const { runConsoleFrontEnd } = require('../design/main/console');
 const shell = require('../design/main/shellintegration');
 const { resolveDropTarget } = require('../design/main/explorershell');
+const sessionData = require('../design/main/sessiondata');
 
 const HELP = `WinSCP Material ${packageInfo.version} — headless command line
 
@@ -29,6 +30,10 @@ Headless drag/drop simulation:
   winscp drop target [options]        Resolve the Explorer/queue drop target
   winscp drag stage PATH...           Stage local fixtures like a remote drag
   winscp drag extension-status        Report the native-extension mode
+
+Session URL utilities:
+  winscp url parse URL [options]    Parse a session URL as redacted JSON
+  winscp url generate [options]     Generate a credential-free session URL
 
 Drag plan options:
   --source remote|local              Where the dragged items originate
@@ -60,11 +65,13 @@ const VALUE_OPTIONS = new Set([
   'parameter', 'command', 'session', 'file', 'temp-root', 'log', 'loglevel', 'xmllog',
   'ini', 'rawsettings',
   'stdout', 'stdin', 'default-download-target', 'fake-file-target', 'external-drop-directory',
+  'protocol', 'host', 'port', 'username',
 ]);
 const BOOLEAN_OPTIONS = new Set([
   'onto-session-tab', 'same-session', 'target-available', 'allow-move', 'read-only',
   'no-upload', 'no-mkdir', 'has-directories', 'queue', 'move', 'json', 'pretty',
   'nointeractiveinput', 'unsafe', 'xmllogrequired', 'xmlgroups',
+  'specific', 'prefer-protocol', 'want-file',
 ]);
 
 function parseOptions(argv) {
@@ -164,6 +171,97 @@ function printJson(io, value, pretty = false) {
 
 function outputIsPretty(options) {
   return booleanOption(options, 'pretty', false);
+}
+
+const URL_PROTOCOLS = Object.freeze({
+  scp: { protocol: 'scp', ftps: 'none' },
+  sftp: { protocol: 'sftpOnly', ftps: 'none' },
+  ftp: { protocol: 'ftp', ftps: 'none' },
+  ftps: { protocol: 'ftp', ftps: 'implicit' },
+  ftpes: { protocol: 'ftp', ftps: 'explicitTls' },
+  dav: { protocol: 'webdav', ftps: 'none' },
+  davs: { protocol: 'webdav', ftps: 'implicit' },
+  s3: { protocol: 's3', ftps: 'implicit' },
+  s3plain: { protocol: 's3', ftps: 'none' },
+});
+
+function safeSessionSummary(data, fileName = '') {
+  return {
+    protocol: data.protocol,
+    ftps: data.ftps,
+    hostName: data.hostName,
+    portNumber: data.portNumber,
+    userName: data.userName,
+    remoteDirectory: data.remoteDirectory,
+    fileName,
+    saveOnly: !!data.saveOnly,
+    hasPassword: sessionData.hasPassword(data),
+    hasHostKey: String(data.hostKey || '') !== '',
+  };
+}
+
+function parseSessionUrl(argv) {
+  const { positional, options } = parseOptions(argv);
+  assertKnownOptions(options, new Set(['pretty', 'json', 'prefer-protocol', 'want-file']), 'url parse');
+  if (positional.length !== 1) throw new Error('url parse needs exactly one URL');
+
+  let flags = sessionData.PUF.PARSE_ONLY;
+  if (booleanOption(options, 'prefer-protocol', false)) flags |= sessionData.PUF.PREFER_PROTOCOL;
+  const parsed = sessionData.parseUrl(positional[0], {
+    flags,
+    wantFileName: booleanOption(options, 'want-file', false),
+  });
+  if (!parsed.ok || !parsed.data.hostName ||
+      !(parsed.parsedInfo & sessionData.PI.PROTOCOL_DEFINED)) {
+    throw new Error('url parse requires a supported session URL with a host');
+  }
+  return {
+    command: 'url parse',
+    url: parsed.maskedUrl,
+    parsedInfo: parsed.parsedInfo,
+    session: safeSessionSummary(parsed.data, parsed.fileName),
+  };
+}
+
+function parsePort(value) {
+  if (!/^\d+$/.test(String(value))) throw new Error('--port expects an integer from 1 through 65535');
+  const port = Number(value);
+  if (!Number.isSafeInteger(port) || port < 1 || port > 65535) {
+    throw new Error('--port expects an integer from 1 through 65535');
+  }
+  return port;
+}
+
+function generateSessionUrl(argv) {
+  const { positional, options } = parseOptions(argv);
+  assertKnownOptions(options, new Set([
+    'protocol', 'host', 'port', 'username', 'specific', 'pretty', 'json',
+  ]), 'url generate');
+  if (positional.length) throw new Error('url generate does not accept positional arguments');
+  const protocolName = String(optionValue(options, 'protocol', 'sftp')).toLowerCase();
+  const protocol = URL_PROTOCOLS[protocolName];
+  if (!protocol) throw new Error(`--protocol must be one of ${Object.keys(URL_PROTOCOLS).join(', ')}`);
+  const hostName = String(optionValue(options, 'host', '')).trim();
+  if (!hostName) throw new Error('url generate needs --host HOST');
+
+  const data = sessionData.defaultSessionData();
+  data.protocol = protocol.protocol;
+  data.ftps = protocol.ftps;
+  data.portNumber = sessionData.defaultPort(data.protocol, data.ftps);
+  data.hostName = hostName;
+  data.userName = String(optionValue(options, 'username', ''));
+  if (optionValue(options, 'port', undefined) !== undefined) {
+    data.portNumber = parsePort(optionValue(options, 'port', undefined));
+  }
+  let flags = sessionData.SUF.USERNAME;
+  if (booleanOption(options, 'specific', false)) flags |= sessionData.SUF.SPECIFIC;
+  const url = sessionData.generateSessionUrl(data, flags);
+  return {
+    command: 'url generate',
+    url,
+    openCommand: sessionData.generateOpenCommandArgs(data),
+    session: safeSessionSummary(data),
+  };
 }
 
 function printError(io, error) {
@@ -414,6 +512,24 @@ async function runCli(argv = process.argv.slice(2), io = {}) {
   }
 
   try {
+    if (first === 'url') {
+      const subcommand = args[1] || 'parse';
+      const subcommandArgs = args.slice(2);
+      const helpRequested = (value) => value === '--help' || value === '-h' || value === 'help';
+      if (helpRequested(subcommand) || (subcommandArgs.length === 1 && helpRequested(subcommandArgs[0]))) {
+        streams.stdout.write(HELP);
+        return 0;
+      }
+      const { options } = parseOptions(subcommandArgs);
+      if (subcommand === 'parse') {
+        printJson(streams, parseSessionUrl(subcommandArgs), outputIsPretty(options));
+      } else if (subcommand === 'generate') {
+        printJson(streams, generateSessionUrl(subcommandArgs), outputIsPretty(options));
+      } else {
+        throw new Error(`unknown url subcommand ${JSON.stringify(subcommand)}`);
+      }
+      return 0;
+    }
     if (first === 'drag' || first === 'drop') {
       const subcommand = args[1] || (first === 'drop' ? 'classify' : 'plan');
       const subcommandArgs = args.slice(2);
@@ -468,5 +584,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  HELP, EFFECTS, parseOptions, dragPlan, classifyDrop, dropTarget, stageDrag, buildConsoleArgs, runCli,
+  HELP, EFFECTS, parseOptions, dragPlan, classifyDrop, dropTarget, stageDrag,
+  parseSessionUrl, generateSessionUrl, buildConsoleArgs, runCli,
 };

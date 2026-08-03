@@ -21,10 +21,14 @@ The drag source requires real staged files and a non-empty drag icon. If a file
 is missing, staging fails, or the platform cannot provide the shell surface,
 the operation reports an error instead of offering a guessed path.
 
+Internal remote drops back onto the directory currently shown in the panel are
+also refused as self-drops. A child directory remains a valid target.
+
 ## Failure modes
 
-Traversal-like names, device names, missing files, failed staging and an
-unavailable shell surface are refused before an unsafe payload is offered.
+Traversal-like names, device names, missing files, failed staging, self-drops
+and an unavailable shell surface are refused before an unsafe payload is
+offered.
 The caller can retry with a valid name or use the in-app transfer commands.
 
 ## Security considerations
@@ -32,7 +36,8 @@ The caller can retry with a valid name or use the in-app transfer commands.
 Staged paths remain under a private temporary directory and are validated
 before joining. Device names and separators are rejected even when preserving
 remote names was explicitly requested; the shell payload never becomes a
-path traversal or device operation.
+path traversal or device operation. A self-drop is rejected before it can be
+mistaken for a move onto the source directory.
 
 Regression coverage is in `test/shellintegration.test.js`, including preserved
 device names and traversal-like separators. Run `npm test` to verify the full

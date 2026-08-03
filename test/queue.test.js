@@ -1769,6 +1769,12 @@ test('transfersLimit bounds how many items run at once', async () => {
   for (let i = 0; i < 5; i++) assert.ok(remote.read(`/r/f${i}.bin`), `f${i} missing`);
 });
 
+test('transfersLimit does not wrap large finite values through int32 coercion', () => {
+  const q = new TransferQueue({ prefs: prefs({ queue: { enabledByDefault: false } }) });
+  q.setTransfersLimit(2147483648);
+  assert.equal(q.transfersLimit, 2147483648);
+});
+
 test('IPC questions fail closed when their renderer window closes', async () => {
   const { EventEmitter } = require('events');
   const { ipc } = ipcWithQueue();

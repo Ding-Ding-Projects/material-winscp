@@ -48,6 +48,41 @@ test('nested drag and drop help stays headless and succeeds', async () => {
   }
 });
 
+test('URL parsing is headless and redacts credentials in structured output', async () => {
+  const result = output();
+  assert.equal(await cli.runCli([
+    'url', 'parse', 'sftp://alice:secret@example.com:2222/home/report.txt', '--want-file', '--pretty',
+  ], { stdout: result.stream, stderr: result.stream }), 0);
+  const parsed = JSON.parse(result.text());
+  assert.equal(parsed.url, 'sftp://alice:***@example.com:2222/home/report.txt');
+  assert.equal(parsed.session.protocol, 'sftpOnly');
+  assert.equal(parsed.session.hostName, 'example.com');
+  assert.equal(parsed.session.fileName, 'report.txt');
+  assert.equal(parsed.session.remoteDirectory, '/home/');
+  assert.equal(parsed.session.hasPassword, true);
+  assert.equal(result.text().includes('secret'), false, 'URL utilities must not print passwords');
+});
+
+test('URL generation supports protocol, user, IPv6 and WinSCP-specific schemes', async () => {
+  const generated = cli.generateSessionUrl([
+    '--protocol', 'sftp', '--host', '2001:db8::1', '--port', '2222', '--username', 'alice', '--specific',
+  ]);
+  assert.equal(generated.url, 'winscp-sftp://alice@[2001:db8::1]:2222/');
+  assert.match(generated.openCommand, /^sftp:\/\/alice@\[2001:db8::1\]:2222\//);
+
+  const result = output();
+  assert.equal(await cli.runCli([
+    'url', 'generate', '--protocol', 'ftps', '--host', 'files.example.com', '--username', 'backup',
+  ], { stdout: result.stream, stderr: result.stream }), 0);
+  assert.equal(JSON.parse(result.text()).url, 'ftps://backup@files.example.com/');
+});
+
+test('URL utilities reject malformed input before any session starts', async () => {
+  assert.throws(() => cli.parseSessionUrl(['not-a-session']), /supported session URL/);
+  assert.throws(() => cli.generateSessionUrl(['--host', 'example.com', '--port', '0']), /1 through 65535/);
+  assert.throws(() => cli.generateSessionUrl(['--protocol', 'telnet', '--host', 'example.com']), /must be one of/);
+});
+
 test('simulation output is compact JSON by default and pretty JSON on request', async () => {
   const compact = output();
   assert.equal(await cli.runCli(['drag', 'plan', '--source', 'remote'], {

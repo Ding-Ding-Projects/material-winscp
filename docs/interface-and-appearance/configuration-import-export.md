@@ -23,6 +23,10 @@ Settings]` block is understood by the core serializer, but this application has
 no separate per-site default-settings object, so it is not applied to the JSON
 preferences.
 
+Blank or malformed numeric values are treated as absent during import and keep
+the supplied WinSCP factory default; in particular, an empty floating-point
+value is never coerced to zero by JavaScript's numeric conversion.
+
 The import replaces the stored site and folder collections, matching the
 session-store meaning of a WinSCP configuration import. It does not replace
 application preferences or workspaces because those have no lossless WinSCP

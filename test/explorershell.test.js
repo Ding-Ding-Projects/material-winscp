@@ -1005,6 +1005,17 @@ test('a drop on the remote panel\'s free space is refused', () => {
   assert.strictEqual(effect, 0);
 });
 
+test('a remote drop onto the current directory is refused, while a child remains valid', () => {
+  const shell = makeShell({
+    panels: { remote: panel({ side: 'remote', path: '/srv/project', entries: ENTRIES }) },
+  });
+  const base = {
+    effect: 1, fromRemotePanel: true, ontoDirView: true, fromDirView: true,
+  };
+  assert.strictEqual(shell.chooseDropEffect({ ...base, dropTarget: '/srv/project/' }), 0);
+  assert.strictEqual(shell.chooseDropEffect({ ...base, dropTarget: '/srv/project/archive' }), 2);
+});
+
 test('inside the remote panel the default is move, and Ctrl means copy', () => {
   const shell = makeShell({ session: fakeSession({ caps: { move: true, copyRemote: true } }) });
   const base = { effect: 1, fromRemotePanel: true, ontoDirView: true, fromDirView: true, dropTarget: 'sub' };

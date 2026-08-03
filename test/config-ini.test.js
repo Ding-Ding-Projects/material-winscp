@@ -102,6 +102,19 @@ test('JSON load and import re-protect clear-text session secrets', () => withRoo
   assert.doesNotMatch(fs.readFileSync(P.config(), 'utf8'), /another-password/);
 }));
 
+test('site mutations fail closed for non-string secret values', () => withRoot(() => {
+  const config = new Config();
+  config.save = () => {};
+  const added = config.addSite({ name: 'Malformed', hostName: 'example.com', password: 12345 });
+  assert.equal(added.password, '');
+
+  const zero = config.addSite({ name: 'Falsy malformed', hostName: 'example.com', password: 0 });
+  assert.equal(zero.password, '');
+
+  const updated = config.updateSite(added.id, { password: { value: 'not-a-secret-string' } });
+  assert.equal(updated.password, '');
+}));
+
 test('JSON load persists protection when migrating a legacy clear-text secret', () => withRoot((root) => {
   fs.writeFileSync(P.config(), JSON.stringify({ sites: [
     { name: 'Legacy', hostName: 'legacy.example.com', password: 'plain-password', savePassword: true },

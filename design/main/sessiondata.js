@@ -463,7 +463,9 @@ class KeyValueStorage {
   readFloat(name, def) {
     const v = this._raw(name);
     if (v === undefined) return def;
-    const n = Number(String(v).trim());
+    const text = String(v).trim();
+    if (text === '') return def;
+    const n = Number(text);
     return Number.isFinite(n) ? n : def;
   }
 

@@ -1817,6 +1817,18 @@ test('home directory jumps are deliberately not recorded as directory changes', 
   assert.ok(terminal.changesCache.isEmpty, 'nothing should be keyed on "home"');
 });
 
+test('home directory keeps the adapter canonical landing path', async () => {
+  const { terminal, adapter, session } = makeTerminal({ cwd: '/somewhere' });
+  adapter.nodes.set('/home/me', { type: 'dir', mtime: 0 });
+  adapter.changeDirectory = async () => '/srv/canonical-home/';
+
+  const landed = await terminal.homeDirectory();
+
+  assert.strictEqual(landed, '/srv/canonical-home');
+  assert.strictEqual(terminal.currentDirectorySync, '/srv/canonical-home');
+  assert.strictEqual(session.state.remotePath, '/srv/canonical-home');
+});
+
 test('clearCaches empties both caches and the session panel cache', async () => {
   const { terminal, session, adapter } = makeTerminal({ cwd: '/d' });
   adapter.add('/d/a', {});

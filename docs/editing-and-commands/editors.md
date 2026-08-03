@@ -84,6 +84,10 @@ available through the visible Up and Down buttons for pointer users.
   upload is pending, the second request joins the first instead of uploading a
   duplicate. Edits made while that upload is pending remain marked unsaved, so
   they cannot be mistaken for the text that was uploaded.
+- **Watcher notifications are serialized too.** Windows can report one save as
+  several overlapping filesystem events. The editor queues those callbacks per
+  document, then rechecks the temporary file before each upload so the newest
+  edit is not lost or uploaded out of order.
 
 ## Failure modes
 
@@ -147,6 +151,8 @@ to the caller with the executable error so the association can be corrected.
   ownership, and release of the in-flight guard after failure.
 - Renderer editor action wiring is tested for clipboard operations, read-only
   guards, and undo/redo exposure.
+- Overlapping `editor:fileChanged` callbacks are tested to ensure uploads run in
+  order and the final temporary-file contents reach the remote file.
 
 ## Suggested articles
 

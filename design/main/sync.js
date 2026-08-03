@@ -130,10 +130,12 @@ function validateOptions(o) {
   if (!['time', 'size', 'either', 'none'].includes(o.criteria)) {
     throw new SyncOptionError(`Unknown criteria "${o.criteria}". Expected time, size, either or none.`);
   }
-  if (!Number.isFinite(o.timeTolerance) || o.timeTolerance < 0) {
+  const timeTolerance = o.timeTolerance === undefined ? DEFAULT_TIME_TOLERANCE : o.timeTolerance;
+  const timeDifference = o.timeDifference === undefined ? 0 : o.timeDifference;
+  if (!Number.isFinite(timeTolerance) || timeTolerance < 0) {
     throw new SyncOptionError('Time tolerance must be a finite, non-negative number of milliseconds.');
   }
-  if (!Number.isFinite(o.timeDifference)) {
+  if (!Number.isFinite(timeDifference)) {
     throw new SyncOptionError('Time difference must be a finite number of seconds.');
   }
 

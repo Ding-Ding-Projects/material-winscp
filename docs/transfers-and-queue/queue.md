@@ -18,6 +18,9 @@ Under **Preferences → Transfer → Background**, stored in `PREF_DEFAULTS.queu
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `transfersLimit` | `2` | Concurrent transfers. Raising it helps on high-latency links and hurts on saturated ones. |
+
+The runtime concurrency limit accepts finite positive values without 32-bit
+integer wraparound; invalid values fall back to one active transfer.
 | `enabledByDefault` | `true` | Whether new transfers start queued rather than waiting. |
 | `parallelDuplicateTransfers` | `true` | Split one large file across several connections when the protocol supports it. |
 | `individualTransfers` | `false` | Treat a folder as many items rather than one, so progress is per file. |

@@ -2034,6 +2034,13 @@ class ExplorerShell {
     if (!s.fromRemotePanel) return effect;
 
     if (s.ontoDirView && s.fromDirView && !s.dropTarget) return DROPEFFECT.NONE;
+    // A drop back onto the directory being displayed is a self-drop, not a
+    // meaningful move. Refuse it before effect negotiation can turn it into a
+    // server-side rename/copy; child directories remain valid targets.
+    if (s.ontoDirView && s.fromDirView && s.dropTarget
+        && sameUnixPath(s.dropTarget, this.panel(SIDES.remote)?.path)) {
+      return DROPEFFECT.NONE;
+    }
 
     if (effect !== DROPEFFECT.COPY) return effect;
 
