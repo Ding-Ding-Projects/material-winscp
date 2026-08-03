@@ -43,6 +43,8 @@ const ADAPTERS = {
 };
 
 const DEFAULT_PORTS = { sftp: 22, scp: 22, ftp: 21, webdav: 80, s3: 443, local: 0 };
+const SECRET_FIELDS = ['password', 'passphrase', 'proxyPassword', 'tunnelPassword',
+  'tunnelPassphrase', 'encryptKey', 's3SessionToken'];
 
 /**
  * Require a sibling module and fail loudly when it is missing. Other agents own
@@ -253,7 +255,12 @@ class Session extends EventEmitter {
    */
   async verifyHostKey(key) {
     const hostPort = formatHostPort(key.host || this.data.hostName, key.port || this.data.portNumber);
-    const shown = key.fingerprintSHA256 || key.fingerprint || '';
+    const shown = String(key.fingerprintSHA256 || '').trim();
+    if (!shown) {
+      this._promptRefused = true;
+      this.log.add('error', `The host key for ${hostPort} was presented without a fingerprint.`);
+      return false;
+    }
 
     // A fingerprint pinned on the site itself (or supplied with /hostkey).
     // `key.pinned` lets the caller name a different one — the tunnel leg is
@@ -293,7 +300,7 @@ class Session extends EventEmitter {
       return false;
     }
     if (answer.remember && this.config) {
-      this.config.rememberHostKey(hostPort, key.fingerprintSHA256 || key.fingerprint || '', key.algorithm || key.keyType || '');
+      this.config.rememberHostKey(hostPort, shown, key.algorithm || key.keyType || '');
       this.log.add('info', `The host key for ${hostPort} was accepted and stored.`);
     } else {
       this.log.add('info', `The host key for ${hostPort} was accepted for this session only.`);
@@ -305,8 +312,14 @@ class Session extends EventEmitter {
   async verifyCertificate(cert) {
     const hostPort = formatHostPort(cert.host || this.data.hostName, cert.port || this.data.portNumber);
     const key = `cert:${hostPort}`;
+    const shown = String(cert.fingerprintSHA256 || '').trim();
+    if (!shown) {
+      this._promptRefused = true;
+      this.log.add('error', `The certificate for ${hostPort} was presented without a fingerprint.`);
+      return false;
+    }
     const known = this.config ? this.config.knownHostKey(key) : null;
-    if (known && known.fingerprint && known.fingerprint === (cert.fingerprintSHA256 || cert.fingerprint)) {
+    if (known && known.fingerprint && known.fingerprint === shown) {
       this.log.add('debug', `Certificate for ${hostPort} is already trusted.`);
       return true;
     }
@@ -334,7 +347,7 @@ class Session extends EventEmitter {
       return false;
     }
     if (answer.remember && this.config) {
-      this.config.rememberHostKey(key, cert.fingerprintSHA256 || cert.fingerprint || '', 'certificate');
+      this.config.rememberHostKey(key, shown, 'certificate');
     }
     return true;
   }
@@ -770,8 +783,14 @@ class Session extends EventEmitter {
     this._emitState();
     if (!o.keepOpen) {
       this.log.close();
+      this._clearSecretData();
       this.emit('closed');
     }
+  }
+
+  /** Drop decrypted site credentials once a session is retired permanently. */
+  _clearSecretData() {
+    for (const field of SECRET_FIELDS) this.data[field] = '';
   }
 
   _emitState() {

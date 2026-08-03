@@ -15,4 +15,10 @@ still displays the value supplied by the session manager and the existing
 changed-key confirmation remains mandatory. A missing value is an incomplete
 security decision, not an “unknown but probably fine” state.
 
-Verification: `node --test test/authenticate.test.js`.
+The main-process verifier applies the same boundary before opening the prompt
+for a host key or certificate. An accepted identity is remembered only when
+the stored fingerprint is non-empty, so an empty record cannot make a later
+connection appear trusted. Permanent session close also clears the decrypted
+credential fields retained by the live session object.
+
+Verification: `node --test test/authenticate.test.js test/session-manager.test.js`.

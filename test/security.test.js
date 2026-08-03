@@ -271,6 +271,22 @@ test('master-password rewrap refuses to delete an unreadable stored secret', () 
   C.lockMaster();
 });
 
+test('credential writes fail closed when protection is unavailable', () => {
+  const originalProtect = C.protect;
+  try {
+    C.protect = () => '';
+    const config = new Config();
+    config.save = () => {};
+    assert.throws(
+      () => config.addSite({ name: 'Unprotectable', hostName: 'example.com', password: 'secret', savePassword: true }),
+      (error) => error && error.code === 'SECRET_PROTECTION_UNAVAILABLE',
+    );
+    assert.deepEqual(config.sites, [], 'a failed protection attempt must not add a half-saved site');
+  } finally {
+    C.protect = originalProtect;
+  }
+});
+
 test('hexToBytes clears the whole result on any bad input', () => {
   assert.deepStrictEqual(S.hexToBytes('4142'), Buffer.from('AB'));
   assert.deepStrictEqual(S.hexToBytes('4142ab'), Buffer.from([0x41, 0x42, 0xAB]));

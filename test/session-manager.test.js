@@ -283,3 +283,30 @@ test('IPv6 host keys use an unambiguous bracketed host-port key', async () => {
   }), true);
   assert.deepEqual(lookedUp, ['[2001:db8::1]:2222']);
 });
+
+test('host-key and certificate verification fail closed without a presented identity', async () => {
+  const session = new Session(
+    { protocol: 'sftp', hostName: 'identity.example', portNumber: 22 },
+    { config: configFor({}), emit() {} },
+  );
+  session.ask = async () => { throw new Error('missing identities must not reach the approval prompt'); };
+  assert.equal(await session.verifyHostKey({
+    host: 'identity.example', port: 22, algorithm: 'ssh-ed25519', fingerprint: 'MD5:legacy-only',
+  }), false);
+  assert.equal(await session.verifyCertificate({
+    host: 'identity.example', port: 443, fingerprint: 'AA:BB', errors: ['untrusted'],
+  }), false);
+});
+
+test('permanently closed sessions clear decrypted credentials', async () => {
+  const session = new Session({
+    protocol: 'local', hostName: 'secret.example', password: 'pw', passphrase: 'phrase',
+    proxyPassword: 'proxy', tunnelPassword: 'tunnel', tunnelPassphrase: 'tunnel-phrase',
+    encryptKey: 'encrypt', s3SessionToken: 'token',
+  }, { emit() {} });
+  await session.disconnect();
+  for (const field of ['password', 'passphrase', 'proxyPassword', 'tunnelPassword',
+    'tunnelPassphrase', 'encryptKey', 's3SessionToken']) {
+    assert.equal(session.data[field], '', `${field} must be cleared after permanent close`);
+  }
+});

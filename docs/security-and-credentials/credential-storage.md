@@ -55,12 +55,13 @@ believe something false.
 | Situation | What the user sees | Recoverable |
 | --- | --- | --- |
 | Keychain unavailable | The save option explains that without a master password the secret will not be stored, and offers to set one. It does not silently fall back to storing it. | Yes |
+| Protection fails while saving a credential | The mutation is rejected with a protection error; no site or partial credential is added, updated, or re-wrapped. | Yes — enable an available protection route and retry |
 | Keychain entry deleted externally | The site's password is gone; connecting prompts. The stale handle is cleaned up rather than reported as corruption. | Yes |
 | Config copied to another machine | Keychain-protected secrets do not travel — by design. Master-password-protected ones do, and need the master password. The import summary states how many secrets could not be carried. | Yes |
 | Decryption fails (wrong key, damaged bytes) | Authenticated encryption makes this detectable. The app reports that the stored secret could not be read and prompts, rather than sending garbage as a password. | Yes |
 | Protected envelope text is malformed (including whitespace, ignored characters, or missing padding) | The envelope is rejected before decryption; no repaired or partially decoded value is accepted. The app prompts again. | Yes |
 | A secret is needed while the app is locked | One prompt for the master password, not one per secret. | Yes |
-| Master password removed | Every secret is re-wrapped with the keychain if available, or **deleted** if not. The confirmation states which, and how many. | n/a |
+| Master password removed | Every secret is re-wrapped with the keychain if available. If that protection route is unavailable, the setting remains enabled and the operation reports failure rather than deleting credentials. | Yes |
 
 ## Security considerations
 

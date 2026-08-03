@@ -118,6 +118,17 @@ function isIniConfiguration(file, text) {
   return path.extname(file).toLowerCase() === '.ini' || /^\s*\[Sessions\\/im.test(text);
 }
 
+/** Refuse a secret write when no protected representation is available. */
+function protectSecret(value, field) {
+  const protectedValue = crypt.protect(value);
+  if (value && !protectedValue) {
+    const error = new Error(`The ${field} could not be protected and was not saved.`);
+    error.code = 'SECRET_PROTECTION_UNAVAILABLE';
+    throw error;
+  }
+  return protectedValue;
+}
+
 /** Normalize an imported/loaded site before it can be persisted. */
 function normalizeSite(site) {
   const normalized = deepMerge(clone(SESSION_DEFAULTS), isRecord(site) ? site : {});
@@ -130,7 +141,7 @@ function normalizeSite(site) {
     if (!value) { normalized[field] = ''; continue; }
     if (typeof value !== 'string') { normalized[field] = ''; continue; }
     if (value.startsWith('mp:') || value.startsWith('os:')) continue;
-    normalized[field] = normalized.savePassword || field !== 'password' ? crypt.protect(value) : '';
+    normalized[field] = normalized.savePassword || field !== 'password' ? protectSecret(value, field) : '';
   }
   if (!normalized.savePassword) normalized.password = '';
   return normalized;
@@ -308,7 +319,7 @@ class Config extends EventEmitter {
       for (const field of INI_SECRET_FIELDS) {
         const value = site[field];
         if (value && !String(value).startsWith('mp:') && !String(value).startsWith('os:')) {
-          site[field] = crypt.protect(value);
+        site[field] = protectSecret(value, field);
         }
       }
       return site;
@@ -447,7 +458,7 @@ class Config extends EventEmitter {
     if (typeof s.id !== 'string' || s.id === '' || this.siteById(s.id)) s.id = newId('site');
     for (const f of SECRET_FIELDS) {
       if (typeof s[f] !== 'string') s[f] = '';
-      if (s[f] && !s[f].startsWith('mp:') && !s[f].startsWith('os:')) s[f] = s.savePassword || f !== 'password' ? crypt.protect(s[f]) : '';
+      if (s[f] && !s[f].startsWith('mp:') && !s[f].startsWith('os:')) s[f] = s.savePassword || f !== 'password' ? protectSecret(s[f], f) : '';
     }
     this.data.sites.push(s);
     this.save(`Added the site "${s.name || s.hostName}"`);
@@ -464,7 +475,7 @@ class Config extends EventEmitter {
     for (const f of SECRET_FIELDS) {
       const v = patch[f];
       if (v !== undefined) {
-        merged[f] = typeof v !== 'string' || v === '' ? '' : (v.startsWith('mp:') || v.startsWith('os:') ? v : crypt.protect(v));
+        merged[f] = typeof v !== 'string' || v === '' ? '' : (v.startsWith('mp:') || v.startsWith('os:') ? v : protectSecret(v, f));
       }
     }
     if (patch.savePassword === false) merged.password = '';
@@ -558,8 +569,10 @@ class Config extends EventEmitter {
   knownHostKey(hostPort) { return this.data.hostKeys[hostPort] || null; }
 
   rememberHostKey(hostPort, fingerprint, algorithm) {
+    if (!String(hostPort || '').trim() || !String(fingerprint || '').trim()) return false;
     this.data.hostKeys[hostPort] = { fingerprint, algorithm, addedAt: Date.now() };
     this.save(`Accepted the host key for ${hostPort}`);
+    return true;
   }
 
   forgetHostKey(hostPort) {
@@ -623,11 +636,20 @@ class Config extends EventEmitter {
     // Re-wrap every stored secret under the new master key.
     const plain = this._readSecretsForRewrap();
     if (!plain) return false;
-    crypt.unlockMaster(password, verifier);
+    if (!crypt.unlockMaster(password, verifier)) return false;
+    let wrapped;
+    try {
+      wrapped = plain.map((record) => Object.fromEntries(SECRET_FIELDS.map((field) => [
+        field, record[field] ? protectSecret(record[field], field) : '',
+      ])));
+    } catch {
+      crypt.lockMaster();
+      return false;
+    }
     this.data.prefs.security.useMasterPassword = true;
     this.data.prefs.security.masterPasswordVerifier = verifier;
     this.data.sites.forEach((s, i) => {
-      for (const f of SECRET_FIELDS) s[f] = plain[i][f] ? crypt.protect(plain[i][f]) : '';
+      for (const f of SECRET_FIELDS) s[f] = wrapped[i][f];
     });
     this.save('Enabled the master password');
     return true;
@@ -643,10 +665,19 @@ class Config extends EventEmitter {
     const plain = this._readSecretsForRewrap();
     if (!plain) return false;
     crypt.lockMaster();
+    let wrapped;
+    try {
+      wrapped = plain.map((record) => Object.fromEntries(SECRET_FIELDS.map((field) => [
+        field, record[field] ? protectSecret(record[field], field) : '',
+      ])));
+    } catch {
+      crypt.unlockMaster(password, this.data.prefs.security.masterPasswordVerifier);
+      return false;
+    }
     this.data.prefs.security.useMasterPassword = false;
     this.data.prefs.security.masterPasswordVerifier = '';
     this.data.sites.forEach((s, i) => {
-      for (const f of SECRET_FIELDS) s[f] = plain[i][f] ? crypt.protect(plain[i][f]) : '';
+      for (const f of SECRET_FIELDS) s[f] = wrapped[i][f];
     });
     this.save('Disabled the master password');
     return true;
