@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `61b8c11`** — Record the latest CLI handoff
+**At commit `778b30c`** — Refresh the in-app changelog
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3424 run, **3423 pass, 0 fail**, 1 skipped |
-| Hand-written code | 219,937 lines across 436 files |
-| Commits | 183 on `main` |
-| Working tree | clean |
-| Remote | `origin/main` at `61b8c11` — in sync |
+| Tests | 3438 run, **3437 pass, 0 fail**, 1 skipped |
+| Hand-written code | 220,377 lines across 436 files |
+| Commits | 190 on `main` |
+| Working tree | **1 uncommitted change(s)** |
+| Remote | `origin/main` at `d29d85d` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `778b30c` | 2026-08-03 | Refresh the in-app changelog |
+| `a281c72` | 2026-08-03 | Expand headless CLI and harden transfer boundaries |
+| `2d7e22f` | 2026-08-03 | Reset command palette selection on search |
+| `22bc236` | 2026-08-03 | Validate SCP time record fields |
+| `85b7e96` | 2026-08-03 | Normalize S3 listing page sizes |
+| `710f6b7` | 2026-08-03 | Validate synchronization clock options |
+| `d29d85d` | 2026-08-03 | Record the pushed CLI handoff |
 | `61b8c11` | 2026-08-03 | Record the latest CLI handoff |
-| `2dae39b` | 2026-08-03 | Record the latest CLI changelog entry |
-| `e5ed31b` | 2026-08-03 | Refresh changelog for CLI hardening |
-| `afbe57d` | 2026-08-03 | Fix repeated CLI batches and drag-name collisions |
-| `1bf3275` | 2026-08-03 | Record the latest startup and protocol handoff |
-| `a5a2c7e` | 2026-08-03 | Refresh the startup and protocol changelog |
-| `d008db8` | 2026-08-03 | Harden startup, security, protocol, and preference edges |
-| `df68f60` | 2026-08-03 | Record the latest CLI and protocol handoff |
 
 ## Notes from whoever worked on this last
 
