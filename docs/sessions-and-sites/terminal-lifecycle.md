@@ -97,6 +97,11 @@ transaction the reread is deferred and coalesced with other file operations.
 The server-side batch `copyFiles` path uses the same transaction boundary as
 `moveFiles`: its target directory is invalidated after the batch, and the
 current listing is reread once when the batch closes rather than once per file.
+The single-file and batch duplicate paths call the adapter's `copyRemote()` contract
+— the same method used by the protocol implementations — and preserve a declined
+overwrite as `false` without pretending that a file changed or forcing a reread.
+The renderer's queued remote-copy dialog currently uses `queue:add` directly;
+these Terminal methods remain the foreground/core seam and are covered independently.
 
 ## Multi-session ownership
 

@@ -17,6 +17,9 @@ requires a program path; `.!`/`%1`/`"%1"` placeholders control the file argument
 ## Failure modes
 
 Invalid or missing entries normalize to the internal editor and `*.*`.
+Malformed character ranges such as `[z-a]` are treated as non-matches rather
+than throwing while the live probe or list is being painted, so the entry can
+be corrected in place.
 Removing the final catch-all is confirmed and leaves unmatched files using the
 internal editor. When the list is filtered, keyboard reordering stays within
 the visible rows so hidden associations cannot be moved accidentally.

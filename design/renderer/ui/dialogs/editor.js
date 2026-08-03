@@ -1023,6 +1023,7 @@ export function createEditorWindow(record, initial, opts = {}) {
       const res = await callMain('editor.setEncoding', state.id, next);
       state.encoding = res.encoding;
       state.encodingDetected = res.encodingDetected;
+      state.bytes = res.bytes;
       state.saved = res.text;
       encodingSel.value = state.encoding;
       history.undo.length = 0;
@@ -1050,6 +1051,8 @@ export function createEditorWindow(record, initial, opts = {}) {
               const res = await callMain('editor.read', state.id);
               state.saved = res.text;
               state.encoding = res.encoding;
+              state.encodingDetected = res.encodingDetected;
+              state.bytes = res.bytes;
               encodingSel.value = state.encoding;
               history.undo.length = 0;
               history.redo.length = 0;
@@ -1181,7 +1184,12 @@ export function createEditorWindow(record, initial, opts = {}) {
     if (!e || e.id !== state.id) return;
     if (e.type === 'remote-changed') conflict(e);
     else if (e.type === 'remote-missing') notify.warning(t('editorTitle'), s('edRemoteMissing', record.remotePath));
-    else if (e.type === 'uploaded') { state.saved = state.text; updateStatus(); }
+    // The event only says that *some* temporary-file bytes were uploaded. It
+    // does not carry the renderer's immutable save snapshot; using the current
+    // textarea value here can mark a newer edit clean while that newer text is
+    // still only in the renderer. save() advances state.saved only after its
+    // own response is tied back to the snapshot it sent.
+    else if (e.type === 'uploaded') { updateStatus(); }
     else if (e.type === 'orphan') notify.warning(t('editorTitle'), s('edOrphan', record.fileName, e.localPath));
     else if (e.type === 'error') notify.error(t('editorTitle'), e.message);
     else if (e.type === 'focus') win.focus();

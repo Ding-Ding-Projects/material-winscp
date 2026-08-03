@@ -2006,9 +2006,9 @@ function parseUrl(url, {
 
     // A stored site is looked up even when a protocol was given, because
     // naming a site after a host is how a user sets a default user name for it.
-    if (storedSessions && storedSessions.sessions &&
+    if (storedSessions && Array.isArray(storedSessions.sessions) &&
         (!protocolDefined || (flags & PUF.ALLOW_STORED_SITE_WITH_PROTOCOL))) {
-      for (const candidate of storedSessions.sessions) {
+      for (const candidate of storedSessionList(storedSessions.sessions)) {
         if (candidate.isWorkspace) continue;
         const n = String(candidate.name);
         let match = false;
@@ -2437,14 +2437,23 @@ const SESSIONS_SUBKEY = 'Sessions';
  */
 function importSessionsFromIni(text, { useDefaults = false } = {}) {
   const sections = typeof text === 'string' ? parseIniFile(text) : text;
+  if (sections === null || typeof sections !== 'object' || Array.isArray(sections)) {
+    throw new TypeError('INI sections must be an object.');
+  }
   const prefix = SESSIONS_SUBKEY + '\\';
   let defaultSettings = null;
   const raw = [];
+  const seenNames = new Set();
 
   for (const section of Object.keys(sections)) {
-    if (!section.startsWith(prefix)) continue;
+    if (section.slice(0, prefix.length).toLowerCase() !== prefix.toLowerCase()) continue;
     const name = unMungeStr(section.slice(prefix.length));
-    if (name === DEFAULT_SETTINGS_NAME) {
+    const nameKey = name.toLowerCase();
+    if (seenNames.has(nameKey)) {
+      throw new Error(`The INI file contains duplicate session name "${name}".`);
+    }
+    seenNames.add(nameKey);
+    if (nameKey === DEFAULT_SETTINGS_NAME.toLowerCase()) {
       defaultSettings = { name, values: sections[section] };
     } else {
       raw.push({ name, values: sections[section] });
@@ -2491,15 +2500,26 @@ function importSessionsFromIni(text, { useDefaults = false } = {}) {
  * defaults, because that is the baseline the reader will use.
  */
 function exportSessionsToIni(sessions, { defaultSettings = null } = {}) {
+  if (!Array.isArray(sessions)) throw new TypeError('Sessions must be an array.');
   const factory = defaultSessionData();
   const sections = Object.create(null);
+  const seenNames = new Set();
+  const addSection = (name, values) => {
+    if (typeof name !== 'string' || name === '') throw new TypeError('Every exported session must have a name.');
+    const section = `${SESSIONS_SUBKEY}\\${mungeStr(name, false)}`;
+    const key = section.toLowerCase();
+    if (seenNames.has(key)) throw new Error(`Cannot export duplicate session name "${name}".`);
+    seenNames.add(key);
+    sections[section] = values;
+  };
   if (defaultSettings) {
-    sections[`${SESSIONS_SUBKEY}\\${mungeStr(DEFAULT_SETTINGS_NAME, false)}`] =
-      saveSession(defaultSettings, { defaultData: factory });
+    addSection(DEFAULT_SETTINGS_NAME, saveSession(defaultSettings, { defaultData: factory }));
   }
   for (const s of sessions) {
-    sections[`${SESSIONS_SUBKEY}\\${mungeStr(s.name, false)}`] =
-      saveSession(s, { defaultData: factory });
+    if (s === null || typeof s !== 'object' || Array.isArray(s)) {
+      throw new TypeError('Every exported session must be an object.');
+    }
+    addSection(s.name, saveSession(s, { defaultData: factory }));
   }
   return formatIniFile(sections);
 }
@@ -2746,15 +2766,21 @@ function importFromOpenssh(data, lines, { matches = null } = {}) {
 /* stored session list helpers                                         */
 /* ================================================================== */
 
+function storedSessionList(sessions) {
+  return Array.isArray(sessions)
+    ? sessions.filter((session) => session !== null && typeof session === 'object' && !Array.isArray(session))
+    : [];
+}
+
 function isInFolder(sessions, name) {
   const prefix = String(name).endsWith('/') ? String(name) : String(name) + '/';
-  return sessions.some((s) => String(s.name).toLowerCase().startsWith(prefix.toLowerCase()));
+  return storedSessionList(sessions).some((s) => String(s.name).toLowerCase().startsWith(prefix.toLowerCase()));
 }
 
 function firstFolderOrWorkspaceSession(sessions, name) {
   if (!name) return null;
   const prefix = String(name).endsWith('/') ? String(name) : String(name) + '/';
-  for (const s of sessions) {
+  for (const s of storedSessionList(sessions)) {
     if (String(s.name).toLowerCase().startsWith(prefix.toLowerCase())) return s;
   }
   return null;
@@ -2772,12 +2798,14 @@ function isWorkspace(sessions, name) {
 
 function getWorkspaces(sessions) {
   const out = new Set();
-  for (const s of sessions) if (s.isWorkspace) out.add(folderName(s));
+  for (const s of storedSessionList(sessions)) if (s.isWorkspace) out.add(folderName(s));
   return [...out].sort((a, b) => a.localeCompare(b));
 }
 
 /** Resolve a workspace entry that is only a link to a stored site. */
 function resolveWorkspaceData(sessions, data) {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return null;
+  const stored = storedSessionList(sessions);
   let d = data;
   const seen = new Set();
   while (d && d.link) {
@@ -2787,7 +2815,7 @@ function resolveWorkspaceData(sessions, data) {
     const linkKey = String(d.link).toLowerCase();
     if (seen.has(linkKey)) return null;      // a link cycle resolves to nothing
     seen.add(linkKey);
-    d = sessions.find((s) => String(s.name).toLowerCase() === linkKey) || null;
+    d = stored.find((s) => String(s.name).toLowerCase() === linkKey) || null;
   }
   return d;
 }
@@ -2797,8 +2825,10 @@ function resolveWorkspaceData(sessions, data) {
  * or workspace entry has no stored counterpart by definition.
  */
 function findSame(sessions, data) {
-  if (isHidden(data.name) || data.name === '' || data.isWorkspace) return null;
-  return sessions.find((s) => String(s.name).toLowerCase() === String(data.name).toLowerCase()) || null;
+  if (data === null || typeof data !== 'object' || Array.isArray(data) ||
+      isHidden(data.name) || data.name === '' || data.isWorkspace) return null;
+  return storedSessionList(sessions)
+    .find((s) => String(s.name).toLowerCase() === String(data.name).toLowerCase()) || null;
 }
 
 /**
@@ -2807,6 +2837,12 @@ function findSame(sessions, data) {
  * workspace never loses an ad-hoc session.
  */
 function saveWorkspaceData(sessions, data, index) {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+    throw new TypeError('Workspace session data must be an object.');
+  }
+  if (!Number.isInteger(index) || index < 0) {
+    throw new TypeError('Workspace session index must be a non-negative integer.');
+  }
   const result = defaultSessionData();
   const same = findSame(sessions, data);
   if (same) {

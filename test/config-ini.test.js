@@ -145,6 +145,43 @@ test('JSON load and import assign IDs to legacy sites that omit them', () => wit
   config.flush();
 }));
 
+test('JSON load sanitizes malformed collections before they reach consumers', () => withRoot((root) => {
+  fs.writeFileSync(P.config(), JSON.stringify({
+    prefs: null,
+    sites: [{ name: 'Valid', hostName: 'valid.example.com' }, 'not-a-site', null],
+    folders: ['Work', '', 'Work', 42],
+    workspaces: [
+      { name: 'Workspace', sessions: [{ id: 'session-1' }, 'not-a-session'] },
+      { name: '' },
+      42,
+    ],
+  }), 'utf8');
+  fs.writeFileSync(P.hostkeys(), JSON.stringify([]), 'utf8');
+
+  const config = new Config().load();
+
+  assert.equal(config.sites.length, 1);
+  assert.equal(config.sites[0].name, 'Valid');
+  assert.deepEqual(config.data.folders, ['Work']);
+  assert.deepEqual(config.data.workspaces, [{
+    name: 'Workspace', sessions: [{ id: 'session-1' }],
+  }]);
+  assert.deepEqual(config.data.hostKeys, {});
+}));
+
+test('state imports reject malformed collections before saving partial data', () => withRoot(() => {
+  const config = new Config();
+  config.data.sites = [{ id: 'existing', name: 'Existing' }];
+  config.data.folders = ['Existing'];
+  const before = config.exportState();
+
+  assert.throws(() => config.importState({ sites: 'not-an-array' }), /Configuration sites must be an array/);
+  assert.throws(() => config.importState({ folders: ['ok', 42] }), /Configuration folders\[1\]/);
+  assert.throws(() => config.importState({ workspaces: [{ name: '' }] }), /Configuration workspaces\[0\]/);
+  assert.throws(() => config.importState({ prefs: null }), /Configuration prefs must be an object/);
+  assert.deepEqual(config.exportState(), before);
+}));
+
 test('failed JSON import rolls back the live configuration before reporting the write error', () => withRoot(() => {
   const config = new Config();
   config.data.prefs.language = 'en';
@@ -210,4 +247,65 @@ test('failed INI import rolls back sites and folders before reporting the write 
   assert.throws(() => config.importIni(ini, 'Imported a WinSCP INI'), failure);
   assert.deepEqual(config.data.sites, before.sites);
   assert.deepEqual(config.data.folders, before.folders);
+}));
+
+test('load drops malformed persisted collections and keeps site management usable', () => withRoot((root) => {
+  fs.writeFileSync(P.config(), JSON.stringify({
+    sites: [null, 'not a site', { name: 'Usable', hostName: 'usable.example.com' }],
+    folders: { broken: true },
+    workspaces: [{ name: 'Usable workspace', sessions: 'not an array' }, null],
+  }), 'utf8');
+
+  const config = new Config().load();
+  config.save = () => {};
+
+  assert.deepEqual(config.sites.map((site) => site.name), ['Usable']);
+  assert.deepEqual(config.data.folders, []);
+  assert.deepEqual(config.data.workspaces, [{ name: 'Usable workspace', sessions: [] }]);
+  assert.equal(config.addFolder('Recovered'), true);
+  assert.throws(() => config.saveWorkspace('Recovered workspace', [null, { id: 'tab-1' }]), /workspace sessions\[0\]/i);
+  const input = [{ id: 'tab-1' }];
+  const workspace = config.saveWorkspace('Recovered workspace', input);
+  input[0].id = 'mutated-after-save';
+  input.push({ id: 'late-tab' });
+  assert.equal(workspace.sessions.length, 1);
+  assert.equal(workspace.sessions[0].id, 'tab-1', 'workspace data is held as a deep copy');
+
+  const stored = JSON.parse(fs.readFileSync(P.config(), 'utf8'));
+  assert.deepEqual(stored.sites.map((site) => site.name), ['Usable']);
+  assert.deepEqual(stored.folders, []);
+  assert.deepEqual(stored.workspaces, [{ name: 'Usable workspace', sessions: [] }]);
+  void root;
+}));
+
+test('invalid JSON state fields are rejected transactionally', () => withRoot(() => {
+  const config = new Config();
+  config.data.sites = [{ id: 'existing', name: 'Existing' }];
+  config.data.folders = ['Existing'];
+  config.data.workspaces = [{ name: 'Existing workspace', sessions: [] }];
+  const before = config.exportState();
+
+  for (const state of [
+    { prefs: [] },
+    { sites: {} },
+    { sites: [{ name: 'ok' }, null] },
+    { folders: {} },
+    { folders: ['ok', 42] },
+    { workspaces: {} },
+    { workspaces: [{ name: 'ok', sessions: 'bad' }] },
+    { workspaces: [{ name: 'ok', sessions: [null] }] },
+  ]) {
+    assert.throws(() => config.importState(state), /Configuration/);
+    assert.deepEqual(config.exportState(), before, JSON.stringify(state));
+  }
+}));
+
+test('site and workspace mutation inputs reject invalid shapes before changing state', () => withRoot(() => {
+  const config = new Config();
+  config.save = () => {};
+  const before = config.exportState();
+
+  assert.throws(() => config.addSite(null), /Configuration site must be an object/);
+  assert.throws(() => config.saveWorkspace('broken', null), /Configuration workspace sessions must be an array/);
+  assert.deepEqual(config.exportState(), before);
 }));

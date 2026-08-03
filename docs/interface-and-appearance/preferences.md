@@ -53,7 +53,9 @@ pending list; a control without one must appear there.
 | `queue.keepDoneItemsFor` | `design/main/queue.js` → `pruneDoneItems()` | Completed rows are swept according to `0`, positive seconds, or `-1`. |
 | `tabs.truncateTitles` | `design/renderer/ui/tabs.js` → tab strip class and `components.css` | Tab labels use ellipsis by default and retain their full text when truncation is disabled; changes apply live. |
 | `showInaccessibleDirectories` | `design/main/dirview.js`, `design/main/guitools.js`, `design/main/ipc.js` | The file lists and traversal code now read the correctly spelled key, so inaccessible directories obey the toggle. |
+| `refreshRemotePanelInterval` | `design/renderer/ui/panels.js` | Refreshes the attached remote panel at the configured interval; `0` disables it. |
 | `window.openedTabsShortcut` | `design/renderer/ui/commands.js` → `OpenedTabsAction` | `Ctrl+Shift+Tab` opens the all-tabs search when enabled; disabling the preference removes the command from shortcut execution while leaving the tabs action available through menus. |
+| `window.sessionTabCaptionTruncation` | `design/renderer/ui/tabs.js` | Disables session-tab title truncation when false; `tabs.truncateTitles` remains an additional global gate. |
 
 The real-Electron regression changes another live queue preference through the
 Preferences surface: `queue.noConfirmations` is persisted by `config:setPref`
@@ -88,7 +90,6 @@ successful settings.
 | `queue.disconnectOnceEmpty` | None |
 | `queue.individualTransfers` | None |
 | `queue.parallelDuplicateTransfers` | None |
-| `refreshRemotePanelInterval` | `design/renderer/ui/panels.js` — refreshes the attached remote panel at the configured interval; `0` disables it. |
 | `security.randomSeedFile` | None |
 | `security.sessionReopenAutoStall` | None |
 | `timeoutOnStartup` | None |
@@ -97,8 +98,12 @@ successful settings.
 | `versionHistory.snapshotSites` | None |
 | `window.largeToolbarIcons` | None |
 | `window.minimizeToTray` | None |
-| `window.openedTabsShortcut` | None |
-| `window.sessionTabCaptionTruncation` | `design/renderer/ui/tabs.js` — disables session-tab title truncation when false; the existing `tabs.truncateTitles` setting remains an additional global gate. |
+
+`refreshRemotePanelInterval`, `window.openedTabsShortcut`, and
+`window.sessionTabCaptionTruncation` are wired settings, so they belong in the
+consumer ledger above rather than in this unavailable table. The audit test
+keeps this distinction tied to production reads; a stored value is not called
+ported merely because the Preferences page can save it.
 
 ## Verification
 
@@ -113,8 +118,11 @@ Numeric controls have one persistence validation seam. Number fields normalize
 on change and sliders commit on every input, but both paths pass through the
 Preferences writer, which rejects non-finite values and clamps the UI value to
 the declared range before writing the stored (scaled, when applicable) value.
-This also protects the main-process consumer from synthetic or programmatic
-renderer events.
+An imported numeric value outside that range is shown as the declared default
+with an explicit invalid-value note until the user chooses a replacement; it is
+not silently rewritten on load. Boolean, enum, text and list controls apply the
+same honest-fallback rule to malformed imported values, so a string such as
+`"false"` cannot render as an enabled checkbox.
 
 ## Security and accessibility
 

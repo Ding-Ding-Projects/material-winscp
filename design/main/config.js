@@ -51,6 +51,54 @@ function deepMerge(base, over) {
 
 function clone(v) { return v === undefined ? v : JSON.parse(JSON.stringify(v)); }
 
+function isRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeFolders(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((folder) => typeof folder === 'string' && folder !== ''))];
+}
+
+function normalizeWorkspaces(value) {
+  if (!Array.isArray(value)) return [];
+  return value.filter((workspace) => isRecord(workspace) && typeof workspace.name === 'string' && workspace.name !== '')
+    .map((workspace) => {
+      const copy = clone(workspace);
+      copy.sessions = Array.isArray(copy.sessions)
+        ? copy.sessions.filter(isRecord)
+        : [];
+      return copy;
+    });
+}
+
+function isValidWorkspace(workspace) {
+  return isRecord(workspace) && typeof workspace.name === 'string' && workspace.name !== '' &&
+    (!Object.prototype.hasOwnProperty.call(workspace, 'sessions') ||
+      (Array.isArray(workspace.sessions) && workspace.sessions.every(isRecord)));
+}
+
+function normalizePrefs(value) {
+  const prefs = deepMerge(clone(PREF_DEFAULTS), isRecord(value) ? value : {});
+  if (!Array.isArray(prefs.copyParamList) || !prefs.copyParamList.length) {
+    prefs.copyParamList = clone(DEFAULT_PRESETS);
+  }
+  if (!Array.isArray(prefs.customCommands) || !prefs.customCommands.length) {
+    prefs.customCommands = clone(DEFAULT_CUSTOM_COMMANDS);
+  }
+  return prefs;
+}
+
+function invalidCollection(name, expected) {
+  throw new TypeError(`Configuration ${name} must be ${expected}.`);
+}
+
+function requireImportArray(state, name, predicate) {
+  if (!Array.isArray(state[name])) invalidCollection(name, 'an array');
+  const invalid = state[name].findIndex((value) => !predicate(value));
+  if (invalid >= 0) invalidCollection(`${name}[${invalid}]`, 'a valid record');
+}
+
 const INI_SECRET_FIELDS = ['password', 'passphrase', 'proxyPassword', 'tunnelPassword',
   'tunnelPassphrase', 'encryptKey', 's3SessionToken'];
 
@@ -72,7 +120,7 @@ function isIniConfiguration(file, text) {
 
 /** Normalize an imported/loaded site before it can be persisted. */
 function normalizeSite(site) {
-  const normalized = deepMerge(clone(SESSION_DEFAULTS), site || {});
+  const normalized = deepMerge(clone(SESSION_DEFAULTS), isRecord(site) ? site : {});
   // Older/manual JSON backups may omit IDs. Without one the site is visible
   // but cannot be addressed by update/remove/move operations.
   normalized.id = normalized.id || newId('site');
@@ -120,22 +168,26 @@ class Config extends EventEmitter {
     if (fs.existsSync(file)) {
       try {
         const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
-        this.data.prefs = deepMerge(clone(PREF_DEFAULTS), raw.prefs || {});
-        if (!raw.prefs || !raw.prefs.copyParamList || !raw.prefs.copyParamList.length) {
-          this.data.prefs.copyParamList = clone(DEFAULT_PRESETS);
-        }
-        if (!raw.prefs || !raw.prefs.customCommands || !raw.prefs.customCommands.length) {
-          this.data.prefs.customCommands = clone(DEFAULT_CUSTOM_COMMANDS);
-        }
+        if (!isRecord(raw)) invalidCollection('file', 'an object');
+        this.data.prefs = normalizePrefs(raw.prefs);
         const rawSites = Array.isArray(raw.sites) ? raw.sites : [];
-        migratedJson = rawSites.some((site) => !site.id || SECRET_FIELDS.some((field) => {
+        const validSites = rawSites.filter(isRecord);
+        migratedJson = (raw.prefs !== undefined && !isRecord(raw.prefs)) ||
+          (raw.sites !== undefined && !Array.isArray(raw.sites)) || validSites.length !== rawSites.length;
+        migratedJson = migratedJson || validSites.some((site) => typeof site.id !== 'string' || !site.id || SECRET_FIELDS.some((field) => {
           const value = site && site[field];
           return typeof value === 'string' && value && !value.startsWith('mp:') && !value.startsWith('os:');
         }));
-        this.data.sites = rawSites.map(normalizeSite);
-        this.data.folders = raw.folders || [];
-        this.data.workspaces = raw.workspaces || [];
-        this.data.version = raw.version || 1;
+        this.data.sites = validSites.map(normalizeSite);
+        this.data.folders = normalizeFolders(raw.folders);
+        this.data.workspaces = normalizeWorkspaces(raw.workspaces);
+        migratedJson = migratedJson || (raw.folders !== undefined &&
+          (!Array.isArray(raw.folders) || this.data.folders.length !== raw.folders.length));
+        migratedJson = migratedJson || (raw.workspaces !== undefined &&
+          (!Array.isArray(raw.workspaces) || this.data.workspaces.length !== raw.workspaces.length ||
+            raw.workspaces.some((workspace) => !isValidWorkspace(workspace))));
+        this.data.version = Number.isInteger(raw.version) && raw.version > 0 ? raw.version : 1;
+        migratedJson = migratedJson || (raw.version !== undefined && this.data.version !== raw.version);
       } catch (e) {
         // A corrupt config must not lose the user's sites: keep the bad file.
         try { fs.copyFileSync(file, file + '.corrupt-' + Date.now()); } catch { /* best effort */ }
@@ -157,7 +209,10 @@ class Config extends EventEmitter {
       }
     }
     if (fs.existsSync(P.hostkeys())) {
-      try { this.data.hostKeys = JSON.parse(fs.readFileSync(P.hostkeys(), 'utf8')); } catch { this.data.hostKeys = {}; }
+      try {
+        const hostKeys = JSON.parse(fs.readFileSync(P.hostkeys(), 'utf8'));
+        this.data.hostKeys = isRecord(hostKeys) ? hostKeys : {};
+      } catch { this.data.hostKeys = {}; }
     }
     if (migratedIni || migratedJson) {
       try { this.flush(); } catch (e) { this.emit('error', e); }
@@ -310,6 +365,7 @@ class Config extends EventEmitter {
 
   /** Restore is itself a new revision — history stays append-only. */
   importState(state, label) {
+    if (!isRecord(state)) invalidCollection('backup', 'an object');
     const previous = {
       prefs: this.data.prefs,
       sites: this.data.sites,
@@ -317,10 +373,22 @@ class Config extends EventEmitter {
       workspaces: this.data.workspaces,
     };
     try {
-      if (state.prefs) this.data.prefs = deepMerge(clone(PREF_DEFAULTS), state.prefs);
-      if (state.sites) this.data.sites = state.sites.map(normalizeSite);
-      if (state.folders) this.data.folders = state.folders;
-      if (state.workspaces) this.data.workspaces = state.workspaces;
+      if (Object.prototype.hasOwnProperty.call(state, 'prefs')) {
+        if (!isRecord(state.prefs)) invalidCollection('prefs', 'an object');
+        this.data.prefs = normalizePrefs(state.prefs);
+      }
+      if (Object.prototype.hasOwnProperty.call(state, 'sites')) {
+        requireImportArray(state, 'sites', isRecord);
+        this.data.sites = state.sites.map(normalizeSite);
+      }
+      if (Object.prototype.hasOwnProperty.call(state, 'folders')) {
+        requireImportArray(state, 'folders', (folder) => typeof folder === 'string' && folder !== '');
+        this.data.folders = normalizeFolders(state.folders);
+      }
+      if (Object.prototype.hasOwnProperty.call(state, 'workspaces')) {
+        requireImportArray(state, 'workspaces', isValidWorkspace);
+        this.data.workspaces = normalizeWorkspaces(state.workspaces);
+      }
       this.flush();
     } catch (e) {
       this.data.prefs = previous.prefs;
@@ -373,7 +441,8 @@ class Config extends EventEmitter {
   }
 
   addSite(site) {
-    const s = deepMerge(clone(SESSION_DEFAULTS), site || {});
+    if (!isRecord(site)) invalidCollection('site', 'an object');
+    const s = deepMerge(clone(SESSION_DEFAULTS), site);
     s.id = s.id || newId('site');
     for (const f of SECRET_FIELDS) {
       if (typeof s[f] !== 'string') s[f] = '';
@@ -388,6 +457,7 @@ class Config extends EventEmitter {
   updateSite(id, patch) {
     const i = this.data.sites.findIndex((s) => s.id === id);
     if (i < 0) return null;
+    if (!isRecord(patch)) invalidCollection('site patch', 'an object');
     const merged = deepMerge(this.data.sites[i], patch);
     for (const f of SECRET_FIELDS) {
       const v = patch[f];
@@ -463,8 +533,12 @@ class Config extends EventEmitter {
 
   // ----------------------------------------------------------- workspaces
   saveWorkspace(name, sessions) {
+    if (typeof name !== 'string' || name === '') invalidCollection('workspace name', 'a non-empty string');
+    if (!Array.isArray(sessions)) invalidCollection('workspace sessions', 'an array');
+    const invalid = sessions.findIndex((session) => !isRecord(session));
+    if (invalid >= 0) invalidCollection(`workspace sessions[${invalid}]`, 'a valid record');
     const i = this.data.workspaces.findIndex((w) => w.name === name);
-    const w = { name, sessions, savedAt: Date.now() };
+    const w = { name, sessions: clone(sessions), savedAt: Date.now() };
     if (i >= 0) this.data.workspaces[i] = w; else this.data.workspaces.push(w);
     this.save(`Saved the workspace "${name}"`);
     this.emit('sites-changed');

@@ -178,6 +178,36 @@ function outputIsPretty(options) {
   return booleanOption(options, 'pretty', false);
 }
 
+/** Return true for a meta flag that is not being consumed as an option value. */
+function hasMetaFlag(argv, wanted) {
+  const args = argv || [];
+  for (let i = 0; i < args.length; i++) {
+    const token = args[i];
+    if (token === '--') return false;
+    if (token === wanted) return true;
+    if (!token.startsWith('--')) continue;
+    const body = token.slice(2);
+    if (body.includes('=')) continue;
+    const key = body.toLowerCase();
+    const optionalWithoutValue = OPTIONAL_VALUE_OPTIONS.has(key)
+      && (args[i + 1] || '').startsWith('--');
+    if (VALUE_OPTIONS.has(key) && !optionalWithoutValue) {
+      // A required value beginning with `--` must remain a missing-value
+      // error, not accidentally become this command's help/version flag.
+      // Optional stream values are different: `--stdout --help` leaves the
+      // help flag available for dispatch.
+      if (i + 1 < args.length) i++;
+    }
+  }
+  return false;
+}
+
+/** Return true for a real CLI help flag, stopping at the positional marker. */
+function hasHelpFlag(argv) { return hasMetaFlag(argv, '--help') || hasMetaFlag(argv, '-h'); }
+
+/** Return true for a real CLI version flag, stopping at the positional marker. */
+function hasVersionFlag(argv) { return hasMetaFlag(argv, '--version') || hasMetaFlag(argv, '-v'); }
+
 const URL_PROTOCOLS = Object.freeze({
   scp: { protocol: 'scp', ftps: 'none' },
   sftp: { protocol: 'sftpOnly', ftps: 'none' },
@@ -523,7 +553,8 @@ async function runCli(argv = process.argv.slice(2), io = {}) {
       const subcommand = args[1] || 'parse';
       const subcommandArgs = args.slice(2);
       const helpRequested = (value) => value === '--help' || value === '-h' || value === 'help';
-      if (helpRequested(subcommand) || (subcommandArgs.length === 1 && helpRequested(subcommandArgs[0]))) {
+      if (helpRequested(subcommand) || hasHelpFlag(subcommandArgs)
+          || (subcommandArgs.length === 1 && subcommandArgs[0] === 'help')) {
         streams.stdout.write(HELP);
         return 0;
       }
@@ -544,7 +575,8 @@ async function runCli(argv = process.argv.slice(2), io = {}) {
       // Keep nested help headless too: automation commonly discovers a
       // command one level at a time, and an unknown-subcommand error here is
       // needlessly less helpful than the already complete command reference.
-      if (helpRequested(subcommand) || (subcommandArgs.length === 1 && helpRequested(subcommandArgs[0]))) {
+      if (helpRequested(subcommand) || hasHelpFlag(subcommandArgs)
+          || (subcommandArgs.length === 1 && subcommandArgs[0] === 'help')) {
         streams.stdout.write(HELP);
         return 0;
       }
@@ -564,8 +596,33 @@ async function runCli(argv = process.argv.slice(2), io = {}) {
     }
 
     let consoleArgs = args;
-    if (first === 'run') consoleArgs = args.slice(1);
-    else if (first === 'script' || first === 'command') consoleArgs = await runConvenience(args.slice(1), first);
+    if (first === 'run') {
+      const runArgs = args.slice(1);
+      // `run` is the compatibility escape hatch, but its standard meta flags
+      // still belong to this executable. Forwarding `--help` to the script
+      // parser starts an interactive prompt instead of answering the caller.
+      if (runArgs[0] === '--help' || runArgs[0] === '-h') {
+        streams.stdout.write(HELP);
+        return 0;
+      }
+      if (runArgs[0] === '--version' || runArgs[0] === '-v') {
+        streams.stdout.write(`${packageInfo.version}\n`);
+        return 0;
+      }
+      consoleArgs = runArgs;
+    }
+    else if (first === 'script' || first === 'command') {
+      const convenienceArgs = args.slice(1);
+      if (hasHelpFlag(convenienceArgs)) {
+        streams.stdout.write(HELP);
+        return 0;
+      }
+      if (hasVersionFlag(convenienceArgs)) {
+        streams.stdout.write(`${packageInfo.version}\n`);
+        return 0;
+      }
+      consoleArgs = await runConvenience(convenienceArgs, first);
+    }
     return await runConsoleFrontEnd(consoleArgs, {
       stdout: streams.stdout,
       stderr: streams.stderr,

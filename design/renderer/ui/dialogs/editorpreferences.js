@@ -115,7 +115,11 @@ export function matchesMask(mask, name) {
       }
       else out += ch.replace(/[.+^${}()|[\]\\]/g, '\\$&');
     }
-    return new RegExp(`^${out}$`, 'i').test(subject);
+    // A user-supplied range such as [z-a] is a valid mask string but an
+    // invalid JavaScript RegExp. Treat it as a non-match so the live probe and
+    // list painting cannot throw while the entry is being corrected.
+    try { return new RegExp(`^${out}$`, 'i').test(subject); }
+    catch { return false; }
   };
   return positive.some(matchOne) && !excludes.some((m) => m && matchOne(m));
 }

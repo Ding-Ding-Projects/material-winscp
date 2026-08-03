@@ -251,6 +251,25 @@ test('a numeric control clamps to its declared range', async () => {
   assert.equal(schema.clampToRange(control, ''), 1);
 });
 
+test('invalid imported preference values get an honest fallback', async () => {
+  const { schema } = await load();
+  const byKey = new Map(schema.flattenControls().map((e) => [e.control.key, e.control]));
+
+  const check = byKey.get('showHiddenFiles');
+  assert.deepEqual(schema.storedValueStatus(check, 'false'), { valid: false, ui: false });
+  assert.deepEqual(schema.storedValueStatus(check, true), { valid: true, ui: true });
+
+  const number = byKey.get('queue.transfersLimit');
+  assert.deepEqual(schema.storedValueStatus(number, 999), { valid: false, ui: number.def });
+  assert.deepEqual(schema.storedValueStatus(number, 4), { valid: true, ui: 4 });
+
+  const select = byKey.get('doubleClickAction');
+  assert.deepEqual(schema.storedValueStatus(select, 'not-a-choice'), { valid: false, ui: select.def });
+
+  assert.equal(schema.controlEnabled({ dependsOn: 'showHiddenFiles' }, () => 'false'), false,
+    'an imported string must not enable a dependent control');
+});
+
 test('describeValue names the option rather than the stored primitive', async () => {
   const { schema } = await load();
   const byKey = new Map(schema.flattenControls().map((e) => [e.control.key, e.control]));
@@ -617,6 +636,16 @@ test('editor masks keep WinSCP catch-all and exclusion semantics in the live pro
   assert.equal(editors.matchesMask('-*.bak', 'notes.bak'), false);
 });
 
+test('a malformed editor character range is a safe non-match', async () => {
+  const { editors } = await load();
+  assert.doesNotThrow(() => editors.matchesMask('[z-a]', 'notes.txt'));
+  assert.equal(editors.matchesMask('[z-a]', 'notes.txt'), false);
+  assert.equal(editors.editorFor('notes.txt', [
+    { mask: '[z-a]', type: 'external', external: 'broken.exe' },
+    { mask: '*.*', type: 'internal' },
+  ]).type, 'internal');
+});
+
 // ------------------------------------------------------ custom commands
 
 test('a custom command is normalised with every behaviour flag present', async () => {
@@ -861,6 +890,12 @@ test('the control renderer mirrors disabled state onto native and composite cont
     'disabled native controls must expose their state explicitly');
   assert.match(prefpages, /node\.setAttribute\('aria-disabled', String\(!!disabled\)\)/,
     'focusable composite preference editors must expose their disabled state');
+  assert.match(prefpages, /data-pref-validity/,
+    'invalid imported values must be announced on their preference row');
+  assert.match(prefpages, /setAttribute\('aria-invalid', 'true'\)/,
+    'invalid imported values must be announced on the focusable control');
+  assert.match(prefpages, /controlDisabled === '1'/,
+    'intrinsically unavailable controls must not be re-enabled by dependency repainting');
 });
 
 test('a dependency-disabled preference row exposes its disabled state', async () => {

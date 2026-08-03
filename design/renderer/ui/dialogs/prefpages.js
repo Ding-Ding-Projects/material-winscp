@@ -1502,6 +1502,53 @@ export function normalizeNumberInput(control, ui) {
 }
 
 /**
+ * Resolve a value read from an imported or hand-edited configuration into what
+ * the renderer may honestly show. Config loading deliberately preserves
+ * unknown shapes, so JavaScript truthiness is not a safe boolean conversion
+ * and a numeric input must not initially display a value outside its range.
+ * The original value stays in storage until the user chooses a replacement;
+ * `valid` lets the row explain that the displayed value is a fallback.
+ */
+export function storedValueStatus(control, stored) {
+  const fallback = 'def' in control ? toUiValue(control, control.def) : '';
+  if (control.type === 'action') return { valid: true, ui: stored };
+
+  if (control.type === 'check') {
+    return typeof stored === 'boolean'
+      ? { valid: true, ui: stored }
+      : { valid: false, ui: control.def };
+  }
+
+  if (control.type === 'number' || control.type === 'slider') {
+    const ui = toUiValue(control, stored);
+    const n = typeof ui === 'number' ? ui : Number.NaN;
+    const inRange = Number.isFinite(n)
+      && (typeof control.min !== 'number' || n >= control.min)
+      && (typeof control.max !== 'number' || n <= control.max);
+    return inRange ? { valid: true, ui } : { valid: false, ui: fallback };
+  }
+
+  if (control.options) {
+    const valid = control.options.some((option) => option.value === stored);
+    return valid ? { valid: true, ui: stored } : { valid: false, ui: control.def };
+  }
+
+  if (['text', 'path', 'color', 'font'].includes(control.type)) {
+    return typeof stored === 'string'
+      ? { valid: true, ui: stored }
+      : { valid: false, ui: fallback };
+  }
+
+  if (control.type === 'custom' && Array.isArray(control.def)) {
+    return Array.isArray(stored)
+      ? { valid: true, ui: stored }
+      : { valid: false, ui: control.def };
+  }
+
+  return { valid: true, ui: stored };
+}
+
+/**
  * A human-readable rendering of a control's current value, in both languages.
  * The search matches against this, so typing "Debug 2" finds the logging level
  * even though the stored value is the number 2.
@@ -1580,12 +1627,15 @@ export function controlEnabled(control, read) {
   const dep = control.dependsOn;
   if (!dep) return true;
   if (typeof dep === 'function') return !!dep(read);
-  if (typeof dep === 'string') return !!read(dep);
+  // Preference checkboxes are booleans. Treating the imported string "false"
+  // as enabled makes a dependent field look usable while its prerequisite is
+  // invalid, and disagrees with the consumers' strict checks.
+  if (typeof dep === 'string') return read(dep) === true;
   const value = read(dep.key);
   if ('equals' in dep) return value === dep.equals;
   if ('not' in dep) return value !== dep.not;
   if ('greaterThan' in dep) return Number(value) > Number(dep.greaterThan);
-  return !!value;
+  return value === true;
 }
 
 export const CONTROL_TYPES = new Set([
@@ -1733,6 +1783,7 @@ function row(control, language, controlNode, opts = {}) {
   const id = opts.id || uid('pref');
   const hintId = control.hint ? uid('pref-hint') : null;
   const pendingId = opts.pending ? uid('pref-pending') : null;
+  const invalidId = opts.invalid ? uid('pref-invalid') : null;
   const parts = [];
 
   if (opts.labelInline) {
@@ -1753,6 +1804,14 @@ function row(control, language, controlNode, opts = {}) {
   if (opts.pending) {
     meta.push(h('p', { class: 'pref-hint is-pending', id: pendingId }, pendingMessage(language)));
   }
+  if (opts.invalid) {
+    meta.push(h('p', { class: 'pref-hint is-invalid', id: invalidId },
+      language === 'yue'
+        ? '儲存嘅值唔適用；而家顯示預設值，揀一個新值先會取代佢。'
+        : language === 'both'
+          ? 'The stored value is invalid; showing the default until you choose a replacement. · 儲存嘅值唔適用；而家顯示預設值，揀一個新值先會取代佢。'
+          : 'The stored value is invalid; showing the default until you choose a replacement.'));
+  }
   if (control.danger) {
     meta.push(h('p', { class: 'pref-hint is-danger' },
       language === 'yue' ? '呢個選項會令資料冇咁安全。'
@@ -1761,9 +1820,10 @@ function row(control, language, controlNode, opts = {}) {
   }
 
   const rowEl = h('div', {
-    class: `pref-row pref-row-${control.type}${opts.disabled ? ' is-disabled' : ''}${opts.pending ? ' is-unavailable' : ''}`,
+    class: `pref-row pref-row-${control.type}${opts.disabled ? ' is-disabled' : ''}${opts.pending ? ' is-unavailable' : ''}${opts.invalid ? ' is-invalid' : ''}`,
     'data-pref-key': control.key,
     'data-pref-status': opts.pending ? 'unavailable' : 'wired',
+    'data-pref-validity': opts.invalid ? 'invalid' : 'valid',
     // Keep the row's announced state in sync with both dependency-disabled
     // controls and settings unavailable in this build. Native descendants
     // already carry their own disabled state; the wrapper must tell assistive
@@ -1771,8 +1831,18 @@ function row(control, language, controlNode, opts = {}) {
     'aria-disabled': (opts.disabled || opts.pending) ? 'true' : 'false',
   }, ...parts, ...meta);
   appearanceTarget(rowEl, `pref-row-${control.key}`, `Preference: ${control.label.en}`);
-  const describedBy = [hintId, pendingId].filter(Boolean).join(' ');
-  if (describedBy) controlNode.setAttribute?.('aria-describedby', describedBy);
+  const describedBy = [hintId, pendingId, invalidId].filter(Boolean).join(' ');
+  if (describedBy) {
+    controlNode.setAttribute?.('aria-describedby', describedBy);
+    for (const el of rowEl.querySelectorAll?.('input, select, textarea, button') || []) {
+      el.setAttribute('aria-describedby', describedBy);
+    }
+  }
+  if (opts.invalid) {
+    for (const el of rowEl.querySelectorAll?.('input, select, textarea, button') || []) {
+      el.setAttribute('aria-invalid', 'true');
+    }
+  }
   return rowEl;
 }
 
@@ -1787,7 +1857,8 @@ function row(control, language, controlNode, opts = {}) {
 function applyDisabled(node, disabled) {
   if (!node) return;
   const set = (el) => {
-    const isDisabled = el.dataset?.permDisabled === '1' ? true : !!disabled;
+    const isDisabled = el.dataset?.controlDisabled === '1'
+      || el.dataset?.permDisabled === '1' || !!disabled;
     el.disabled = isDisabled;
     // Native disabled controls announce their state automatically. Shared
     // preference editors may instead expose a focusable button or composite;
@@ -1817,6 +1888,8 @@ export function renderControl(control, ctx) {
   const enabled = controlEnabled(control, ctx.read);
   const pending = isPending(control.key);
   const stored = ctx.read(control.key);
+  const status = storedValueStatus(control, stored);
+  const shown = status.ui;
   const id = uid('pref');
   const commit = (value) => ctx.write(control, value);
 
@@ -1827,7 +1900,7 @@ export function renderControl(control, ctx) {
           type: 'checkbox', id, class: 'pref-check-input',
           onchange: () => commit(input.checked),
         });
-        input.checked = !!stored;
+        input.checked = shown === true;
         const wrap = h('label', { class: 'pref-check', for: id },
           input,
           h('span', { class: 'pref-check-box' }),
@@ -1843,7 +1916,7 @@ export function renderControl(control, ctx) {
             type: 'radio', name, id: rid, class: 'pref-radio-input',
             onchange: () => { if (input.checked) commit(o.value); },
           });
-          input.checked = stored === o.value;
+          input.checked = shown === o.value;
           if (o.disabled) { input.disabled = true; input.dataset.permDisabled = '1'; }
           const item = h('label', { class: `pref-radio${o.disabled ? ' is-disabled' : ''}`, for: rid },
             input,
@@ -1869,14 +1942,8 @@ export function renderControl(control, ctx) {
           if (o.disabled) optEl.disabled = true;
           sel.appendChild(optEl);
         });
-        const idx = control.options.findIndex((o) => o.value === stored);
+        const idx = control.options.findIndex((o) => o.value === shown);
         sel.selectedIndex = idx >= 0 ? idx : 0;
-        if (idx < 0) {
-          // Never silently drop a stored value the list cannot show.
-          const extra = h('option', { value: 'x', selected: true }, String(stored));
-          sel.appendChild(extra);
-          sel.selectedIndex = sel.options.length - 1;
-        }
         return { node: sel, id, focusable: sel };
       }
       case 'number': {
@@ -1889,7 +1956,7 @@ export function renderControl(control, ctx) {
             commit(normalized.stored);
           },
         });
-        input.value = String(toUiValue(control, stored ?? control.def));
+        input.value = String(shown);
         const wrap = control.unit
           ? h('span', { class: 'pref-inline' }, input, h('span', { class: 'pref-unit' }, labelText(control.unit, language)))
           : input;
@@ -1900,7 +1967,7 @@ export function renderControl(control, ctx) {
           type: 'range', id, class: 'slider',
           min: String(control.min ?? 0), max: String(control.max ?? 100), step: String(control.step ?? 1),
         });
-        input.value = String(toUiValue(control, stored ?? control.def));
+        input.value = String(shown);
         const out = h('output', { class: 'slider-value' });
         const paint = () => {
           const n = Number(input.value);
@@ -1920,7 +1987,7 @@ export function renderControl(control, ctx) {
           maxlength: control.maxLength,
           onchange: () => commit(input.value),
         });
-        input.value = stored == null ? '' : String(stored);
+        input.value = shown == null ? '' : String(shown);
         if (control.mask && ctx.custom && typeof ctx.custom.mask === 'function') {
           return { node: ctx.custom.mask(control, input), id, focusable: input };
         }
@@ -1932,7 +1999,7 @@ export function renderControl(control, ctx) {
           placeholder: control.placeholder || '',
           onchange: () => commit(input.value),
         });
-        input.value = stored == null ? '' : String(stored);
+        input.value = shown == null ? '' : String(shown);
         const browse = h('button', {
           type: 'button', class: 'btn-text pref-browse',
           onclick: async () => {
@@ -1940,31 +2007,34 @@ export function renderControl(control, ctx) {
             if (picked) { input.value = picked; commit(picked); }
           },
         }, language === 'yue' ? '瀏覽…' : 'Browse…');
-        if (!ctx.pickPath) browse.disabled = true;
+        if (!ctx.pickPath) {
+          browse.disabled = true;
+          browse.dataset.controlDisabled = '1';
+        }
         return { node: h('span', { class: 'pref-inline' }, input, browse), id, focusable: input };
       }
       case 'color': {
         if (ctx.custom && typeof ctx.custom.color === 'function') {
-          const node = asNode(ctx.custom.color(control, stored, commit));
+          const node = asNode(ctx.custom.color(control, shown, commit));
           if (node) return { node, id, focusable: node.querySelector?.('button') || node };
         }
         const input = h('input', {
           type: 'text', id, class: 'field-input pref-text mono', spellcheck: 'false',
           onchange: () => commit(input.value),
         });
-        input.value = stored == null ? '' : String(stored);
+        input.value = shown == null ? '' : String(shown);
         return { node: input, id, focusable: input };
       }
       case 'font': {
         if (ctx.custom && typeof ctx.custom.font === 'function') {
-          const node = asNode(ctx.custom.font(control, stored, commit));
+          const node = asNode(ctx.custom.font(control, shown, commit));
           if (node) return { node, id, focusable: node.querySelector?.('input, select, button') || node };
         }
         const input = h('input', {
           type: 'text', id, class: 'field-input pref-text', spellcheck: 'false',
           onchange: () => commit(input.value),
         });
-        input.value = stored == null ? '' : String(stored);
+        input.value = shown == null ? '' : String(shown);
         return { node: input, id, focusable: input };
       }
       case 'action': {
@@ -1972,12 +2042,15 @@ export function renderControl(control, ctx) {
           type: 'button', class: 'btn-tonal pref-action', id,
           onclick: () => ctx.runAction?.(control),
         }, labelText(control.buttonLabel || control.label, language));
-        if (!ctx.runAction) btn.disabled = true;
+        if (!ctx.runAction) {
+          btn.disabled = true;
+          btn.dataset.controlDisabled = '1';
+        }
         return { node: btn, id, focusable: btn };
       }
       case 'custom': {
         const factory = ctx.custom && ctx.custom[control.custom];
-        const node = typeof factory === 'function' ? asNode(factory(control, stored, commit)) : null;
+        const node = typeof factory === 'function' ? asNode(factory(control, shown, commit)) : null;
         if (node) return { node, labelInline: true };
         return {
           node: h('p', { class: 'pref-hint is-unsupported' },
@@ -2009,6 +2082,6 @@ export function renderControl(control, ctx) {
   }
   return row(control, language, built.node, {
     id: rowId, labelInline: built.labelInline,
-    disabled: !enabled || pending, pending,
+    disabled: !enabled || pending, pending, invalid: !status.valid,
   });
 }

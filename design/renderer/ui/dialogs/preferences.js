@@ -299,6 +299,7 @@ export function ensurePreferenceStyles() {
 .pref-hint.is-restart { color: var(--onterc); background: var(--terc); border-radius: var(--shape-xs); padding: 4px 7px; display: inline-block; }
 /* An option that persists but changes nothing yet says so on its own row. */
 .pref-hint.is-pending { color: var(--onterc); background: var(--terc); border-radius: var(--shape-xs); padding: 4px 7px; display: inline-block; }
+.pref-hint.is-invalid { color: var(--onerrc); background: var(--errc); border-radius: var(--shape-xs); padding: 4px 7px; display: inline-block; }
 .pref-hint.is-danger { color: var(--onerrc); background: var(--errc); border-radius: var(--shape-xs); padding: 4px 7px; display: inline-block; }
 .pref-hint.is-unsupported { color: var(--onterc); background: var(--terc); border-radius: var(--shape-xs); padding: 6px 8px; }
 .pref-inline { display: inline-flex; align-items: center; gap: calc(8px * var(--den)); flex-wrap: wrap; min-width: 0; }

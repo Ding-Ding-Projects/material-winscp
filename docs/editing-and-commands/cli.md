@@ -58,9 +58,14 @@ PATH`, `--fake-file-target PATH`, or `--external-drop-directory PATH`. It
 returns the target, queue-forcing decision, and refusal counter as JSON without
 starting Electron, Explorer, or a network connection.
 
-Help is available at every simulation level: `winscp drag --help`,
-`winscp drop --help`, `winscp drag plan --help`, and `winscp url --help` all return the same command
+Help is available at every level: `winscp drag --help`, `winscp drop --help`,
+`winscp drag plan --help`, and `winscp url --help` all return the same command
 reference with exit code `0`, without starting the console runner or a GUI.
+The same is true for the console forms: `winscp run --help`,
+`winscp script --help`, and `winscp command --help`. `--version` is likewise
+handled by `run`, `script`, and `command` before the scripting engine starts.
+Help may follow a nested simulation option, for example
+`winscp url parse sftp://host/ --help`.
 
 Explorer drag payloads fail closed when a preserved remote name contains `/`,
 `\\`, `.` or `..`, or ends in a dot or space. Windows trims those suffixes when

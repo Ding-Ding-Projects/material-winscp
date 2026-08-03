@@ -11,8 +11,21 @@ user-facing message identifies the selected file as invalid configuration data.
 Import does not partially apply a malformed file, and no secret is included in
 the error text beyond the parser's local syntax detail.
 
+The JSON store also validates collection shapes. A startup file with malformed
+folders, workspaces, or individual site records drops only those unusable
+records, rewrites the normalized collections, and keeps valid sites manageable.
+An explicit JSON import is stricter: a malformed field or record is rejected
+transactionally so the live configuration remains unchanged. Workspace session
+lists are normalized to records, and invalid direct mutation inputs are refused
+before they can poison the store.
+
 Focused verification:
 
 ```powershell
 node --test test/config-ini.test.js
 ```
+
+WinSCP INI export refuses duplicate session names, including case variants,
+instead of silently replacing one section with another. INI import accepts the
+usual case-insensitive `Sessions\` section spelling and rejects duplicate names
+before changing the site list.

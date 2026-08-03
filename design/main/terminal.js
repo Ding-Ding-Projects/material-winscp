@@ -2206,8 +2206,11 @@ class Terminal extends EventEmitter {
           let success = false;
           try {
             try {
-              await processFile(fileName, file, param, index);
-              success = true;
+              const outcome = await processFile(fileName, file, param, index);
+              // Operation callbacks use `false` for a deliberate no-op (for
+              // example, declining an overwrite). Undefined remains the
+              // successful result used by delete/property/lock callbacks.
+              success = outcome !== false;
             } finally {
               this.operationFinish(progress, fileName, success);
             }
@@ -2488,12 +2491,12 @@ class Terminal extends EventEmitter {
           if (rename) {
             await a.rename(a.normalize(fileName), a.normalize(newName), { overwrite: !dontOverwrite });
           } else {
-            if (!this.isCapable('remoteCopy') || typeof a.copyFile !== 'function') {
+            if (!this.isCapable('remoteCopy') || typeof a.copyRemote !== 'function') {
               const e = new Error(`${a.protocolName} cannot duplicate a file on the server.`);
               e.code = 'NOT_SUPPORTED';
               throw e;
             }
-            await a.copyFile(a.normalize(fileName), a.normalize(newName), { overwrite: !dontOverwrite });
+            await a.copyRemote(a.normalize(fileName), a.normalize(newName), { overwrite: !dontOverwrite });
           }
         } catch (e) {
           await loop.error(e, rename
@@ -2589,8 +2592,10 @@ class Terminal extends EventEmitter {
     const newName = includeTrailingSlash(params.target) +
       maskFileName(extractFileName(fileName), params.fileMask || '');
     this.logEvent(`Copying file "${fileName}" to "${newName}".`);
-    await this.doRenameOrCopyFile(false, fileName, file, newName, false, !!params.dontOverwrite, true);
-    await this.reactOnCommand('copyFile');
+    const done = await this.doRenameOrCopyFile(false, fileName, file, newName, false,
+      !!params.dontOverwrite, true);
+    if (done) await this.reactOnCommand('copyFile');
+    return done;
   }
 
   /** TTerminal::CopyFiles. Batch reads are coalesced like MoveFiles. */

@@ -33,7 +33,7 @@ class MemoryAdapter extends Adapter {
     this.connected = true;
     this.home = '/home/me';
     this.nodes = new Map([['/', { type: 'dir', mtime: 0, rights: 'rwxr-xr-x' }]]);
-    this.calls = { list: 0, remove: [], rename: [], mkdir: [], setRights: [], setOwner: [], setTimes: [], symlink: [] };
+    this.calls = { list: 0, remove: [], rename: [], copyRemote: [], mkdir: [], setRights: [], setOwner: [], setTimes: [], symlink: [] };
     this.failNext = null;      // { op, error, times }
   }
 
@@ -146,6 +146,18 @@ class MemoryAdapter extends Adapter {
         this.nodes.set(t + k.slice(f.length), v);
       }
     }
+  }
+
+  async copyRemote(from, to, opts = {}) {
+    this._maybeFail('copyRemote');
+    const f = this.normalize(from);
+    const t = this.normalize(to);
+    this.calls.copyRemote.push({ from: f, to: t, opts });
+    const source = this.nodes.get(f);
+    if (!source) { const e = new Error(`No such file: ${f}`); e.code = 'ENOENT'; throw e; }
+    if (this.nodes.has(t) && !opts.overwrite) { const e = new Error(`Exists: ${t}`); e.code = 'EEXIST'; throw e; }
+    this.nodes.set(t, { ...source });
+    return t;
   }
 
   async symlink(target, link) {
@@ -1031,6 +1043,19 @@ test('a skipped file is swallowed and the loop continues; the count still record
   assert.strictEqual(terminal.lastOperation.filesFinishedSuccessfully, 2);
 });
 
+test('processFiles records an explicit false callback result as unsuccessful', async () => {
+  const { terminal } = makeTerminal();
+  const finished = [];
+  terminal.on('finished', (record) => finished.push(record));
+
+  const ok = await terminal.processFiles(['/declined'], OPERATIONS.remoteCopy,
+    async () => false);
+
+  assert.strictEqual(ok, true, 'the batch completed even though its only item was declined');
+  assert.deepStrictEqual(finished.map((record) => record.success), [false]);
+  assert.strictEqual(terminal.lastOperation.filesFinishedSuccessfully, 0);
+});
+
 test('with exceptionOnFail set a skipped file is rethrown instead of swallowed', async () => {
   const { terminal } = makeTerminal();
   terminal.setExceptionOnFail(true);
@@ -1827,6 +1852,41 @@ test('home directory jumps are deliberately not recorded as directory changes', 
   await terminal.homeDirectory();
   assert.strictEqual(terminal.currentDirectorySync, '/home/me');
   assert.ok(terminal.changesCache.isEmpty, 'nothing should be keyed on "home"');
+});
+
+test('server-side duplicate calls the adapter copyRemote contract', async () => {
+  const { terminal, adapter } = makeTerminal({
+    cwd: '/d', caps: { copyRemote: true }, prefs: { autoReadDirectoryAfterOp: false },
+  });
+  adapter.add('/d/a', { size: 3 });
+
+  const done = await terminal.copyFile('/d/a',
+    { name: 'a', type: 'file', fullFileName: '/d/a', directory: '/d' },
+    { target: '/d', fileMask: 'b', dontOverwrite: false });
+
+  assert.strictEqual(done, true);
+  assert.deepStrictEqual(adapter.calls.copyRemote, [{
+    from: '/d/a', to: '/d/b', opts: { overwrite: true },
+  }]);
+  assert.ok(adapter.has('/d/b'));
+});
+
+test('a declined server-side duplicate reports no work and skips the reread', async () => {
+  const { terminal, adapter, queries } = makeTerminal({
+    cwd: '/d', caps: { copyRemote: true }, answers: [ANSWERS.no],
+    prefs: { autoReadDirectoryAfterOp: true },
+  });
+  adapter.add('/d/a', {});
+  adapter.add('/d/b', {});
+
+  const done = await terminal.copyFile('/d/a',
+    { name: 'a', type: 'file', fullFileName: '/d/a', directory: '/d' },
+    { target: '/d', fileMask: 'b', dontOverwrite: false });
+
+  assert.strictEqual(done, false);
+  assert.strictEqual(adapter.calls.copyRemote.length, 0);
+  assert.strictEqual(adapter.calls.list, 0, 'a declined copy must not trigger a post-operation reread');
+  assert.match(queries[0].message, /already exists/);
 });
 
 test('home directory keeps the adapter canonical landing path', async () => {

@@ -84,6 +84,11 @@ available through the visible Up and Down buttons for pointer users.
   upload is pending, the second request joins the first instead of uploading a
   duplicate. Edits made while that upload is pending remain marked unsaved, so
   they cannot be mistaken for the text that was uploaded.
+- **Upload events do not guess which text is clean.** A completion event can
+  come from a watcher or another save and does not identify the renderer's
+  immutable snapshot. The editor therefore advances its clean marker only from
+  the response to its own snapshot-aware save, preserving edits typed while an
+  upload is in flight.
 - **Watcher notifications are serialized too.** Windows can report one save as
   several overlapping filesystem events. The editor queues those callbacks per
   document, then rechecks the temporary file before each upload so the newest
@@ -155,6 +160,8 @@ to the caller with the executable error so the association can be corrected.
   ownership, and release of the in-flight guard after failure.
 - Renderer editor action wiring is tested for clipboard operations, read-only
   guards, and undo/redo exposure.
+- Renderer upload completion is tested so text typed after a save snapshot
+  remains dirty until that text is actually saved.
 - Overlapping `editor:fileChanged` callbacks are tested to ensure uploads run in
   order and the final temporary-file contents reach the remote file.
 

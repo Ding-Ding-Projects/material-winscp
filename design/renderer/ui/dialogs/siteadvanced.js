@@ -122,12 +122,13 @@ const GAPS = {
   gssapiFwdTGT: 'Credential delegation needs GSSAPI, which this port’s SSH engine does not implement. The value is kept for when it does.',
   gssLibList: 'The GSSAPI library order is stored but has no effect yet: no GSSAPI mechanism is implemented. Your order is preserved so it applies the moment one is.',
   sftpMaxVersion: 'The SFTP client negotiates version 3 only. Versions 4–6 and the workarounds that go with them have no effect today; the value is kept.',
-  sftpDownloadQueue: 'Request pipelining depth is not configurable in this port’s SFTP engine, which issues one request at a time on the streaming path. Throughput on a high-latency link is lower than the original’s. The value is stored and reported in the log rather than silently ignored.',
-  sftpUploadQueue: 'Request pipelining depth is not configurable in this port’s SFTP engine. The value is stored and reported in the log rather than silently ignored.',
   sftpBugs: 'These workarounds apply to SFTP versions 4 and above, which this port does not negotiate yet. They are stored and will apply when it does.',
-  ftpTransferActiveImmediately: 'Not yet threaded through to the FTP adapter. The value is stored; it does not change how the data connection is opened today.',
   ftpDupFF: 'Not yet threaded through to the FTP adapter. The value is stored.',
   ftpUndupFF: 'Not yet threaded through to the FTP adapter. The value is stored.',
+  vMSAllRevisions: 'VMS revision filtering is not implemented by this port’s FTP listing parser. The value is stored, but listings keep the revisions the server returns.',
+  webDavCrossDomainRedirects: 'Cross-host redirect following is not threaded through to the WebDAV adapter. The value is stored, but redirects to another host remain refused so credentials cannot be forwarded there accidentally.',
+  proxyLocalhost: 'Loopback proxy bypass is not threaded through to the SSH transport. The value is stored, but a configured proxy is still used for localhost targets.',
+  protocolFeatures: 'Protocol feature overrides are not consumed by the current adapters. The value is stored for compatibility, but it does not force or suppress a detected feature today.',
   proxyMethodSystem: 'There is no reliable way to read the Windows system proxy configuration from this runtime, so "system" is not offered. Choose the proxy explicitly — connecting direct while the user believed a proxy was in use would be a privacy failure, not a convenience.',
   codePage: 'Code pages outside this runtime’s built-in set fall back to Latin-1, which preserves the bytes of a file name rather than mangling it. A Big5 or GB18030 name still needs an encoding table.',
 };
@@ -372,14 +373,14 @@ export const SITE_ADVANCED_PAGES = [
           text('FtpAccountEdit', 'ftpAccount', 'Account:',
             { hint: 'Sent with the ACCT command by servers that ask for one after the password.' }),
           autoswitch('FtpHostCombo', 'ftpHost', 'Use HOST command to select host on the server'),
-          check('VMSAllRevisionsCheck', 'vMSAllRevisions', 'Display all file revisions on VMS servers'),
+          check('VMSAllRevisionsCheck', 'vMSAllRevisions', 'Display all file revisions on VMS servers', { gap: 'vMSAllRevisions' }),
         ],
       },
       {
         id: 'FtpCompatibilityGroup', caption: 'Compatibility',
         controls: [
           autoswitch('FtpTransferActiveImmediatelyCombo', 'ftpTransferActiveImmediately',
-            'Start active-mode transfer immediately', { gap: 'ftpTransferActiveImmediately' }),
+            'Start active-mode transfer immediately'),
           check('FtpDupFFCheck', 'ftpDupFF', 'Server duplicates the 0xFF byte in file names', { gap: 'ftpDupFF' }),
           check('FtpUndupFFCheck', 'ftpUndupFF', 'Undo the server’s 0xFF duplication', { gap: 'ftpUndupFF' }),
         ],
@@ -436,7 +437,7 @@ export const SITE_ADVANCED_PAGES = [
         controls: [
           check('WebDavLiberalEscapingCheck', 'webDavLiberalEscaping', 'Tolerate non-encoded special characters in filenames'),
           check('WebDavCrossDomainRedirectsCheck', 'webDavCrossDomainRedirects', 'Allow redirects to other hosts',
-            { hint: 'Off by default: following a redirect to another host sends your credentials there.' }),
+            { hint: 'Off by default: following a redirect to another host sends your credentials there.', gap: 'webDavCrossDomainRedirects' }),
           check('WebDavAuthLegacyCheck', 'webDavAuthLegacy', 'Send credentials before the server asks (legacy servers)',
             {
               hint: 'Sends Basic authentication pre-emptively. Only for a server that rejects the challenge-response exchange.',
@@ -498,13 +499,14 @@ export const SITE_ADVANCED_PAGES = [
           {
             id: 'BufferSizeCheck', kind: 'checkNumber', key: 'sendBuf',
             label: 'Optimize connection buffer size', onValue: 262144, offValue: 0,
-            enabled: (c) => c.ssh || c.ftp || c.s3,
+            enabled: (c) => c.ssh,
           },
           combo('CodePageCombo', 'codePage', 'Remote character set:',
-            ['UTF-8', 'ISO-8859-1', 'windows-1252', 'Big5', 'GB18030', 'Shift_JIS'], { gap: 'codePage' }),
-          text('SourceAddressEdit', 'sourceAddress', 'Local address to bind to:'),
+            ['UTF-8', 'ISO-8859-1', 'windows-1252', 'Big5', 'GB18030', 'Shift_JIS'],
+            { gap: 'codePage', enabled: (c) => c.ftp }),
+          text('SourceAddressEdit', 'sourceAddress', 'Local address to bind to:', { enabled: (c) => c.ssh }),
           text('ProtocolFeaturesEdit', 'protocolFeatures', 'Protocol feature overrides:',
-            { hint: 'A space-separated list of features to force on (+name) or off (-name) instead of detecting them.' }),
+            { hint: 'A space-separated list of features to force on (+name) or off (-name) instead of detecting them.', gap: 'protocolFeatures' }),
         ],
       },
     ],
@@ -513,6 +515,8 @@ export const SITE_ADVANCED_PAGES = [
   /* ---------------------------------------------------------------- */
   {
     id: 'proxy', caption: 'Proxy', level: 2, icon: 'lan',
+    enabled: (c) => c.ssh,
+    disabledReason: 'Proxy options are wired for SSH sessions (SFTP and SCP) only in this port.',
     groups: [
       {
         id: 'ProxyTypeGroup', caption: 'Proxy',
@@ -548,7 +552,7 @@ export const SITE_ADVANCED_PAGES = [
             { visible: (c) => c.site.proxyMethod === 'cmd' }),
           select('ProxyDNSCombo', 'proxyDNS', 'Do DNS name lookup at proxy end:',
             [['auto', 'Auto'], ['off', 'No'], ['on', 'Yes']]),
-          check('ProxyLocalhostCheck', 'proxyLocalhost', 'Consider proxying local host connections'),
+          check('ProxyLocalhostCheck', 'proxyLocalhost', 'Consider proxying local host connections', { gap: 'proxyLocalhost' }),
         ],
       },
     ],
@@ -597,8 +601,8 @@ export const SITE_ADVANCED_PAGES = [
   /* ---------------------------------------------------------------- */
   {
     id: 'tls', caption: 'TLS/SSL', level: 2, icon: 'shield_lock',
-    enabled: (c) => (c.ftp || c.webdav || c.s3) && c.site.ftps !== 'none',
-    disabledReason: 'TLS options apply when the session actually uses TLS. Choose an encryption on the login form first.',
+    enabled: (c) => (c.ftp || c.webdav) && c.site.ftps !== 'none',
+    disabledReason: 'Configurable TLS options apply to FTP and WebDAV sessions. S3 uses the adapter’s TLS defaults. Choose an encryption on the login form first.',
     groups: [
       {
         id: 'TlsGroup', caption: 'TLS options',
@@ -939,6 +943,11 @@ export function mergeAlgorithmOrder(stored, catalogue, { noWarn = false } = {}) 
   return [...list.slice(0, warnAt), ...above, 'WARN', ...list.slice(warnAt + 1), ...below];
 }
 
+/** Give the panel an isolated working copy so Cancel cannot leak nested edits. */
+export function cloneAdvancedSite(site) {
+  return structuredCloneish(site || {});
+}
+
 /* ================================================================== */
 /* the panel                                                           */
 /* ================================================================== */
@@ -946,14 +955,15 @@ export function mergeAlgorithmOrder(stored, catalogue, { noWarn = false } = {}) 
 /**
  * createSiteAdvancedPanel(site, opts) -> handle
  *
- * `site` is a working copy: the panel mutates it in place and the caller reads
- * `handle.site` when the user accepts. Nothing is written to storage here.
+ * `site` is copied into an isolated working state: the panel mutates that copy
+ * in place and the caller reads `handle.site` when the user accepts. Nothing
+ * is written to storage here, and Cancel cannot leak edits to nested objects.
  */
 export function createSiteAdvancedPanel(site, opts = {}) {
   installSessionDialogStyles();
 
   const state = {
-    site,
+    site: cloneAdvancedSite(site),
     prefs: opts.prefs || {},
     pageId: opts.pageId || SITE_ADVANCED_PAGES[0].id,
     /** Secrets the user actually retyped, so the sentinel is never written back. */

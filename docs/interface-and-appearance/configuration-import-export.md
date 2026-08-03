@@ -62,6 +62,13 @@ The store remains one atomic JSON file for normal operation. An INI discovered
 beside app data is imported once at startup and then migrated into that JSON
 store, so a crash cannot leave a half-written configuration.
 
+Malformed persisted collection types are normalized at startup: valid site
+records survive, unusable folder/workspace entries are removed, and the cleaned
+collections are rewritten. Explicit JSON imports reject malformed collection
+fields transactionally. INI export also refuses duplicate session names (case
+insensitive) because the WinSCP section format cannot represent both without
+silently losing one.
+
 JSON backups are treated as untrusted input at the same boundary: loading an
 older backup or importing a backup re-normalizes every session secret. Tagged
 `mp:` and `os:` ciphertext is retained, while clear-text values are immediately

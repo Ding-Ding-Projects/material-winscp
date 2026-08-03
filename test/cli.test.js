@@ -48,6 +48,26 @@ test('nested drag and drop help stays headless and succeeds', async () => {
   }
 });
 
+test('help flags remain headless at the end of a nested command', async () => {
+  for (const args of [
+    ['drag', 'plan', '--source', 'remote', '--help'],
+    ['drop', 'target', '--queue', '--help'],
+    ['url', 'parse', 'sftp://example.com/', '--help'],
+    ['url', 'generate', '--host', 'example.com', '--help'],
+  ]) {
+    const nested = output();
+    assert.equal(await cli.runCli(args, { stdout: nested.stream, stderr: nested.stream }), 0);
+    assert.match(nested.text(), /winscp run/);
+    assert.equal(nested.text().includes('needs'), false);
+  }
+
+  const missing = output();
+  assert.equal(await cli.runCli(['drag', 'plan', '--source', '--help'], {
+    stdout: missing.stream, stderr: missing.stream,
+  }), 2);
+  assert.equal(missing.text(), '--source expects a value\n');
+});
+
 test('URL parsing is headless and redacts credentials in structured output', async () => {
   const result = output();
   assert.equal(await cli.runCli([
@@ -114,6 +134,46 @@ test('winscp-com prints help and version without starting the console runner', (
   assert.equal(version.status, 0);
   assert.equal(version.stdout, `${require('../package.json').version}\n`);
   assert.equal(version.stderr, '');
+});
+
+test('console convenience forms own their help and version flags', async () => {
+  for (const args of [
+    ['run', '--help'],
+    ['script', '--help'],
+    ['script', 'deploy.txt', '--help'],
+    ['command', '--help'],
+  ]) {
+    const result = output();
+    assert.equal(await cli.runCli(args, { stdout: result.stream, stderr: result.stream }), 0);
+    assert.match(result.text(), /winscp drag plan/);
+  }
+
+  for (const args of [
+    ['run', '--version'],
+    ['script', '--version'],
+    ['command', '--version'],
+  ]) {
+    const result = output();
+    assert.equal(await cli.runCli(args, { stdout: result.stream, stderr: result.stream }), 0);
+    assert.equal(result.text(), `${require('../package.json').version}\n`);
+  }
+
+  const missing = output();
+  assert.equal(await cli.runCli(['script', 'deploy.txt', '--parameter', '--version'], {
+    stdout: missing.stream, stderr: missing.stream,
+  }), 2);
+  assert.equal(missing.text(), '--parameter expects a value\n');
+});
+
+test('the executable run help flag does not enter the console prompt', () => {
+  const entry = path.join(__dirname, '..', 'bin', 'winscp.js');
+  const run = spawnSync(process.execPath, [entry, 'run', '--help'], {
+    encoding: 'utf8',
+    timeout: 120000,
+  });
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stdout, /winscp drag plan/);
+  assert.equal(run.stderr, '');
 });
 
 test('convenience commands translate to the existing console runner switches', () => {

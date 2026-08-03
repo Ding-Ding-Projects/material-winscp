@@ -33,6 +33,29 @@ test('editor save failure still releases the in-flight save guard', async () => 
   assert.match(source.slice(saveStart, conflictStart), /finally \{\s*savePromise = null;/);
 });
 
+test('an upload completion cannot clean text typed after its save snapshot', async () => {
+  const source = await fs.readFile(sourcePath, 'utf8');
+  const eventStart = source.indexOf("else if (e.type === 'uploaded')");
+  const eventEnd = source.indexOf("else if (e.type === 'orphan')", eventStart);
+  assert.ok(eventStart >= 0 && eventEnd > eventStart);
+  const branch = source.slice(eventStart, eventEnd);
+  assert.match(branch, /updateStatus\(\)/);
+  assert.doesNotMatch(branch, /state\.saved\s*=\s*state\.text/);
+  assert.match(source.slice(source.indexOf('async function save(force)'), eventStart),
+    /if \(state\.text === snapshot\) state\.saved = snapshot;/);
+});
+
+test('reload and encoding changes refresh the detected-encoding state', async () => {
+  const source = await fs.readFile(sourcePath, 'utf8');
+  const applyStart = source.indexOf('async function applyEncoding(next)');
+  const reloadStart = source.indexOf('function reload()', applyStart);
+  const reloadAction = source.indexOf("callMain('editor.read', state.id)", reloadStart);
+  assert.ok(applyStart >= 0 && reloadStart > applyStart && reloadAction > reloadStart);
+  assert.match(source.slice(applyStart, reloadStart), /state\.encodingDetected = res\.encodingDetected;/);
+  assert.match(source.slice(reloadAction, source.indexOf('\n            } catch', reloadAction)),
+    /state\.encodingDetected = res\.encodingDetected;/);
+});
+
 test('modeless close serializes an async unsaved-changes decision', async () => {
   const source = await fs.readFile(sourcePath, 'utf8');
   const closeStart = source.indexOf('async function close(reason)');

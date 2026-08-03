@@ -1147,6 +1147,26 @@ test('sites round trip through a WinSCP INI file, folders and all', () => {
   assert.strictEqual(sessions[1].note, 'a note with = and spaces');
 });
 
+test('INI export refuses duplicate session names instead of dropping one', () => {
+  const first = S.defaultSessionData('Prod');
+  first.hostName = 'first.example.com';
+  const second = S.defaultSessionData('prod');
+  second.hostName = 'second.example.com';
+
+  assert.throws(() => S.exportSessionsToIni([first, second]), /duplicate session name/i);
+});
+
+test('INI session sections and duplicate detection are case-insensitive', () => {
+  const imported = S.importSessionsFromIni('[sessions\\Prod]\r\nHostName=prod.example.com\r\n');
+  assert.equal(imported.sessions.length, 1);
+  assert.equal(imported.sessions[0].name, 'Prod');
+
+  assert.throws(() => S.importSessionsFromIni(
+    '[Sessions\\Prod]\r\nHostName=one.example.com\r\n' +
+    '[Sessions\\prod]\r\nHostName=two.example.com\r\n'),
+  /duplicate session name/i);
+});
+
 test('a site is stored against the factory defaults, not the stored defaults', () => {
   // This is the pairing that keeps a file readable back: TStoredSessionList
   // saves every site against the factory defaults and loads it the same way,
@@ -1424,6 +1444,20 @@ test('a workspace link resolves case-insensitively, and a cycle resolves to noth
   const a = S.defaultSessionData('a'); a.link = 'b';
   const b = S.defaultSessionData('B'); b.link = 'A';
   assert.strictEqual(S.resolveWorkspaceData([a, b], a), null);
+});
+
+test('stored-session helpers fail closed for malformed persisted entries', () => {
+  const site = S.defaultSessionData('work/prod');
+  const sessions = [null, 'broken', site];
+
+  assert.equal(S.isInFolder(sessions, 'work'), true);
+  assert.equal(S.isFolder(sessions, 'work'), true);
+  assert.equal(S.findSame(sessions, site), site);
+  assert.equal(S.resolveWorkspaceData(null, { link: 'work/prod' }), null);
+  assert.doesNotThrow(() => S.parseUrl('work/prod', {
+    storedSessions: { sessions, defaultSettings: S.defaultSessionData() },
+  }));
+  assert.throws(() => S.saveWorkspaceData(sessions, null, 1), /Workspace session data/);
 });
 
 /* ================================================================== */
