@@ -129,6 +129,9 @@ behaviour, and only then apply it.
 - Directory listing is also tested with omitted entry attributes; it
   `lstat`-probes the child and reports its actual size, timestamps, ownership,
   permissions, and type instead of silently presenting a zero-metadata file.
+- Capacity probing tolerates servers that advertise `statvfs@openssh.com` but
+  refuse the request for the current account or filesystem; it reports space
+  information as unavailable rather than failing the surrounding operation.
 - Resumed uploads are verified against the in-process SFTP server for both the
   wire offset and permission preservation. Reopening an existing file does not
   apply the default upload mode; an explicit `mode` remains available when

@@ -1391,7 +1391,6 @@ export const PENDING_KEYS = new Set([
   'window.largeToolbarIcons',
   // There is no tray icon to minimise to yet.
   'window.minimizeToTray',
-  'window.sessionTabCaptionTruncation',
 ]);
 
 /** True when the option is stored but nothing in the application reads it yet. */

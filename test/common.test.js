@@ -392,6 +392,11 @@ test('tryStrToSize accepts K/M/G and nothing else', () => {
   assert.equal(C.tryStrToSize('KB').ok, false);
   assert.equal(C.tryStrToSize('1KB').ok, false);
   assert.equal(C.tryStrToSize('').ok, false);
+  // The vendor parses this as Int64; accepting it as a rounded JS Number
+  // would silently change the requested byte count.
+  assert.equal(C.tryStrToSize('9223372036854775807').ok, false);
+  assert.equal(C.tryStrToSize('9007199254740991').ok, true);
+  assert.equal(C.tryStrToSize('8796093022208K').ok, false);
 });
 
 test('sizeToStr picks the largest unit that loses nothing', () => {

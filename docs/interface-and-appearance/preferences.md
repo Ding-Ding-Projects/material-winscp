@@ -98,7 +98,7 @@ successful settings.
 | `window.largeToolbarIcons` | None |
 | `window.minimizeToTray` | None |
 | `window.openedTabsShortcut` | None |
-| `window.sessionTabCaptionTruncation` | None |
+| `window.sessionTabCaptionTruncation` | `design/renderer/ui/tabs.js` — disables session-tab title truncation when false; the existing `tabs.truncateTitles` setting remains an additional global gate. |
 
 ## Verification
 

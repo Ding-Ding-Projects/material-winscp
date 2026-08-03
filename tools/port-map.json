@@ -75,7 +75,7 @@
       "targets": [
         "design/main/protocols/sftp.js"
       ],
-      "note": "SFTP over ssh2: auth, tunnels, proxies, listing, transfers with resume. Bug-workaround matrix still to verify against a real server."
+      "note": "SFTP over ssh2: auth, tunnels, proxies, listing, transfers with resume, and honest statvfs-unavailable fallback when an advertised extension is refused. Bug-workaround matrix still to verify against a real server."
     },
     "core/ScpFileSystem": {
       "status": "partial",
@@ -538,7 +538,7 @@
         "design/renderer/ui/dialogs/preferences.js",
         "design/renderer/ui/dialogs/prefpages.js"
       ],
-      "note": "28 pages, 207 controls over 207 real keys, live writes through config:setPref one key at a time. 27 of those options are stored and not yet honoured - each says so on its own row, and test/preferences.test.js holds the list to the real consumer scan."
+      "note": "28 pages, 207 controls over 207 real keys, live writes through config:setPref one key at a time. 26 of those options are stored and not yet honoured - each says so on its own row, and test/preferences.test.js holds the list to the real consumer scan."
     },
     "forms/Progress": {
       "status": "partial",
@@ -639,7 +639,7 @@
       "design/renderer/ui/dialogs/checklist.js",
       "design/main/ipc.js"
       ],
-      "note": "The checklist arranged around one question, with per-row overrides only where legal, directory-scoped and global selection, inversion, search, stable name/action/directory sorting, export, and deletions needing a second explicit yes. Move and the Calculate and Commands menus remain unbuilt."
+      "note": "The checklist arranged around one question, with per-row overrides only where legal, directory-scoped and global selection, inversion, search, stable name/action/directory sorting, an informational Calculate command, export, and deletions needing a second explicit yes. Move and the Commands menu remain unbuilt."
     },
     "forms/SynchronizeProgress": {
       "status": "partial",
@@ -656,7 +656,7 @@
       "targets": [
         "design/main/common.js"
       ],
-      "note": "String/path/time/size helpers ported as pure logic with tests. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
+      "note": "String/path/time/size helpers ported as pure logic with tests, including WinSCP-compatible rejection of oversized byte counts instead of accepting imprecise JavaScript numbers. Adversarial verification did not run (the verify agent hit the session limit), so this progress is the implementer's own assessment and is deliberately conservative."
     },
     "core/RemoteFiles": {
       "status": "partial",

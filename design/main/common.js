@@ -1020,7 +1020,10 @@ function tryStrToSize(sizeStr) {
   while (index < s.length && isDigit(s[index])) index++;
   if (index === 0) return { ok: false, size: 0 };
   let size = Number(s.slice(0, index));
-  if (!Number.isFinite(size)) return { ok: false, size: 0 };
+  // WinSCP parses the numeric part as Int64.  Do not let JavaScript accept
+  // rounded values beyond its exact integer range; they would no longer
+  // describe the byte count the user entered.
+  if (!Number.isSafeInteger(size)) return { ok: false, size: 0 };
   s = trimBoth(s.slice(index));
   if (s) {
     if (s.length !== 1) return { ok: false, size: 0 };
@@ -1031,6 +1034,7 @@ function tryStrToSize(sizeStr) {
       default: return { ok: false, size: 0 };
     }
   }
+  if (!Number.isSafeInteger(size)) return { ok: false, size: 0 };
   return { ok: true, size };
 }
 

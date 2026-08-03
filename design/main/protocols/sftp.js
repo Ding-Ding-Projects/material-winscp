@@ -2230,7 +2230,16 @@ class SftpAdapter extends Adapter {
     }
 
     if (!this.serverCaps.statVfsV2 && !force) return null;
-    const st = await this.ext.statvfs(target, { force });
+    let st;
+    try {
+      st = await this.ext.statvfs(target, { force });
+    } catch (e) {
+      // Some servers advertise statvfs but refuse it for a particular account
+      // or filesystem. Treat that as unavailable capacity, not a fatal probe.
+      if (!ext.isOperationUnsupported(e)) throw e;
+      this._log('debug', `statvfs refused for ${target}: ${e.message}`);
+      return null;
+    }
     for (const line of [
       `Block size: ${st.blockSize}`,
       `Fundamental block size: ${st.fundamentalBlockSize}`,

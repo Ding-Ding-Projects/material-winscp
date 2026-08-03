@@ -35,6 +35,7 @@ row context menu without scrolling through unrelated directories.
 | Invert selection | Flip checked/unticked state for every actionable row. Rows whose action is `Do nothing` remain unticked, so inversion cannot create a ticked no-op. |
 | Search | Filter rows by name or reason. Wired to the [regex builder](../search-and-regex/regex-builder.md) like every search bar here. |
 | Sort | By any column; sorting never changes actions. |
+| Calculate | Recompute the checked outcome on demand and announce the resulting transfers and deletions; it does not execute anything. |
 | Save checklist | Export the list as text for review before committing. |
 
 The checklist search bar is a full search surface: plain text by default, regex
@@ -78,6 +79,10 @@ as an explicit opt-in, with the builder anchored beside the field.
   protocol capabilities.
 - Reverse on a `Do nothing` row is tested to remain gated with the correct
   no-direction reason.
+- Calculate is tested to count only checked rows, report transfer bytes and
+  deletion totals, and leave the checklist rows unchanged. The toolbar command
+  is informational only; applying still requires the separate Synchronize
+  action and deletion confirmation.
 - Directory-scoped check and uncheck is tested for changing only the displayed
   directory subtree, preserving each row's action, excluding similarly named
   siblings, and never ticking `Do nothing`. The context-menu availability check

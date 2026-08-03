@@ -193,15 +193,19 @@ export function createTabStrip(opts = {}) {
   h('div', { class: 'tabstrip-tools' }, overflowBtn, searchBtn, groupsBtn, newBtn));
 
   bindText(root, 'openedTabs', { attr: 'aria-label' });
-  root.classList.toggle('tabs-no-title-truncation', readPref('tabs.truncateTitles', true) === false);
+  const truncationEnabled = readPref('tabs.truncateTitles', true) !== false
+    && readPref('window.sessionTabCaptionTruncation', true) !== false;
+  root.classList.toggle('tabs-no-title-truncation', !truncationEnabled);
   appearanceTarget(root, `tab-strip-${id}`, 'Session tab strip');
   container.appendChild(root);
 
   const roving = rovingFocus(root, '[role="tab"]', { orientation: 'horizontal', loop: true });
   const offPrefs = bus.on('prefs:changed', (event) => {
     const path = event && (event.path || event.key);
-    if (path === 'tabs.truncateTitles') {
-      root.classList.toggle('tabs-no-title-truncation', event.value === false);
+    if (path === 'tabs.truncateTitles' || path === 'window.sessionTabCaptionTruncation') {
+      const enabled = readPref('tabs.truncateTitles', true) !== false
+        && readPref('window.sessionTabCaptionTruncation', true) !== false;
+      root.classList.toggle('tabs-no-title-truncation', !enabled);
     }
   });
 

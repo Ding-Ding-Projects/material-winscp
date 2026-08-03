@@ -810,6 +810,18 @@ test('SFTP extended requests against a real server', async (t) => {
     } finally { await srv.close(); }
   });
 
+  await t.test('advertised statvfs that is refused is reported as unavailable', async () => {
+    const srv = await startRawSftpServer({ extensions: [['statvfs@openssh.com', '2']] });
+    try {
+      const { adapter } = await connectAdapter(srv);
+      const error = new Error('operation unsupported');
+      error.code = 8; // SSH_FX_OP_UNSUPPORTED
+      adapter.ext.statvfs = async () => { throw error; };
+      assert.equal(await adapter.spaceInfo('/'), null);
+      await adapter.disconnect();
+    } finally { await srv.close(); }
+  });
+
   await t.test('hardlink@openssh.com creates the link, existing path first', async () => {
     const srv = await startRawSftpServer({
       extensions: [['hardlink@openssh.com', '1']],

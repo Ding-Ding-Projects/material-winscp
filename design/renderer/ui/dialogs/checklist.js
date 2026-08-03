@@ -62,6 +62,7 @@ defineStrings({
   txClInvert: ['Invert the selection', '反轉選取'],
   txClGroup: ['Group by directory', '按目錄分組'],
   txClSort: ['Sort checklist', '排序清單'],
+  txClCalculate: ['Calculate selected actions', '計算已選動作'],
   txClSearchPh: ['Search the checklist', '搵清單'],
   txClScope: ['this checklist', '呢張清單'],
   txClApply: ['Synchronize', '開始同步'],
@@ -276,6 +277,11 @@ export function summarizeChecklist(items, options = {}) {
     deletions: counts.deleteLocal + counts.deleteRemote,
     total: (items || []).length,
   };
+}
+
+/** Recalculate the checked outcome without changing rows or touching a bridge. */
+export function calculateChecklist(items) {
+  return summarizeChecklist(items, { onlyChecked: true });
 }
 
 /**
@@ -580,7 +586,7 @@ export function openChecklistDialog(result = {}) {
   }
 
   function paintSummary() {
-    const summary = summarizeChecklist(rows, { onlyChecked: true });
+    const summary = calculateChecklist(rows);
     clear(summaryEl);
     summaryEl.classList.toggle('has-deletions', summary.deletions > 0);
     summaryEl.appendChild(h('h3', {},
@@ -596,12 +602,20 @@ export function openChecklistDialog(result = {}) {
     }
   }
 
+  function calculateSelection() {
+    const summary = calculateChecklist(rows);
+    const lines = describeChecklist(summary).map((line) => t(line.key, ...line.params));
+    announce(lines.join(' '));
+    notify.info(t('txClCalculate'), lines.join(' '));
+  }
+
   const toolbar = h('div', { class: 'tx-cl-toolbar' },
     toolButton('select_all', 'txClCheckAll', checkEverything),
     toolButton('remove', 'txClUncheckAll', uncheckEverything),
     toolButton('flip', 'txClInvert', invertSelection),
     toolButton('swap_horiz', 'txClReverse', () => applyToAll((r) => { const x = reverseAction(r); return x.ok ? x.item : r; })),
     toolButton('sort', 'txClSort', sortRows),
+    toolButton('functions', 'txClCalculate', calculateSelection),
     groupToggle(),
     toolButton('content_copy', 'txClCopyList', copyChecklist),
     h('span', { class: 'spacer' }),
