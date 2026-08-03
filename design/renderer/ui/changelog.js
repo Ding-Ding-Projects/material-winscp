@@ -187,6 +187,20 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "da2d937", kind: 'commit', ref: "da2d937", oid: "da2d937156c78b341a8e1d843b5a0e1f2c1493c9", date: "2026-08-03",
+    title: "Harden console drag queue and editor paths",
+    changes: [
+      { category: "removed", text: "English: Preserve binary stdin, reject Win32 trailing-name aliases, remove cancelled parallel targets, expose SiteAdvanced steppers, and make editor retries recover. The parity gremlins have lost another five ladders.\\n\\n粵語：Binary stdin 而家保留原 bytes，Win32 尾點尾空格 alias 直接拒絕，cancelled parallel target 會清走，SiteAdvanced stepper 見得人，editor retry 可以復活。Parity 小妖怪又少咗五條梯。" },
+    ],
+  },
+  {
+    id: "40c8886", kind: 'commit', ref: "40c8886", oid: "40c8886c4452b4976b5e16194e6000d2a485ac58", date: "2026-08-03",
+    title: "Refresh S3 and UI hardening evidence",
+    changes: [
+      { category: "fixed", text: "English: Update the in-app history and handoff for the latest S3, palette, Login, config, and watcher fixes; the paperwork now follows the bugs home.\\n\\n粵語：更新 app history 同 handoff，記低最新 S3、palette、Login、config 同 watcher 修正；啲 paperwork 而家跟住啲 bug 返屋企，唔再迷路。" },
+    ],
+  },
+  {
     id: "924064a", kind: 'commit', ref: "924064a", oid: "924064a4a5beefa2e0dee56fc44ba5887185f4af", date: "2026-08-03",
     title: "Harden S3 UI sync and config edges",
     changes: [
@@ -688,20 +702,6 @@ export const DEVELOPMENT = [
     title: "Refresh handoff for queue and panel wave",
     changes: [
       { category: "fixed", text: "Update the factual handoff with 59.0% logic coverage, 114 outstanding units, 3342 passing tests plus one skip, the 22-issue scan and the fourth-wave queue/session/search/panel/setup fixes. Another pothole is flagged; the cardboard finish line is still unemployed.\\n\\n廣東話：handoff 報清楚多咗幾個測試同新修正，終點紙牌繼續失業，因為條路仲未行完。" },
-    ],
-  },
-  {
-    id: "b80efd9", kind: 'commit', ref: "b80efd9", oid: "b80efd97f9f8d89ba30a2a670246ee9368171296", date: "2026-08-03",
-    title: "Refresh changelog for queue and platform fixes",
-    changes: [
-      { category: "changed", text: "Record the queue, session, search, panel, synchronize and setup hardening from the fourth wave with verified commit links. The changelog now documents that zero-result searches and non-Windows shortcuts both mean exactly what they say.\\n\\n廣東話：更新日誌講清楚零結果就係零，非 Windows shortcut 就唔做，唔會畀讀者玩文字魔術。" },
-    ],
-  },
-  {
-    id: "aa5ee78", kind: 'commit', ref: "aa5ee78", oid: "aa5ee78c22119ff7a0ba3ae75db9f3a1bb7ba010", date: "2026-08-03",
-    title: "Harden queue sessions search panels and setup",
-    changes: [
-      { category: "added", text: "Include queue prompt state in once-done requests, fail closed on stale exec capabilities, tolerate watcher errors without items, short-circuit empty find limits, normalize Windows directory caches case-insensitively, and keep shortcut cleanup Windows-only. Add focused tests and indexed documentation. The queue now carries its paperwork, the search knows when zero means zero, and setup stops visiting the wrong operating system.\\n\\n廣東話：queue 帶齊文件、find 明白零就係零、setup 唔再去錯 OS 探親；panel 同 session 都有新路牌。" },
     ],
   },
 ];

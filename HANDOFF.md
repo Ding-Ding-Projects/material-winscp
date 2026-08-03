@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `924064a`** — Harden S3 UI sync and config edges
+**At commit `da2d937`** — Harden console drag queue and editor paths
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3459 run, **3458 pass, 0 fail**, 1 skipped |
-| Hand-written code | 220,853 lines across 437 files |
-| Commits | 202 on `main` |
+| Tests | 3464 run, **3463 pass, 0 fail**, 1 skipped |
+| Hand-written code | 220,978 lines across 437 files |
+| Commits | 204 on `main` |
 | Working tree | **2 uncommitted change(s)** |
-| Remote | `origin/main` at `9db8af1` — **differs from HEAD** |
+| Remote | `origin/main` at `40c8886` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `da2d937` | 2026-08-03 | Harden console drag queue and editor paths |
+| `40c8886` | 2026-08-03 | Refresh S3 and UI hardening evidence |
 | `924064a` | 2026-08-03 | Harden S3 UI sync and config edges |
 | `9db8af1` | 2026-08-03 | Refresh lifecycle hardening evidence |
 | `8c87551` | 2026-08-03 | Harden editor security and session lifecycles |
 | `72f52c0` | 2026-08-03 | Refresh protocol hardening evidence |
 | `cd350d3` | 2026-08-03 | Harden protocol inputs and transfer settings |
 | `f171425` | 2026-08-03 | Record the latest verification counts |
-| `a60bd5c` | 2026-08-03 | Refresh async lifecycle evidence |
-| `1c10a04` | 2026-08-03 | Harden async console sync and queue lifecycles |
 
 ## Notes from whoever worked on this last
 
