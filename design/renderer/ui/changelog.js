@@ -187,6 +187,318 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "87def2e", kind: 'commit', ref: "87def2e", oid: "87def2eedfb8ecef829ef3d738bd40800bc6a362", date: "2026-08-03",
+    title: "Refresh handoff after protocol fixes",
+    changes: [
+      { category: "fixed", text: "English: Record the pushed protocol, queue, synchronization, and checklist fixes with their verified test and Docker evidence. The handoff now knows which bugs have stopped pretending to be furniture." },
+      { category: "fixed", text: "廣東話: 更新 handoff，記低今次 protocol、queue、sync 同 checklist 修正，以及真實測試同 Docker 證據；啲 bug 唔再扮傢俬咁企喺度。" },
+    ],
+  },
+  {
+    id: "cd71f05", kind: 'commit', ref: "cd71f05", oid: "cd71f0574ddeda79aa579b1dea3b9bed3762fc29", date: "2026-08-03",
+    title: "Harden protocol retries and sync boundaries",
+    refs: ["#2", "#3", "#4", "#5"],
+    changes: [
+      { category: "changed", text: "English: Harden FTPS data-channel cleanup and certificate checks, reject unsafe SCP recursive names, preserve queue resume and overwrite decisions, and correct synchronization and checklist edge cases. The old edge-case gremlins have been put on a timeout." },
+      { category: "fixed", text: "廣東話: 修好 FTPS data channel 清場同證書核對，拒絕 SCP 古怪路徑名，保留 queue resume 同 overwrite 問答，亦修正同步同 checklist 邊界位；啲舊 bug 而家俾人請咗飲茶再排隊。Refs #2, #3, #4, #5." },
+    ],
+  },
+  {
+    id: "438729b", kind: 'commit', ref: "438729b", oid: "438729bd895c8f77ad2f718848c8548eaeba720f", date: "2026-08-03",
+    title: "Keep nested console discovery headless",
+    changes: [
+      { category: "added", text: "Make winscp-com and winscp run consume help/version flags after variadic command or parameter switches instead of forwarding them into the scripting prompt. Add process-level regressions and document the wrapper behavior.\\n\\n廣東話：help/version 而家唔會喺 command 參數堆入面迷路，CLI 唔使突然開 prompt 玩捉迷藏。" },
+    ],
+  },
+  {
+    id: "d0bf1d5", kind: 'commit', ref: "d0bf1d5", oid: "d0bf1d5d3bda7ad60675f5da7ebbf179dfbc6ae6", date: "2026-08-03",
+    title: "Align handoff with pushed source",
+    changes: [
+      { category: "changed", text: "Update the generated remote proof after d788b02 reached origin/main; coverage and test counts remain unchanged.\\n\\n廣東話：而家交接簿終於追到架車，遠端同 source tip 對齊，唔再畀份報告落後一步扮神秘。" },
+    ],
+  },
+  {
+    id: "845c04a", kind: 'commit', ref: "845c04a", oid: "845c04a9d94fc408699e42399033c0963c49d00e", date: "2026-08-03",
+    title: "Refresh handoff after CLI boundary fixes",
+    changes: [
+      { category: "added", text: "Record the verified 60.5% logic coverage, 3,558-test run, 114 outstanding units, and the new d788b02 source tip before the remote push.\\n\\n廣東話：交接簿重新對鐘，唔再將未出門口嘅 commit 當成已經搭車；數字有幾多就寫幾多，唔畀報告自己加戲。" },
+    ],
+  },
+  {
+    id: "d788b02", kind: 'commit', ref: "d788b02", oid: "d788b02e45b8988f008ccfdb69fb4de040e2e790", date: "2026-08-03",
+    title: "Harden drag CLI and trust boundaries",
+    refs: ["#14", "#17"],
+    changes: [
+      { category: "added", text: "Add read-only drop simulation and capability discovery, and route panel drops through validated effect and target checks. Harden authentication retries, protected-envelope parsing, submenu focus restoration, disconnected-session action gating, and SFTP custom-subsystem handling with focused regressions and docs.\\n\\n廣東話：CLI 而家識驗 DROP、唔會亂咁搬屋；登入、右鍵選單同 SFTP 都收好門口，啲壞資料想扮無事都冇咁易。\\n\\nDocker SFTP/FTP smoke and the full test suite are green: 3,558 total, 3,557 passed, 0 failed, 1 skipped." },
+      { category: "changed", text: "Refs #14\\nRefs #17" },
+    ],
+  },
+  {
+    id: "6541962", kind: 'commit', ref: "6541962", oid: "654196249e9088883697c3f680c860dab2161781", date: "2026-08-03",
+    title: "Refresh handoff after capability and CLI fixes",
+    changes: [
+      { category: "changed", text: "The project diary now counts the green suite and the latest adapters—份 handoff 終於跟得上，唔再攞舊數字扮新鮮。" },
+    ],
+  },
+  {
+    id: "1bd52d3", kind: 'commit', ref: "1bd52d3", oid: "1bd52d34e0dcbbed8b9be56cd37b12d51e334088", date: "2026-08-03",
+    title: "Document remaining protocol capability limits",
+    changes: [
+      { category: "changed", text: "The docs now stop promising proxy magic and filename wizardry—FTP/WebDAV 依家有幾多掂就講幾多，唔再靠想像力連線。" },
+    ],
+  },
+  {
+    id: "ad2fc20", kind: 'commit', ref: "ad2fc20", oid: "ad2fc204b75b8bc992fac6b52e3d43373f367504", date: "2026-08-03",
+    title: "Align SiteAdvanced capability ledger and site identity",
+    changes: [
+      { category: "changed", text: "The advanced settings table now matches real adapters, and site IDs stay put—pipeline 唔再扮斷線，identity 亦唔俾亂咁改。" },
+    ],
+  },
+  {
+    id: "7ebde98", kind: 'commit', ref: "7ebde98", oid: "7ebde988231d0d213ce8bc3722a7f736b8a5015f", date: "2026-08-03",
+    title: "Harden CLI configuration and foreground settings paths",
+    changes: [
+      { category: "changed", text: "CLI help, config shapes, terminal copies, editor snapshots, and preference fallbacks now fail closed—成班設定唔再扮冇事，亂值入嚟就老實講，copy 錯 contract 就即刻收工。" },
+    ],
+  },
+  {
+    id: "55c3cb9", kind: 'commit', ref: "55c3cb9", oid: "55c3cb9eca5198d68665f9dddbbbb7bbc30a79d0", date: "2026-08-03",
+    title: "Refresh verified handoff after CLI and protocol fixes",
+    changes: [
+      { category: "changed", text: "The handoff now counts the green suite properly—冇再俾一次撞車嘅測試嚇到亂報警。" },
+    ],
+  },
+  {
+    id: "ca67b21", kind: 'commit', ref: "ca67b21", oid: "ca67b21ce328810d55a9528d29aa5ff8e80b09a6", date: "2026-08-03",
+    title: "Document sorted checklist identity preservation",
+    changes: [
+      { category: "changed", text: "The checklist row keeps its true identity now—冇再俾排序扭到暈，揀邊行就改邊行。" },
+    ],
+  },
+  {
+    id: "fc7938a", kind: 'commit', ref: "fc7938a", oid: "fc7938a22aaaff7515fea5c8eb61c152487ab6c9", date: "2026-08-03",
+    title: "Fix reconnect and sorted checklist identity",
+    changes: [
+      { category: "removed", text: "Reconnect now waits for teardown to finish, and checklist rows keep their choices when the UI sorts them. The files may move around, but their decisions no longer wander off for dim sum.\\n\\nReconnect 會等 teardown 完先再返嚟，checklist sort 完都會跟返原本檔案嘅選擇；row 可以周圍郁，但佢嘅 decision 唔會走失去飲茶。" },
+    ],
+  },
+  {
+    id: "485a1d0", kind: 'commit', ref: "485a1d0", oid: "485a1d0f33f3c350f235871e2a90428bc57fd043", date: "2026-08-03",
+    title: "Harden SCP WebDAV and foreground queue paths",
+    changes: [
+      { category: "changed", text: "SCP now keeps the four-digit mode instead of trimming the interesting bits, WebDAV forgets stale verbs when a reconnect loses its Allow header, and the foreground mover finally reads its speed limit before racing off.\\n\\nSCP 唔再剪走 special mode bits，WebDAV reconnect 見唔到 Allow 就會收返過期 command，foreground mover 亦終於肯睇 speed limit 先起飛。條 code 唔再當設定係裝飾品。" },
+    ],
+  },
+  {
+    id: "a855217", kind: 'commit', ref: "a855217", oid: "a85521775b0791b030ed039601583b12571ce65d", date: "2026-08-03",
+    title: "Refresh handoff after FTPS coverage",
+    changes: [
+      { category: "changed", text: "The handoff now knows the data socket survived TLS too; it records the exact verification tip and still leaves unfinished coverage on the table where it belongs.\\n\\n份 handoff 而家知道 data socket 連 TLS 都捱得過，寫清楚最新 verification tip，未完成嘅 coverage 繼續老老實實擺喺枱面。" },
+    ],
+  },
+  {
+    id: "0f499cf", kind: 'commit', ref: "0f499cf", oid: "0f499cf39f554aa5fc168a611645ae17d4d0b535", date: "2026-08-03",
+    title: "Cover delayed passive FTPS transfers",
+    changes: [
+      { category: "security", text: "The FTP ordering switch now has a TLS witness too, so the data socket cannot claim plain-text innocence while secretly tripping over certificate handshakes.\\n\\nFTP ordering switch 而家連 TLS 都有見證：data socket 唔可以喺明文測試扮無辜，轉頭喺證書 handshake 度跣親。" },
+    ],
+  },
+  {
+    id: "1230182", kind: 'commit', ref: "1230182", oid: "12301822aeab86a3b92c9c2d526dccdde537703e", date: "2026-08-03",
+    title: "Refresh handoff after CLI checkpoint",
+    changes: [
+      { category: "fixed", text: "The handoff now reports the pushed CLI and protocol fixes, the full 3,515-pass local gate, and the remaining 114 porting units without sprinkling confetti over unfinished coverage.\\n\\n份 handoff 已經跟返最新 checkpoint：CLI 同 protocol 修好、本地 3,515 個測試過晒，仲有 114 個 porting units 未清，唔會用彩紙遮住未完成嘅 coverage。" },
+    ],
+  },
+  {
+    id: "4d78e05", kind: 'commit', ref: "4d78e05", oid: "4d78e0579940ac22959230651104c5844c9f5266", date: "2026-08-03",
+    title: "Fix CLI edges and protocol transfer races",
+    changes: [
+      { category: "fixed", text: "The command line no longer packs the literal true into a suitcase and calls it a path; FTP now opens delayed passive data sockets in the order servers actually expect, S3 overlap rows are served once, and editor stat outages no longer impersonate deletions. Regex, modal focus, release copy, and verification docs are covered by tests.\\n\\n條 code 終於唔再將 true 當行李塞入路徑度扮檔案；FTP data socket 按伺服器真正食得落嘅次序開，S3 重疊 object 唔再食兩次，editor 斷線亦唔會扮刪檔。Regex、modal focus、release 文案同驗證文件都有測試睇住，冇位俾 bug 扮鬼。" },
+    ],
+  },
+  {
+    id: "c0209f5", kind: 'commit', ref: "c0209f5", oid: "c0209f5b84c6389b88128780b5aa51b1e36add87", date: "2026-08-03",
+    title: "Refresh handoff after SFTP checkpoint",
+    changes: [
+      { category: "changed", text: "English: Point the generated handoff at the pushed SFTP, preference, size, and checklist checkpoint so the report stops living in the previous commit's attic." },
+      { category: "changed", text: "廣東話：將 generated handoff 指返啱已推嘅 SFTP、preference、size 同 checklist checkpoint，唔再住喺上一個 commit 嘅閣樓。" },
+    ],
+  },
+  {
+    id: "2facf09", kind: 'commit', ref: "2facf09", oid: "2facf09d00d30f7875e8f59442067220b2cbeb46", date: "2026-08-03",
+    title: "Close SFTP size preference and checklist gaps",
+    changes: [
+      { category: "added", text: "English: Handle refused SFTP statvfs probes, reject imprecise oversized byte counts, make session-tab truncation configurable, and add a non-destructive checklist Calculate command. The port now says 'not available' when the server means it, instead of doing interpretive dance with nonsense numbers." },
+      { category: "changed", text: "廣東話：SFTP statvfs 被拒就誠實講 unavailable，超大 size 唔再食落啲失真數字，session tab truncation 真係有 preference，checklist 加咗唔會執行嘢嘅 Calculate。個 port 唔再拎 nonsense number 跳 interpretive dance。" },
+    ],
+  },
+  {
+    id: "7fa152f", kind: 'commit', ref: "7fa152f", oid: "7fa152fdf516bb34761f98c543a015c6c031c94c", date: "2026-08-03",
+    title: "Refresh handoff after roadmap checkpoint",
+    changes: [
+      { category: "changed", text: "English: Refresh the generated handoff to the pushed reconnect, queue, WebDAV, and menu checkpoint; the report now tells the truth about a clean tree instead of narrating yesterday's shoelaces." },
+      { category: "changed", text: "廣東話：更新 handoff 去跟實際推上去嗰個 reconnect、queue、WebDAV 同 menu checkpoint；今次報告講真話，唔再扮個 clean tree 仲有琴日啲鞋帶。" },
+    ],
+  },
+  {
+    id: "a95dc72", kind: 'commit', ref: "a95dc72", oid: "a95dc7252f6a4fe12cd5ed88502ab4896b8cb16c", date: "2026-08-03",
+    title: "Harden reconnect queue WebDAV and menu parity",
+    changes: [
+      { category: "changed", text: "English: Retire dead adapters before reconnect, recognize slash-marked WebDAV collections, canonicalize headless queue speed limits, and surface inherited action shortcuts in context menus. The UI now stops hiding the keyboard cheat sheet while the queue stops accepting speed limits from the numeric underworld." },
+      { category: "changed", text: "廣東話：斷線重連前清走死 adapter、認出 WebDAV slash collection、整靚 headless queue speed limit，再喺 context menu 顯示 inherited shortcut。個 UI 唔再收埋快捷鍵小抄，queue 亦唔再收埋數字地獄嘅 speed limit。" },
+    ],
+  },
+  {
+    id: "e840449", kind: 'commit', ref: "e840449", oid: "e840449732524c5291c5eccef96e3c49b6505f9f", date: "2026-08-03",
+    title: "Wire editor refresh, preference shortcut, and S3 listing guards",
+    changes: [
+      { category: "removed", text: "English: Refresh matching remote panels after editor uploads, make the opened-tabs shortcut preference live, and deduplicate overlapping S3 directory prefixes with focused documentation and tests. The Explorer no longer stares at yesterday's file size like a confused goldfish." },
+      { category: "changed", text: "廣東話：editor upload 完之後更新返啱 session 個 remote panel，令 opened-tabs shortcut preference 真係生效，再去重 S3 重疊頁面嘅 folder prefix；Explorer 唔使再望住琴日個 file size 發呆，似條迷惘金魚。" },
+    ],
+  },
+  {
+    id: "5d0b038", kind: 'commit', ref: "5d0b038", oid: "5d0b038914aaa7d40038f7a1b6d39b99da4c618b", date: "2026-08-03",
+    title: "Wire protocol edges and roadmap controls",
+    changes: [
+      { category: "changed", text: "English: Make FTP HOST mode, SFTP listing/checksum paths, SCP OpenSSL checksums, direction-aware synchronization watching, checklist sorting, and safe editor rollback real and tested. The code now trips over fewer of its own shoelaces." },
+      { category: "changed", text: "廣東話：接通 FTP HOST、SFTP 清單同 checksum、SCP OpenSSL checksum、同步方向監察、清單排序，同埋 editor rollback；仲加埋拼錯 preference 個修正。啲 code 而家少啲自己踩自己條鞋帶。" },
+    ],
+  },
+  {
+    id: "abe0622", kind: 'commit', ref: "abe0622", oid: "abe0622ed8062930d13da0f40b27f060ebad4042", date: "2026-08-03",
+    title: "Refresh handoff after freshness fix",
+    changes: [
+      { category: "changed", text: "English: The handoff records the self-checking generator and the real 3486-run evidence, so the project diary finally stops chasing its own tail.\\n\\n廣東話: handoff 記低咗 self-checking generator 同真實 3486-run 證據，份 project 日記終於唔使再追住自己條尾跑。" },
+    ],
+  },
+  {
+    id: "fbb9bae", kind: 'commit', ref: "fbb9bae", oid: "fbb9bae2304f999e4f23fa4c7238c5e2898222ed", date: "2026-08-03",
+    title: "Ignore expected handoff test artefact",
+    changes: [
+      { category: "changed", text: "English: Handoff checks now ignore the screenshot the boot test intentionally refreshes, so a clean tree is not reported dirty just because evidence had a photoshoot.\\n\\n廣東話: handoff check 而家識得忽略 boot test 有意更新嗰張 screenshot，唔會因為證據去影相就話乾淨個 tree 污糟邋遢。" },
+    ],
+  },
+  {
+    id: "68f8952", kind: 'commit', ref: "68f8952", oid: "68f8952a08319fd39757b1a45dbf0be952cd75bf", date: "2026-08-03",
+    title: "Make handoff freshness self-checking",
+    changes: [
+      { category: "changed", text: "English: Handoff generation now walks past report-only commits, because a diary cannot tattoo its own future hash onto the page.\\n\\n廣東話: handoff 而家會跳過淨係改報告嘅 commit，唔會叫份日記預言自己個 hash；份 ledger 終於可以自己驗身。" },
+    ],
+  },
+  {
+    id: "dbb195b", kind: 'commit', ref: "dbb195b", oid: "dbb195bb2d054a058e86b8602e222f567aaabc9b", date: "2026-08-03",
+    title: "Refresh final handoff evidence",
+    changes: [
+      { category: "changed", text: "English: The handoff now records the final pushed tip and its verified checks, so the ledger is less stale than a forgotten takeaway box.\\n\\n廣東話: handoff 而家記低最終 pushed tip 同 verified checks，份 ledger 唔再似雪櫃入面放到過期嘅外賣盒。" },
+    ],
+  },
+  {
+    id: "ef2580a", kind: 'commit', ref: "ef2580a", oid: "ef2580a6e9c470b93ca377955ba2997149f5fe97", date: "2026-08-03",
+    title: "Refresh handoff for Pages fix",
+    changes: [
+      { category: "fixed", text: "English: The handoff now names the artifact fix that is actually on the branch, so the project diary stops wearing yesterday's hat.\\n\\n廣東話: handoff 已經跟到最新 commit，唔再戴住舊帽扮新鮮；Pages artifact 今次唔會再玩失蹤。" },
+    ],
+  },
+  {
+    id: "aae7ad2", kind: 'commit', ref: "aae7ad2", oid: "aae7ad2dadf0895524748faeaf30d0a5e74e3a6a", date: "2026-08-03",
+    title: "Fix Pages artifact selection",
+    changes: [
+      { category: "changed", text: "English: Pages now receives one run-scoped archive, so deploy-pages stops playing artifact roulette after retries.\\n\\n廣東話: 而家每次 run 都有自己條 artifact，deploy 唔使再喺三份同名包入面玩大抽獎，網站唔會無端端食檸檬。" },
+    ],
+  },
+  {
+    id: "023b8b6", kind: 'commit', ref: "023b8b6", oid: "023b8b65968d6e565894ab5dd96841f8ed11d846", date: "2026-08-03",
+    title: "Refresh handoff after site and reconnect hardening",
+    changes: [
+      { category: "changed", text: "English: Record the pushed dca4464 wave, its 3,486-test evidence, 59.0% logic coverage, 114 remaining units, and the clean default branch. The handoff now tells the truth without leaving a screenshot-shaped breadcrumb in the working tree." },
+    ],
+    changesYue: [
+      { category: "changed", text: "廣東話：Handoff 跟返已推上去嘅 dca4464，寫清楚 3,486 個測試、59.0% logic coverage、仲有 114 個 units，同埋 main 乾淨。截圖唔再偷偷留低腳印，份交接紙終於唔使估。" },
+    ],
+  },
+  {
+    id: "dca4464", kind: 'commit', ref: "dca4464", oid: "dca44645e1ef335bc2c72843a25797ef50715497", date: "2026-08-03",
+    title: "Harden reconnect, Explorer selection, and site builds",
+    changes: [
+      { category: "fixed", text: "English: Reconnect now refuses malformed retry budgets, Explorer drag/drop trusts the real selection model, and the static-site builder locks its shared output through build and verification. Windows can stop treating half-written pages like a surprise escape room. The site docs and regression tests record the new guarantees, and the proxy warning no longer repeats itself." },
+    ],
+    changesYue: [
+      { category: "changed", text: "廣東話：重連遇到古怪 timeout 就收工，Explorer 拖放信返真正選取狀態，site builder 鎖實個 output 直到 build 同 verify 都完，Windows 唔使再玩『邊個刪走咗我個檔』密室逃脫。文件同測試一齊跟上，proxy 提示亦唔再唱 encore。" },
+    ],
+  },
+  {
+    id: "8f29541", kind: 'commit', ref: "8f29541", oid: "8f29541f963075dd691caa70108ee50d1adf99f3", date: "2026-08-03",
+    title: "Refresh handoff after S3 and SFTP hardening",
+    changes: [
+      { category: "security", text: "English: The handoff now names the repeated-page guard, metadata recovery, editor drain, and accessible password toggle with the full green suite." },
+      { category: "security", text: "廣東話：Handoff 而家記低重複頁 guard、SFTP metadata 補救、editor drain 同 password 掣嘅 accessibility，仲有完整綠色測試數字。" },
+    ],
+  },
+  {
+    id: "b59d321", kind: 'commit', ref: "b59d321", oid: "b59d321dc6cb31d2e86424e2b76ae32b34fb31a8", date: "2026-08-03",
+    title: "Harden S3, SFTP, editor, and login flows",
+    changes: [
+      { category: "security", text: "English: Repeated S3 pages, shy SFTP metadata, editor cleanup races, and password buttons with stage fright now get deterministic boundaries." },
+    ],
+    changesYue: [
+      { category: "changed", text: "廣東話：S3 重複頁、SFTP 謎之 metadata、editor 清理競賽同怕醜嘅 password 掣而家全部有清楚規矩，唔再靠估。" },
+    ],
+  },
+  {
+    id: "d2e0885", kind: 'commit', ref: "d2e0885", oid: "d2e0885a41c4c6c3bd87fe58f61264ab2a101a87", date: "2026-08-03",
+    title: "Make create-directory test line-ending safe",
+    changes: [
+      { category: "changed", text: "English: The assertion now survives Windows checkout newlines instead of treating CRLF as a failed modal." },
+      { category: "changed", text: "廣東話：Windows checkout 有 CRLF 都唔會再俾測試當成 modal 壞咗，條 assertion 終於識睇環境。" },
+    ],
+  },
+  {
+    id: "637ce7b", kind: 'commit', ref: "637ce7b", oid: "637ce7be995bfa67121e1b5a02fcf37f82003aa1", date: "2026-08-03",
+    title: "Refresh handoff after transfer hardening",
+    changes: [
+      { category: "changed", text: "English: The handoff now reports the transfer wave without pretending the test-mutated screenshot is a user edit." },
+      { category: "changed", text: "廣東話：今次 handoff 寫清楚 transfer 修補結果，唔再將測試整花嘅 screenshot 當成真 dirty work。" },
+    ],
+  },
+  {
+    id: "dbe8cc7", kind: 'commit', ref: "dbe8cc7", oid: "dbe8cc7a74ab0823af323052a18e89b5851e41f3", date: "2026-08-03",
+    title: "Harden transfer, queue, and protocol edges",
+    changes: [
+      { category: "changed", text: "English: Partial files, haunted queue races, empty symlink destinations, typed INI ghosts, and oversized SCP listings have all been shown the exit." },
+    ],
+    changesYue: [
+      { category: "changed", text: "廣東話：半截檔案、queue 競賽鬼、空 symlink 目標、打錯型嘅 INI 同爆大 SCP listing 而家全部有清楚出口，唔再扮正常。" },
+    ],
+  },
+  {
+    id: "cc9b7fe", kind: 'commit', ref: "cc9b7fe", oid: "cc9b7fe26d7109441763147b828b637c9ca45d86", date: "2026-08-03",
+    title: "Refresh handoff verification record",
+    changes: [
+      { category: "changed", text: "English: The handoff finally stopped counting its own paperwork as a haunted worktree; it now records the pushed tip, the real suite totals, and the remaining honest coverage." },
+    ],
+    changesYue: [
+      { category: "changed", text: "廣東話：Handoff 唔再將自己啲紙仔當成鬧鬼嘅 dirty worktree；而家清楚記低已推嘅 commit、真實測試數字，同埋仲未完成嘅覆蓋率。" },
+    ],
+  },
+  {
+    id: "b47e589", kind: 'commit', ref: "b47e589", oid: "b47e5891d250b780ba9350f1c8d08a3aceef61a4", date: "2026-08-03",
+    title: "Harden protocol, sync, and panel boundaries",
+    changes: [
+      { category: "changed", text: "English: Unsafe offsets, oversized FTP numbers, eager directory pruning, and stale panel responses all tried to sneak past the boundary; the guards now make them queue politely." },
+    ],
+    changesYue: [
+      { category: "changed", text: "廣東話：WebDAV 偏移量、FTP 大數、同步遮罩同舊 panel 回覆以前一齊扮冇事；而家個邊界有保安，唔畀佢哋亂咁入場。" },
+    ],
+  },
+  {
+    id: "4734d06", kind: 'commit', ref: "4734d06", oid: "4734d06e32e3ee91e70ae3532bb44c4441b9381a", date: "2026-08-03",
+    title: "Refresh explorer and SFTP evidence",
+    changes: [
+      { category: "fixed", text: "English: Refresh the handoff for the verified explorer, Preferences, SFTP, root-path, and create-directory fixes at 3,467 tests. The ledger has receipts, even if the roadmap still wants a marathon.\\n\\n粵語：更新 handoff，記低 explorer、Preferences、SFTP、root path 同 create-directory 修正，3467 tests 有收據；roadmap 仲要跑馬拉松，份 ledger 唔會扮短跑完咗。" },
+    ],
+  },
+  {
     id: "8884879", kind: 'commit', ref: "8884879", oid: "88848797575cd5a7db695c91bceb009e44278725", date: "2026-08-03",
     title: "Expand explorer preferences and SFTP reachability",
     changes: [
@@ -351,357 +663,6 @@ export const DEVELOPMENT = [
     title: "Validate SCP time record fields",
     changes: [
       { category: "changed", text: "Reject unsafe timestamp fields before the wire parser nods along. 呢次 SCP 時間記錄唔再畀超大數字扮正常，免得協議食壞肚。" },
-    ],
-  },
-  {
-    id: "85b7e96", kind: 'commit', ref: "85b7e96", oid: "85b7e968fa1533109b9b0a099f2ceda11760a0f8", date: "2026-08-03",
-    title: "Normalize S3 listing page sizes",
-    changes: [
-      { category: "changed", text: "English: Keep fractional max-keys values from bouncing off S3 like a confused dim sum order. The adapter now floors them and preserves a minimum page size before sending the request.\\n\\n廣東話: S3 唔食小數頁數，唔好叫個 API 食 2.9 份點心。依家落地取整，最少保留一份，等 listing 安全出街。" },
-    ],
-  },
-  {
-    id: "710f6b7", kind: 'commit', ref: "710f6b7", oid: "710f6b748e589bdea8263e52332832485d2739bd", date: "2026-08-03",
-    title: "Validate synchronization clock options",
-    changes: [
-      { category: "changed", text: "Reject non-finite and negative clock settings before comparison so malformed timing cannot make the checklist hallucinate. The clock gremlin now gets bounced at the door; 時鐘妖怪唔可以亂咁改同步結果。" },
-    ],
-  },
-  {
-    id: "d29d85d", kind: 'commit', ref: "d29d85d", oid: "d29d85d5687e6a3ab4797f2849c024e8b585a216", date: "2026-08-03",
-    title: "Record the pushed CLI handoff",
-    changes: [
-      { category: "changed", text: "Refresh the generated handoff after the push so it records origin/main at the same verified tip, the clean working tree, and the 3,424-test evidence." },
-      { category: "changed", text: "English humour: The handoff has finally caught the train it was documenting." },
-    ],
-    changesYue: [
-      { category: "changed", text: "廣東話玩笑：handoff 終於追到自己記緊嗰班車，唔使再喺月台揮手假裝同步。" },
-    ],
-  },
-  {
-    id: "61b8c11", kind: 'commit', ref: "61b8c11", oid: "61b8c11a37af74d459742a6c1f37797e5c273736", date: "2026-08-03",
-    title: "Record the latest CLI handoff",
-    changes: [
-      { category: "fixed", text: "Refresh the generated handoff with the 3,424-test evidence, clean-tree state, current 59.0% logic coverage, and the remaining 114-unit roadmap after the CLI and drag fixes." },
-      { category: "changed", text: "English humour: The handoff has counted the marching ants, checked the map, and still refuses to call 59 percent the finish line." },
-    ],
-    changesYue: [
-      { category: "changed", text: "廣東話玩笑：handoff 數清楚螞蟻、睇實張地圖，仲係唔肯將 59% 當終點，條路仲長過茶記餐牌。" },
-    ],
-  },
-  {
-    id: "2dae39b", kind: 'commit', ref: "2dae39b", oid: "2dae39b15735491090c7c076e203759be41e7dd8", date: "2026-08-03",
-    title: "Record the latest CLI changelog entry",
-    changes: [
-      { category: "changed", text: "Include the generated entry for the changelog refresh itself so the in-app history reaches the current implementation wave." },
-      { category: "changed", text: "English humour: The diary has now written down the fact that it wrote something down." },
-    ],
-    changesYue: [
-      { category: "changed", text: "廣東話玩笑：本簿仔終於記低自己啱啱寫過嘢，唔再扮失憶。" },
-    ],
-  },
-  {
-    id: "e5ed31b", kind: 'commit', ref: "e5ed31b", oid: "e5ed31bcd49308ef28bfba45afe8a7dc61a9f101", date: "2026-08-03",
-    title: "Refresh changelog for CLI hardening",
-    changes: [
-      { category: "fixed", text: "Record the verified repeated-switch parser and drag collision fix with links to the exact commit." },
-      { category: "changed", text: "English humour: The release diary now remembers which commands stopped wandering off." },
-    ],
-    changesYue: [
-      { category: "changed", text: "廣東話玩笑：changelog 終於記得邊啲 command 唔再周街迷路，唔使靠估。" },
-    ],
-  },
-  {
-    id: "afbe57d", kind: 'commit', ref: "afbe57d", oid: "afbe57d891913aa7d1c1c9d7bcf929541213be4c", date: "2026-08-03",
-    title: "Fix repeated CLI batches and drag-name collisions",
-    changes: [
-      { category: "changed", text: "Group repeated /command and /parameter values before the console parser so every batch command is consumed without an implicit session or prompt. Reject remote names that collide after Windows filename conversion instead of allowing a staged file to overwrite another." },
-      { category: "changed", text: "English humour: The parser stops leaving later commands loitering in a fake prompt, and the drag folder stops playing filename musical chairs." },
-    ],
-    changesYue: [
-      { category: "changed", text: "廣東話玩笑：命令唔再喺假 prompt 入面留低等人餵，拖放檔名撞車就即刻煞停，唔畀檔案玩消失魔術。" },
-    ],
-  },
-  {
-    id: "1bf3275", kind: 'commit', ref: "1bf3275", oid: "1bf32755f5770d0a66b02b10527cf4a3cf350180", date: "2026-08-03",
-    title: "Record the latest startup and protocol handoff",
-    changes: [
-      { category: "changed", text: "English: The handoff now names the pushed second wave, its 3,417-test evidence, and the still-open 114-unit map; the paperwork remains stubbornly factual." },
-    ],
-    changesYue: [
-      { category: "changed", text: "粵語：handoff 而家跟足第二輪 push、3417 測試同仲有 114 units；文件繼續老實到有少少頑固。" },
-    ],
-  },
-  {
-    id: "a5a2c7e", kind: 'commit', ref: "a5a2c7e", oid: "a5a2c7e058b921243236291d3b8b30e0d004828b", date: "2026-08-03",
-    title: "Refresh the startup and protocol changelog",
-    changes: [
-      { category: "security", text: "English: The generated history now records the latest startup, security, protocol, and preference repairs with verified commit links; the timeline has acquired another honest pothole marker." },
-      { category: "security", text: "粵語：changelog 更新咗最新 startup、security、protocol 同 preference 修正，commit link 全部驗過；條時間線又插多支真路牌，唔係紙紮終點。" },
-    ],
-  },
-  {
-    id: "d008db8", kind: 'commit', ref: "d008db8", oid: "d008db882c5475cadc8d3ae7ac95eb052efb72fe", date: "2026-08-03",
-    title: "Harden startup, security, protocol, and preference edges",
-    changes: [
-      { category: "security", text: "English: Missing INI files now explain themselves, portable imports find the file WinSCP actually writes, secrets refuse unsafe rewraps, FTP and WebDAV stop guessing, and numeric settings show what they really saved; the boundary guards have formed a small but determined queue." },
-      { category: "security", text: "粵語：INI 唔見咗會自己講清楚、portable import 搵返 WinSCP 真係寫嗰份、secret rewrap fail closed、FTP/WebDAV 唔再靠估、numeric setting 顯示返真正存咗乜；啲邊界守衛排隊排得幾有紀律。" },
-    ],
-  },
-  {
-    id: "df68f60", kind: 'commit', ref: "df68f60", oid: "df68f60514e6342c97bbc1c5712aa0c03aace2fe", date: "2026-08-03",
-    title: "Record the latest CLI and protocol handoff",
-    changes: [
-      { category: "changed", text: "English: The handoff now names the pushed CLI/editor/queue/protocol wave and its 3,408-test evidence; the roadmap still says 114 units because honest maps do not paint the unfinished road green." },
-      { category: "changed", text: "粵語：handoff 而家報清楚最新 CLI、editor、queue 同 protocol wave，測試證據都齊；仲有 114 units 就照講，唔會幫未鋪好嘅路油綠色。" },
-    ],
-  },
-  {
-    id: "395984e", kind: 'commit', ref: "395984e", oid: "395984e3e58c3df4605c4c80a097eacfe78d6155", date: "2026-08-03",
-    title: "Refresh the CLI and protocol changelog",
-    changes: [
-      { category: "changed", text: "English: The generated history now links the latest hardening wave to its verified full SHA, so even the timeline knows where the useful bits live." },
-      { category: "changed", text: "粵語：更新咗 changelog，最新 hardening wave 有齊 verified full SHA；條時間線終於識得帶路，唔使靠估。" },
-    ],
-  },
-  {
-    id: "c68948c", kind: 'commit', ref: "c68948c", oid: "c68948c970400321de07c140af91d7249455c7aa", date: "2026-08-03",
-    title: "Harden CLI, editor, queue, and protocol edges",
-    changes: [
-      { category: "changed", text: "English: Nested CLI help, BOM-less decoding, filtered editor ordering, CustomCommand prompts, queue event containment, S3 abort idempotence, and IPC capability gates now behave like grown-up boundary code; the sharp edges have been given tiny helmets." },
-      { category: "changed", text: "粵語：CLI help、editor 編碼、filtered 排序、CustomCommand、queue、S3 cleanup 同 IPC capability gate 而家識得好好守邊界；啲尖角終於戴咗細細個安全帽。" },
-    ],
-  },
-  {
-    id: "18e7d9a", kind: 'commit', ref: "18e7d9a", oid: "18e7d9adb5423b33ad2174ea0cd6d63c4c5b79a9", date: "2026-08-03",
-    title: "Record the pushed protocol hardening handoff",
-    changes: [
-      { category: "changed", text: "English: The handoff now names the real remote tip, the 3,400-test evidence, and the remaining roadmap work; the paperwork has finally stopped chasing the code around the room." },
-    ],
-    changesYue: [
-      { category: "changed", text: "粵語：handoff 而家跟足真正 remote、測試數字同未完 roadmap；啲文件終於唔使追住份 code 周圍跑。" },
-    ],
-  },
-  {
-    id: "c32c930", kind: 'commit', ref: "c32c930", oid: "c32c930d56ba624e1c7b1bf06621ed8d12964e12", date: "2026-08-03",
-    title: "Refresh the generated changelog",
-    changes: [
-      { category: "changed", text: "English: The release history now records the protocol and smoke-hardening commit with verified full-SHA links, so the timeline stops wearing yesterday's hat." },
-    ],
-    changesYue: [
-      { category: "changed", text: "粵語：更新咗 changelog，今次連新 commit 都有齊全 SHA；條時間線唔使再戴住尋日頂帽扮最新。" },
-    ],
-  },
-  {
-    id: "c38476f", kind: 'commit', ref: "c38476f", oid: "c38476f35d1ea101a5a7137cbeeebb146aac1914", date: "2026-08-03",
-    title: "Harden protocol edge cases and Docker smoke cleanup",
-    changes: [
-      { category: "changed", text: "English: WebDAV redirects, FTP commands, canonical paths, URLs, and dialogs now stop doing interpretive dance at their sharpest edges; the Docker smoke runner gives a stuck daemon a bounded timeout instead of waiting for it to write a memoir." },
-    ],
-    changesYue: [
-      { category: "changed", text: "粵語：WebDAV、FTP、SFTP 同幾個對話框終於唔再喺邊界位跳舞；Docker 卡住時有時限，唔使等個 daemon 寫完自傳先收工。" },
-    ],
-  },
-  {
-    id: "30a8ae7", kind: 'commit', ref: "30a8ae7", oid: "30a8ae744f3cb779ef210dcfc9db8103789549f3", date: "2026-08-03",
-    title: "Record the parity wave in the pushed handoff",
-    changes: [
-      { category: "changed", text: "HANDOFF.md now reflects the 3,393-pass baseline and the synchronized e0fa83f origin/main tip." },
-      { category: "changed", text: "HANDOFF.md 而家記低 3393 pass，同埋已同步嘅 e0fa83f origin/main；parity wave 有收據喇。" },
-    ],
-  },
-  {
-    id: "e0fa83f", kind: 'commit', ref: "e0fa83f", oid: "e0fa83f2b4f74a5a7d44a42af371603fc0227e7e", date: "2026-08-03",
-    title: "Update the in-app changelog for the parity wave",
-    changes: [
-      { category: "fixed", text: "The history now records the Preferences, SiteAdvanced, dialog, action, synchronization, and packaging fixes with validated references." },
-      { category: "changed", text: "App 入面嘅 changelog 而家記低 Preferences、SiteAdvanced、dialog、action、sync 同 packaging 修正，reference 全部驗過，冇死 link 留低。" },
-    ],
-  },
-  {
-    id: "0dcc3f4", kind: 'commit', ref: "0dcc3f4", oid: "0dcc3f41b1328058596dad3bc6c23099f1317ae1", date: "2026-08-03",
-    title: "Harden preferences, actions, sync, dialogs, and packaging",
-    changes: [
-      { category: "changed", text: "The remaining slice now validates numeric preferences, removes an inert SiteAdvanced toggle, validates directory names, gates hidden-file state, reports case collisions, and rejects incomplete Squirrel artifacts in CI." },
-      { category: "changed", text: "今輪補實 Preferences range、SiteAdvanced、Create Directory、hidden files、sync collision 同 Squirrel artifact gate；啲設定唔再有假掣，啲 package 唔再靠運氣出街。" },
-    ],
-  },
-  {
-    id: "e7ae918", kind: 'commit', ref: "e7ae918", oid: "e7ae918552e947e50100c03d1c5398971564ad62", date: "2026-08-03",
-    title: "Record the current security and lifecycle wave in handoff",
-    changes: [
-      { category: "changed", text: "HANDOFF.md now reflects the 3,387-pass baseline and the synchronized 9148a21 origin/main tip." },
-      { category: "changed", text: "HANDOFF.md 而家記低 3387 pass，同埋已同步嘅 9148a21 origin/main；舊 pointer 可以正式退休。" },
-    ],
-  },
-  {
-    id: "9148a21", kind: 'commit', ref: "9148a21", oid: "9148a21acff58a3877390b66fc0cfe26cc69c98b", date: "2026-08-03",
-    title: "Update the in-app changelog for security and lifecycle fixes",
-    changes: [
-      { category: "fixed", text: "The history now records the verified security, config, S3, queue, session, and accessibility fixes with validated commit links." },
-      { category: "security", text: "App 入面嘅 changelog 而家記低 security、config、S3、queue、session 同 accessibility 修正；每條 link 都驗過，唔畀死 link 偷雞。" },
-    ],
-  },
-  {
-    id: "e81083b", kind: 'commit', ref: "e81083b", oid: "e81083b8a200ada03fa467229bb7f2848f5c85b6", date: "2026-08-03",
-    title: "Harden security, config, S3, queue, and session edges",
-    changes: [
-      { category: "changed", text: "The next roadmap wave fails closed on missing host fingerprints, preserves config on malformed JSON, explains unsupported S3 checksums, resets active throttle debt, shares concurrent disconnect teardown, and gives the calendar a real accessible name." },
-      { category: "changed", text: "今輪修正 host fingerprint、JSON config、S3 checksum、queue throttle、session disconnect 同 calendar accessibility；啲 edge case 而家有真 contract，唔再靠估。" },
-    ],
-  },
-  {
-    id: "e40a62b", kind: 'commit', ref: "e40a62b", oid: "e40a62b123455a600d9cb6ef58e5ee1f73065da3", date: "2026-08-03",
-    title: "Record the current pushed roadmap wave in handoff",
-    changes: [
-      { category: "changed", text: "HANDOFF.md now reflects the 3,382-test baseline and the synchronized ae34762 origin/main tip." },
-    ],
-    changesYue: [
-      { category: "changed", text: "HANDOFF.md 而家記低 3382 個測試，同埋已經同步嘅 ae34762 origin/main；唔再俾舊資料扮新鮮。" },
-    ],
-  },
-  {
-    id: "ae34762", kind: 'commit', ref: "ae34762", oid: "ae3476233d72a7c21862fb59266533fc26f025ae", date: "2026-08-03",
-    title: "Update the in-app changelog for the roadmap wave",
-    changes: [
-      { category: "fixed", text: "The history now records the verified CLI, drag/drop, menu, overlay, palette, and discard fixes with validated commit links." },
-      { category: "removed", text: "App 入面嘅 changelog 而家記低已驗證嘅 CLI、drag/drop、menu、overlay、palette 同 discard 修正，commit link 逐條驗過，唔畀死 link 偷雞。" },
-    ],
-  },
-  {
-    id: "e91bd48", kind: 'commit', ref: "e91bd48", oid: "e91bd48fa962d535b43b6e5706ab890ffaf007db", date: "2026-08-03",
-    title: "Fix CLI, drag-drop, menu, overlay, and history edges",
-    changes: [
-      { category: "changed", text: "The command line now forwards INI and raw settings, Explorer drops fail closed, menus show platform shortcuts and scroll safely, palette jumps focus their controls, and discard events report whether history recorded them." },
-      { category: "removed", text: "CLI 而家識傳 INI 同 raw settings，Explorer drop 唔再亂跌落 current directory，menu 會顯示平台快捷鍵兼識捲，palette 直達真正 control，discard 就老實講有冇寫入 history；啲 edge case 終於唔使再扮魔術。" },
-    ],
-  },
-  {
-    id: "7c9fe53", kind: 'commit', ref: "7c9fe53", oid: "7c9fe530a33c48df4cc53fd0e619cfe44f0825da", date: "2026-08-03",
-    title: "Record the verified pushed head in handoff",
-    changes: [
-      { category: "changed", text: "HANDOFF.md now records that origin/main is in sync at d85484b instead of carrying a stale pre-push pointer." },
-      { category: "changed", text: "HANDOFF.md 而家記低 origin/main 已經同 d85484b 對齊，唔再揸住推送前嗰條舊 pointer 扮新鮮。" },
-    ],
-  },
-  {
-    id: "d85484b", kind: 'commit', ref: "d85484b", oid: "d85484bdab0ee10acfda9bd5ea996f900624f14a", date: "2026-08-03",
-    title: "Refresh handoff for the second verified wave",
-    changes: [
-      { category: "changed", text: "HANDOFF.md now records the 3,377-test baseline, the changelog commit, and the current honest roadmap state." },
-      { category: "changed", text: "HANDOFF.md 而家記低 3377 個測試、changelog commit，同埋老實嘅 roadmap 現況；唔會扮 100% 收工。" },
-    ],
-  },
-  {
-    id: "88d55a8", kind: 'commit', ref: "88d55a8", oid: "88d55a8aa469f759fe295aa1da38361b9aafd7c1", date: "2026-08-03",
-    title: "Update the in-app changelog",
-    changes: [
-      { category: "fixed", text: "The history now records the verified second wave, with the oldest entries rotated only by the generator's fixed window." },
-    ],
-    changesYue: [
-      { category: "changed", text: "App 入面嘅 changelog 而家記低已驗證嘅第二波；最舊嗰啲係跟 generator 固定窗口自然輪出，唔係 code 偷走咗。" },
-    ],
-  },
-  {
-    id: "bcc1fd8", kind: 'commit', ref: "bcc1fd8", oid: "bcc1fd8a50bd2db15aad23b5601cab4cd31bc19a", date: "2026-08-03",
-    title: "Fix workspace, search, session, and SFTP edge cases",
-    changes: [
-      { category: "changed", text: "The edge cases now follow the real capability and protocol contracts; the code can stop pretending every workspace member is a tab." },
-    ],
-    changesYue: [
-      { category: "changed", text: "修正工作區、搜尋、工作階段同 SFTP 嘅邊角位；啲 bug 而家唔使再扮成主角搶戲。" },
-    ],
-  },
-  {
-    id: "09b1239", kind: 'commit', ref: "09b1239", oid: "09b12394a44c05e615a47f855fac8869b90ea073", date: "2026-08-03",
-    title: "Refresh handoff for the verified CLI wave",
-    changes: [
-      { category: "fixed", text: "Refresh HANDOFF.md against the post-fix commit and the verified 3,371/3,372 test result. The ledger now points at the actual current tree instead of last week's archaeological layer." },
-    ],
-    changesYue: [
-      { category: "changed", text: "Handoff.md 而家對準修正後 commit，同埋已驗證嘅 3371/3372 測試結果。個 ledger 終於指向現況，唔再挖緊上星期嘅考古層。" },
-    ],
-  },
-  {
-    id: "33d884f", kind: 'commit', ref: "33d884f", oid: "33d884f0f21f345d5a6b1ecd0aebad1d8e34ffef", date: "2026-08-03",
-    title: "Record the expanded CLI and protocol fixes",
-    changes: [
-      { category: "removed", text: "The in-app history now names the verified headless CLI, drag/drop target, checklist, DirView, synchronization, FTP, SFTP, and editor work. The changelog has receipts now, so the code cannot sneak out wearing a fake moustache." },
-      { category: "removed", text: "App 入面嘅 history 而家記低已驗證嘅 headless CLI、drag/drop target、checklist、DirView、同步、FTP、SFTP 同 editor 修正。changelog 有齊收據，啲 code 唔可以再戴假鬍鬚扮冇做過嘢。" },
-    ],
-  },
-  {
-    id: "69004b4", kind: 'commit', ref: "69004b4", oid: "69004b45a056a36bb9262415a72b7b9e3f75831a", date: "2026-08-03",
-    title: "Expand headless CLI and close transfer edge cases",
-    changes: [
-      { category: "fixed", text: "The headless CLI now covers the practical console switches and deterministic drag/drop target simulation, while the application closes editor, checklist, DirView, FTP, SFTP, and existing-only synchronization gaps. Real protocol regressions, Docker policy probes, focused tests, and feature documentation accompany the fixes. The code previously treated a checklist policy like a suggestion box; now it reads the checkbox." },
-      { category: "fixed", text: "CLI 而家支援實用 console switches，同埋 deterministic drag/drop target simulation；app 亦補返 editor、checklist、DirView、FTP、SFTP 同 existing-only synchronization 個窿。真 protocol regression、Docker policy probes、focused tests 同 feature docs 一齊落地。之前啲 code 當 checklist policy 係意見箱，而家終於識睇個 checkbox。" },
-    ],
-  },
-  {
-    id: "35f0fd5", kind: 'commit', ref: "35f0fd5", oid: "35f0fd5923de44f177167f3cffad45db18a6d5bf", date: "2026-08-03",
-    title: "Update handoff for verified lifecycle fixes",
-    changes: [
-      { category: "changed", text: "Refresh handoff facts for the latest verified test count, coverage, issue count, and artifact count while keeping the handwritten notes intact. The project ledger now knows the queue stopped pretending to be idle." },
-      { category: "changed", text: "更新 handoff 入面最新已驗證嘅測試、coverage、issue 同 artifact 數字，保留手寫 notes。個 project ledger 而家知道 queue 唔可以再扮 idle。" },
-    ],
-  },
-  {
-    id: "4f16742", kind: 'commit', ref: "4f16742", oid: "4f16742194ff12a22d940705182bdf4bcad73931", date: "2026-08-03",
-    title: "Refresh changelog for transfer edge fixes",
-    changes: [
-      { category: "changed", text: "Record the verified CLI, queue, protocol, configuration, and shell-hardening commit in the in-app history. The changelog now has another receipt, and the gremlins have fewer hiding places." },
-      { category: "changed", text: "更新 app changelog，記低已驗證嘅 CLI、queue、協議、設定同 shell hardening commit。今次多張收據，啲小妖怪少幾個匿身位。" },
-    ],
-  },
-  {
-    id: "43eb4db", kind: 'commit', ref: "43eb4db", oid: "43eb4db6dba53da2e37aa50bf06966a53a4187b7", date: "2026-08-03",
-    title: "Fix CLI staging and transfer lifecycle edges",
-    changes: [
-      { category: "added", text: "Reject empty drag-stage paths, persist protection for legacy JSON secrets, keep paused queue work out of idle, retire stale WebDAV agents on reconnect, refuse blank queue targets, and reject Windows device basenames in shell payloads. Add focused documentation and regressions. The edge-case cupboard is less haunted, and the queue now knows that paused is not done." },
-      { category: "fixed", text: "拒絕空嘅 drag-stage path，舊 JSON secret 改完即刻保存保護，paused queue work 唔再扮 idle，WebDAV reconnect 會清走舊 agent，空 queue target 同 Windows device basename 一律拒絕。加埋文件同 regression；edge-case 雜物櫃少咗鬼，queue 終於明白 paused 唔係 done。" },
-    ],
-  },
-  {
-    id: "c02a2a9", kind: 'commit', ref: "c02a2a9", oid: "c02a2a94328ad5fdc71fbb3aab3ed060f87881bf", date: "2026-08-03",
-    title: "Update handoff with verified wave status",
-    changes: [
-      { category: "changed", text: "Refresh the handoff with the generated coverage, test, issue, and artifact facts while preserving the human notes. The dashboard now reports the weather instead of doing interpretive dance." },
-      { category: "changed", text: "更新 handoff 入面已驗證嘅 coverage、測試、issue 同 artifact 數字，同時保留手寫 notes。個 dashboard 而家報天氣，唔再跳解讀舞。" },
-    ],
-  },
-  {
-    id: "41e2d4c", kind: 'commit', ref: "41e2d4c", oid: "41e2d4c1e7813046ff5ce2c416dd2659331ab4b3", date: "2026-08-03",
-    title: "Refresh changelog for accessibility hardening",
-    changes: [
-      { category: "changed", text: "Record the latest verified implementation commit in the in-app history. The changelog now has receipts instead of vibes, and the protocol gremlins get a dated cameo." },
-    ],
-    changesYue: [
-      { category: "changed", text: "更新 app 入面嘅 changelog，記低最新已驗證嘅實作 commit。今次唔靠氣氛，靠收據；協議小妖怪都有日期出場。" },
-    ],
-  },
-  {
-    id: "ad9936c", kind: 'commit', ref: "ad9936c", oid: "ad9936c45432426f3905d52ba298bcb2c12b9c47", date: "2026-08-03",
-    title: "Harden FTP IPC accessibility and shortcut edges",
-    changes: [
-      { category: "added", text: "Reject CR/LF in FTP credentials, cancel IPC prompts when the renderer closes, normalize human shortcuts, cap impossible dialog minima, announce synchronize errors assertively, and lock the file-find regex builder during active searches. Add focused tests and docs. The protocol doors now check the luggage, and the UI stops asking a closed window for directions." },
-    ],
-    changesYue: [
-      { category: "changed", text: "拒絕 FTP 認證資料入面嘅 CR/LF，renderer 關門就取消 IPC 問題，整靚人手 shortcut，限制唔可能嘅 dialog 最小尺寸，俾 synchronize 錯誤大聲通知，搜尋中就鎖住 regex builder。加埋測試同文件；協議門口終於識睇行李，個 UI 亦唔再問一扇已閂嘅門路向。" },
-    ],
-  },
-  {
-    id: "3d3efee", kind: 'commit', ref: "3d3efee", oid: "3d3efeed190a89bcd87399bb109dd50bd0d561db", date: "2026-08-03",
-    title: "Refresh handoff for protocol and drag wave",
-    changes: [
-      { category: "added", text: "Update the factual handoff with 59.0% logic coverage, 114 outstanding units, 3347 passing tests plus one skip, the 22-issue scan and the fifth-wave protocol and drag hardening. The signposts are honest, even when the road keeps making new ones.\\n\\n廣東話：handoff 繼續報真數，路牌愈插愈多，但冇一塊係紙紮終點。" },
-    ],
-  },
-  {
-    id: "1c63540", kind: 'commit', ref: "1c63540", oid: "1c63540d91544fc704bde4112dfdb180b990576c", date: "2026-08-03",
-    title: "Refresh changelog for drag and protocol hardening",
-    changes: [
-      { category: "fixed", text: "Record the Preferences, Commander drag, shell staging, Terminal, S3 and WebDAV fixes with verified commit links. The changelog now notes that credentials and drag paths both deserve a passport check.\\n\\n廣東話：更新日誌記低 credentials 同 drag path 都要過關，唔係見門就入。" },
     ],
   },
 ];
