@@ -187,6 +187,30 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "3636cfb", kind: 'commit', ref: "3636cfb", oid: "3636cfbe55ce856b1853a3235088afd7bef86518", date: "2026-08-03",
+    title: "Harden session, configuration, preferences, and dialogs",
+    changes: [
+      { category: "changed", text: "English: Make session trust, configuration persistence, history export, preference writes, and dialog actions fail closed and retry safely; document the behavior and lock it down with regressions. The code now keeps its promises instead of wandering off with half-saved settings." },
+    ],
+    changesYue: [
+      { category: "changed", text: "廣東話：收實 session 信任、設定儲存、history export、偏好寫入同對話框操作；寫唔入就回復、驗證唔到就停手，仲補齊文件同回歸測試。啲 code 而家唔再食咗半碟設定就扮冇事，終於識得講聲『我寫唔到』。" },
+    ],
+  },
+  {
+    id: "9f07ff2", kind: 'commit', ref: "9f07ff2", oid: "9f07ff2e8dbc5dfa0da92359a1c8fc3a7c63245e", date: "2026-08-03",
+    title: "Refresh handoff after changelog verification",
+    changes: [
+      { category: "changed", text: "English: Record the verified 3,652-pass suite and the pushed changelog state; the report waited for the flaky test gremlin to stop juggling numbers.\\n\\nCantonese: 記低 verified 3,652-pass suite 同已 push 嘅 changelog state；報告等到 flaky test 小妖怪唔再拋數字先落筆。" },
+    ],
+  },
+  {
+    id: "077decf", kind: 'commit', ref: "077decf", oid: "077decf1a5c48680dd6abbd40e35327bef69c1ed", date: "2026-08-03",
+    title: "Refresh changelog after protocol queue fixes",
+    changes: [
+      { category: "added", text: "English: Link the in-app development history to the latest pushed handoff; the changelog is doing its tiny librarian walk and putting the new volume on the shelf.\\n\\nCantonese: 將 app 入面嘅 development history 連返最新 handoff；changelog 而家做緊細小圖書館員步伐，將新書放返上架。" },
+    ],
+  },
+  {
     id: "1af12e3", kind: 'commit', ref: "1af12e3", oid: "1af12e30894a027bfce14a2ea08d2285b403ba7b", date: "2026-08-03",
     title: "Refresh handoff after protocol queue fixes",
     changes: [
@@ -625,31 +649,6 @@ export const DEVELOPMENT = [
     title: "Harden editor security and session lifecycles",
     changes: [
       { category: "security", text: "English: Serialize editor closes, reject authenticated non-UTF-8 secrets, bracket IPv6 host keys, and refuse empty cache subtrees. The lifecycle gremlins have fewer trapdoors now.\\n\\n粵語：Editor close 而家排隊，壞 UTF-8 secret 唔准入場，IPv6 host key 加方括號，空 cache subtree 直接拒絕；啲 lifecycle 小妖怪少咗幾個地窖可以匿喇。" },
-    ],
-  },
-  {
-    id: "72f52c0", kind: 'commit', ref: "72f52c0", oid: "72f52c097a5720b239caf5c71ce1d48dbb6c015f", date: "2026-08-03",
-    title: "Refresh protocol hardening evidence",
-    changes: [
-      { category: "fixed", text: "English: The evidence now counts the safer protocol parsers and transfer settings, so the handoff stops pretending the bug buffet has fewer plates.\\n\\n粵語：而家 handoff 真係數埋啲安全啲嘅 protocol parser 同 transfer settings，唔再扮個 bug buffet 少咗碟。" },
-    ],
-  },
-  {
-    id: "cd350d3", kind: 'commit', ref: "cd350d3", oid: "cd350d3982e02da391dd7699942c410674d0c8f8", date: "2026-08-03",
-    title: "Harden protocol inputs and transfer settings",
-    changes: [
-      { category: "changed", text: "English: Reject unsafe SCP millisecond timestamps and SFTP stream offsets, normalize WebDAV timeouts, clamp untrusted FTP listing sizes, and refuse malformed CopyParams numerics. Remote servers and imported presets may be weird; the boundary now keeps the weirdness outside the transfer engine." },
-      { category: "changed", text: "粵語：SCP 時間、SFTP offset、WebDAV timeout、FTP listing 同 CopyParams 數值而家先驗身再入場；遠端 server 幾古靈精怪都好，亂數唔可以入嚟搞亂個 transfer engine。" },
-    ],
-  },
-  {
-    id: "f171425", kind: 'commit', ref: "f171425", oid: "f1714257527d93db3967336478d9104b7cdf7427", date: "2026-08-03",
-    title: "Record the latest verification counts",
-    changes: [
-      { category: "changed", text: "English: Update the generated handoff with the full 3448-test result, including the async console, watcher, and queue regressions. The ledger now counts every proof instead of rounding down to yesterday." },
-    ],
-    changesYue: [
-      { category: "changed", text: "粵語：最新 handoff 而家記實 3448 個 tests，連 console、watcher 同 queue 嘅新證據都冇漏；唔再攞尋日嘅數字扮今日食飽。" },
     ],
   },
 ];
