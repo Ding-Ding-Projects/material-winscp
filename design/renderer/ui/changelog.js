@@ -187,6 +187,30 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "ad9936c", kind: 'commit', ref: "ad9936c", oid: "ad9936c45432426f3905d52ba298bcb2c12b9c47", date: "2026-08-03",
+    title: "Harden FTP IPC accessibility and shortcut edges",
+    changes: [
+      { category: "added", text: "Reject CR/LF in FTP credentials, cancel IPC prompts when the renderer closes, normalize human shortcuts, cap impossible dialog minima, announce synchronize errors assertively, and lock the file-find regex builder during active searches. Add focused tests and docs. The protocol doors now check the luggage, and the UI stops asking a closed window for directions." },
+    ],
+    changesYue: [
+      { category: "changed", text: "拒絕 FTP 認證資料入面嘅 CR/LF，renderer 關門就取消 IPC 問題，整靚人手 shortcut，限制唔可能嘅 dialog 最小尺寸，俾 synchronize 錯誤大聲通知，搜尋中就鎖住 regex builder。加埋測試同文件；協議門口終於識睇行李，個 UI 亦唔再問一扇已閂嘅門路向。" },
+    ],
+  },
+  {
+    id: "3d3efee", kind: 'commit', ref: "3d3efee", oid: "3d3efeed190a89bcd87399bb109dd50bd0d561db", date: "2026-08-03",
+    title: "Refresh handoff for protocol and drag wave",
+    changes: [
+      { category: "added", text: "Update the factual handoff with 59.0% logic coverage, 114 outstanding units, 3347 passing tests plus one skip, the 22-issue scan and the fifth-wave protocol and drag hardening. The signposts are honest, even when the road keeps making new ones.\\n\\n廣東話：handoff 繼續報真數，路牌愈插愈多，但冇一塊係紙紮終點。" },
+    ],
+  },
+  {
+    id: "1c63540", kind: 'commit', ref: "1c63540", oid: "1c63540d91544fc704bde4112dfdb180b990576c", date: "2026-08-03",
+    title: "Refresh changelog for drag and protocol hardening",
+    changes: [
+      { category: "fixed", text: "Record the Preferences, Commander drag, shell staging, Terminal, S3 and WebDAV fixes with verified commit links. The changelog now notes that credentials and drag paths both deserve a passport check.\\n\\n廣東話：更新日誌記低 credentials 同 drag path 都要過關，唔係見門就入。" },
+    ],
+  },
+  {
     id: "ae54b2a", kind: 'commit', ref: "ae54b2a", oid: "ae54b2a10ef9b397ef88f602fb968f2bcfa40d9b", date: "2026-08-03",
     title: "Harden drag shell terminal and protocol security",
     changes: [
@@ -615,27 +639,6 @@ export const DEVELOPMENT = [
     title: "Refresh interaction wave handoff metadata",
     changes: [
       { category: "fixed", text: "The handoff now records the 3,220-pass regression run, Docker evidence, the 9412e5b and d443d90 milestones, and the honest 59.0% coverage with 114 units outstanding. The paperwork is following the code at a brisk walk.\\n\\nHandoff 而家記低 3,220 pass regression、Docker evidence、9412e5b 同 d443d90 milestone，仲有老實嘅 59.0% coverage 同 114 個未完成 unit。文件用快步追住 code，冇再迷路。" },
-    ],
-  },
-  {
-    id: "d443d90", kind: 'commit', ref: "d443d90", oid: "d443d9078e5acdab1d72d5772653ca5a44658cd0", date: "2026-08-03",
-    title: "Refresh in-app changelog for interaction fixes",
-    changes: [
-      { category: "fixed", text: "The in-app history now records the verified 9412e5b interaction, queue, checklist, malformed-row, and WebDAV fixes with real links and bilingual copy. The changelog remembers the plot, even when the plot involves a 405 response.\\n\\nApp 入面嘅歷史而家記低已驗證嘅 9412e5b interaction、queue、checklist、壞 row 同 WebDAV 修正，連埋真 link 同雙語 copy；就算劇情係 405 response，changelog 都冇失憶。" },
-    ],
-  },
-  {
-    id: "9412e5b", kind: 'commit', ref: "9412e5b", oid: "9412e5b1ee72923e8d529f4dab43c42490ddb288", date: "2026-08-03",
-    title: "Fix palette, shortcuts, queue, checklist, and WebDAV",
-    changes: [
-      { category: "fixed", text: "Command-palette destinations stay keyboard-reachable, context menus borrow only exact shortcuts, directory checklist selection includes descendants, queue cancellation stops delayed writes, malformed panel rows become honest diagnostics, and WebDAV MKCOL verifies a 405 resource is really a directory. Regression tests, localized copy, docs, and a genuine Electron smoke capture keep the edges from doing improv comedy.\\n\\nCommand palette 仍然畀鍵盤行到，context menu 只借 exact shortcut，checklist 包埋子目錄，queue cancel 唔再偷偷寫 delayed chunk，panel 壞 row 會老實報告，WebDAV 遇到 405 會驗清楚係咪真係 directory。測試、翻譯、文件同真實 Electron capture 一齊補齊，等啲邊界唔好再即興加戲。" },
-    ],
-  },
-  {
-    id: "f8d2a55", kind: 'commit', ref: "f8d2a55", oid: "f8d2a55b6c839cf5811877a90e0700615d938eb8", date: "2026-08-03",
-    title: "Refresh hardening handoff metadata",
-    changes: [
-      { category: "changed", text: "The handoff now records the 7d90403 and 92a9211 milestones, the verified 3,213-pass suite, and the honest 59.0% coverage with 114 units still outstanding. The paperwork has finally caught up with the code instead of chasing it down the corridor.\\n\\nHandoff 而家記低 7d90403 同 92a9211、已驗證嘅 3,213 pass 測試，同埋老實嘅 59.0% coverage 及 114 個未完成 unit。文件終於追返上 code，唔使再喺走廊追住份紙跑。" },
     ],
   },
 ];
