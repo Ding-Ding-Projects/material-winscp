@@ -187,6 +187,21 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "1af12e3", kind: 'commit', ref: "1af12e3", oid: "1af12e30894a027bfce14a2ea08d2285b403ba7b", date: "2026-08-03",
+    title: "Refresh handoff after protocol queue fixes",
+    changes: [
+      { category: "security", text: "English: Record the pushed protocol, queue, synchronization, security, and CLI wave with its green local gates; the handoff now knows the suitcase gained another 35 tests without losing a sock.\\n\\nCantonese: 記低 protocol、queue、sync、security 同 CLI 呢輪已 push 嘅 green local gates；handoff 而家知個喼多咗 35 個 tests，仲冇甩襪。" },
+    ],
+  },
+  {
+    id: "64e0cc2", kind: 'commit', ref: "64e0cc2", oid: "64e0cc2ab87ac944266ca04bd9a970965c54a145", date: "2026-08-03",
+    title: "Harden protocol queue and sync boundaries",
+    refs: ["#2", "#3", "#4", "#5", "#14"],
+    changes: [
+      { category: "fixed", text: "English: Close proven SFTP, SCP, FTP, WebDAV, S3, queue, copy-parameter, and synchronization edge cases, and document the headless drop options; the transfer machinery now checks its shoelaces before sprinting.\\n\\nCantonese: 收口 SFTP、SCP、FTP、WebDAV、S3、queue、copy parameters 同 sync 嘅實證邊角 bug，仲補齊 headless drop options 文件；搬檔 machinery 而家跑之前會先綁好鞋帶。\\n\\nRefs #2, #3, #4, #5, #14" },
+    ],
+  },
+  {
     id: "2e23e4f", kind: 'commit', ref: "2e23e4f", oid: "2e23e4f012dd393287115fcf45a43a0ce5d62a37", date: "2026-08-03",
     title: "Fail closed on credential and identity gaps",
     refs: ["#13"],
@@ -635,22 +650,6 @@ export const DEVELOPMENT = [
     ],
     changesYue: [
       { category: "changed", text: "粵語：最新 handoff 而家記實 3448 個 tests，連 console、watcher 同 queue 嘅新證據都冇漏；唔再攞尋日嘅數字扮今日食飽。" },
-    ],
-  },
-  {
-    id: "a60bd5c", kind: 'commit', ref: "a60bd5c", oid: "a60bd5cfcf2a61c9cd0539ecfbfaf7d917033358", date: "2026-08-03",
-    title: "Refresh async lifecycle evidence",
-    changes: [
-      { category: "fixed", text: "English: Add the async console, synchronization watcher, and queue cancellation fixes to the generated handoff and in-app changelog. The audit trail now follows the ghosts out the door." },
-      { category: "changed", text: "粵語：Console、sync watcher 同 queue 嘅新修正已經寫入 handoff 同 changelog；今次份 audit trail 跟住啲幽靈 callback 一齊出門口。" },
-    ],
-  },
-  {
-    id: "1c10a04", kind: 'commit', ref: "1c10a04", oid: "1c10a04933ce623c1f520f3b5b55917a918457be", date: "2026-08-03",
-    title: "Harden async console sync and queue lifecycles",
-    changes: [
-      { category: "removed", text: "English: Stop late console failures from notifying released waits, remove externally stopped watchers from the synchronization registry, and await every asynchronous queue cancellation before reporting success. Ghost callbacks and phantom queue wins have been shown the exit." },
-      { category: "changed", text: "粵語：Console 等候放手之後唔再畀幽靈 error 嚇人，sync watcher 停咗會清走自己，queue cancel 亦會等齊 IPC 先報喜；假勝利同殘影 callback 而家一齊收工。" },
     ],
   },
 ];
