@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `a95dc72`** — Harden reconnect queue WebDAV and menu parity
+**At commit `2facf09`** — Close SFTP size preference and checklist gaps
 
 ## Where the work stands
 
@@ -15,9 +15,9 @@
 | Port coverage (raw) | 71.5% — includes embedded hex resources, **do not quote this one** |
 | Tests | 3507 run, **3506 pass, 0 fail**, 1 skipped |
 | Hand-written code | 222,243 lines across 442 files |
-| Commits | 225 on `main` |
-| Working tree | **14 uncommitted change(s)** |
-| Remote | `origin/main` at `a95dc72` — in sync |
+| Commits | 227 on `main` |
+| Working tree | clean |
+| Remote | `origin/main` at `2facf09` — in sync |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `2facf09` | 2026-08-03 | Close SFTP size preference and checklist gaps |
+| `7fa152f` | 2026-08-03 | Refresh handoff after roadmap checkpoint |
 | `a95dc72` | 2026-08-03 | Harden reconnect queue WebDAV and menu parity |
 | `e840449` | 2026-08-03 | Wire editor refresh, preference shortcut, and S3 listing guards |
 | `5d0b038` | 2026-08-03 | Wire protocol edges and roadmap controls |
 | `abe0622` | 2026-08-03 | Refresh handoff after freshness fix |
 | `fbb9bae` | 2026-08-03 | Ignore expected handoff test artefact |
 | `68f8952` | 2026-08-03 | Make handoff freshness self-checking |
-| `dbb195b` | 2026-08-03 | Refresh final handoff evidence |
-| `ef2580a` | 2026-08-03 | Refresh handoff for Pages fix |
 
 ## Notes from whoever worked on this last
 
