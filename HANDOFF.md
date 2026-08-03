@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `fa7b4ce`** — Refresh in-app changelog for dialog fixes
+**At commit `b01e17a`** — Refresh in-app changelog for dialog protocol fixes
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3246 run, **3245 pass, 0 fail**, 1 skipped |
-| Hand-written code | 214,677 lines across 382 files |
-| Commits | 98 on `main` |
+| Tests | 3263 run, **3262 pass, 0 fail**, 1 skipped |
+| Hand-written code | 215,098 lines across 391 files |
+| Commits | 101 on `main` |
 | Working tree | clean |
-| Remote | `origin/main` at `461e050` — **differs from HEAD** |
+| Remote | `origin/main` at `6881f62` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `b01e17a` | 2026-08-03 | Refresh in-app changelog for dialog protocol fixes |
+| `8557de4` | 2026-08-03 | Harden dialogs, file search, and S3 cancellation |
+| `6881f62` | 2026-08-03 | Refresh dialog wave handoff metadata |
 | `fa7b4ce` | 2026-08-03 | Refresh in-app changelog for dialog fixes |
 | `71db2c6` | 2026-08-03 | Harden dialogs, overlays, and site navigation |
 | `461e050` | 2026-08-03 | Refresh geometry wave handoff metadata |
 | `5652951` | 2026-08-03 | Refresh in-app changelog for CLI geometry fixes |
 | `c274856` | 2026-08-03 | Harden CLI output, geometry, queue, and SCP |
-| `8d3a02e` | 2026-08-03 | Refresh CLI boundary handoff metadata |
-| `2a2d946` | 2026-08-03 | Refresh in-app changelog for CLI boundary work |
-| `1e1c543` | 2026-08-03 | Expand headless CLI and harden lifecycle boundaries |
 
 ## Notes from whoever worked on this last
 
