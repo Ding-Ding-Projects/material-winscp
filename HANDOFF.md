@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `c98cf01`** — Harden editor site and panel parity
+**At commit `64e0cc2`** — Harden protocol queue and sync boundaries
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **60.5%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 71.5% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3618 run, **3617 pass, 0 fail**, 1 skipped |
-| Hand-written code | 226,630 lines across 446 files |
-| Commits | 252 on `main` |
+| Tests | 3653 run, **3652 pass, 0 fail**, 1 skipped |
+| Hand-written code | 227,618 lines across 447 files |
+| Commits | 255 on `main` |
 | Working tree | clean |
-| Remote | `origin/main` at `c98cf01` — in sync |
+| Remote | `origin/main` at `64e0cc2` — in sync |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `64e0cc2` | 2026-08-03 | Harden protocol queue and sync boundaries |
+| `2e23e4f` | 2026-08-03 | Fail closed on credential and identity gaps |
+| `52bda17` | 2026-08-03 | Refresh handoff after editor site fixes |
 | `c98cf01` | 2026-08-03 | Harden editor site and panel parity |
 | `d3f2003` | 2026-08-03 | Refresh handoff after packaging audit |
 | `3e8e823` | 2026-08-03 | Harden packaging accessibility menus and history |
 | `e11458b` | 2026-08-03 | Refresh handoff after parity wave |
 | `937ecb0` | 2026-08-03 | Expand CLI drag palette and overlay parity |
-| `b53723c` | 2026-08-03 | Keep changelog linked to current history |
-| `87def2e` | 2026-08-03 | Refresh handoff after protocol fixes |
-| `cd71f05` | 2026-08-03 | Harden protocol retries and sync boundaries |
 
 ## Notes from whoever worked on this last
 
