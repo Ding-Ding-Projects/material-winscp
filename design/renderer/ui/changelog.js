@@ -187,6 +187,30 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "69004b4", kind: 'commit', ref: "69004b4", oid: "69004b45a056a36bb9262415a72b7b9e3f75831a", date: "2026-08-03",
+    title: "Expand headless CLI and close transfer edge cases",
+    changes: [
+      { category: "fixed", text: "The headless CLI now covers the practical console switches and deterministic drag/drop target simulation, while the application closes editor, checklist, DirView, FTP, SFTP, and existing-only synchronization gaps. Real protocol regressions, Docker policy probes, focused tests, and feature documentation accompany the fixes. The code previously treated a checklist policy like a suggestion box; now it reads the checkbox." },
+      { category: "fixed", text: "CLI 而家支援實用 console switches，同埋 deterministic drag/drop target simulation；app 亦補返 editor、checklist、DirView、FTP、SFTP 同 existing-only synchronization 個窿。真 protocol regression、Docker policy probes、focused tests 同 feature docs 一齊落地。之前啲 code 當 checklist policy 係意見箱，而家終於識睇個 checkbox。" },
+    ],
+  },
+  {
+    id: "35f0fd5", kind: 'commit', ref: "35f0fd5", oid: "35f0fd5923de44f177167f3cffad45db18a6d5bf", date: "2026-08-03",
+    title: "Update handoff for verified lifecycle fixes",
+    changes: [
+      { category: "changed", text: "Refresh handoff facts for the latest verified test count, coverage, issue count, and artifact count while keeping the handwritten notes intact. The project ledger now knows the queue stopped pretending to be idle." },
+      { category: "changed", text: "更新 handoff 入面最新已驗證嘅測試、coverage、issue 同 artifact 數字，保留手寫 notes。個 project ledger 而家知道 queue 唔可以再扮 idle。" },
+    ],
+  },
+  {
+    id: "4f16742", kind: 'commit', ref: "4f16742", oid: "4f16742194ff12a22d940705182bdf4bcad73931", date: "2026-08-03",
+    title: "Refresh changelog for transfer edge fixes",
+    changes: [
+      { category: "changed", text: "Record the verified CLI, queue, protocol, configuration, and shell-hardening commit in the in-app history. The changelog now has another receipt, and the gremlins have fewer hiding places." },
+      { category: "changed", text: "更新 app changelog，記低已驗證嘅 CLI、queue、協議、設定同 shell hardening commit。今次多張收據，啲小妖怪少幾個匿身位。" },
+    ],
+  },
+  {
     id: "43eb4db", kind: 'commit', ref: "43eb4db", oid: "43eb4db6dba53da2e37aa50bf06966a53a4187b7", date: "2026-08-03",
     title: "Fix CLI staging and transfer lifecycle edges",
     changes: [
@@ -623,27 +647,6 @@ export const DEVELOPMENT = [
     title: "Refresh geometry wave handoff metadata",
     changes: [
       { category: "fixed", text: "The handoff now records the 3,235-pass regression run, Docker smoke, the c274856 and 5652951 milestones, and the honest 59.0% coverage with 114 units outstanding. It reports the project, not a fairy tale about the project.\\n\\nHandoff 而家記低 3,235 pass regression、Docker smoke、c274856 同 5652951 milestone，仲有老實嘅 59.0% coverage 同 114 個未完成 unit。佢報告緊個 project，唔係 project 嘅童話故事。" },
-    ],
-  },
-  {
-    id: "5652951", kind: 'commit', ref: "5652951", oid: "56529510cafa7fa1d605d1b9970785e1db8ec8e4", date: "2026-08-03",
-    title: "Refresh in-app changelog for CLI geometry fixes",
-    changes: [
-      { category: "changed", text: "The in-app history now includes the verified c274856 CLI output, configuration-root, geometry, queue, reconnect, and SCP changes with complete links and bilingual copy. The changelog now has enough breadcrumbs to find the window edge.\\n\\nApp 入面嘅歷史而家收錄已驗證嘅 c274856 CLI output、configuration root、geometry、queue、reconnect 同 SCP 修正，連埋完整 link 同雙語 copy；changelog 而家有足夠麵包屑搵返個 window edge。" },
-    ],
-  },
-  {
-    id: "c274856", kind: 'commit', ref: "c274856", oid: "c274856d2332c201b2f48b4fe4bb2f535747da9f", date: "2026-08-03",
-    title: "Harden CLI output, geometry, queue, and SCP",
-    changes: [
-      { category: "removed", text: "Headless drag/drop JSON is compact unless --pretty is requested, extension roots resolve environment and relative paths, window bounds keep a visible edge, reconnect prompts coalesce, parallel queue failures abort siblings, and SCP overwrite removes only the exact destination before copying. Tests and docs make the behavior auditable, so the code can stop losing the plot in six different file formats.\\n\\nHeadless drag/drop JSON 預設 compact，想靚啲先用 --pretty；extension root 識環境同 relative path，window bounds 留返 visible edge，reconnect prompt 合併，queue 平行失敗會收掣，SCP overwrite 只刪 exact destination 先 copy。測試文件都對齊，等 code 唔好喺六種 file format 入面一齊迷路。" },
-    ],
-  },
-  {
-    id: "8d3a02e", kind: 'commit', ref: "8d3a02e", oid: "8d3a02ef5f1f74e0a237f8979eac0ade2065550b", date: "2026-08-03",
-    title: "Refresh CLI boundary handoff metadata",
-    changes: [
-      { category: "fixed", text: "The handoff now records the 3,227-pass regression run, Docker smoke, the 1e1c543 and 2a2d946 milestones, and the honest 59.0% coverage with 114 units outstanding. The successor gets the real state, not a motivational poster.\\n\\nHandoff 而家記低 3,227 pass regression、Docker smoke、1e1c543 同 2a2d946 milestone，仲有老實嘅 59.0% coverage 同 114 個未完成 unit。交接畀 successor 嘅係真 state，唔係勵志海報。" },
     ],
   },
 ];
