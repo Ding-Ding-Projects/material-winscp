@@ -187,6 +187,30 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "f61f353", kind: 'commit', ref: "f61f353", oid: "f61f353115f24bedc01661f5412845578aa409d3", date: "2026-08-03",
+    title: "Harden session, panel, search, bookmark, and About surfaces",
+    changes: [
+      { category: "added", text: "English: Expose panel tree visibility, fail closed on empty PATH components, publish live certificate facts safely, add bookmark shortcut enumeration, make FileFind export keyboard reachable, and add About detail copying. Add focused tests and documentation. The small surfaces have stopped hiding useful facts behind one very shy button." },
+      { category: "changed", text: "廣東話：補返 panel tree visibility、empty PATH fail-closed、live certificate facts 安全輸出、bookmark shortcut enumeration、FileFind 鍵盤 export，同 About copy details。加 tests 同 docs，細細粒 surface 終於唔再將有用資料收埋喺一粒怕醜掣後面。" },
+    ],
+  },
+  {
+    id: "19b22bb", kind: 'commit', ref: "19b22bb", oid: "19b22bb97e47c63a88ee32a53bca3e955f00be6a", date: "2026-08-03",
+    title: "Refresh preference-wave handoff metadata",
+    changes: [
+      { category: "added", text: "English: Record the verified 3,299/3,300 test result, unchanged 59.0% logic coverage, 114 remaining units, and the changelog test correction. The handoff now carries the empty-history edge case without losing the plot." },
+      { category: "changed", text: "廣東話：記低已驗證嘅 3,299/3,300 測試、仍然 59.0% logic coverage、剩低 114 個 units，同 changelog test 修正。交更紙帶埋 empty-history edge case，唔會失劇情。" },
+    ],
+  },
+  {
+    id: "058e002", kind: 'commit', ref: "058e002", oid: "058e0025ede3ac0461cece1a537b0dc42d8f2951", date: "2026-08-03",
+    title: "Refresh changelog and stabilize empty-history coverage",
+    changes: [
+      { category: "changed", text: "English: Record the preference and protocol wave in the in-app history, and keep the no-recorded-changes test valid when body-less commits roll outside the rolling development window. The changelog now reads the calendar instead of demanding a ghost commit." },
+      { category: "changed", text: "廣東話：將 preference 同 protocol wave 寫入 app history，亦令 no-recorded-changes test 唔會因為冇 body 嘅舊 commit 滑出 rolling window 就發脾氣。changelog 而家睇日曆，唔使搵鬼影 commit。" },
+    ],
+  },
+  {
     id: "bf1d6de", kind: 'commit', ref: "bf1d6de", oid: "bf1d6deb9c59d4a601dd80928b89b3d7fe8699df", date: "2026-08-03",
     title: "Harden preferences, SFTP, queue, sync, and import dialogs",
     changes: [
@@ -636,42 +660,6 @@ export const DEVELOPMENT = [
     ],
     changesYue: [
       { category: "changed", text: "佇列上載本機資料夾而家同前景引擎一樣，會落入本機 directory symlink；remote source 就繼續要明確開 followDirectorySymlinks 先跟。之前同一個 folder 走兩條路有兩套意見，搞到個資料夾都唔知自己應該係邊個。測試釘實檔案真係到，空目錄計劃亦唔再扮嘢。\\n\\nRefs #26" },
-    ],
-  },
-  {
-    id: "328be29", kind: 'commit', ref: "328be29", oid: "328be291df179949d48d32d986e51ac0c747b7c0", date: "2026-08-02",
-    title: "Record funny-level disclosure capture",
-    changes: [
-      { category: "fixed", text: "Capture the real desktop disclosure that explains funny levels style every message while facts stay fixed, with both independent language sliders visible. The screenshot is evidence, not UI wallpaper: the code has to do the talking while this file keeps the receipt." },
-    ],
-    changesYue: [
-      { category: "changed", text: "呢張係真 desktop 影相，講清楚 funny level 只改語氣，兩條語言 slider 都真係見到。唔係攞張 wallpaper 嚟扮功能，個 code 要做嘢，張相就負責留底。" },
-    ],
-  },
-  {
-    id: "8f3b126", kind: 'commit', ref: "8f3b126", oid: "8f3b126a0224e87bdbd98667c20d198e5ab189b4", date: "2026-08-02",
-    title: "Fix what the verifiers caught: a lost \"on completion\" action, and two false claims",
-    refs: ["#28"],
-    changes: [
-      { category: "changed", text: "Three defects, all found by the wave's own adversarial verifiers rather than by the agents that wrote the code. Two of the three branches were refuted on this basis; both verifiers said the remedy was a corrective commit rather than discarding the work, and they were right." },
-      { category: "fixed", text: "1. A REAL REGRESSION. With \"Keep completed items for\" set to \"Do not keep them\" — a real user choice — the sweep runs synchronously the moment an item finishes, so by the time the queue went idle the item asking to disconnect was no longer in `items` and _onceDoneAction found nothing. The user picked \"on completion: disconnect\", the transfer completed, and the app stayed connected: a per-item choice silently cancelled by an unrelated DISPLAY preference, with no error anywhere. The request is now taken when the item finishes rather than read back off a list a sweep is allowed to empty, and cleared after the idle announcement so it cannot answer for the next batch. Both halves are tested and both fail without the fix." },
-      { category: "fixed", text: "2. A CITATION THAT SAID THE OPPOSITE. ipc.js credited the immediate sweep to TTerminalQueue::SetKeepDoneItemsFor (Queue.cpp:1126). That function assigns the field under a guard and stops — it is conspicuously the ONLY setter in that block that does not call TriggerEvent(), which SetTransfersLimit and SetEnabled both do. The cited lines are evidence against the claim. The behaviour is defensible and stays, now labelled a deliberate divergence with the reason, because a divergence nobody wrote down becomes a bug report." },
-      { category: "changed", text: "3. A NUMBER I GOT WRONG AND THEN PROPAGATED. \"Fifteen of the sixteen transfer commands\" was mine — I put it in issue #28 and in the brief, and it reached code, a test and docs/protocol-gaps.md. It is TWELVE. The TRANSFERS table has 16 rows and FOUR carry `queue: 'off'`. The doc sentence even contradicted itself, saying \"the sixteenth\" and then \"the four\". Counted, not recalled." },
-      { category: "security", text: "Also: security.sessionReopenBackground left PENDING_KEYS. Two changes from the same wave, one declaring the key dead and the other giving it a consumer, merged with no textual conflict — and the guard caught it, which is the entire point of the guard. The test now asserts the read rather than deleting the case, so removing that supervisor fails loudly instead of the option quietly going back to doing nothing while its row says it works." },
-      { category: "changed", text: "3018 tests, 3017 pass, 0 fail — Node 26 and the Node 22 CI pins." },
-    ],
-    changesYue: [
-      { category: "changed", text: "三個問題，全部係嗰一浪自己嘅反駁員執到，唔係寫嘅人自己發現。兩條 branch 因此被 推翻，而兩個反駁員都話應該補一個更正 commit 而唔係掉咗佢 —— 佢哋啱。" },
-      { category: "changed", text: "**一個真 bug**：「完成項目唔保留」係一個真嘅選項，開咗之後個清掃即刻行，於是隊列 閒置嗰陣，嗰個叫緊「做完就斷線」嘅項目已經唔喺 `items` 度。用戶揀咗斷線、傳輸完成 咗、然後個 app 照樣連住 —— 一個逐項嘅選擇，被一個純粹係**顯示**用嘅設定靜靜雞取消 咗，仲要一聲都唔出。" },
-      { category: "changed", text: "**一句引錯嘅出處**：我哋話個即時清掃係照 `SetKeepDoneItemsFor` 做，但嗰個函數乜都 冇掃，而且係嗰段入面**唯一一個唔叫 TriggerEvent() 嘅 setter** —— 引嚟證明自己嘅嗰 幾行，正正就係反證。行為本身合理，留低，但而家寫明係「特登唔跟原著」同原因。" },
-      { category: "changed", text: "**一個我自己數錯、仲傳咗開去嘅數字**：「十六個入面十五個」係我喺 issue #28 同份 指示入面寫嘅，然後入咗 code、測試同文件。**實際係十二個。** 份文件仲自己前後矛盾, 一時話「第十六個」一時話「嗰四個」。數過，唔靠記。" },
-    ],
-  },
-  {
-    id: "618ad8d", kind: 'commit', ref: "618ad8d", oid: "618ad8dafb0d48e61cfbd92089166ed90bff168e", date: "2026-08-02",
-    title: "Merge branch 'worktree-wf_1e396398-c91-3'",
-    changes: [
-      { category: "changed", text: "# Conflicts: # design/main/ipc.js # docs/protocol-gaps.md # docs/transfers-and-queue/queue.md" },
     ],
   },
 ];
