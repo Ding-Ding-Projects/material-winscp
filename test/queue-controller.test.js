@@ -124,6 +124,18 @@ test('controller rejects disabled, invalid and unavailable commands instead of c
   unavailableController.close();
 });
 
+test('controller awaits asynchronous bulk cancellation results', async () => {
+  const queue = new FakeQueue([item('a', 'active')]);
+  queue.remove = async () => {
+    await new Promise((resolve) => setImmediate(resolve));
+    return false;
+  };
+  const controller = new QueueController(queue);
+
+  await assert.rejects(() => controller.dispatch('cancel-all'), { code: 'ACTION_FAILED' });
+  controller.close();
+});
+
 test('queue event reconciliation contains IPC failures without an error listener', () => {
   const queue = new FakeQueue([item('a', 'queued')]);
   const controller = new QueueController(queue);

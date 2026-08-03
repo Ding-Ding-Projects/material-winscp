@@ -158,6 +158,11 @@ export function isConsoleEventForSession(payload, sessionId) {
   return !!(payload && payload.sessionId === sessionId);
 }
 
+/** A released wait no longer owns the eventual request failure notification. */
+export function shouldNotifyConsoleFailure(current, token) {
+  return current === token;
+}
+
 /* ------------------------------------------------------------------ */
 /* styles                                                              */
 /* ------------------------------------------------------------------ */
@@ -451,7 +456,9 @@ export function createConsoleWindow(info) {
       refreshCwd();
     } catch (err) {
       if (busy === token) push('stderr', s('csFailed', command, err.message));
-      notify.error(t('consoleTitle'), s('csFailed', command, err.message));
+      if (shouldNotifyConsoleFailure(busy, token)) {
+        notify.error(t('consoleTitle'), s('csFailed', command, err.message));
+      }
     } finally {
       if (busy === token) { busy = null; applyState(); }
     }

@@ -37,7 +37,7 @@ publishes events for both sessions.
 | Situation | What the user sees | Recoverable |
 | --- | --- | --- |
 | Protocol has no shell | The command is disabled with a tooltip explaining why. It never opens an empty console. | n/a |
-| Command produces unbounded output (`yes`, `tail -f`) | The renderer keeps the newest 2,000 lines and marks the output as truncated. There is no interrupt channel; stopping the wait does not stop the remote command, whose later output can still arrive. | Yes — stop it from another remote session or use a command with its own timeout |
+| Command produces unbounded output (`yes`, `tail -f`) | The renderer keeps the newest 2,000 lines and marks the output as truncated. There is no interrupt channel; stopping the wait does not stop the remote command, and a later request failure does not produce a stale error notification after the wait was released. | Yes — stop it from another remote session or use a command with its own timeout |
 | Full-screen program (`vim`, `top`) | Terminal emulation is line-oriented. Such programs are detected and reported as unsupported rather than rendering as escape-sequence soup. | Yes — use a terminal |
 | A command changes the working directory | Reflected in the panel when `autoReadDirectoryAfterOp` is on. Otherwise the panel says it may be stale. | Yes |
 | Non-POSIX login shell | The console opens and everything behaves oddly. The `shell` option is the fix, and the error names the shell the server reported. | Yes |
@@ -62,8 +62,10 @@ publishes events for both sessions.
 - **Nothing typed here is stored as a credential.** Command history is per
   session and not persisted, precisely because people type passwords into
   terminals.
-- **Interrupt actually interrupts.** A runaway command must be stoppable without
-  killing the session, or users will kill the session — and lose their queue.
+- **Stop waiting is not remote interruption.** A runaway command continues on
+  the server after the renderer releases its wait. Stop it from another remote
+  session or use a command with its own timeout; the console will not surface a
+  late request failure as though the released wait were still active.
 
 ## Verification
 

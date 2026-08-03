@@ -18,3 +18,11 @@ test('console live events are scoped to the owning session', async () => {
   assert.equal(consoleDialog.isConsoleEventForSession(null, 'session-a'), false);
   assert.equal(consoleDialog.isConsoleEventForSession({ text: 'unscoped' }, 'session-a'), false);
 });
+
+test('console does not notify after the user stopped waiting for a request', async () => {
+  const consoleDialog = await import(pathToFileURL(
+    path.join(ROOT, 'design', 'renderer', 'ui', 'dialogs', 'console.js')).href);
+  const token = { command: 'slow-command' };
+  assert.equal(consoleDialog.shouldNotifyConsoleFailure(token, token), true);
+  assert.equal(consoleDialog.shouldNotifyConsoleFailure(null, token), false);
+});

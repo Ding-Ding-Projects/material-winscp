@@ -247,7 +247,9 @@ class QueueController extends EventEmitter {
         const items = this._snapshot.items.filter((item) => LIVE_STATES.has(item.state));
         return this._invoke(action, async () => {
           for (const item of items) {
-            const result = this._method('remove', action)(item.id);
+            // IPC adapters may expose remove() as async. Await it before
+            // deciding whether the bulk cancellation really succeeded.
+            const result = await this._method('remove', action)(item.id);
             if (result === false) throw new QueueControllerError('ACTION_FAILED', `The queue rejected cancelling "${item.id}".`);
           }
         });

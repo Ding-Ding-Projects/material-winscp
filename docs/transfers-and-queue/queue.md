@@ -59,6 +59,9 @@ controller.
   late sibling chunk from writing after the item has moved into error handling.
 - **Progress never blocks a reply.** Long work pushes to `event:progress` with a
   correlation id; the IPC call that started it returns straight away.
+- **Bulk cancellation waits for every IPC result.** The queue controller awaits
+  each item removal before reconciling, so an asynchronous refusal is reported
+  as a failed command instead of a false success.
 - **An item's settings are a snapshot.** See the note in the
   [category index](README.md) — this is intentional.
 - **Empty-directory planning agrees across transfer paths.** With

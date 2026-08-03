@@ -704,7 +704,16 @@ export function openKeepUpToDateDialog(props = {}) {
       queueModel.refresh();
       return;
     }
-    if (payload.type === 'stopped') { log(t('txKutdStopped', context.localPath)); watcherId = null; paint(); }
+    if (payload.type === 'stopped') {
+      log(t('txKutdStopped', context.localPath));
+      // The watcher may stop from the main process (disconnect, error, or an
+      // external stop), so this path must clean the shared registry too. The
+      // button's local state was already cleared, but leaving the map entry
+      // behind made stale watchers accumulate and misled later surfaces.
+      watchers.delete(payload.id);
+      watcherId = null;
+      paint();
+    }
   });
 
   // design/main/sync.js's Watcher emits 'changes'/'tick' while design/main/ipc.js
