@@ -187,6 +187,27 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "aa5ee78", kind: 'commit', ref: "aa5ee78", oid: "aa5ee78c22119ff7a0ba3ae75db9f3a1bb7ba010", date: "2026-08-03",
+    title: "Harden queue sessions search panels and setup",
+    changes: [
+      { category: "added", text: "Include queue prompt state in once-done requests, fail closed on stale exec capabilities, tolerate watcher errors without items, short-circuit empty find limits, normalize Windows directory caches case-insensitively, and keep shortcut cleanup Windows-only. Add focused tests and indexed documentation. The queue now carries its paperwork, the search knows when zero means zero, and setup stops visiting the wrong operating system.\\n\\n廣東話：queue 帶齊文件、find 明白零就係零、setup 唔再去錯 OS 探親；panel 同 session 都有新路牌。" },
+    ],
+  },
+  {
+    id: "a9b9fb3", kind: 'commit', ref: "a9b9fb3", oid: "a9b9fb3a6976bc07c513281809fd248f1e0d3b42", date: "2026-08-03",
+    title: "Refresh handoff for Windows CI correction",
+    changes: [
+      { category: "fixed", text: "Record the verified Windows newline correction, 3337-test local gate, 59.0% logic coverage, 114 outstanding units and 22 open issues. The handoff now includes the exact fix for the one remote red light instead of hiding it under the carpet.\\n\\n廣東話：handoff 寫清楚今次點樣熄咗嗰盞紅燈，唔會掃埋張地氈下面扮冇事。" },
+    ],
+  },
+  {
+    id: "a3d6bc5", kind: 'commit', ref: "a3d6bc5", oid: "a3d6bc513e21efe4741a11e54f81c62a47016632", date: "2026-08-03",
+    title: "Record Windows CI newline fix",
+    changes: [
+      { category: "added", text: "Add the location-profile CRLF-safe test correction to the in-app changelog with its verified commit link. The build diary now notes that Windows newline fashion was the culprit, not the profile logic.\\n\\n廣東話：changelog 記低今次係 Windows CRLF 搞事，唔係 profile logic；換行符號都有自己嘅戲份。" },
+    ],
+  },
+  {
     id: "0e0969b", kind: 'commit', ref: "0e0969b", oid: "0e0969bbe0dd01226821c7463d197593ad763cba", date: "2026-08-03",
     title: "Fix Windows line-ending test extraction",
     changes: [
@@ -615,27 +636,6 @@ export const DEVELOPMENT = [
     title: "Fix protocol, session, UI, and changelog gaps",
     changes: [
       { category: "security", text: "English: Tighten the seams where the port was confidently pretending: stale FTP resumes, EOF reads, secret loading, login validation, panel reachability, editor IPC, and current changelog links now have real guards and tests.\\n\\nCantonese: 執返啲 port 扮緊冇事嘅位：FTP resume 唔再留垃圾尾、EOF 唔再扮 network error、secret 唔亂出、login 同 panel 真係有門，editor IPC 同 changelog 亦有憑有據。" },
-    ],
-  },
-  {
-    id: "0c43eb7", kind: 'commit', ref: "0c43eb7", oid: "0c43eb78968f9afb9e40afcd0115b21a33b874db", date: "2026-08-03",
-    title: "Refresh final handoff metadata",
-    changes: [
-      { category: "changed", text: "English: Record the pushed tip, synchronized remote, and fresh genuine Electron boot capture so the handoff stops wearing yesterday's nametag.\\n\\nCantonese: 更新已推送嘅 commit、同步遠端同真實 Electron 啟動畫面，等 handoff 唔使再戴住尋日張名牌。" },
-    ],
-  },
-  {
-    id: "e9d01ca", kind: 'commit', ref: "e9d01ca", oid: "e9d01cad8792af6cebf6db7256c30197ca265a21", date: "2026-08-03",
-    title: "Refresh handoff after CLI smoke",
-    changes: [
-      { category: "changed", text: "English: Record the final test count, coverage ledger, Docker evidence, and the exact headless CLI commit so the handoff does not bluff about the remaining roadmap.\\n\\nCantonese: Handoff 更新到真數，3197 個測試同 Docker 兩路證據逐樣寫低；未完成嘅 114 個單位繼續企喺度，唔會畀百分比化妝。" },
-    ],
-  },
-  {
-    id: "755036b", kind: 'commit', ref: "755036b", oid: "755036b95e3e666acb6688da9aff03a48866325f", date: "2026-08-03",
-    title: "Add headless CLI and Docker diff smoke",
-    changes: [
-      { category: "added", text: "English: Add the full console-compatible winscp entry point, deterministic drag/drop simulation commands, real SFTP/FTP Docker verification, and a structured-clone-safe sync.apply response. Validate bad CLI input before it can turn into a confident wrong plan, and keep Docker credentials out of process arguments.\\n\\nCantonese: 個 CLI 終於識做嘢，拖放唔再靠估，兩部 Docker server 幫手照妖；sync.apply 唔再攞住活生生嘅 queue 過 Electron 關口，密碼亦唔再喺 command line 周街派街坊。" },
     ],
   },
 ];
