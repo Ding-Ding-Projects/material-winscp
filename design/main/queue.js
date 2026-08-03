@@ -35,6 +35,12 @@ const { COPY_PARAM_DEFAULTS, PREF_DEFAULTS } = require('./defaults');
 // transfer half. The queue moves the bytes; that module decides what happens
 // to a file that is already there.
 const T = require('./transfer');
+// TTerminal::ContinueReopen itself. The queue does NOT get its own reconnect
+// policy: WinSCP's TUploadQueueItem::DoTransferExecute calls
+// TTerminal::CopyToRemote (Queue.cpp:2324), so a queued transfer walks into the
+// very same TRobustOperationLoop and the very same SessionReopenTimeout as a
+// foreground one. Importing the decision is how the two stay identical.
+const { continueReopen } = require('./terminal');
 
 const STATES = ['queued', 'active', 'paused', 'done', 'error', 'query', 'prompt'];
 
@@ -297,7 +303,16 @@ class TransferQueue extends EventEmitter {
    * options:
    *   prefs           the application preferences (defaults.js shape)
    *   progressMs      minimum interval between 'progress' events (default 250)
-   *   maxReconnects   reconnect attempts per item before it errors (default 5)
+   *   maxReconnects   a HARD CAP on reconnect attempts per item, on top of the
+   *                   SessionReopenTimeout budget. `0` (the default) means no
+   *                   cap, which is what WinSCP has: Queue.cpp holds no retry
+   *                   counter at all, because its items reconnect through
+   *                   TTerminal::CopyToRemote like everything else. It survives
+   *                   as an option so an embedder that genuinely wants a
+   *                   count-based ceiling has one; nothing in the app sets it.
+   *   now             injectable clock, for testing the budget without waiting
+   *                   for one. Must be the same clock the budget compares
+   *                   against, hence one function rather than two.
    */
   constructor(options = {}) {
     super();
@@ -311,7 +326,13 @@ class TransferQueue extends EventEmitter {
     this.transfersLimit = qp.transfersLimit || 2;
     this.onceDone = qp.onceEmpty || 'none';
     this.progressMs = options.progressMs === undefined ? 250 : options.progressMs;
-    this.maxReconnects = options.maxReconnects === undefined ? 5 : options.maxReconnects;
+    // Was a fixed 5. A user who set "Keep reconnecting for" to twenty minutes
+    // got five attempts on the path fifteen of the sixteen transfer commands
+    // take, because this number was the whole reconnect policy and nothing here
+    // had ever read security.sessionReopenTimeout
+    // (Ding-Ding-Projects/material-winscp#28).
+    this.maxReconnects = options.maxReconnects === undefined ? 0 : options.maxReconnects;
+    this._now = options.now || (() => Date.now());
 
     this._active = new Set();
     this._globalGate = new Gate(true);
@@ -370,6 +391,14 @@ class TransferQueue extends EventEmitter {
       _plan: null,
       _entryIndex: 0,
       _reconnects: 0,
+      // TRobustOperationLoop's FStart and its `bool * FAnyTransfer`
+      // (Terminal.cpp:498-512). `_reopenStart` is stamped when the item first
+      // starts running; `_transferAny` is the holder object — null for a
+      // protocol with no budget, an object for one that has — and it is
+      // deliberately the same holder shape RobustLoop takes, so a reader can
+      // see the two loops are the same loop.
+      _reopenStart: null,
+      _transferAny: null,
       _pendingQuery: null,
       _pendingPrompt: null,
       // "Yes to all" / "Skip all" / "only newer" now live in the transfer
@@ -747,6 +776,17 @@ class TransferQueue extends EventEmitter {
 
   async _run(item) {
     item.startedAt = item.startedAt || Date.now();
+    // TRobustOperationLoop's constructor: stamp FStart and take the flag,
+    // zeroed, before the first attempt (Terminal.cpp:498-512). Once per item,
+    // because the loop is the operation's, not the attempt's — and because
+    // `_pump` selects on `state === 'queued'`, which an item mid-reconnect
+    // briefly is, so a second entry here would silently hand it a fresh window.
+    // `=== null` rather than falsy: an injected clock is allowed to start at 0,
+    // and a re-stamped window is a budget that never expires.
+    if (item._reopenStart === null || item._reopenStart === undefined) {
+      item._reopenStart = this._now();
+      item._transferAny = this._reconnectBudgetHolder(item);
+    }
     for (;;) {
       try {
         this._setState(item, 'active');
@@ -761,7 +801,7 @@ class TransferQueue extends EventEmitter {
         return;
       } catch (err) {
         if (item._cancelled) return;
-        if (isConnectionError(err) && item._reconnects < this.maxReconnects) {
+        if (isConnectionError(err) && this._mayReopen(item)) {
           item._reconnects += 1;
           this._setState(item, 'queued');
           const ok = await this._askReconnect(item, err);
@@ -774,6 +814,62 @@ class TransferQueue extends EventEmitter {
         return;
       }
     }
+  }
+
+  /**
+   * `bool * AFileTransferAny` for this item — Terminal.cpp:7767 and :8348,
+   * `FLAGSET(Flags, tfUseFileTransferAny) ? &FFileTransferAny : NULL`.
+   *
+   * The remote end is the source of a download and the target of an upload; a
+   * remote-to-remote copy has the same adapter on both, so either arm gives the
+   * same answer. `null` here means no budget at all, which is the correct
+   * reading of the flag being clear — see `limitsTransferReconnects`.
+   */
+  _reconnectBudgetHolder(item) {
+    const remote = item.side === 'download' ? item.sourceAdapter : item.targetAdapter;
+    return T.limitsTransferReconnects(remote) ? { fileTransferAny: false } : null;
+  }
+
+  /**
+   * TRobustOperationLoop::TryReopen's budget arm (Terminal.cpp:538-559),
+   * verbatim apart from the language.
+   *
+   * Read the braces before reading the logic: BOTH the progress-based reset and
+   * the ContinueReopen call that IS the budget live inside
+   * `if (FAnyTransfer != NULL)`. A protocol without the flag therefore has NO
+   * ceiling and reconnects for as long as the supervisor keeps saying yes —
+   * that is SFTP upstream, and it is SFTP here. FTP gets the ceiling because
+   * its second connection lets a stalled data transfer drag the control
+   * connection down, so it can fail-and-reconnect in a tight loop while moving
+   * nothing at all.
+   *
+   * And at the SHIPPED DEFAULT of `sessionReopenTimeout: 0` this returns true
+   * forever even for FTP (defaults.js:384, Terminal.cpp:2461-2463). That is not
+   * the fix quietly doing nothing; it is the preference meaning "indefinitely",
+   * and it is why both the zero and non-zero cases are covered by tests.
+   */
+  _mayReopen(item) {
+    // The optional hard cap, off by default. Checked first because a count the
+    // embedder asked for should not be spent differently depending on protocol.
+    if (this.maxReconnects > 0 && item._reconnects >= this.maxReconnects) return false;
+
+    const holder = item._transferAny;
+    if (!holder) return true;
+    if (holder.fileTransferAny) {
+      // Bytes moved since the last attempt, so the window starts again.
+      item._reopenStart = this._now();
+      holder.fileTransferAny = false;
+      return true;
+    }
+    const ok = continueReopen(this.prefs, item._reopenStart, this._now());
+    if (!ok) {
+      this.emit('reconnect-expired', {
+        item: this.view(item),
+        elapsedMs: this._now() - item._reopenStart,
+        timeoutMs: Number(((this.prefs.security) || {}).sessionReopenTimeout) || 0,
+      });
+    }
+    return ok;
   }
 
   /**
@@ -1573,6 +1669,12 @@ class TransferQueue extends EventEmitter {
   // ---- progress --------------------------------------------------------
 
   _recordCps(item, bytes) {
+    // TTerminal::DoProgress (Terminal.cpp:2277-2280) — `if
+    // (ProgressData.TransferredSize > 0) FFileTransferAny = true;`. This is the
+    // queue's only "a byte actually landed" seam (both `_copyStream` and
+    // `_copyChunked` funnel through it), so it is where the reconnect window
+    // learns it deserves to start again.
+    if (bytes > 0 && item._transferAny) item._transferAny.fileTransferAny = true;
     const now = Date.now();
     item._cpsWindow.push([now, bytes]);
     const cutoff = now - 5000;

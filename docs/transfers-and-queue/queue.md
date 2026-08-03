@@ -58,12 +58,28 @@ Under **Preferences → Transfer → Background**, stored in `PREF_DEFAULTS.queu
   minimum duration and is strictly "longer than", so `0` seconds means every
   batch that took a measurable moment. The queue owns no I/O: it emits `beep`
   and `design/main/ipc.js` calls `shell.beep()`.
+- **A dropped connection is bounded by `security.sessionReopenTimeout`, not by a
+  retry count.** The queue has no reconnect policy of its own: WinSCP's queue
+  items reconnect through `TTerminal::CopyToRemote` like everything else, so a
+  queued transfer gets the same budget as a foreground one. Three things follow,
+  and all three are the preference behaving as documented rather than the queue
+  being lax:
+  - `sessionReopenTimeout: 0` — the default — means **indefinitely**.
+  - Only FTP and FTPS have a budget at all; every other protocol reconnects
+    without a ceiling, exactly as upstream. See
+    [Reconnection](../sessions-and-sites/reconnection.md).
+  - Bytes that actually moved between drops restart the window.
+
+  `TransferQueue` still accepts a `maxReconnects` option as a hard count-based
+  cap for an embedder that wants one. It defaults to `0` (off), because it has
+  no counterpart in `Queue.cpp` and nothing in the app sets it.
 
 ## Failure modes
 
 | Situation | What the user sees | Recoverable |
 | --- | --- | --- |
-| Session drops with items queued | Items pause and the session auto-reconnects per `security.sessionReopen*`. Without a remembered password, one modal prompt appears — once, not per item. | Yes |
+| Session drops with items queued | Items pause and the session auto-reconnects per `security.sessionReopen*`; the queue waits `sessionReopenBackground` between its own attempts and gives up only when `sessionReopenTimeout` is exceeded (never, at the default of `0`). Without a remembered password, one modal prompt appears — once, not per item. | Yes |
+| The session behind a queued item is closed while it is reconnecting | The item fails with the connection error rather than retrying into a session that no longer exists. Closing the session is this port's Abort answer to WinSCP's reconnect query. | n/a |
 | Target file exists | Resolved by the item's own overwrite rule, decided when it was queued. Only a foreground transfer with `confirmOverwriting` stops to ask. | Yes |
 | Local disk fills | Every active item fails with `ENOSPC`; resumable partials are kept. The queue does not keep retrying into a full disk. | Yes |
 | An item is cancelled mid-write | Partial target removed, unless it is a `.filepart` being kept for resume. | n/a |
@@ -91,6 +107,16 @@ Under **Preferences → Transfer → Background**, stored in `PREF_DEFAULTS.queu
   settings isolation, failure containment — are tested against the local adapter
   with synthetic delays, so no network is involved.
 - `onceEmpty` action gating (that a failure suppresses it) has a direct test.
+- The reconnect budget is covered at `sessionReopenTimeout: 0` (unlimited, the
+  shipped default), at a non-zero value (the window expires and the item is
+  reported), with bytes moving between drops (the window restarts), and for a
+  protocol with no budget at all — plus an agreement test asserting the queue
+  and the foreground engine reach the same verdict from the same adapter. The
+  clock is injected, so no test waits for a timeout.
+- That the *main process* answers the queue's `reconnect` event is tested
+  separately, because a listener that neither retries nor fails leaves the item
+  awaiting a promise nothing can settle: the queue skips its own unsupervised
+  backoff the moment anything subscribes.
 - Throughput and parallelism against real servers are checked manually; this
   article does not claim automated coverage for them.
 

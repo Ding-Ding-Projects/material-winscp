@@ -32,6 +32,25 @@ Keepalives are per site; reconnection policy is global, under
   nobody is using does not reconnect until it is needed. This is the difference
   between a laptop waking to twelve reconnect attempts and waking to none.
 - **Queued work reconnects eagerly**, on the shorter `sessionReopenBackground`.
+  That is the interval the queue waits before touching the adapter again after a
+  dropped transfer; the session's own reconnect timer runs in parallel on
+  `sessionReopenAuto`.
+- **`sessionReopenTimeout` bounds a running transfer as well as a session**, and
+  it bounds both transfer paths identically — the foreground engine
+  (`transfer:copyToRemote`) and the queue (`queue:add`). Two qualifications
+  matter:
+  - **`0` means indefinitely, and `0` is the default.** At the shipped setting
+    nothing gives up on time, on either path. The budget is what the user opts
+    into by setting "Keep reconnecting for".
+  - **Only FTP and FTPS carry the budget at all.** Every other protocol
+    reconnects without a ceiling, matching WinSCP, which sets the flag in its
+    FTP back end's two transfer entry points and nowhere else. FTP is singled
+    out because its second connection lets a stalled data transfer drag the
+    control connection down, so it can fail-and-reconnect in a tight loop while
+    moving nothing. A protocol adapter can opt in with
+    `caps.limitTransferReconnects`.
+  - **Bytes that actually moved restart the window.** A transfer making progress
+    between drops is not the failure the ceiling exists to stop.
 - **Stall detection is off by default.** A slow transfer and a dead one look
   identical from the outside; a badly-set stall timeout aborts genuinely slow
   transfers, which is worse than the problem.

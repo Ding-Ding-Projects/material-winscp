@@ -839,6 +839,28 @@ class RetryLoop {
 //     raises it. That is CustomReadDirectory's function-local (Terminal.cpp:3760).
 // ===========================================================================
 
+/**
+ * TTerminal::ContinueReopen (Terminal.cpp:2459-2464), as a free function so
+ * that everything with a reconnect budget consults ONE implementation.
+ *
+ *   return (Configuration->SessionReopenTimeout == 0) ||
+ *          (int(double(Now() - Start) * MSecsPerDay) < Configuration->SessionReopenTimeout);
+ *
+ * ZERO MEANS FOREVER, and it is the shipped default (defaults.js:384). That is
+ * not a detail to be tidied away later: at the default configuration this
+ * function returns true for every caller no matter how long the outage has
+ * run, so a "budget" that only ever behaves correctly with a non-zero
+ * preference set has never been exercised the way most users run it.
+ *
+ * `now` is passed in rather than read from Date.now() because the terminal
+ * carries an injectable clock and a start stamped from one clock compared
+ * against another is either instantly spent or eternal.
+ */
+function continueReopen(prefs, start, now) {
+  const timeout = Number((((prefs || {}).security) || {}).sessionReopenTimeout) || 0;
+  return timeout === 0 || (now - start) < timeout;
+}
+
 class RobustLoop {
   constructor(terminal, progress, options) {
     const o = options || {};
@@ -1269,10 +1291,16 @@ class Terminal extends EventEmitter {
 
   // -------------------------------------------- reconnect during an operation
 
-  /** TTerminal::ContinueReopen — is there any of the reopen budget left? */
+  /**
+   * TTerminal::ContinueReopen — is there any of the reopen budget left?
+   *
+   * The arithmetic lives in the module-level `continueReopen` below, because
+   * the queue asks the same question about the same preference and a second
+   * copy of `timeout === 0 || elapsed < timeout` is how "honoured on one path,
+   * ignored on the other" gets built a third time.
+   */
   continueReopen(start) {
-    const timeout = Number((this.prefs.security || {}).sessionReopenTimeout) || 0;
-    return timeout === 0 || (this._now() - start) < timeout;
+    return continueReopen(this.prefs, start, this._now());
   }
 
   /**
@@ -3028,6 +3056,7 @@ module.exports = {
   DirectoryChangesCache,
   RetryLoop,
   RobustLoop,
+  continueReopen,
   TerminalError,
   FatalError,
   SkipFileError,

@@ -15,6 +15,9 @@ const { Adapter, entry, DEFAULT_CAPS } = require('../design/main/protocols/base'
 const { TransferQueue, Throttle, TextConverter, validLocalFileName, changeFileName,
   allowResume, isConnectionError } = require('../design/main/queue');
 const { PREF_DEFAULTS } = require('../design/main/defaults');
+// The foreground engine's own half of the reconnect-budget decision, so the two
+// transfer paths can be asserted to agree rather than assumed to.
+const { TransferEngine, TRANSFER_FLAGS, limitsTransferReconnects } = require('../design/main/transfer');
 
 const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
@@ -746,6 +749,306 @@ test('a dropped connection resumes the item rather than restarting it', async ()
   assert.strictEqual(starts[0], 0);
   assert.ok(starts[1] > 0, `second attempt restarted from ${starts[1]} instead of resuming`);
   assert.strictEqual(starts.length, 2, 'exactly one retry');
+});
+
+// ---------------------------------------------------------------------------
+// the reconnect budget — Ding-Ding-Projects/material-winscp#28
+//
+// The queue used to cap reconnects at a hard-coded 5 and never look at
+// security.sessionReopenTimeout, so "Keep reconnecting for 20 minutes" bought
+// five attempts on the path fifteen of the sixteen transfer commands take.
+// WinSCP has no such counter: TUploadQueueItem::DoTransferExecute calls
+// TTerminal::CopyToRemote (Queue.cpp:2324), so a queued transfer walks into the
+// same TRobustOperationLoop as a foreground one and gets the same budget.
+//
+// The helper below drives one download that keeps losing its connection, with
+// an injected clock so a timeout can be tested without waiting for one.
+// ---------------------------------------------------------------------------
+
+/** A pair whose REMOTE end names itself as `remoteName`. */
+function makeNamedPair(remoteName, options) {
+  const local = new MemoryAdapter('local', options);
+  const remote = new MemoryAdapter(remoteName, options);
+  local.putDir('/l');
+  remote.putDir('/r');
+  return { local, remote };
+}
+
+function reopenPrefs(timeoutMs) {
+  const p = prefs();
+  p.security.sessionReopenTimeout = timeoutMs;
+  return p;
+}
+
+/**
+ * Download /r/big.bin, dropping the connection `drops` times.
+ *
+ * `afterBytes: 0` drops before a single byte moves, which is the case the
+ * budget is actually about; a non-zero value lets bytes land first, which is
+ * what restarts the window (Terminal.cpp:542-547).
+ *
+ * The clock only ever advances inside the reconnect handler, so elapsed time is
+ * exactly `drops * clockStepMs` and nothing depends on how fast the suite runs.
+ */
+async function droppingDownload(opts) {
+  const { local, remote } = makeNamedPair(opts.remoteName, { chunkSize: 4096 });
+  const payload = bigBuffer(opts.size || 81920);
+  remote.put('/r/big.bin', payload);
+
+  let clock = 1000000;
+  const q = new TransferQueue({
+    prefs: reopenPrefs(opts.timeoutMs),
+    progressMs: 0,
+    now: () => clock,
+  });
+
+  const arm = () => { remote.failRead = { path: '/r/big.bin', afterBytes: opts.afterBytes }; };
+  let armed = 1;
+  arm();
+
+  const reconnects = [];
+  const expired = [];
+  q.on('reconnect-expired', (e) => expired.push(e));
+  q.on('reconnect', (e) => {
+    reconnects.push(e.attempt);
+    clock += opts.clockStepMs;
+    if (armed < opts.drops) { arm(); armed += 1; }
+    e.retry();
+  });
+
+  const item = q.add({
+    side: 'download',
+    source: '/r/big.bin',
+    target: '/l/big.bin',
+    sourceAdapter: remote,
+    targetAdapter: local,
+    copyParam: { resumeSupport: 'on' },
+  });
+  await q.idle();
+  return { q, item, reconnects, expired, local, remote, payload };
+}
+
+test('a zero reconnect timeout still means forever, on the queue too', async () => {
+  // The shipped default (defaults.js:384). This is the configuration almost
+  // everyone runs, so a budget that only behaves correctly with a non-zero
+  // preference set has not been tested where it matters:
+  // TTerminal::ContinueReopen returns true unconditionally at zero
+  // (Terminal.cpp:2461-2463) and the queue must do exactly the same.
+  assert.strictEqual(PREF_DEFAULTS.security.sessionReopenTimeout, 0,
+    'this test is about the SHIPPED default; if that changed, so must the test');
+
+  const { item, reconnects, expired, local, payload } = await droppingDownload({
+    remoteName: 'ftp',            // the one protocol that HAS a budget
+    timeoutMs: 0,
+    drops: 7,                     // more than the 5 the old fixed cap allowed
+    afterBytes: 0,                // and not one byte moves to earn a reset
+    clockStepMs: 3600000,         // an hour between each, to prove time is irrelevant
+  });
+
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.strictEqual(reconnects.length, 7, 'zero means no ceiling at all');
+  assert.strictEqual(expired.length, 0);
+  assert.ok(local.read('/l/big.bin').equals(payload), 'and the file still lands whole');
+});
+
+test('a non-zero reconnect timeout is what stops a queued transfer retrying', async () => {
+  // TRobustOperationLoop::TryReopen's else-arm (Terminal.cpp:548-555): no bytes
+  // moved, so ContinueReopen(FStart) decides, and once the window is spent the
+  // operation is reported rather than retried.
+  const { item, reconnects, expired } = await droppingDownload({
+    remoteName: 'ftp',
+    timeoutMs: 5000,
+    drops: 7,                     // armed to keep dropping; the budget stops it first
+    afterBytes: 0,
+    clockStepMs: 6000,            // one step past the window
+  });
+
+  assert.strictEqual(item.state, 'error');
+  assert.strictEqual(item.error.code, 'ECONNRESET');
+  assert.strictEqual(reconnects.length, 1,
+    'the first drop is inside the window; the second is past it');
+  assert.strictEqual(expired.length, 1, 'and the giving-up is announced, not silent');
+  assert.strictEqual(expired[0].timeoutMs, 5000);
+  assert.ok(expired[0].elapsedMs >= 5000);
+});
+
+test('bytes that actually moved restart the queue\'s reconnect window', async () => {
+  // The other arm of the same branch (Terminal.cpp:542-547): a transfer making
+  // progress between drops is not the failure the ceiling exists to stop, so
+  // the window starts again. Seven drops an hour apart, against a five-second
+  // budget, must therefore all be granted.
+  const { item, reconnects, expired, local, payload } = await droppingDownload({
+    remoteName: 'ftp',
+    timeoutMs: 5000,
+    drops: 7,
+    afterBytes: 8192,             // each attempt moves 8KB before dying
+    clockStepMs: 3600000,
+  });
+
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.strictEqual(reconnects.length, 7);
+  assert.strictEqual(expired.length, 0, 'progress must not spend the budget');
+  assert.ok(local.read('/l/big.bin').equals(payload));
+});
+
+test('the queue and the foreground engine agree on WHICH transfers get a budget', async () => {
+  // Setting tfUseFileTransferAny is what IMPOSES the ceiling, and WinSCP sets it
+  // in exactly two places — TFTPFileSystem::CopyToLocal and ::CopyToRemote
+  // (FtpFileSystem.cpp:1585, :1682). Every other protocol reconnects
+  // indefinitely, upstream and here. Both transfer paths must reach that verdict
+  // through the same test, or a setting gets honoured on one and not the other,
+  // which is the defect this whole change exists to stop repeating.
+  const engineGivesBudget = (adapter) => (TransferEngine.prototype.downloadFlags.call({
+    remote: adapter,
+    limitedTransferReconnects: TransferEngine.prototype.limitedTransferReconnects,
+  }) & TRANSFER_FLAGS.useFileTransferAny) !== 0;
+
+  for (const [name, expected] of [['ftp', true], ['ftps', true], ['sftp', false],
+    ['scp', false], ['webdav', false], ['s3', false]]) {
+    const a = new MemoryAdapter(name);
+    assert.strictEqual(limitsTransferReconnects(a), expected, `${name}: the shared test`);
+    assert.strictEqual(engineGivesBudget(a), expected, `${name}: the foreground engine`);
+  }
+  // caps.limitTransferReconnects overrides the protocol name, both ways.
+  const stubborn = new MemoryAdapter('sftp');
+  stubborn.caps.limitTransferReconnects = true;
+  assert.strictEqual(limitsTransferReconnects(stubborn), true);
+  assert.strictEqual(engineGivesBudget(stubborn), true);
+});
+
+test('a queued SFTP transfer keeps reconnecting, exactly as the engine lets it', async () => {
+  // The behavioural half of the agreement above, kept separate so it stands on
+  // its own evidence. `downloadFlags()` gives SFTP no tfUseFileTransferAny, so
+  // TRobustOperationLoop never reaches ContinueReopen for it; the same seven
+  // drops that expired the FTP item must therefore all be granted here, no
+  // matter how long the outage ran.
+  const { item, reconnects, expired } = await droppingDownload({
+    remoteName: 'sftp',
+    timeoutMs: 5000,
+    drops: 7,
+    afterBytes: 0,
+    clockStepMs: 3600000,
+  });
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.strictEqual(reconnects.length, 7, 'SFTP has no ceiling, exactly as upstream');
+  assert.strictEqual(expired.length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// …and the budget has to be REACHABLE, not merely correct.
+//
+// queue.js reads listenerCount('reconnect') BEFORE emitting and skips its own
+// unsupervised backoff when anything is listening, so a listener that neither
+// retries nor fails is worse than no listener at all: the item then awaits a
+// promise nothing in the process can settle. design/main/ipc.js used to forward
+// `reconnect` through the same blanket loop as every other queue event, which
+// dropped the live `retry`/`fail` callbacks into a structured clone —
+// webContents.send throws on a function and `emit` swallows that as an
+// undeliverable push — so the FIRST dropped connection parked a queued transfer
+// for the life of the process, holding a transfersLimit slot with it.
+// ---------------------------------------------------------------------------
+
+/** design/main/ipc.js outside Electron: only the four calls its constructor makes. */
+function ipcWithQueue(securityOverrides) {
+  const os = require('os');
+  const nodePath = require('path');
+  const electronId = require.resolve('electron');
+  require.cache[electronId] = {
+    id: electronId,
+    filename: electronId,
+    loaded: true,
+    exports: {
+      app: {
+        getPath: () => nodePath.join(os.tmpdir(), 'material-winscp-queue-test'),
+        getVersion: () => '0.0.0-test',
+        on() {},
+      },
+      ipcMain: { handle() {}, removeHandler() {} },
+      BrowserWindow: { getAllWindows: () => [] },
+      shell: {}, clipboard: {}, dialog: {},
+    },
+  };
+  const { Ipc } = require('../design/main/ipc');
+  const p = prefs();
+  Object.assign(p.security, securityOverrides || {});
+  const config = { prefs: p, sites: [], setPref() {}, on() {} };
+  // getWindow returns null, which is the "no window yet" branch of Ipc.emit:
+  // every renderer push becomes a no-op, exactly as it would before the window
+  // opens. The reconnect decision must still be taken.
+  const ipc = new Ipc({ config, version: '0.0.0-test', getWindow: () => null });
+  return { ipc, queue: ipc.queue() };
+}
+
+test('the main process answers the queue\'s reconnect instead of parking it', async () => {
+  const { ipc, queue: q } = ipcWithQueue({ sessionReopenBackground: 0 });
+  assert.strictEqual(q.listenerCount('reconnect'), 1,
+    'something must be listening, or the queue falls back to its own backoff');
+
+  const { local, remote } = makeNamedPair('sftp', { chunkSize: 4096 });
+  const payload = bigBuffer(40960);
+  remote.put('/r/big.bin', payload);
+  remote.failRead = { path: '/r/big.bin', afterBytes: 8192 };
+
+  // The session has to be one the manager still knows about, because a session
+  // the user closed is this port's Abort answer. Seeded directly: SessionManager
+  // only gains sessions by really connecting one.
+  const session = { id: 'sess-reconnect-test' };
+  ipc.sessions.sessions.set(session.id, session);
+
+  const item = q.add({
+    side: 'download',
+    source: '/r/big.bin',
+    target: '/l/big.bin',
+    sourceAdapter: remote,
+    targetAdapter: local,
+    session,
+    copyParam: { resumeSupport: 'on' },
+  });
+
+  const outcome = await Promise.race([
+    q.idle().then(() => 'settled'),
+    sleep(2000).then(() => 'hung'),
+  ]);
+  assert.strictEqual(outcome, 'settled',
+    'the reconnect was never answered, so the item waits forever');
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.ok(local.read('/l/big.bin').equals(payload));
+});
+
+test('a queued transfer whose session was closed is failed, not retried forever', async () => {
+  // TTerminal::QueryReopen answers Retry by itself because an unattended queue
+  // must recover on its own; the user's Abort is closing the session, which
+  // removes it from the manager. Nothing here is registered, so `fail()`.
+  const { queue: q } = ipcWithQueue({ sessionReopenBackground: 0 });
+  const { local, remote } = makeNamedPair('sftp', { chunkSize: 4096 });
+  remote.put('/r/big.bin', bigBuffer(40960));
+  remote.failRead = { path: '/r/big.bin', afterBytes: 8192 };
+
+  const item = q.add({
+    side: 'download',
+    source: '/r/big.bin',
+    target: '/l/big.bin',
+    sourceAdapter: remote,
+    targetAdapter: local,
+    session: { id: 'a-session-that-was-closed' },
+    copyParam: { resumeSupport: 'on' },
+  });
+
+  const outcome = await Promise.race([
+    q.idle().then(() => 'settled'),
+    sleep(2000).then(() => 'hung'),
+  ]);
+  assert.strictEqual(outcome, 'settled');
+  assert.strictEqual(item.state, 'error');
+  assert.strictEqual(item.error.code, 'ECONNRESET');
+});
+
+test('maxReconnects survives as an explicit cap, and is off by default', () => {
+  // Queue.cpp holds no retry counter, so nothing in the app sets one. The option
+  // stays for an embedder that genuinely wants a count-based ceiling; what it
+  // must never be again is the queue's entire reconnect policy.
+  assert.strictEqual(new TransferQueue({ prefs: prefs() }).maxReconnects, 0);
+  assert.strictEqual(new TransferQueue({ prefs: prefs(), maxReconnects: 3 }).maxReconnects, 3);
 });
 
 test('isConnectionError only claims real connection failures', () => {
