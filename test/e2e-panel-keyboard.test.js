@@ -36,6 +36,11 @@ test('Commander Insert selects the focused last row, not its predecessor', async
     await waitFor(() => app.evaluate(`document.querySelectorAll('.fp-local .fp-row').length >= 3`));
 
     await app.evaluate(keydown('End'));
+    // The real panel may still be completing the directory render when the
+    // synthetic key event returns.  Wait for the observable focus state before
+    // sending the dependent Insert command, or a slow runner can apply Insert
+    // to the old first row while the End render is still queued.
+    await waitFor(() => app.evaluate(`document.querySelector('.fp-local .fp-row.is-focus')?.dataset.name === 'last.txt'`));
     await app.evaluate(keydown('Insert'));
     const state = await app.evaluate(`(() => ({
       focused: document.querySelector('.fp-local .fp-row.is-focus')?.dataset.name || null,

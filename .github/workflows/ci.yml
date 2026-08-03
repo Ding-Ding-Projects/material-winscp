@@ -59,17 +59,13 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v4
         with:
-          # vendor/winscp is the upstream porting reference and is large; it is
-          # not needed to build or run this app.
-          #
-          # Two tests DO read it — the pair in test/messages.test.js that
-          # rebuilds design/renderer/messages.json from source/resource/*.rc and
-          # compares it with the committed table. They report themselves as
-          # skipped here, with the reason, rather than failing; the table itself
-          # is committed, so the other 43 tests in that file still run. Checking
-          # the table against upstream is a job for whoever re-runs
-          # `node tools/extract-resources.js` with the submodule checked out.
-          submodules: false
+          # The submodule is the upstream porting reference. The renderer can
+          # boot without it, but the coverage ledger test must walk source/ and
+          # refuse a report that silently contains zero units. The two resource
+          # tests in test/messages.test.js remain explicitly skipped here when
+          # the extractor is unavailable; the coverage check itself is not
+          # optional.
+          submodules: true
           # actions/checkout defaults to `fetch-depth: 1` — a SHALLOW clone
           # holding exactly the commit that triggered the run and nothing
           # before it. test/changelog.test.js resolves every changelog entry's

@@ -1643,7 +1643,7 @@ const TRANSFER_CSS = `
    must drop the centring transform and the bottom pinning that the progress
    window relies on — leaving them in place moved it half its own width to the
    left of wherever anchorTo() had just put it. */
-.tx-q-popover { position: fixed; left: auto; bottom: auto; transform: none;
+.tx-pg-window.tx-q-popover { position: fixed; left: auto; right: auto; bottom: auto; transform: none;
   width: min(860px, calc(100vw - 32px)); max-height: min(70vh, 720px);
   min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .tx-q-popbody { flex: 1 1 auto; display: flex; min-height: 0; overflow: hidden; }
