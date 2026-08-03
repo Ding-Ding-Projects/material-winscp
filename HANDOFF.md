@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `c32c930`** — Refresh the generated changelog
+**At commit `395984e`** — Refresh the CLI and protocol changelog
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3400 run, **3399 pass, 0 fail**, 1 skipped |
-| Hand-written code | 219,211 lines across 426 files |
-| Commits | 172 on `main` |
+| Tests | 3408 run, **3407 pass, 0 fail**, 1 skipped |
+| Hand-written code | 219,450 lines across 429 files |
+| Commits | 175 on `main` |
 | Working tree | **1 uncommitted change(s)** |
-| Remote | `origin/main` at `c32c930` — in sync |
+| Remote | `origin/main` at `395984e` — in sync |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `395984e` | 2026-08-03 | Refresh the CLI and protocol changelog |
+| `c68948c` | 2026-08-03 | Harden CLI, editor, queue, and protocol edges |
+| `18e7d9a` | 2026-08-03 | Record the pushed protocol hardening handoff |
 | `c32c930` | 2026-08-03 | Refresh the generated changelog |
 | `c38476f` | 2026-08-03 | Harden protocol edge cases and Docker smoke cleanup |
 | `30a8ae7` | 2026-08-03 | Record the parity wave in the pushed handoff |
 | `e0fa83f` | 2026-08-03 | Update the in-app changelog for the parity wave |
 | `0dcc3f4` | 2026-08-03 | Harden preferences, actions, sync, dialogs, and packaging |
-| `e7ae918` | 2026-08-03 | Record the current security and lifecycle wave in handoff |
-| `9148a21` | 2026-08-03 | Update the in-app changelog for security and lifecycle fixes |
-| `e81083b` | 2026-08-03 | Harden security, config, S3, queue, and session edges |
 
 ## Notes from whoever worked on this last
 
