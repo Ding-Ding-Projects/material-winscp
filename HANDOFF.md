@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `aae7ad2`** — Fix Pages artifact selection
+**At commit `ef2580a`** — Refresh handoff for Pages fix
 
 ## Where the work stands
 
@@ -15,9 +15,9 @@
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
 | Tests | 3486 run, **3485 pass, 0 fail**, 1 skipped |
 | Hand-written code | 221,564 lines across 440 files |
-| Commits | 217 on `main` |
+| Commits | 218 on `main` |
 | Working tree | clean |
-| Remote | `origin/main` at `aae7ad2` — in sync |
+| Remote | `origin/main` at `ef2580a` — in sync |
 
 ### Coverage by area
 
@@ -127,6 +127,7 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `ef2580a` | 2026-08-03 | Refresh handoff for Pages fix |
 | `aae7ad2` | 2026-08-03 | Fix Pages artifact selection |
 | `023b8b6` | 2026-08-03 | Refresh handoff after site and reconnect hardening |
 | `dca4464` | 2026-08-03 | Harden reconnect, Explorer selection, and site builds |
@@ -134,7 +135,6 @@ bite a successor who assumes otherwise:
 | `b59d321` | 2026-08-03 | Harden S3, SFTP, editor, and login flows |
 | `d2e0885` | 2026-08-03 | Make create-directory test line-ending safe |
 | `637ce7b` | 2026-08-03 | Refresh handoff after transfer hardening |
-| `dbe8cc7` | 2026-08-03 | Harden transfer, queue, and protocol edges |
 
 ## Notes from whoever worked on this last
 
