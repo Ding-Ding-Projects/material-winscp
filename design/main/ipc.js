@@ -340,10 +340,55 @@ class Ipc {
     // pause, every resume and every removal — was not forwarded at all, so a
     // queue panel driven by these events could only ever see an item appear
     // and then, much later, finish.
-    for (const ev of ['item-added', 'item-updated', 'item-done', 'item-error', 'queue-updated', 'idle', 'reconnect']) {
+    for (const ev of ['item-added', 'item-updated', 'item-done', 'item-error',
+      'queue-updated', 'idle', 'reconnect-expired']) {
       q.on(ev, (payload, extra) => this.emit('event:queue', { type: ev, item: payload, extra }));
     }
     q.on('progress', (item) => this.emit('event:progress', { kind: 'transfer', item }));
+
+    // `reconnect` is NOT in that list, and must not be put back into it.
+    //
+    // Its payload carries the live `retry`/`fail` callbacks the queue item is
+    // blocked on, and `emit` above structure-clones — a function makes
+    // webContents.send throw, emit swallows that as an undeliverable push, and
+    // the item is then awaiting a promise that nothing in this process can ever
+    // settle. Worse, queue.js checks `listenerCount('reconnect')` BEFORE
+    // emitting and skips its own unsupervised backoff when anything is
+    // listening, so the blanket forwarder simultaneously took the decision and
+    // failed to make it: the FIRST dropped connection parked a queued transfer
+    // for the lifetime of the process, holding one of the `transfersLimit`
+    // slots with it. The reconnect budget this file now feeds the queue is only
+    // reachable because something here actually answers.
+    //
+    // This is WinSCP's TTerminal::QueryReopen seam. It answers Retry rather
+    // than asking, because an unattended queue must recover from a dropped
+    // connection on its own (the same reasoning terminal.js:1308 records for
+    // the timeout answer); the user's Abort is closing the session, which
+    // removes it from the manager and is what `fail()` reports here.
+    q.on('reconnect', (e) => {
+      const message = e && e.error
+        ? String(e.error.message || e.error) : 'The connection was lost.';
+      this.emit('event:queue', {
+        type: 'reconnect',
+        item: e && e.item,
+        extra: { attempt: e && e.attempt, error: message },
+      });
+      const session = e && e.session;
+      if (!session || !session.id || !this.sessions.get(session.id)) { e.fail(); return; }
+      // security.sessionReopenBackground — "ms between attempts for a session
+      // with queued work" (session.js:534), shorter than sessionReopenAuto
+      // because something is waiting. docs/sessions-and-sites/reconnection.md
+      // has promised this behaviour since it was written; nothing read the
+      // preference. The session's own timer is reconnecting in parallel — this
+      // is how long the QUEUE waits before touching the adapter again. Whether
+      // there is a round after this one is the item's SessionReopenTimeout
+      // budget's decision, not a count kept out here.
+      const sec = (this.config && this.config.prefs.security) || {};
+      const delay = Math.max(0, Number(sec.sessionReopenBackground) || 0);
+      const timer = setTimeout(() => e.retry(), delay);
+      // A pending reconnect must not be the reason the process stays alive.
+      if (typeof timer.unref === 'function') timer.unref();
+    });
 
     // A query or a prompt from inside a transfer is a decision the user must
     // make; it goes out on the prompt channel like every other one.

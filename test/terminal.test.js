@@ -751,6 +751,44 @@ test('a robust loop with no flag has no reconnect budget at all', async () => {
   assert.ok(!session.lines.some((l) => /Retry interval expired/.test(l)));
 });
 
+test('the reconnect budget is one function, and zero still means forever', () => {
+  // TTerminal::ContinueReopen (Terminal.cpp:2459-2464). The arithmetic is
+  // exported because design/main/queue.js asks the same question about the same
+  // preference: a queued transfer reaches this decision upstream by calling
+  // TTerminal::CopyToRemote (Queue.cpp:2324), so a second copy of
+  // `timeout === 0 || elapsed < timeout` living in the queue is how a setting
+  // ends up honoured on one transfer path and ignored on the other.
+  assert.strictEqual(typeof T.continueReopen, 'function',
+    'queue.js imports this; it has to exist');
+
+  // Zero is the SHIPPED DEFAULT (defaults.js:384) and it means indefinitely,
+  // however long the outage has run.
+  const forever = { security: { sessionReopenTimeout: 0 } };
+  assert.strictEqual(T.continueReopen(forever, 0, 1), true);
+  assert.strictEqual(T.continueReopen(forever, 0, 86400000), true);
+  // A missing preferences object must not accidentally become a budget.
+  assert.strictEqual(T.continueReopen(undefined, 0, 86400000), true);
+  assert.strictEqual(T.continueReopen({}, 0, 86400000), true);
+
+  const bounded = { security: { sessionReopenTimeout: 5000 } };
+  assert.strictEqual(T.continueReopen(bounded, 1000, 5999), true);
+  assert.strictEqual(T.continueReopen(bounded, 1000, 6000), false, 'the boundary is exclusive');
+  assert.strictEqual(T.continueReopen(bounded, 1000, 60000), false);
+
+  // And the terminal's own method must BE that function, not a twin of it.
+  let clock = 1000;
+  const { terminal } = makeTerminal({
+    now: () => clock,
+    prefs: { security: { sessionReopenTimeout: 5000 } },
+  });
+  for (const elapsed of [0, 4999, 5000, 50000]) {
+    clock = 1000 + elapsed;
+    assert.strictEqual(terminal.continueReopen(1000),
+      T.continueReopen(terminal.prefs, 1000, clock),
+      `the two disagreed after ${elapsed}ms`);
+  }
+});
+
 test('a fatal error on a still-open session closes it before reporting', async () => {
   const { terminal, adapter, session } = makeTerminal({ cwd: '/d' });
   // Fatal by message while the transport still claims to be up: WinSCP closes

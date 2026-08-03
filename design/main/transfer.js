@@ -86,6 +86,32 @@ const TRANSFER_FLAGS = Object.freeze({
 });
 
 /**
+ * Does a transfer against this remote adapter carry `tfUseFileTransferAny`,
+ * i.e. a reconnect budget? See `TransferEngine.limitedTransferReconnects` for
+ * why setting the flag TIGHTENS rather than loosens.
+ *
+ * WinSCP sets it in exactly two places — TFTPFileSystem::CopyToLocal and
+ * ::CopyToRemote (FtpFileSystem.cpp:1585, :1682) — so FTP and FTPS get the
+ * ceiling and every other protocol keeps reconnecting indefinitely. An adapter
+ * may state it outright with `caps.limitTransferReconnects`.
+ *
+ * Free-standing because both transfer paths need it: the foreground engine
+ * through its own method, and the queue, whose upstream counterpart reaches
+ * this decision by calling TTerminal::CopyToRemote (Queue.cpp:2324) rather
+ * than by owning a second retry policy.
+ */
+function limitsTransferReconnects(adapter) {
+  if (!adapter) return false;
+  if (adapter.caps && adapter.caps.limitTransferReconnects !== undefined) {
+    return !!adapter.caps.limitTransferReconnects;
+  }
+  // Exact names, not `includes('ftp')`: that substring is also in SFTP, the
+  // one protocol WinSCP deliberately leaves unlimited.
+  const p = String(adapter.protocolName || '').toLowerCase();
+  return p === 'ftp' || p === 'ftps';
+}
+
+/**
  * TBatchOverwrite. The three `terminal.js` already had ('no', 'all', 'none')
  * are the same strings, so a progress object shared between the two files
  * never disagrees about what its `batchOverwrite` means.
@@ -1133,17 +1159,14 @@ class TransferEngine {
    * all, which is precisely what the ceiling stops.
    *
    * An adapter may state it outright with `caps.limitTransferReconnects`.
+   *
+   * The test itself is the module-level `limitsTransferReconnects` below, so
+   * that queue.js — WinSCP's queue item calls TTerminal::CopyToRemote
+   * (Queue.cpp:2324) and therefore lands in this same decision — asks the
+   * question the same way instead of guessing at "ftp".
    */
   limitedTransferReconnects() {
-    const a = this.remote;
-    if (!a) return false;
-    if (a.caps && a.caps.limitTransferReconnects !== undefined) {
-      return !!a.caps.limitTransferReconnects;
-    }
-    // Exact names, not `includes('ftp')`: that substring is also in SFTP, the
-    // one protocol WinSCP deliberately leaves unlimited.
-    const p = String(a.protocolName || '').toLowerCase();
-    return p === 'ftp' || p === 'ftps';
+    return limitsTransferReconnects(this.remote);
   }
 
   /** Configuration->ConfirmOverwriting. */
@@ -3353,7 +3376,7 @@ module.exports = {
   // copy-param logic
   validLocalFileName, restoreChars, changeFileName, allowResume, useAsciiTransfer,
   remoteFileRights, localFileReadOnly, resumeTransfer, skipTransfer, allowAnyTransfer,
-  isReservedName,
+  isReservedName, limitsTransferReconnects,
   // progress helpers terminal.js did not need
   rollbackTransfer, addResumed, setAsciiTransfer,
   // classes
