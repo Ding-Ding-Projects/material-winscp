@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `d85484b`** — Refresh handoff for the second verified wave
+**At commit `ae34762`** — Update the in-app changelog for the roadmap wave
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3377 run, **3376 pass, 0 fail**, 1 skipped |
-| Hand-written code | 218,455 lines across 407 files |
-| Commits | 160 on `main` |
+| Tests | 3383 run, **3382 pass, 0 fail**, 1 skipped |
+| Hand-written code | 218,563 lines across 407 files |
+| Commits | 163 on `main` |
 | Working tree | **1 uncommitted change(s)** |
-| Remote | `origin/main` at `d85484b` — in sync |
+| Remote | `origin/main` at `ae34762` — in sync |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `ae34762` | 2026-08-03 | Update the in-app changelog for the roadmap wave |
+| `e91bd48` | 2026-08-03 | Fix CLI, drag-drop, menu, overlay, and history edges |
+| `7c9fe53` | 2026-08-03 | Record the verified pushed head in handoff |
 | `d85484b` | 2026-08-03 | Refresh handoff for the second verified wave |
 | `88d55a8` | 2026-08-03 | Update the in-app changelog |
 | `bcc1fd8` | 2026-08-03 | Fix workspace, search, session, and SFTP edge cases |
 | `09b1239` | 2026-08-03 | Refresh handoff for the verified CLI wave |
 | `33d884f` | 2026-08-03 | Record the expanded CLI and protocol fixes |
-| `69004b4` | 2026-08-03 | Expand headless CLI and close transfer edge cases |
-| `35f0fd5` | 2026-08-03 | Update handoff for verified lifecycle fixes |
-| `4f16742` | 2026-08-03 | Refresh changelog for transfer edge fixes |
 
 ## Notes from whoever worked on this last
 
