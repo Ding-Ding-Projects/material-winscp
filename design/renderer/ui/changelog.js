@@ -187,6 +187,30 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "d008db8", kind: 'commit', ref: "d008db8", oid: "d008db882c5475cadc8d3ae7ac95eb052efb72fe", date: "2026-08-03",
+    title: "Harden startup, security, protocol, and preference edges",
+    changes: [
+      { category: "security", text: "English: Missing INI files now explain themselves, portable imports find the file WinSCP actually writes, secrets refuse unsafe rewraps, FTP and WebDAV stop guessing, and numeric settings show what they really saved; the boundary guards have formed a small but determined queue." },
+      { category: "security", text: "粵語：INI 唔見咗會自己講清楚、portable import 搵返 WinSCP 真係寫嗰份、secret rewrap fail closed、FTP/WebDAV 唔再靠估、numeric setting 顯示返真正存咗乜；啲邊界守衛排隊排得幾有紀律。" },
+    ],
+  },
+  {
+    id: "df68f60", kind: 'commit', ref: "df68f60", oid: "df68f60514e6342c97bbc1c5712aa0c03aace2fe", date: "2026-08-03",
+    title: "Record the latest CLI and protocol handoff",
+    changes: [
+      { category: "changed", text: "English: The handoff now names the pushed CLI/editor/queue/protocol wave and its 3,408-test evidence; the roadmap still says 114 units because honest maps do not paint the unfinished road green." },
+      { category: "changed", text: "粵語：handoff 而家報清楚最新 CLI、editor、queue 同 protocol wave，測試證據都齊；仲有 114 units 就照講，唔會幫未鋪好嘅路油綠色。" },
+    ],
+  },
+  {
+    id: "395984e", kind: 'commit', ref: "395984e", oid: "395984e3e58c3df4605c4c80a097eacfe78d6155", date: "2026-08-03",
+    title: "Refresh the CLI and protocol changelog",
+    changes: [
+      { category: "changed", text: "English: The generated history now links the latest hardening wave to its verified full SHA, so even the timeline knows where the useful bits live." },
+      { category: "changed", text: "粵語：更新咗 changelog，最新 hardening wave 有齊 verified full SHA；條時間線終於識得帶路，唔使靠估。" },
+    ],
+  },
+  {
     id: "c68948c", kind: 'commit', ref: "c68948c", oid: "c68948c970400321de07c140af91d7249455c7aa", date: "2026-08-03",
     title: "Harden CLI, editor, queue, and protocol edges",
     changes: [
@@ -640,30 +664,6 @@ export const DEVELOPMENT = [
     changes: [
       { category: "added", text: "English: Expose panel tree visibility, fail closed on empty PATH components, publish live certificate facts safely, add bookmark shortcut enumeration, make FileFind export keyboard reachable, and add About detail copying. Add focused tests and documentation. The small surfaces have stopped hiding useful facts behind one very shy button." },
       { category: "changed", text: "廣東話：補返 panel tree visibility、empty PATH fail-closed、live certificate facts 安全輸出、bookmark shortcut enumeration、FileFind 鍵盤 export，同 About copy details。加 tests 同 docs，細細粒 surface 終於唔再將有用資料收埋喺一粒怕醜掣後面。" },
-    ],
-  },
-  {
-    id: "19b22bb", kind: 'commit', ref: "19b22bb", oid: "19b22bb97e47c63a88ee32a53bca3e955f00be6a", date: "2026-08-03",
-    title: "Refresh preference-wave handoff metadata",
-    changes: [
-      { category: "added", text: "English: Record the verified 3,299/3,300 test result, unchanged 59.0% logic coverage, 114 remaining units, and the changelog test correction. The handoff now carries the empty-history edge case without losing the plot." },
-      { category: "changed", text: "廣東話：記低已驗證嘅 3,299/3,300 測試、仍然 59.0% logic coverage、剩低 114 個 units，同 changelog test 修正。交更紙帶埋 empty-history edge case，唔會失劇情。" },
-    ],
-  },
-  {
-    id: "058e002", kind: 'commit', ref: "058e002", oid: "058e0025ede3ac0461cece1a537b0dc42d8f2951", date: "2026-08-03",
-    title: "Refresh changelog and stabilize empty-history coverage",
-    changes: [
-      { category: "changed", text: "English: Record the preference and protocol wave in the in-app history, and keep the no-recorded-changes test valid when body-less commits roll outside the rolling development window. The changelog now reads the calendar instead of demanding a ghost commit." },
-      { category: "changed", text: "廣東話：將 preference 同 protocol wave 寫入 app history，亦令 no-recorded-changes test 唔會因為冇 body 嘅舊 commit 滑出 rolling window 就發脾氣。changelog 而家睇日曆，唔使搵鬼影 commit。" },
-    ],
-  },
-  {
-    id: "bf1d6de", kind: 'commit', ref: "bf1d6de", oid: "bf1d6deb9c59d4a601dd80928b89b3d7fe8699df", date: "2026-08-03",
-    title: "Harden preferences, SFTP, queue, sync, and import dialogs",
-    changes: [
-      { category: "added", text: "English: Wire saved transfer options, preserve special SFTP types, append retries behind waiting work, harden keep-up-to-date UI transitions, gate property tags truthfully, and show secret-free known-host algorithms. Add focused tests and documentation. The queue now respects the line, and the dialogs stop pretending every shiny control has a backend." },
-      { category: "changed", text: "廣東話：補返 saved transfer options、保留 SFTP special types、retry 排隊唔插隊、keep-up-to-date UI transition、Properties tag capability，同 known-host algorithm 安全預覽。加 tests 同 docs，啲 dialog 終於唔再扮每粒閃閃掣都有 backend，queue 亦識排隊守規矩。" },
     ],
   },
 ];
