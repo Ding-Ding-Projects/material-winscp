@@ -187,6 +187,27 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "0e0969b", kind: 'commit', ref: "0e0969b", oid: "0e0969bbe0dd01226821c7463d197593ad763cba", date: "2026-08-03",
+    title: "Fix Windows line-ending test extraction",
+    changes: [
+      { category: "fixed", text: "Make the location-profile source-extraction regression accept LF and CRLF endings so the Windows CI checkout tests the same behavior as the local checkout. The regex now reads the file instead of arguing with the newline fashion police.\\n\\n廣東話：location profile 個 regex 而家識睇 LF 同 CRLF，唔會再同換行符號鬥氣，Windows CI 可以正常開工。" },
+    ],
+  },
+  {
+    id: "2fabb27", kind: 'commit', ref: "2fabb27", oid: "2fabb27c86183c360d5b0c6b49496e1a96a4f630", date: "2026-08-03",
+    title: "Refresh handoff for CLI parity wave",
+    changes: [
+      { category: "fixed", text: "Update the handoff with 59.0% logic coverage, 114 outstanding units, 3337 total tests with one skip, the 22-issue scan, and the verified third-wave CLI and platform fixes. The road map gains another honest signpost, not a cardboard finish line.\\n\\n廣東話：roadmap 再加一塊真路牌，唔會整張紙牌寫住『終點』就當到站。" },
+    ],
+  },
+  {
+    id: "128d764", kind: 'commit', ref: "128d764", oid: "128d76451b7f5fec254d0c611fa1e83af64b54c6", date: "2026-08-03",
+    title: "Refresh changelog for CLI parity hardening",
+    changes: [
+      { category: "fixed", text: "Record the third-wave CLI, runner, Preferences, remote-transfer, PATH and SFTP fixes with verified commit links. The changelog now knows the command line can carry a tab without dropping its luggage.\\n\\n廣東話：更新日誌記低 CLI 帶住 tab 都唔會甩喼，runner 同 SFTP 嘅新本領都有 receipts。" },
+    ],
+  },
+  {
     id: "7e93933", kind: 'commit', ref: "7e93933", oid: "7e9393357f94f5f34c7dd288a194c9b6cb219345", date: "2026-08-03",
     title: "Complete CLI parity and harden platform edges",
     changes: [
@@ -615,27 +636,6 @@ export const DEVELOPMENT = [
     title: "Add headless CLI and Docker diff smoke",
     changes: [
       { category: "added", text: "English: Add the full console-compatible winscp entry point, deterministic drag/drop simulation commands, real SFTP/FTP Docker verification, and a structured-clone-safe sync.apply response. Validate bad CLI input before it can turn into a confident wrong plan, and keep Docker credentials out of process arguments.\\n\\nCantonese: 個 CLI 終於識做嘢，拖放唔再靠估，兩部 Docker server 幫手照妖；sync.apply 唔再攞住活生生嘅 queue 過 Electron 關口，密碼亦唔再喺 command line 周街派街坊。" },
-    ],
-  },
-  {
-    id: "4e4d883", kind: 'commit', ref: "4e4d883", oid: "4e4d883ac5e509e850d67c4db522c5deb253e8a1", date: "2026-08-03",
-    title: "Record final pushed security handoff",
-    changes: [
-      { category: "fixed", text: "English: The generated handoff and the fresh real Electron capture now describe the verified security tip together, so the paperwork no longer trails the bug fix like a confused queue item.\\n\\nCantonese: Generated handoff 同新鮮真實 Electron 截圖而家一齊講緊已驗證嘅 security tip，文件唔再似迷路 queue item 咁追唔上修正。" },
-    ],
-  },
-  {
-    id: "cbfeeb1", kind: 'commit', ref: "cbfeeb1", oid: "cbfeeb1fa38134e5adfc0b1b6303de3e74910d13", date: "2026-08-03",
-    title: "Refresh handoff after security fix",
-    changes: [
-      { category: "fixed", text: "English: The handoff now names the security-parser fix and its green 3,190-test evidence, so the status page has stopped hiding behind yesterday's screenshot.\\n\\nCantonese: Handoff 而家寫埋 security parser 修正同綠燈 3,190 測試證據，唔再躲喺尋日張截圖後面扮冇事。" },
-    ],
-  },
-  {
-    id: "5d7648a", kind: 'commit', ref: "5d7648a", oid: "5d7648ac63e649934bc32a71293ba74b0dd05f69", date: "2026-08-03",
-    title: "Validate damaged scrambled password headers",
-    changes: [
-      { category: "fixed", text: "English: A flipped padding byte could cosplay as a length header and make the decoder give up early. Validate every candidate against the full blob, preserve the self-synchronizing format, and document the fail-closed behavior; the security regression and real smoke capture are included.\\n\\nCantonese: Padding byte 一反轉就扮 length header，decoder 即刻提早收工。依家逐個 candidate 對完整 blob 驗身，保留 self-synchronizing 格式，寫低 fail-closed 規則，security regression 同真實 smoke 截圖一併入貨。" },
     ],
   },
 ];
