@@ -187,6 +187,27 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "7e93933", kind: 'commit', ref: "7e93933", oid: "7e9393357f94f5f34c7dd288a194c9b6cb219345", date: "2026-08-03",
+    title: "Complete CLI parity and harden platform edges",
+    changes: [
+      { category: "added", text: "Preserve tab-containing command arguments, release runner state through optional log cleanup failures, make PATH lookup host-correct, restore companion preference keys, require explicit remote-copy capability, and make SFTP recursive removal lstat entries without attributes. Add focused tests and documentation. The CLI now keeps its tabs, the runner keeps its marbles, and SFTP stops wandering into symlinked gardens.\\n\\n廣東話：CLI 保住 tab、runner 收好自己啲 marble、SFTP 用 lstat 睇清楚條路，唔會再行入 symlink 花園打卡。" },
+    ],
+  },
+  {
+    id: "4355fa1", kind: 'commit', ref: "4355fa1", oid: "4355fa1dc4ce6453f3acacd67295d0df25362cae", date: "2026-08-03",
+    title: "Refresh handoff for transfer and security wave",
+    changes: [
+      { category: "fixed", text: "Update the factual handoff with 59.0% logic coverage, 114 outstanding units, 3331 total tests with one skip, the 22-issue scan and the newly pushed transfer, console, sync and security fixes. The map now marks another stretch of potholes with little flags.\\n\\n廣東話：handoff 再插多幾支小旗，邊度有坑、邊度已經填好，大家揸車唔使靠手感。" },
+    ],
+  },
+  {
+    id: "e1df1cc", kind: 'commit', ref: "e1df1cc", oid: "e1df1cc72a128ec6da8667560d8105a2ae22d9d8", date: "2026-08-03",
+    title: "Refresh changelog for transfer and security hardening",
+    changes: [
+      { category: "fixed", text: "Record the transfer, console, remote-file, sync, SiteAdvanced and security edge fixes with verified commit links. The changelog now has receipts for the rakes it removed.\\n\\n廣東話：更新日誌留低晒 receipts，邊支 rake 被收起都睇得返，唔使靠估。" },
+    ],
+  },
+  {
     id: "3ba2f1c", kind: 'commit', ref: "3ba2f1c", oid: "3ba2f1cee10f3e344c8b3311fb56fbe7fa205710", date: "2026-08-03",
     title: "Harden transfer console security and sync edges",
     changes: [
@@ -615,27 +636,6 @@ export const DEVELOPMENT = [
     title: "Validate damaged scrambled password headers",
     changes: [
       { category: "fixed", text: "English: A flipped padding byte could cosplay as a length header and make the decoder give up early. Validate every candidate against the full blob, preserve the self-synchronizing format, and document the fail-closed behavior; the security regression and real smoke capture are included.\\n\\nCantonese: Padding byte 一反轉就扮 length header，decoder 即刻提早收工。依家逐個 candidate 對完整 blob 驗身，保留 self-synchronizing 格式，寫低 fail-closed 規則，security regression 同真實 smoke 截圖一併入貨。" },
-    ],
-  },
-  {
-    id: "9cf2684", kind: 'commit', ref: "9cf2684", oid: "9cf2684dc25ae5f0bbd9baf40943b1390587eef7", date: "2026-08-03",
-    title: "Refresh final handoff and smoke evidence",
-    changes: [
-      { category: "changed", text: "English: The final handoff and its real Electron capture now travel together, because a report that describes a screenshot left behind is just a detective novel with the last page missing.\\n\\nCantonese: 最後份 handoff 同真實 Electron 截圖一齊出發，唔好留低一份講緊失蹤證據嘅偵探小說但冇最後一頁。" },
-    ],
-  },
-  {
-    id: "cfc9631", kind: 'commit', ref: "cfc9631", oid: "cfc9631155f11a7b19660d5003b566d7a3983c48", date: "2026-08-03",
-    title: "Refresh handoff after smoke evidence",
-    changes: [
-      { category: "changed", text: "English: The handoff now points at the smoke-evidence commit and records the green local suite, so its progress meter is less fictional than a queue with no items.\\n\\nCantonese: Handoff 而家指住 smoke evidence 個 commit，同埋記低本地綠燈測試，個進度表唔再似一條冇貨嘅 queue 咁虛構。" },
-    ],
-  },
-  {
-    id: "ecd6ef0", kind: 'commit', ref: "ecd6ef0", oid: "ecd6ef0b228a4004440688a1d2245417b64a041d", date: "2026-08-03",
-    title: "Refresh genuine Electron smoke capture",
-    changes: [
-      { category: "changed", text: "English: The smoke test left behind a real renderer capture, so keep the evidence instead of letting the screenshot vanish into the test runner's snack drawer.\\n\\nCantonese: Smoke test 留低咗真實 renderer 截圖，留返份證據，唔好畀佢跌入 test runner 個點心櫃消失。" },
     ],
   },
 ];
