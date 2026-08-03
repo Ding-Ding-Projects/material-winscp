@@ -430,6 +430,15 @@ test('tag editing requires truthful capability and a write seam', async () => {
   assert.strictEqual(P.canEditTags({ tags: null, caps: { tags: true }, onApplyTags() {} }), false);
 });
 
+test('directory-size calculation is hidden when the backend does not support it', async () => {
+  const P = await load('properties');
+  const agg = P.aggregateSelection([{ name: 'tree', type: 'dir', size: 0 }]);
+  assert.strictEqual(P.canCalculateSize(agg, { calculateSize: true }), true);
+  assert.strictEqual(P.canCalculateSize(agg, { calculateSize: false }), false);
+  // Missing capability data is allowed during the session-info refresh.
+  assert.strictEqual(P.canCalculateSize(agg, {}), true);
+});
+
 /* ================================================================== */
 /* 4. the duplicate dialog's target split                              */
 /* ================================================================== */

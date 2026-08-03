@@ -19,10 +19,11 @@ has an accessible label, and long paths retain their full value in a tooltip whi
 remaining ellipsized in narrow layouts. A missing queue item is rendered as a
 stable, actionable-free state rather than throwing or blocking the application.
 
-When the live queue item reaches `done` or `error`, the dialog announces the
-terminal result through its status region and disables pause, cancel, speed,
-and background actions. This prevents a finished transfer from still appearing
-to accept transfer controls while leaving its final progress visible.
+When the live queue item reaches `done`, `error`, or `cancelled`, the dialog
+announces the terminal result through its status region and disables pause,
+cancel, speed, and background actions. This also covers cancellation performed
+from another queue surface while this non-modal window remains open, so the
+user receives an outcome announcement rather than a silent disabled state.
 
 ## Verification
 

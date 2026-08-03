@@ -21,6 +21,13 @@ tags, and an `onApplyTags(tags)` write callback. Tag metadata without that
 complete seam remains hidden rather than exposing an OK action that cannot
 persist the change.
 
+Directory-size calculation is offered only when the selection contains a real
+directory and the session capability does not explicitly set
+`calculateSize: false`. If capability information is still being loaded, the
+dialog may provisionally show the control and rebuild it when session info
+arrives. A backend that reports the capability as unsupported therefore never
+receives an accidental size request from this surface.
+
 Owner, group, timestamps, and recursive application follow the same rule:
 invalid or unavailable metadata is not invented, and a failed write remains a
 failed write with the backend message retained for the user.
@@ -36,4 +43,5 @@ validation marks the field invalid while preserving the typed value.
 
 `node --test test/dialogs-fileops.test.js` covers all 4096 permission modes,
 symbolic/octal validation, tri-state intersection, and malformed metadata
-handling. The full repository command is `npm test`.
+handling, plus capability gating for directory-size calculation. The full
+repository command is `npm test`.

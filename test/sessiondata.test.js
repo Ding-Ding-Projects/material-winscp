@@ -395,6 +395,12 @@ test('a plain password is read and flagged for rewriting into the protected form
   assert.strictEqual(S.loadSession({ PasswordPlain: 'x' }, { loadPasswords: false }).data.password, '');
 });
 
+test('raw string options stay strings when an importer supplies typed values', () => {
+  const d = S.loadSession({ ProxyTelnetCommand: 123 }).data;
+  assert.strictEqual(d.proxyTelnetCommand, '123');
+  assert.strictEqual(typeof d.proxyTelnetCommand, 'string');
+});
+
 test('loadPasswords false does not load any session secret', () => {
   const r = S.loadSession({
     PasswordPlain: 'main',

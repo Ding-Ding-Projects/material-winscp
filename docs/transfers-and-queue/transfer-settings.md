@@ -102,6 +102,7 @@ Presets are ordinary user-managed records, so they are covered by
 | Symlink loop with `followDirectorySymlinks` on | Depth-bounded; the transfer stops and names the loop. | Yes |
 | `onceDoneOperation: shutdown` and the transfer fails | The action does not run. | n/a |
 | Cancellation arrives after overwrite planning but before the byte mover starts | The transfer exits as cancelled without opening a write or creating a target. | Yes, start it again |
+| Cancellation arrives after the byte mover stops at a safe point | A resumable `.filepart` is not renamed into the destination; the transfer remains cancelled. | Yes, start it again |
 
 ## Security considerations
 

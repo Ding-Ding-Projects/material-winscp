@@ -428,7 +428,9 @@ class KeyValueStorage {
 
   readStringRaw(name, def) {
     const v = this._raw(name);
-    return v === undefined ? def : v;
+    // INI/TStrings values are text. Keep the same type boundary when a
+    // programmatic importer supplies a typed map instead of parsed lines.
+    return v === undefined ? def : String(v);
   }
 
   readString(name, def) {

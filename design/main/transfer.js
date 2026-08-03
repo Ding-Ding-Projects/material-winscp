@@ -3009,6 +3009,10 @@ class AdapterFileSystem {
       onBytes: (n) => progress.addTransferred(n),
     });
 
+    // A byte mover may observe cancellation and return normally after
+    // stopping at a safe point. Do not publish its incomplete .filepart.
+    this._throwIfCancelled(progress);
+
     if (doResume) {
       // Only now that every byte is there does the real name appear.
       if (destFileExists) {
@@ -3175,6 +3179,10 @@ class AdapterFileSystem {
       progress,
       onBytes: (n) => progress.addTransferred(n),
     });
+
+    // The mover is allowed to stop cleanly when cancellation arrives. The
+    // resumable staging file must not become the visible destination then.
+    this._throwIfCancelled(progress);
 
     if (doResume) {
       if (existing) {

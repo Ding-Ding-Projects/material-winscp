@@ -59,6 +59,7 @@ defineStrings({
   txPgCancelling: ['Cancelling transfer…', '取消緊傳輸⋯'],
   txPgFinished: ['Transfer finished.', '傳輸完成。'],
   txPgFinishedWithErrors: ['Transfer finished with errors.', '傳輸完成，但有錯誤。'],
+  txPgCancelledState: ['Transfer cancelled.', '傳輸已取消。'],
   txPgActionFailed: ['Could not update the transfer: {0}', '更新傳輸失敗：{0}'],
 });
 
@@ -231,6 +232,7 @@ export function openProgressDialog({ id } = {}) {
     if (lastPaintState !== item.state) {
       if (item.state === 'done') setStatus(t('txPgFinished'));
       else if (item.state === 'error') setStatus(t('txPgFinishedWithErrors'), true);
+      else if (item.state === 'cancelled') setStatus(t('txPgCancelledState'));
       else if (!actionBusy) setStatus('');
       lastPaintState = item.state;
     }

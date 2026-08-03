@@ -27,6 +27,11 @@ Blank or malformed numeric values are treated as absent during import and keep
 the supplied WinSCP factory default; in particular, an empty floating-point
 value is never coerced to zero by JavaScript's numeric conversion.
 
+The session serializer also enforces the textual INI boundary for raw string
+options: programmatic import maps are normalized to strings before assignment,
+so a typed value cannot turn a command or other raw setting into a number or
+boolean in the session model.
+
 The import replaces the stored site and folder collections, matching the
 session-store meaning of a WinSCP configuration import. It does not replace
 application preferences or workspaces because those have no lossless WinSCP
@@ -49,7 +54,7 @@ discarded rather than written in clear.
   plaintext-password protection, machine-ciphertext rejection, and automatic
   migration from `winscp-material.ini` beside app data.
 - `test/sessiondata.test.js` covers the lower-level INI option and hierarchy
-  serializer, including default-vs-explicit values.
+  serializer, including default-vs-explicit values and typed raw-string input.
 - The JSON path remains covered by the existing configuration and Electron
   import/export flows.
 

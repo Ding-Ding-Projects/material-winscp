@@ -579,6 +579,10 @@ test('a symlink keeps its target, and one without a target is refused', () => {
   assert.throws(
     () => parse('lrwxrwxrwx   1 root root            7 Jun 15 12:34 link'),
     R.ListLineError);
+  // An arrow without a destination is just as unusable as no arrow at all.
+  assert.throws(
+    () => parse('lrwxrwxrwx   1 root root            7 Jun 15 12:34 link -> '),
+    R.ListLineError);
 });
 
 test('MacOS ACL and extended-attribute markers after the rights column', () => {

@@ -30,6 +30,12 @@ trusting a stale event payload. `dispatch()` waits for the real queue method,
 rejects a false result or missing method, then reconciles again. It never emits
 a success result for a no-op or an unavailable command.
 
+Commands are serialized in submission order. This matters for IPC clients that
+can deliver two clicks before the first queue operation completes: the second
+command validates against the reconciled model produced by the first, instead
+of invoking a stale action against the same item. A rejected command does not
+poison the sequence, so later commands remain available.
+
 Queue events are a failure boundary too. If reconciliation cannot read a queue
 snapshot, the controller reports the error to an attached `error` listener; if
 there is no diagnostic listener, it contains the failure rather than allowing
@@ -63,6 +69,8 @@ node --check design/main/queue.js
 
 The event-boundary regression tests cover both IPC-safe containment and
 diagnostic delivery when an `error` listener is present.
+The focused pause regression also verifies that concurrent commands call the
+queue only once and reject the stale second command after reconciliation.
 
 The queue controller is not an HTTP API. Postman artefacts are not applicable;
 the feature is exercised through the local model and its event contract.

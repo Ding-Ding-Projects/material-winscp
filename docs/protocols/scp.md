@@ -60,6 +60,7 @@ codes 126/127, so real checksum failures remain visible.
 | Locale gives non-English month names | Dates parse wrongly or not at all. `unsetNationalVars` prevents this. | Yes |
 | Filenames containing newlines | Cannot be represented in `ls` output. Such entries are reported as unparseable rather than silently mangled or merged. | No — use SFTP |
 | Server clock is in another timezone | Timestamps look shifted; `timeDifferenceAuto` measures and corrects it. | Yes |
+| A remote `ls` line reports an unsafe or overflowing byte count | The entry remains visible with size `0` (unknown) rather than carrying a rounded number into comparisons and transfers. | Yes — enable SFTP or fix the server output |
 | Server sends an epoch timestamp whose millisecond conversion exceeds JavaScript's safe-integer range | The SCP record is rejected with a protocol error rather than producing a rounded timestamp. | No — retry with a supported server timestamp |
 | Transfer interrupted | SCP has no resume. The queue item fails with the whole file to redo — `caps.resume` is `false`, so the UI never offers Resume. | Partially |
 | A malformed or truncated SCP stream | The operation fails with a protocol error; a recursive download is never reported complete merely because its SSH channel closed. | No — retry the transfer |
@@ -100,6 +101,8 @@ codes 126/127, so real checksum failures remain visible.
   recursive truncation, permissions and error categories are covered by
   focused contract tests and the real SSH/SCP suite in `test/e2e-sftp.test.js`.
 - Timezone correction is tested with synthetic clock offsets.
+- Listing-size validation is tested so an oversized remote `ls` value becomes an
+  honest unknown size instead of a rounded byte count.
 - Commander remote-copy command construction is tested for explicit overwrite
   and default no-overwrite behavior in `test/scp-commander-parity.test.js`.
 - SHA checksum fallback to `shasum -a N` is tested with an in-process shell

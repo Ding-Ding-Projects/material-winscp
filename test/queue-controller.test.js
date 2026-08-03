@@ -136,6 +136,25 @@ test('controller awaits asynchronous bulk cancellation results', async () => {
   controller.close();
 });
 
+test('controller serializes concurrent pause commands', async () => {
+  const queue = new FakeQueue([item('a', 'active')]);
+  let pauseCalls = 0;
+  queue.pauseItem = async (id) => {
+    pauseCalls += 1;
+    await new Promise((resolve) => setImmediate(resolve));
+    return FakeQueue.prototype.pauseItem.call(queue, id);
+  };
+  const controller = new QueueController(queue);
+
+  const first = controller.dispatch('pause-item', 'a');
+  const second = controller.dispatch('pause-item', 'a');
+  await first;
+  await assert.rejects(second, { code: 'UNKNOWN_ACTION' });
+  assert.equal(pauseCalls, 1);
+  assert.equal(controller.item('a').state, 'paused');
+  controller.close();
+});
+
 test('queue event reconciliation contains IPC failures without an error listener', () => {
   const queue = new FakeQueue([item('a', 'queued')]);
   const controller = new QueueController(queue);

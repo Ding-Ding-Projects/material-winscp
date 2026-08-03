@@ -132,6 +132,12 @@ function parseLsDate(text, now) {
   return t;
 }
 
+/** Remote `ls` output is untrusted; keep only exact safe byte counts. */
+function listingSize(value) {
+  const size = typeof value === 'number' ? value : Number(String(value).replace(/,/g, ''));
+  return Number.isSafeInteger(size) && size >= 0 ? size : 0;
+}
+
 /**
  * Parse one `ls -l` line. Returns null when the line is not a listing line —
  * `total 12`, a warning on stdout, a shell banner.
@@ -167,7 +173,7 @@ function parseListingLine(line, opts = {}) {
   }
   if (dateIndex < 0) return null;
 
-  const size = Number(toks[dateIndex - 1].text);
+  const size = listingSize(toks[dateIndex - 1].text);
   const names = toks.slice(0, dateIndex - 1).map((t) => t.text);
   let owner = '';
   let group = '';
@@ -1047,6 +1053,7 @@ module.exports = {
   parseListing,
   parseListingLine,
   parseLsDate,
+  listingSize,
   parseControl,
   modeString,
   transferMode,

@@ -24,6 +24,7 @@ test('cancel failures remain visible and do not masquerade as success', () => {
 test('terminal queue state is announced and no longer offers transfer actions', () => {
   assert.match(source, /item\.state === 'done'\) setStatus\(t\('txPgFinished'\)\)/);
   assert.match(source, /item\.state === 'error'\) setStatus\(t\('txPgFinishedWithErrors'\), true\)/);
+  assert.match(source, /item\.state === 'cancelled'\) setStatus\(t\('txPgCancelledState'\)\)/);
   assert.match(source, /const terminal = item\?\.state === 'done' \|\| item\?\.state === 'error' \|\| item\?\.state === 'cancelled'/);
   assert.match(source, /cancelBtn\.disabled = !item \|\| terminal;/);
   assert.match(source, /speedBtn\.disabled = !item \|\| terminal;/);

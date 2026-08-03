@@ -2540,3 +2540,30 @@ test('a cancellation arriving after planning does not start the byte mover', asy
   assert.deepStrictEqual(moved, [], 'a cancelled operation must not invoke copyBytes');
   assert.strictEqual(remote.has('/r/a.txt'), false);
 });
+
+test('cancellation returned by the byte mover does not publish a partial filepart', async () => {
+  const { engine, local, remote } = makeEngine({
+    copyBytes: async (plan) => {
+      const ws = await plan.targetAdapter.createWriteStream(plan.targetPath, {
+        size: plan.size, start: plan.writeAt, append: plan.append,
+      });
+      ws.write(Buffer.from('A'));
+      await new Promise((resolve, reject) => {
+        ws.on('error', reject);
+        ws.end(resolve);
+      });
+      plan.progress.setCancel(CANCEL.cancel);
+      return 1;
+    },
+  });
+  local.put('/l/a.txt', 'AB');
+  remote.putDir('/r');
+
+  await assert.rejects(() => engine.copyToRemote(['/l/a.txt'], '/r/',
+    cp({ preserveTime: false, resumeSupport: 'on' }), COPY_FLAGS.noConfirmation, null),
+    (error) => error.aborted === true);
+  assert.strictEqual(remote.has('/r/a.txt'), false,
+    'cancellation must not rename the incomplete staging file');
+  assert.strictEqual(remote.text('/r/a.txt.filepart'), 'A',
+    'the incomplete staging file remains available for a later resume');
+});

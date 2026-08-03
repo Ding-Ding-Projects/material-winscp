@@ -232,6 +232,11 @@ export function canEditTags(props = {}) {
     && typeof props.onApplyTags === 'function';
 }
 
+/** Whether the Common sheet can offer its directory-size operation. */
+export function canCalculateSize(agg, caps = {}) {
+  return !!agg?.allowCalculateSize && caps.calculateSize !== false;
+}
+
 /* ================================================================== */
 /* the dialog                                                          */
 /* ================================================================== */
@@ -350,7 +355,7 @@ registerDialog('properties', ({ props, close }) => {
     calcButton.textContent = t('calcSize');
     calcButton.title = t('calcSize');
   });
-  calcButton.hidden = !agg.allowCalculateSize;
+  calcButton.hidden = !canCalculateSize(agg, caps);
   appearanceTarget(calcButton, 'props-calculate', 'Calculate directory sizes');
 
   const commonRows = [];

@@ -93,6 +93,7 @@ class QueueController extends EventEmitter {
     this.queue = queue;
     this._version = 0;
     this._closed = false;
+    this._dispatchTail = Promise.resolve();
     this._listeners = [];
     this._snapshot = {
       version: 0,
@@ -231,7 +232,14 @@ class QueueController extends EventEmitter {
     return (...args) => this.queue[name](...args);
   }
 
-  async dispatch(action, id, value) {
+  dispatch(action, id, value) {
+    const run = this._dispatchTail.then(() => this._dispatch(action, id, value));
+    // A rejected command must not poison later commands in the sequence.
+    this._dispatchTail = run.catch(() => undefined);
+    return run;
+  }
+
+  async _dispatch(action, id, value) {
     if (typeof action !== 'string' || !action) throw new QueueControllerError('INVALID_ACTION', 'A queue action is required.');
     if (id !== undefined && id !== null) this._assertAction(id, action);
     else if (action !== 'pause-all' && action !== 'resume-all' && action !== 'process-queue'

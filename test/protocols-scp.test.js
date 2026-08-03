@@ -13,6 +13,8 @@ const {
   ScpSink,
   ByteReader,
   parseControl,
+  parseListingLine,
+  listingSize,
   modeString,
   transferMode,
 } = require('../design/main/protocols/scp');
@@ -136,6 +138,15 @@ test.describe('SCP adapter contract', () => {
     const reader = new ByteReader(source, 1024, 8);
     source.end('123456789\n');
     await assert.rejects(() => reader.readLine(), (error) => error.category === 'protocol' && error.code === 'EPROTO');
+  });
+
+  test('listing sizes reject unsafe and overflowing remote values', () => {
+    assert.equal(listingSize(Number.MAX_SAFE_INTEGER), Number.MAX_SAFE_INTEGER);
+    assert.equal(listingSize(Number.MAX_SAFE_INTEGER + 1), 0);
+    const row = parseListingLine('-rw-r--r-- 1 user group 9007199254740992 Jan 1 2024 giant', {
+      now: Date.parse('2024-06-01T00:00:00Z'),
+    });
+    assert.equal(row.size, 0);
   });
 
   test('never sends more bytes than the SCP header declares and reports progress', async () => {

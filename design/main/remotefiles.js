@@ -1634,6 +1634,7 @@ class TRemoteFile {
             const p = line.indexOf(SYMLINK_STR);
             if (p >= 0) {
               this.linkTo = line.slice(p + SYMLINK_STR.length);
+              if (this.linkTo === '') throw new Error('symlink with an empty target');
               line = line.slice(0, p);
             } else {
               throw new Error('symlink without a target');
