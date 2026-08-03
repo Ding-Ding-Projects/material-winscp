@@ -154,13 +154,15 @@ export function createSearchBar(opts = {}) {
     opts.onChange?.(snapshot);
   };
 
-  const savePersist = debounce(() => {
+  function persistState() {
     if (opts.persist === false) return;
     const all = { ...(store.get('search') || {}) };
     all[id] = { query: state.query, pattern: state.pattern, flags: state.flags, mode: state.mode };
     store.set('search', all);
     persistCurrent('search');
-  }, 500);
+  }
+
+  const savePersist = debounce(persistState, 500);
 
   const emit = debounce(() => { notify(); savePersist(); }, opts.debounceMs ?? 120);
 
@@ -271,6 +273,12 @@ export function createSearchBar(opts = {}) {
   }
 
   function destroy() {
+    // A palette or dialog can close immediately after typing. The pending
+    // notification debounce is intentionally cancelled, but the latest search
+    // state still has to reach storage before its field is detached.
+    emit.cancel();
+    savePersist.cancel();
+    persistState();
     builder?.close();
     subscribers.clear();
     registry.delete(id);

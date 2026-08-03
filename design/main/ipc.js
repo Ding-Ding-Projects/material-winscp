@@ -32,6 +32,7 @@ const { EditorManager } = require('./editors');
 const { History } = require('./history');
 const { Updates } = require('./updates');
 const { AutoUpdater } = require('./autoupdate');
+const shellintegration = require('./shellintegration');
 
 // ------------------------------------------------------------- envelopes
 
@@ -570,6 +571,7 @@ class Ipc {
       clipboard: {
         readText: () => clipboard.readText(),
         writeText: (t) => clipboard.writeText(String(t)),
+        files: () => shellintegration.readClipboardFilePaths(clipboard),
       },
       ops: this.explorerOps(),
     });
@@ -2084,7 +2086,18 @@ class Ipc {
     /** Drag and drop: which operation a drop effect means, and where it lands. */
     this.handle('explorer:dropEffect', (spec) => E().chooseDropEffect(obj(spec, 'spec')));
     this.handle('explorer:dropTarget', (spec) => E().ddGetTarget(obj(spec, 'spec')));
-    this.handle('explorer:dragDrop', (spec) => E().dragDropFileOperation(obj(spec, 'spec')));
+    this.handle('explorer:dragDrop', (spec) => {
+      const s = obj(spec, 'spec');
+      const files = strArr(s.files, 'spec.files', 200000);
+      need(files.length > 0, 'spec.files must not be empty.');
+      for (const [index, file] of files.entries()) {
+        need(path.isAbsolute(file) || path.win32.isAbsolute(file) || path.posix.isAbsolute(file),
+          `spec.files[${index}] must be an absolute local path.`);
+      }
+      if (s.allowMove !== undefined) bool(s.allowMove, 'spec.allowMove');
+      if (s.dragDrop !== undefined) bool(s.dragDrop, 'spec.dragDrop');
+      return E().dragDropFileOperation({ ...s, files });
+    });
 
     /** Closing: the pending-queue warning and the workspace branch. */
     this.handle('explorer:canCloseQueue', () => E().canCloseQueue());

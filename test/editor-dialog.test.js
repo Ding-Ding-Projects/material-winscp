@@ -68,6 +68,14 @@ test('modeless close serializes an async unsaved-changes decision', async () => 
   assert.match(close, /if \(okToClose === false\) \{ closing = false; return false; \}/);
 });
 
+test('modeless editor resize and keyboard growth stay inside the viewport', async () => {
+  const source = await fs.readFile(sourcePath, 'utf8');
+  assert.match(source, /const w = clamp\(opts\.width \|\| 880, minWidth, Math\.max\(minWidth, vw - 8\)\)/);
+  assert.match(source, /setWindowSize\(ow \+ ev\.clientX - startX, oh \+ ev\.clientY - startY\)/);
+  assert.match(source, /ArrowRight: \(\) => \(grow \? setWindowSize\(win\.offsetWidth \+ stepPx, win\.offsetHeight\)/);
+  assert.match(source, /max-width: calc\(100vw - 8px\); max-height: calc\(100vh - 8px\)/);
+});
+
 test('editor exposes selection-aware clipboard editing with read-only guards', async () => {
   const source = await fs.readFile(sourcePath, 'utf8');
   assert.match(source, /async function cutSelection\(\)/);

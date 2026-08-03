@@ -25,6 +25,21 @@ Generated command arguments are quoted when they contain either a space or a
 tab, matching the tokenizer's separators; this keeps paths and names with
 tabs intact when a CLI command is parsed again.
 
+## Session URLs and open switches
+
+`open` accepts the ordinary `sftp://`, `scp://`, `ftp://`, `ftps://`,
+`ftpes://`, `dav://`, `davs://`, `http://`, `https://`, `s3://`,
+`s3plain://` and `ssh://` forms, plus registered-handler forms such as
+`winscp-sftp://` and `winscp://sftp://...`. URL decoding follows WinSCP's
+rules, including `+` as a space in URL components, IPv6 bracket validation and
+the valid TCP port range. The open switches apply to the parsed session;
+`-clientcert` maps to the TLS client-certificate file and each
+`-rawsettings NAME=VALUE` entry is applied to the session settings.
+
+When a stored site is expanded into the warning's explicit `open` command, its
+default port is shown for compatibility. The shared URL generator used by the
+CLI and app continues to omit default ports in ordinary generated URLs.
+
 ## Secure output
 
 `open` commands are redacted at the logging boundary: URL passwords and
@@ -44,6 +59,7 @@ do not share a script transcript or XML log without reviewing it.
 | `/xmllog` is requested with `/xmlgroups` | Each group name is XML-escaped and command credentials are redacted. |
 | `/stdin` or `/stdout` has an unknown mode | The in-process runner prints the parser error and returns `1`, matching the console front end's process boundary. |
 | `/stdin=binary` | Transfer input is consumed as raw bytes; it is not UTF-8 decoded or split and reassembled by lines. |
+| `/log=FILE` is supplied | The console writes the script transcript through the existing session logger, including timestamps and `***` redaction for credentials; the file is closed before the runner returns. |
 | Repeated `/command` or `/parameter` switches are supplied | Every group is consumed in order; no implicit session or prompt is created. |
 | No script and no standard input | The non-interactive runner exits `0` without hanging. |
 

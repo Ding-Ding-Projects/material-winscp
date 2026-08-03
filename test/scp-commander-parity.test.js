@@ -56,6 +56,31 @@ test('Commander drag/drop refuses malformed private payloads instead of swallowi
   assert.deepEqual(normalizePanelDragPayload({ side: 'local', paths: ['/a', ''], panelId: 3 }), {
     ok: false, reason: 'invalidPaths',
   });
+  assert.deepEqual(normalizePanelDragPayload({ side: 'local', paths: ['/a'], preferredEffect: 'delete' }), {
+    ok: false, reason: 'invalidPreferredEffect',
+  });
+  assert.deepEqual(normalizePanelDragPayload({ side: 'local', paths: ['/a', '/a'] }), {
+    ok: false, reason: 'duplicatePaths',
+  });
+  assert.deepEqual(normalizePanelDragPayload({ side: 'local', paths: ['C:\\A', 'c:\\a'] }), {
+    ok: false, reason: 'duplicatePaths',
+  });
+  assert.deepEqual(normalizePanelDragPayload({ side: 'local', paths: ['/a', 3] }), {
+    ok: false, reason: 'invalidPaths',
+  });
+  assert.deepEqual(normalizePanelDragPayload({ side: 'local', paths: ['/a\0b'] }), {
+    ok: false, reason: 'invalidPaths',
+  });
+  assert.deepEqual(normalizePanelDragPayload({ side: 'local', paths: ['/a'], panelId: 3 }), {
+    ok: false, reason: 'invalidPanelId',
+  });
+});
+
+test('Commander drag/drop ignores a source path resolver that throws', () => {
+  assert.deepEqual(entriesForDragPaths(
+    [{ name: 'file.txt' }], ['/file.txt'], () => { throw new Error('stale row'); },
+  ), []);
+  assert.deepEqual(entriesForDragPaths([{ name: 'file.txt' }], ['/file.txt'], null), []);
 });
 
 test('Commander drag/drop move preference honours default move and Ctrl copy', () => {

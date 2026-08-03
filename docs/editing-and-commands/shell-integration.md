@@ -10,6 +10,12 @@ The staging root and invalid-character replacement follow the active transfer
 settings and operating-system temporary directory. There is no network fetch
 or hidden shared staging location.
 
+When files are copied in Windows Explorer, the main process reads the shell's
+`FileNameW`/`FileName` clipboard format and decodes its NUL-separated paths.
+Only absolute, NUL-free paths reach the ExplorerShell paste plan. The renderer
+uses that plan for `PasteAction3`, so a session URL is offered to the Login
+surface and is never mistaken for an upload filename.
+
 Each staged name is checked before it is joined to that directory. Separators,
 `.` and `..`, and Windows device basenames (`CON`, `PRN`, `AUX`, `NUL`, `COM1`
 through `COM9`, and `LPT1` through `LPT9`, including names with extensions) are
@@ -31,6 +37,8 @@ Traversal-like names, device names, missing files, incomplete staging,
 self-drops and an unavailable shell surface are refused before an unsafe or
 partial payload is offered. Incoming `LINK` and other unknown effects are
 refused; a `MOVE` is downgraded to a safe `copy` only when move is disabled.
+Malformed desktop paths and non-boolean move controls are rejected at IPC;
+multiline clipboard text is not accepted as one path.
 The caller can retry with a valid name or use the in-app transfer commands.
 
 ## Security considerations
@@ -41,9 +49,11 @@ remote names was explicitly requested; the shell payload never becomes a
 path traversal or device operation. A self-drop is rejected before it can be
 mistaken for a move onto the source directory.
 
-Regression coverage is in `test/shellintegration.test.js`, including preserved
-device names and traversal-like separators. Run `npm test` to verify the full
-suite.
+Regression coverage is in `test/shellintegration.test.js`,
+`test/explorershell.test.js`, `test/commands.test.js`, and
+`test/e2e-reconcile.test.js`, including clipboard decoding, paste routing,
+preserved device names, traversal-like separators, and the real IPC boundary.
+Run the focused suites for this slice before the full project suite.
 
 ## Suggested articles
 

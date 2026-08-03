@@ -38,9 +38,23 @@ deleted to satisfy a visual cap. Coordinate menus receive the same positive
 height guard for extremely small viewports.
 
 Overlay backgrounds are provided by the `surface-1/2/3` tokens and each
-floating root carries a surface class plus its border/elevation. Transparent
-gradients inside the colour picker's alpha rail are intentional data
-visualisation, not the panel background.
+floating root carries a surface class plus its border/elevation. The shared
+menu, popover, modal and transfer-window rules also declare their own
+background, border and elevation, so a missing or overridden utility class
+cannot turn an overlay transparent. Transparent gradients inside the colour
+picker's alpha rail are intentional data visualisation, not the panel
+background.
+
+Menu labels wrap instead of being silently ellipsized. A long bilingual action
+therefore increases the row height and remains readable; the menu itself keeps
+its viewport cap and scrolls the remaining rows. The same rule applies to the
+keyboard path: selecting an item resets the opener's `aria-expanded` state and
+detached handle, so the menu can be reopened without a mouse.
+
+Resizable modeless editor windows clamp both pointer and keyboard resizing to
+an 8px viewport gutter. Their shell has a direct surface and border contract,
+and their body remains the scroll owner when the viewport is shorter than the
+requested editor size.
 
 Anchored dropdowns and submenus receive the viewport-height cap before
 `anchorTo()` measures them. Long bilingual or action-heavy menus therefore

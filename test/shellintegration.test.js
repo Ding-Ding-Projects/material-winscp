@@ -1103,6 +1103,22 @@ test('the "target unknown" explanation names the mode actually in use', () => {
   assert.match(SI.targetUnknownMessage({ extensionInstalled: true }), /shell extension/);
 });
 
+test('Explorer file clipboard decodes NUL-separated UTF-16 paths and ignores relative data', () => {
+  const value = Buffer.from('C:\\work\\one.txt\0C:\\work\\two.txt\0relative.txt\0\0', 'utf16le');
+  const files = SI.readClipboardFilePaths({
+    availableFormats: () => ['FileNameW'],
+    readBuffer: (format) => { assert.equal(format, 'FileNameW'); return value; },
+  });
+  assert.deepEqual(files, ['C:\\work\\one.txt', 'C:\\work\\two.txt']);
+});
+
+test('Explorer file clipboard fails closed when the native format is unavailable', () => {
+  assert.deepEqual(SI.readClipboardFilePaths({
+    availableFormats: () => ['UnicodeText'],
+    readBuffer: () => { throw new Error('format unavailable'); },
+  }), []);
+});
+
 // CustomScpExplorer.cpp:8506.
 test('the staging directory is not deleted before its deadline and is retried until it goes', () => {
   let clock = 0;

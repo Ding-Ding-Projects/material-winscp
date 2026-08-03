@@ -311,6 +311,68 @@ test('QueueShowAction reopens the existing queue surface after saving', async ()
   }
 });
 
+test('PasteAction3 uses the ExplorerShell plan instead of uploading a session URL', async () => {
+  const previousWindow = global.window;
+  const previousOpenDialog = C.services.openDialog;
+  const calls = [];
+  let opened = 0;
+  global.window = { api: {
+    explorer: {
+      setPanels: async (patch) => { calls.push(['setPanels', patch]); return true; },
+      paste: async () => ({ ok: true, value: { action: 'newSession', url: 'sftp://host/' } }),
+    },
+    app: { clipboardRead: async () => ({ ok: true, value: 'sftp://host/' }) },
+  } };
+  C.services.openDialog = (name) => { calls.push(['dialog', name]); opened += 1; return { name }; };
+  try {
+    const panel = { path: () => '/remote', refresh: () => {} };
+    const result = await C.getCommand('PasteAction3')._spec.run({
+      side: 'remote', isLocal: false, panel, sessionId: 'session-1', workspace: null,
+    });
+    assert.deepEqual(result, { action: 'newSession', url: 'sftp://host/' });
+    assert.equal(opened, 1);
+    assert.deepEqual(calls.map(([name]) => name), ['setPanels', 'dialog']);
+  } finally {
+    C.services.openDialog = previousOpenDialog;
+    if (previousWindow === undefined) delete global.window;
+    else global.window = previousWindow;
+  }
+});
+
+test('PasteAction3 routes a shell file list to the remote upload queue', async () => {
+  const previousWindow = global.window;
+  const previousPrefs = C.services.prefs;
+  const { notify } = await import(R('ui/notifications.js'));
+  const previousInfo = notify.info;
+  const calls = [];
+  global.window = { api: {
+    explorer: {
+      setPanels: async () => true,
+      paste: async () => ({ ok: true, value: { action: 'pasteFiles', files: ['C:\\work\\one.txt'] } }),
+    },
+    queue: {
+      add: async (request) => { calls.push(['add', request]); return { ok: true, value: [{ id: 'q1' }] }; },
+      setEnabled: async (value) => { calls.push(['enabled', value]); return { ok: true, value: true }; },
+    },
+  } };
+  C.services.prefs = { all: () => ({}) };
+  notify.info = () => {};
+  try {
+    const panel = { path: () => '/remote', refresh: () => {} };
+    await C.getCommand('PasteAction3')._spec.run({
+      side: 'remote', isLocal: false, panel, sessionId: 'session-1', connected: true,
+    });
+    assert.equal(calls[0][0], 'add');
+    assert.deepEqual(calls[0][1].files, ['C:\\work\\one.txt']);
+    assert.equal(calls[0][1].direction, 'upload');
+  } finally {
+    notify.info = previousInfo;
+    C.services.prefs = previousPrefs;
+    if (previousWindow === undefined) delete global.window;
+    else global.window = previousWindow;
+  }
+});
+
 /* ------------------------------------------------------------------ */
 /* the column model                                                    */
 /* ------------------------------------------------------------------ */
@@ -431,6 +493,44 @@ test('column auto-size measures the header from the owning panel side', () => {
   } finally {
     if (previousDocument === undefined) delete global.document;
     else global.document = previousDocument;
+  }
+});
+
+test('FileListFromClipboardAction preserves single and multiline file paths', async () => {
+  const previousWindow = global.window;
+  const previousPrefs = C.services.prefs;
+  const { notify } = await import(R('ui/notifications.js'));
+  const previousInfo = notify.info;
+  const calls = [];
+  const pasteOptions = [];
+  global.window = { api: {
+    explorer: {
+      setPanels: async () => true,
+      paste: async (options) => {
+        pasteOptions.push(options);
+        return { ok: true, value: { action: 'pasteFiles', files: ['/remote/one', '/remote/two'] } };
+      },
+    },
+    queue: {
+      add: async (request) => { calls.push(request); return { ok: true, value: [{ id: 'q1' }] }; },
+      setEnabled: async () => ({ ok: true, value: true }),
+    },
+  } };
+  C.services.prefs = { all: () => ({}) };
+  notify.info = () => {};
+  try {
+    const panel = { path: () => '/remote', refresh: () => {} };
+    await C.getCommand('FileListFromClipboardAction')._spec.run({
+      side: 'remote', isLocal: false, panel, sessionId: 'session-1', connected: true,
+    });
+    assert.deepEqual(pasteOptions, [{ fileListOnly: true }]);
+    assert.deepEqual(calls[0].files, ['/remote/one', '/remote/two']);
+    assert.equal(calls[0].direction, 'upload');
+  } finally {
+    notify.info = previousInfo;
+    C.services.prefs = previousPrefs;
+    if (previousWindow === undefined) delete global.window;
+    else global.window = previousWindow;
   }
 });
 

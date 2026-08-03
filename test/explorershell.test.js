@@ -1224,6 +1224,22 @@ test('an incoming drop validates its target, session and advertised capabilities
   assert.notEqual(calls[0][3].delete, true, 'disabled move must not delete the local source');
 });
 
+test('an incoming drop rejects malformed paths and non-boolean move controls', async () => {
+  const shell = copyShell({
+    ops: { copyToRemote: () => true },
+  });
+  assert.deepStrictEqual(await shell.dragDropFileOperation({
+    effect: SI.DROPEFFECT.COPY, files: ['relative.txt'], targetPath: '/home/joe',
+  }), { ok: false, reason: 'invalidFiles' });
+  assert.deepStrictEqual(await shell.dragDropFileOperation({
+    effect: SI.DROPEFFECT.MOVE,
+    files: ['C:\\work\\alpha.txt'], targetPath: '/home/joe', allowMove: 'false',
+  }), { ok: false, reason: 'invalidAllowMove' });
+  assert.deepStrictEqual(await shell.dragDropFileOperation({
+    effect: '2', files: ['C:\\work\\alpha.txt'], targetPath: '/home/joe',
+  }), { ok: false, reason: 'invalidDropEffect' });
+});
+
 // ===========================================================================
 // transfer preset auto-selection
 // ===========================================================================
@@ -1631,6 +1647,28 @@ test('CanPasteFromClipBoard accepts files, a session URL, or a single-line path'
   // Multi-line text is not a path and not a URL.
   const multi = makeShell({ panels: mkPanel(), clipboard: { files: () => [], text: () => 'a\nb' } });
   assert.strictEqual(multi.canPasteFromClipBoard(), false);
+});
+
+test('clipboard file paste filters malformed paths and paste refuses multiline text', async () => {
+  const files = makeShell({
+    panels: { remote: panel({ side: 'remote', path: '/r', entries: ENTRIES }) },
+    clipboard: {
+      files: () => ['C:\\a', 'relative.txt', 'C:\\b\0bad'],
+      text: () => '',
+    },
+  });
+  assert.deepStrictEqual(files.clipboardFiles(), ['C:\\a']);
+  assert.deepStrictEqual(await files.pasteFromClipBoardPlan({}), { action: 'pasteFiles', files: ['C:\\a'] });
+
+  const multiline = makeShell({
+    session: null, panels: {}, clipboard: { files: () => [], text: () => '/one\n/two' },
+  });
+  assert.deepStrictEqual(await multiline.pasteFromClipBoardPlan({}), {
+    action: 'none', reason: 'invalidClipboardText',
+  });
+  assert.deepStrictEqual(await multiline.pasteFromClipBoardPlan({ fileListOnly: true }), {
+    action: 'pasteFiles', files: ['/one', '/two'],
+  });
 });
 
 test('pasting an unsafe session URL asks first and aborts on refusal', async () => {

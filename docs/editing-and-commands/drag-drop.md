@@ -42,6 +42,18 @@ copy.
 - Malformed in-app payloads, missing source panels, missing targets,
   disconnected sessions and explicit protocol refusals are reported before any
   transfer begins.
+- In-app payload paths must be non-empty strings with no NUL, duplicate paths,
+  or unknown effect values. Desktop-drop paths are re-validated at the main
+  IPC boundary as absolute local paths; malformed `allowMove` and `dragDrop`
+  flags are refused instead of being coerced into a potentially destructive
+  move.
+
+Clipboard paste uses the same ExplorerShell decision path. Windows Explorer's
+`FileNameW`/`FileName` clipboard formats are decoded into absolute paths before
+they can become an upload. Relative, NUL-containing, or malformed clipboard
+entries are ignored, and multiline text is not treated as one directory path.
+Pasting a session URL opens the Login surface rather than queuing the URL as a
+file.
 
 ## Accessibility and feedback
 
@@ -69,9 +81,11 @@ the whole drag instead of letting one file overwrite the other.
 ## Verification
 
 The focused regression coverage is in `test/scp-commander-parity.test.js`,
-`test/explorershell.test.js`, `test/shellintegration.test.js` and
-`test/commands.test.js`. It verifies payload validation, move/copy effects,
-disconnected-session and capability refusals, and the shared target policy.
+`test/explorershell.test.js`, `test/shellintegration.test.js`,
+`test/commands.test.js`, and the real-bridge checks in
+`test/e2e-reconcile.test.js`. It verifies payload validation, clipboard file
+decoding, paste routing, move/copy effects, disconnected-session and capability
+refusals, and the shared target policy.
 Run `npm test` to execute the complete test suite.
 
 ## Suggested articles

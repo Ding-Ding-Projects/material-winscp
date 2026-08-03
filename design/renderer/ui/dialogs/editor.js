@@ -261,16 +261,30 @@ export function openModelessWindow(opts = {}) {
 
   if (opts.toolbar) toolsEl.appendChild(opts.toolbar);
 
-  const vw = document.documentElement.clientWidth;
-  const vh = document.documentElement.clientHeight;
-  const w = Math.min(opts.width || 880, vw - 40);
-  const hgt = Math.min(opts.height || 560, vh - 60);
+  const vw = Math.max(1, document.documentElement.clientWidth || window.innerWidth || 1);
+  const vh = Math.max(1, document.documentElement.clientHeight || window.innerHeight || 1);
+  const minWidth = Math.min(320, Math.max(1, vw - 8));
+  const minHeight = Math.min(220, Math.max(1, vh - 8));
+  const w = clamp(opts.width || 880, minWidth, Math.max(minWidth, vw - 8));
+  const hgt = clamp(opts.height || 560, minHeight, Math.max(minHeight, vh - 8));
   // Each new window steps down and right so several editors do not stack
   // exactly on top of one another and become impossible to tell apart.
   const step = ((index - 1) % 6) * 26;
   let x = clamp(Math.round((vw - w) / 2) + step, 8, Math.max(8, vw - w - 8));
   let y = clamp(Math.round((vh - hgt) / 2) - 20 + step, 8, Math.max(8, vh - hgt - 8));
   Object.assign(win.style, { width: `${w}px`, height: `${hgt}px`, left: `${x}px`, top: `${y}px` });
+
+  function setWindowSize(nextWidth, nextHeight) {
+    const width = Math.max(1, document.documentElement.clientWidth || window.innerWidth || 1);
+    const height = Math.max(1, document.documentElement.clientHeight || window.innerHeight || 1);
+    const lowerWidth = Math.min(320, Math.max(1, width - 8));
+    const lowerHeight = Math.min(220, Math.max(1, height - 8));
+    const nextW = clamp(nextWidth, lowerWidth, Math.max(lowerWidth, width - 8));
+    const nextH = clamp(nextHeight, lowerHeight, Math.max(lowerHeight, height - 8));
+    x = clamp(x, 4, Math.max(4, width - nextW - 4));
+    y = clamp(y, 4, Math.max(4, height - nextH - 4));
+    Object.assign(win.style, { width: `${nextW}px`, height: `${nextH}px`, left: `${x}px`, top: `${y}px` });
+  }
 
   /* ---- drag by the header ---- */
   header.addEventListener('pointerdown', (e) => {
@@ -303,8 +317,7 @@ export function openModelessWindow(opts = {}) {
     const ow = win.offsetWidth, oh = win.offsetHeight;
     grip.setPointerCapture(e.pointerId);
     const move = (ev) => {
-      win.style.width = `${Math.max(320, ow + ev.clientX - startX)}px`;
-      win.style.height = `${Math.max(220, oh + ev.clientY - startY)}px`;
+      setWindowSize(ow + ev.clientX - startX, oh + ev.clientY - startY);
     };
     const up = () => {
       grip.removeEventListener('pointermove', move);
@@ -325,10 +338,10 @@ export function openModelessWindow(opts = {}) {
     const stepPx = e.shiftKey ? 32 : 8;
     const grow = e.ctrlKey || e.metaKey;
     const map = {
-      ArrowLeft: () => (grow ? win.style.width = `${Math.max(320, win.offsetWidth - stepPx)}px` : win.style.left = `${x = Math.max(4, x - stepPx)}px`),
-      ArrowRight: () => (grow ? win.style.width = `${win.offsetWidth + stepPx}px` : win.style.left = `${x = x + stepPx}px`),
-      ArrowUp: () => (grow ? win.style.height = `${Math.max(220, win.offsetHeight - stepPx)}px` : win.style.top = `${y = Math.max(4, y - stepPx)}px`),
-      ArrowDown: () => (grow ? win.style.height = `${win.offsetHeight + stepPx}px` : win.style.top = `${y = y + stepPx}px`),
+      ArrowLeft: () => (grow ? setWindowSize(win.offsetWidth - stepPx, win.offsetHeight) : win.style.left = `${x = Math.max(4, x - stepPx)}px`),
+      ArrowRight: () => (grow ? setWindowSize(win.offsetWidth + stepPx, win.offsetHeight) : win.style.left = `${x = Math.min(Math.max(4, document.documentElement.clientWidth - win.offsetWidth - 4), x + stepPx)}px`),
+      ArrowUp: () => (grow ? setWindowSize(win.offsetWidth, win.offsetHeight - stepPx) : win.style.top = `${y = Math.max(4, y - stepPx)}px`),
+      ArrowDown: () => (grow ? setWindowSize(win.offsetWidth, win.offsetHeight + stepPx) : win.style.top = `${y = Math.min(Math.max(4, document.documentElement.clientHeight - win.offsetHeight - 4), y + stepPx)}px`),
     };
     if (map[e.key]) { e.preventDefault(); map[e.key](); }
   });
@@ -392,9 +405,11 @@ function ensureStyles() {
   if (stylesWritten || typeof document === 'undefined') return;
   stylesWritten = true;
   styleSheet('editor').set(`
-.mw { position: fixed; display: flex; flex-direction: column; min-width: calc(320px * var(--uiscale));
+.mw { position: fixed; display: flex; flex-direction: column; min-width: min(calc(320px * var(--uiscale)), calc(100vw - 8px));
   border-radius: var(--shape-lg); background: var(--c-high); color: var(--onsfc);
-  box-shadow: var(--e4); overflow: hidden; }
+  box-shadow: var(--e4); border: 1px solid var(--outline-var);
+  box-sizing: border-box; max-width: calc(100vw - 8px); max-height: calc(100vh - 8px);
+  overflow: hidden; }
 .mw-head { display: flex; align-items: center; gap: calc(8px * var(--den));
   padding: calc(6px * var(--den)) calc(8px * var(--den));
   background: var(--c); border-bottom: 1px solid var(--outline-var); cursor: move; touch-action: none; }

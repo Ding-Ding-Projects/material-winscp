@@ -22,7 +22,7 @@ const {
   ManagementScript, Options, ScriptAbort, cutToken, syncOptionsFrom, MSG,
 } = require('./script');
 const { tryRelativeTime, resolveTime } = require('./masks');
-const { xmlEscape } = require('./logging');
+const { SessionLog, xmlEscape } = require('./logging');
 
 const RESULT_SUCCESS = 0;
 const RESULT_ANY_ERROR = 1;
@@ -552,6 +552,31 @@ class ScriptXmlLog {
   }
 }
 
+/**
+ * `/log=FILE` is the text-log half of the console contract. The scripting
+ * engine already emits one redacted record for every input, output and exit
+ * status, so reuse SessionLog's timestamp/mark/redaction writer instead of
+ * inventing a second log format for the headless process.
+ */
+function createScriptFileLog(fileName, level = 0) {
+  if (!fileName) return null;
+  return new SessionLog({
+    getPrefs: () => ({
+      enabled: true,
+      level: Number.isFinite(level) ? level : 0,
+      logToFile: true,
+      logFileName: fileName,
+      logFileAppend: true,
+      logMaxSize: 0,
+      logMaxCount: 0,
+      logSensitive: false,
+      logWindowLines: 2000,
+      actionsLogging: false,
+    }),
+    session: {},
+  });
+}
+
 // ---------------------------------------------------------------------------
 // the runner
 // ---------------------------------------------------------------------------
@@ -968,11 +993,22 @@ async function runConsole(argv = [], deps = {}) {
 
   const logSwitch = params.locateSwitch('log');
   const logLevel = params.locateSwitch('loglevel');
+  const logLevelValue = logLevel.found ? (parseInt(logLevel.value, 10) || 0) : 0;
+  const scriptFileLog = safe && logSwitch.found && logSwitch.value !== ''
+    ? createScriptFileLog(logSwitch.value, logLevelValue) : null;
+  const scriptLog = deps.log;
+  const log = scriptLog || scriptFileLog
+    ? (kind, text, terminal) => {
+      if (scriptLog) scriptLog(kind, text, terminal);
+      if (scriptFileLog) scriptFileLog.add(kind, text);
+    }
+    : null;
   const runnerDeps = {
     ...deps,
     env: deps.env || process.env,
     xmlLog,
-    logProtocol: logLevel.found ? (parseInt(logLevel.value, 10) || 0) : 0,
+    ...(log ? { log } : {}),
+    logProtocol: logLevelValue,
     logFile: safe && logSwitch.found ? logSwitch.value : '',
   };
 
@@ -981,28 +1017,32 @@ async function runConsole(argv = [], deps = {}) {
 
   const runner = new ConsoleRunner(consoleInstance, runnerDeps);
 
-  if (loadError) {
-    runner.showException(loadError);
-    if (xmlLog) xmlLog.close();
-    return RESULT_ANY_ERROR;
+  try {
+    if (loadError) {
+      runner.showException(loadError);
+      if (xmlLog) xmlLog.close();
+      return RESULT_ANY_ERROR;
+    }
+
+    if (session && params.paramCount > 1) {
+      runner.printMessage(MSG.CMDLINE_PARAMETERS);
+    }
+
+    // No /script and no /command: commands come from stdin. This is what makes
+    // `echo ls | winscp.com /console` work, and it is why an empty stdin exits
+    // successfully rather than dropping into an unattended prompt forever.
+    const usageWarnings = scriptCommands.length > 0 || !consoleInstance.hasFlag(CF.INTERACTIVE);
+
+    return await runner.run({
+      session,
+      options: params,
+      scriptCommands,
+      scriptParameters,
+      usageWarnings,
+    });
+  } finally {
+    if (scriptFileLog) scriptFileLog.close();
   }
-
-  if (session && params.paramCount > 1) {
-    runner.printMessage(MSG.CMDLINE_PARAMETERS);
-  }
-
-  // No /script and no /command: commands come from stdin. This is what makes
-  // `echo ls | winscp.com /console` work, and it is why an empty stdin exits
-  // successfully rather than dropping into an unattended prompt forever.
-  const usageWarnings = scriptCommands.length > 0 || !consoleInstance.hasFlag(CF.INTERACTIVE);
-
-  return runner.run({
-    session,
-    options: params,
-    scriptCommands,
-    scriptParameters,
-    usageWarnings,
-  });
 }
 
 /** Split a `/command`-style argument list the way the tokenizer would. */

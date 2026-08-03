@@ -1929,8 +1929,18 @@ class ExplorerShell {
   /** CanPasteToDirViewFromClipBoard — the panel itself can take shell files. */
   canPasteToDirViewFromClipBoard() {
     if (!this.dirViewEnabled(SIDES.current)) return false;
-    const files = this.clipboard && typeof this.clipboard.files === 'function' ? this.clipboard.files() : [];
-    return !!(files && files.length);
+    return this.clipboardFiles().length > 0;
+  }
+
+  /** Only absolute, NUL-free shell paths are meaningful file clipboard data. */
+  clipboardFiles() {
+    const files = this.clipboard && typeof this.clipboard.files === 'function'
+      ? this.clipboard.files() : [];
+    if (!Array.isArray(files)) return [];
+    return files.filter((file) => {
+      if (typeof file !== 'string' || !file || file.includes('\0')) return false;
+      return nodePath.win32.isAbsolute(file) || nodePath.posix.isAbsolute(file);
+    });
   }
 
   /**
@@ -1943,7 +1953,7 @@ class ExplorerShell {
     if (this.canPasteToDirViewFromClipBoard()) return true;
     const text = this.clipboard && typeof this.clipboard.text === 'function' ? String(this.clipboard.text() || '') : '';
     const trimmed = text.trim();
-    if (!trimmed || trimmed.includes('\n')) return false;
+    if (!trimmed || /[\r\n]/.test(trimmed)) return false;
     if (this._isSessionUrl(trimmed)) return true;
     return this.dirViewEnabled(SIDES.current);
   }
@@ -1962,24 +1972,28 @@ class ExplorerShell {
     const o = options || {};
     const ourFiles = o.ourFiles || (this.clipboard && typeof this.clipboard.ourFiles === 'function'
       ? this.clipboard.ourFiles() : null);
-    if (ourFiles && ourFiles.files && ourFiles.files.length) {
+    const ownFiles = ourFiles && Array.isArray(ourFiles.files)
+      ? ourFiles.files.filter((file) => typeof file === 'string' && file && !file.includes('\0'))
+      : [];
+    if (ownFiles.length) {
       if (!this.canPasteToDirViewFromClipBoard() && !this.dirViewEnabled(SIDES.current)) {
         return { action: 'none' };
       }
       return {
         action: 'remoteCopy',
-        files: ourFiles.files,
+        files: ownFiles,
         fromSession: ourFiles.session || null,
         toSession: this.session(),
       };
     }
     if (this.canPasteToDirViewFromClipBoard()) {
-      return { action: 'pasteFiles', files: this.clipboard.files() };
+      return { action: 'pasteFiles', files: this.clipboardFiles() };
     }
     const text = this.clipboard && typeof this.clipboard.text === 'function'
       ? String(this.clipboard.text() || '').trim() : '';
     if (!text) return { action: 'none' };
     if (this._isSessionUrl(text)) {
+      if (o.fileListOnly) return { action: 'none', reason: 'invalidClipboardText' };
       if (o.unsafeSettings) {
         const answer = await this.confirm({
           name: 'unsafeSession',
@@ -1991,6 +2005,11 @@ class ExplorerShell {
       }
       return { action: 'newSession', url: text };
     }
+    if (o.fileListOnly) {
+      const files = text.split(/[\r\n]+/).map((file) => file.trim()).filter(Boolean);
+      return files.length ? { action: 'pasteFiles', files } : { action: 'none' };
+    }
+    if (/[\r\n]/.test(text)) return { action: 'none', reason: 'invalidClipboardText' };
     return { action: 'changePath', path: text };
   }
 
@@ -2119,7 +2138,10 @@ class ExplorerShell {
   async dragDropFileOperation(spec) {
     const s = spec || {};
     const DROPEFFECT = shellintegration.DROPEFFECT;
-    const effect = Number(s.effect);
+    if (s.effect === undefined || typeof s.effect !== 'number' || !Number.isFinite(s.effect)) {
+      return { ok: false, reason: 'invalidDropEffect' };
+    }
+    const effect = s.effect;
     // DDEnd normally resolves drInvalid before reaching this method, but a
     // renderer or embedder can call the operation entry point directly.  Do
     // not turn drNone, drCancel, or an unknown shell value into a COPY: that
@@ -2127,11 +2149,34 @@ class ExplorerShell {
     if (effect !== DROPEFFECT.COPY && effect !== DROPEFFECT.MOVE) {
       return { ok: false, reason: 'invalidDropEffect' };
     }
-    const files = Array.isArray(s.files) ? s.files : [];
+    if (!Array.isArray(s.files)) return { ok: false, reason: 'missingFiles' };
+    const seen = new Set();
+    const files = [];
+    for (const file of s.files) {
+      const path = typeof file === 'string' ? file : file && file.path;
+      if (typeof path !== 'string' || !path || path.includes('\0')
+          || (!nodePath.win32.isAbsolute(path) && !nodePath.posix.isAbsolute(path))) {
+        return { ok: false, reason: 'invalidFiles' };
+      }
+      const key = path.toLowerCase();
+      if (seen.has(key)) return { ok: false, reason: 'duplicateFiles' };
+      seen.add(key);
+      files.push(typeof file === 'string' ? path : { ...file, path });
+    }
     if (!files.length) return { ok: false, reason: 'missingFiles' };
+    if (s.targetPath !== undefined && s.targetPath !== null && typeof s.targetPath !== 'string') {
+      return { ok: false, reason: 'invalidTarget' };
+    }
     const targetDirectory = String(s.targetPath || '');
     if (!targetDirectory.trim()) return { ok: false, reason: 'missingTarget' };
     if (!this.hasAvailableTerminal()) return { ok: false, reason: 'notConnected' };
+
+    if (s.allowMove !== undefined && typeof s.allowMove !== 'boolean') {
+      return { ok: false, reason: 'invalidAllowMove' };
+    }
+    if (s.dragDrop !== undefined && typeof s.dragDrop !== 'boolean') {
+      return { ok: false, reason: 'invalidDragDrop' };
+    }
 
     const acceptance = shellintegration.canAcceptDrop(this.session()?.caps, {
       readOnly: s.readOnly === true,

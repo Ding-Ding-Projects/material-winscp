@@ -108,6 +108,12 @@ console runner, including `/script`, `/command`, `/parameter`, `/log`,
 legacy executable name. It also supports `winscp-com --help` and
 `winscp-com --version` without starting the console runner.
 
+The console `open` command shares the app's session URL handling. It accepts
+the bare and registered-handler URL forms documented in [Script runner](script-runner.md),
+applies client-certificate and raw-setting switches to the session, and keeps
+passwords out of generated warnings and `/log` output. `/log=FILE` uses the
+same timestamped, redacted session-log format as the app logger.
+
 ## Configuration
 
 There is no stored preference. The command line is the configuration boundary:
@@ -174,6 +180,9 @@ accepted as an explicit synonym for the default machine-readable format.
 - `test/cli.test.js` covers help/version, console-argument translation, drag
   decisions, missing option values, real-path classification, temporary staging
   and cleanup.
+- `test/script.test.js` covers handler URL aliases, WinSCP URL decoding and port
+  validation, client-certificate/raw-setting application, generated command
+  parity, and redacted `/log=FILE` output.
 - The `winscp-com --help` and `winscp-com --version` wrapper paths are covered
   with process-level smoke tests; neither starts the console runner.
 - `node --check bin/winscp.js` checks the executable syntax.

@@ -337,3 +337,26 @@ test('submenu dismissal returns focus and clears the parent expanded state', () 
     restore();
   }
 });
+
+test('selecting a dropdown item clears the opener state so keyboard can reopen it', () => {
+  const restore = installMenuDom();
+  try {
+    const button = new MenuTestNode('button');
+    button.isConnected = true;
+    document.body.appendChild(button);
+    C.attachMenuButton(button, () => [{ id: 'run', label: 'Run', onSelect: () => {} }], { label: 'Actions' });
+
+    button.dispatchEvent({ type: 'click', target: button });
+    assert.equal(button.getAttribute('aria-expanded'), 'true');
+    const menu = document.getElementById('layer-menu');
+    assert.equal(menu.children.length, 1);
+    menu.children[0].children[0].dispatchEvent({ type: 'click', target: menu.children[0].children[0] });
+
+    assert.equal(menu.children.length, 0, 'selection closes the menu');
+    assert.equal(button.getAttribute('aria-expanded'), 'false', 'selection resets the opener state');
+    button.dispatchEvent({ type: 'click', target: button });
+    assert.equal(menu.children.length, 1, 'the same button can reopen the menu');
+  } finally {
+    restore();
+  }
+});

@@ -843,6 +843,93 @@ async function readClipboard() {
   catch { return ''; }
 }
 
+function looksLikeSessionUrl(text) {
+  return /^(sftp|scp|ftps?|ftpes|https?|dav|davs|s3):\/\//i.test(String(text || '').trim());
+}
+
+/** Open the login surface rather than accidentally uploading a session URL. */
+function openClipboardSessionUrl(ctx) {
+  if (services.openDialog) return services.openDialog('login', { workspace: ctx.workspace });
+  notify.warning(t('pasteClip'), 'A session URL is on the clipboard. Open the Login dialog to use it.');
+  return null;
+}
+
+/** Ask the main ExplorerShell first, retaining a text-only fallback for previews. */
+async function explorerClipboardPlan(ctx, { fileListOnly = false } = {}) {
+  if (!backend.present) return null;
+  try {
+    await backend.explorer('setPanels', {
+      currentSide: ctx.side,
+      sessionId: ctx.sessionId || null,
+    });
+    return await backend.explorer('paste', fileListOnly ? { fileListOnly: true } : undefined);
+  } catch {
+    // The browser preview and older preload surfaces have no Explorer plan;
+    // the text fallback below remains the honest degraded mode.
+    return null;
+  }
+}
+
+async function pasteClipboard(ctx, { fileListOnly = false } = {}) {
+  const plan = await explorerClipboardPlan(ctx, { fileListOnly });
+  if (plan) {
+    if (plan.action === 'changePath') {
+      if (fileListOnly) {
+        return queueTransfer(ctx, {
+          direction: ctx.isLocal ? 'download' : 'upload',
+          files: [plan.path], target: ctx.panel.path(),
+        });
+      }
+      ctx.panel.navigate(plan.path);
+      return plan;
+    }
+    if (plan.action === 'newSession') {
+      if (!fileListOnly) openClipboardSessionUrl(ctx);
+      return plan;
+    }
+    if (plan.action === 'pasteFiles') {
+      const files = Array.isArray(plan.files) ? plan.files.filter((p) => typeof p === 'string' && p) : [];
+      if (!files.length) { notify.info(t('transferClip'), t('cmClipboardNoFiles')); return plan; }
+      if (fileListOnly) {
+        return queueTransfer(ctx, {
+          direction: ctx.isLocal ? 'download' : 'upload',
+          files, target: ctx.panel.path(),
+        });
+      }
+      // A shell file list is a local-to-remote upload in the remote panel. A
+      // local panel has no local-only clipboard operation in this bridge; do
+      // not mislabel those paths as remote downloads.
+      if (ctx.isLocal) {
+        notify.warning(t('transferClip'), 'Shell file clipboard paste is available on the remote panel, not as a local-to-local transfer.');
+        return plan;
+      }
+      return queueTransfer(ctx, { direction: 'upload', files, target: ctx.panel.path() });
+    }
+    if (plan.action === 'none') {
+      notify.info(t(fileListOnly ? 'transferClip' : 'pasteClip'),
+        t(fileListOnly ? 'cmClipboardNoFiles' : 'cmClipboardEmpty'));
+      return plan;
+    }
+  }
+
+  const text = await readClipboard();
+  if (!text.trim()) { notify.info(t(fileListOnly ? 'transferClip' : 'pasteClip'), t('cmClipboardEmpty')); return null; }
+  if (looksLikeSessionUrl(text)) {
+    if (!fileListOnly) openClipboardSessionUrl(ctx);
+    return { action: 'newSession', url: text.trim() };
+  }
+  const lines = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  if (!lines.length) { notify.info(t('transferClip'), t('cmClipboardNoFiles')); return null; }
+  if (!fileListOnly && lines.length === 1 && /^[a-zA-Z]:[\\/]|^[\\/]/.test(lines[0])) {
+    ctx.panel.navigate(lines[0]);
+    return { action: 'changePath', path: lines[0] };
+  }
+  return queueTransfer(ctx, {
+    direction: ctx.isLocal ? 'download' : 'upload',
+    files: lines, target: ctx.panel.path(),
+  });
+}
+
 /* ---- preferences ---------------------------------------------------- */
 // The renderer store persists only the shell's own roots, so panel and window
 // preferences are read from and written to main's configuration document.
@@ -1803,33 +1890,11 @@ def('FileListToCommandLineAction', {
 });
 def('PasteAction3', {
   enabled: (c) => !!c.panel && online(c),
-  run: async (c) => {
-    const text = await readClipboard();
-    if (!text.trim()) { notify.info(t('pasteClip'), t('cmClipboardEmpty')); return; }
-    const lines = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-    // A single path that names a directory is a navigation; a list of paths is
-    // a transfer request — exactly WinSCP's Paste behaviour.
-    if (lines.length === 1 && /^[a-zA-Z]:[\\/]|^[\\/]/.test(lines[0])) {
-      c.panel.navigate(lines[0]);
-      return;
-    }
-    await queueTransfer(c, {
-      direction: c.isLocal ? 'download' : 'upload',
-      files: lines, target: c.panel.path(),
-    });
-  },
+  run: (c) => pasteClipboard(c),
 });
 def('FileListFromClipboardAction', {
   enabled: (c) => !!c.panel && online(c),
-  run: async (c) => {
-    const text = await readClipboard();
-    const lines = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-    if (!lines.length) { notify.info(t('transferClip'), t('cmClipboardNoFiles')); return; }
-    await queueTransfer(c, {
-      direction: c.isLocal ? 'download' : 'upload',
-      files: lines, target: c.panel.path(),
-    });
-  },
+  run: (c) => pasteClipboard(c, { fileListOnly: true }),
 });
 
 def('FileGenerateUrlAction2', {

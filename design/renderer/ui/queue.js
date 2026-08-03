@@ -1710,10 +1710,15 @@ const TRANSFER_CSS = `
   left: 50%; bottom: calc(24px * var(--den));
   transform: translateX(-50%);
   width: min(680px, calc(100vw - 32px));
-  max-height: calc(100vh - 96px);
+  max-width: calc(100vw - 16px);
+  max-height: max(1px, calc(100vh - 16px));
+  min-height: 0;
   display: flex; flex-direction: column;
   border-radius: var(--shape-xl);
   border: 1px solid var(--outline-var);
+  background: var(--c-high);
+  color: var(--onsfc);
+  box-shadow: var(--e3);
   overflow: hidden;
   animation: m3-fade-up var(--motion-medium) var(--ease-emphasized);
 }

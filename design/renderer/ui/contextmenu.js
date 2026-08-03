@@ -160,7 +160,10 @@ export function normalizeMenuItem(item, options = {}) {
 
 /** Close every open menu. */
 export function closeAllMenus() {
-  while (openStack.length) openStack.pop().dispose(true);
+  // Let the root menu notify its opener as it is torn down. Suppressing the
+  // callback leaves attachMenuButton() holding a detached handle with
+  // aria-expanded="true", so the next keyboard activation cannot reopen it.
+  while (openStack.length) openStack.pop().dispose();
 }
 
 function normalize(items, options = {}) {

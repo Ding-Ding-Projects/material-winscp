@@ -34,7 +34,8 @@ const { COPY_PARAM_DEFAULTS } = require('./defaults');
 // The port numbers are TSessionData's own constants; `sessiondata.js` is the
 // port of that file and owns them, so the scripting surface reads them rather
 // than carrying a second set that can drift.
-const { FTP_PORT, FTPS_IMPLICIT_PORT } = require('./sessiondata');
+const sessionData = require('./sessiondata');
+const { FTP_PORT, FTPS_IMPLICIT_PORT } = sessionData;
 
 // ---------------------------------------------------------------------------
 // messages — transcribed from resource/TextsCore1.rc and TextsCore2.rc
@@ -2412,7 +2413,7 @@ class ManagementScript extends Script {
         // A stored site makes a script unreproducible on another machine, so
         // WinSCP prints the equivalent explicit command.
         this.printLine(MSG.SITE_WARNING);
-        this.printLine(`open ${generateOpenCommandArgs(data)}`);
+        this.printLine(`open ${generateOpenCommandArgs(data, true)}`);
       }
 
       if (!data.hostName) {
@@ -2752,39 +2753,57 @@ function maskPasswordInUrl(url) {
  * an unknown switch instead of being silently ignored.
  */
 function parseOpenUrl(url, options) {
-  const data = {
-    protocol: 'sftp',
-    hostName: '',
-    portNumber: 0,
-    userName: '',
-    password: '',
-    ftps: 'none',
-    remoteDirectory: '',
-  };
+  const data = sessionData.defaultSessionData();
+  // A protocol URL supplies its own default port below; do not let the factory
+  // SFTP port survive when the URL changes the protocol to FTP/WebDAV/S3.
+  data.protocol = 'sftp';
+  data.ftps = 'none';
+  data.hostName = '';
+  data.portNumber = 0;
+  data.userName = '';
+  data.password = '';
+  data.remoteDirectory = '';
+
+  // TSessionData::DecodeUrlChars treats '+' as a space as well as decoding
+  // percent escapes. The scripting parser is a separate entry point from the
+  // GUI URL parser, so keep the same rule here instead of silently producing a
+  // different username or remote path from the same URL.
+  const decode = (value) => sessionData.decodeUrlChars(value);
 
   const text = String(url || '').trim();
   const m = /^([a-z0-9+.-]+):\/\/(.*)$/i.exec(text);
   let authority = text;
 
   if (m) {
-    const scheme = m[1].toLowerCase();
+    let scheme = m[1].toLowerCase();
+    // The registered handler uses winscp-<protocol>://. The generic
+    // winscp:// form is also emitted by older integrations; it either wraps a
+    // complete inner URL or defaults to SFTP when only an authority follows.
+    if (scheme === 'winscp') {
+      if (/^[a-z0-9+.-]+:\/\//i.test(m[2])) return parseOpenUrl(m[2], options);
+      scheme = 'sftp';
+    } else if (scheme.startsWith('winscp-')) {
+      scheme = scheme.slice('winscp-'.length);
+    }
     const known = {
       sftp: ['sftp', 'none'], scp: ['scp', 'none'],
       ftp: ['ftp', 'none'], ftps: ['ftp', 'implicit'], ftpes: ['ftp', 'explicitTls'],
       dav: ['webdav', 'none'], davs: ['webdav', 'implicit'],
-      http: ['webdav', 'none'], https: ['webdav', 'implicit'],
-      s3: ['s3', 'implicit'],
+      http: ['webdav', 'none'], https: ['webdav', 'implicit'], webdav: ['webdav', 'none'],
+      s3: ['s3', 'implicit'], s3plain: ['s3', 'none'],
+      ssh: ['sftp', 'none'],
     };
     if (!known[scheme]) throw new ScriptError(`Unknown protocol '${scheme}'.`);
     data.protocol = known[scheme][0];
     data.ftps = known[scheme][1];
+    if (scheme === 'ssh') data.puttyProtocol = 'ssh';
     authority = m[2];
   }
 
   const slash = authority.indexOf('/');
   if (slash >= 0) {
     const remote = authority.slice(slash);
-    if (remote !== '/') data.remoteDirectory = decodeURIComponent(remote);
+    if (remote !== '/') data.remoteDirectory = decode(remote);
     authority = authority.slice(0, slash);
   }
 
@@ -2793,22 +2812,27 @@ function parseOpenUrl(url, options) {
     const credentials = authority.slice(0, at);
     authority = authority.slice(at + 1);
     const colon = credentials.indexOf(':');
-    data.userName = decodeURIComponent(colon < 0 ? credentials : credentials.slice(0, colon));
-    if (colon >= 0) data.password = decodeURIComponent(credentials.slice(colon + 1));
+    data.userName = decode(colon < 0 ? credentials : credentials.slice(0, colon));
+    if (colon >= 0) data.password = decode(credentials.slice(colon + 1));
   }
 
   if (authority.startsWith('[')) {
     const close = authority.indexOf(']');
+    if (close < 0) throw new ScriptError('Invalid bracketed host in session URL.');
     data.hostName = authority.slice(1, close);
     const after = authority.slice(close + 1);
-    if (after.startsWith(':')) data.portNumber = Number(after.slice(1)) || 0;
+    if (after.startsWith(':')) {
+      const port = Number(after.slice(1));
+      if (Number.isInteger(port) && port >= 1 && port <= 65535) data.portNumber = port;
+    }
   } else {
     const colon = authority.lastIndexOf(':');
     if (colon >= 0) {
-      data.hostName = decodeURIComponent(authority.slice(0, colon));
-      data.portNumber = Number(authority.slice(colon + 1)) || 0;
+      data.hostName = decode(authority.slice(0, colon));
+      const port = Number(authority.slice(colon + 1));
+      if (Number.isInteger(port) && port >= 1 && port <= 65535) data.portNumber = port;
     } else {
-      data.hostName = decodeURIComponent(authority);
+      data.hostName = decode(authority);
     }
   }
 
@@ -2819,10 +2843,9 @@ function parseOpenUrl(url, options) {
   if (!data.portNumber) {
     // TSessionData::GetDefaultPort — implicit FTPS is 990. Answering 21 for it
     // connected to the plaintext control port and then tried to negotiate TLS
-    // on a socket the server never expected it on.
-    data.portNumber = data.protocol === 'ftp'
-      ? (data.ftps === 'implicit' ? FTPS_IMPLICIT_PORT : FTP_PORT)
-      : ({ sftp: 22, scp: 22, webdav: data.ftps === 'implicit' ? 443 : 80, s3: 443 }[data.protocol] || 0);
+    // on a socket the server never expected it on. Use the shared helper so
+    // raw FSProtocol=2 (SFTP-only) still receives SSH's default port.
+    data.portNumber = sessionData.getDefaultPort(data);
   }
   return data;
 }
@@ -2845,7 +2868,7 @@ function applyOpenSwitches(data, options, portNumberDefined) {
   const privateKey = take('privatekey');
   if (privateKey !== undefined) data.publicKeyFile = privateKey;
   const clientCert = take('clientcert');
-  if (clientCert !== undefined) data.tlsClientCertificate = clientCert;
+  if (clientCert !== undefined) data.tlsCertificateFile = clientCert;
   const passphrase = take('passphrase');
   if (passphrase !== undefined) data.passphrase = passphrase;
   const username = take('username');
@@ -2917,21 +2940,43 @@ function applyOpenSwitches(data, options, portNumberDefined) {
       if (eq < 0) continue;
       data.rawSettings[setting.slice(0, eq)] = setting.slice(eq + 1);
     }
+    sessionData.applyRawSettings(data, raw.filter((setting) => setting.includes('=')));
   }
   return data;
 }
 
 /** GenerateOpenCommandArgs, with every secret masked. */
-function generateOpenCommandArgs(data) {
-  const scheme = data.protocol === 'webdav'
-    ? (data.ftps === 'implicit' ? 'davs' : 'dav')
-    : (data.protocol === 'ftp' && data.ftps === 'implicit' ? 'ftps' : data.protocol);
-  const user = data.userName ? `${encodeURIComponent(data.userName)}${data.password ? `:${PASSWORD_MASK}` : ''}@` : '';
-  const port = data.portNumber ? `:${data.portNumber}` : '';
-  let out = addQuotes(`${scheme}://${user}${data.hostName}${port}/`);
-  if (data.hostKey) out += ` -hostkey=${addQuotes(data.hostKey)}`;
-  if (data.publicKeyFile) out += ` -privatekey=${addQuotes(data.publicKeyFile)}`;
-  return out;
+function generateOpenCommandArgs(data, includeDefaultPort = false) {
+  // The shared generator knows about every option that cannot live in a URL
+  // (client certificates, passphrases, passive mode, timeout and raw settings)
+  // and brackets IPv6 hosts. Mask a clone first: the scripting warning is a
+  // log boundary and must never turn a stored password into command text.
+  // Stored-site providers may return the compact session shape used by the
+  // manager rather than the complete TSessionData field set. Start from
+  // factory defaults so the shared generator never dereferences a missing
+  // algorithm list, then overlay only fields the provider supplied.
+  const safe = sessionData.defaultSessionData();
+  Object.assign(safe, sessionData.cloneSessionData(data));
+  sessionData.maskPasswords(safe);
+  let command = sessionData.generateOpenCommandArgs(safe);
+  if (includeDefaultPort && safe.portNumber === sessionData.getDefaultPort(safe)) {
+    const firstSpace = command.search(/\s/);
+    const url = firstSpace === -1 ? command : command.slice(0, firstSpace);
+    const suffix = firstSpace === -1 ? '' : command.slice(firstSpace);
+    const authorityStart = url.indexOf('://') + 3;
+    const pathStart = url.indexOf('/', authorityStart);
+    if (authorityStart >= 3 && pathStart >= 0) {
+      const authority = url.slice(authorityStart, pathStart);
+      const hostPort = authority.slice(authority.lastIndexOf('@') + 1);
+      const hasExplicitPort = hostPort.startsWith('[')
+        ? hostPort.includes(']:')
+        : hostPort.includes(':');
+      if (!hasExplicitPort) {
+        command = `${url.slice(0, pathStart)}:${safe.portNumber}${url.slice(pathStart)}${suffix}`;
+      }
+    }
+  }
+  return command;
 }
 
 // ---------------------------------------------------------------------------

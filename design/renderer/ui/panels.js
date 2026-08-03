@@ -154,13 +154,16 @@ export function normalizePanelEntries(entries) {
 
 /** Resolve the immutable paths captured by a drag into the source entries. */
 export function entriesForDragPaths(entries, paths, pathOf, isLocal = false) {
+  if (typeof pathOf !== 'function') return [];
   const wanted = new Set((Array.isArray(paths) ? paths : []).map((value) => {
     const text = String(value || '').replace(/\\/g, '/');
     return isLocal ? text.toLowerCase() : text;
   }));
   return (Array.isArray(entries) ? entries : []).filter((entry) => {
     if (!entry || entry.name === '..') return false;
-    const value = String(pathOf(entry) || '').replace(/\\/g, '/');
+    let raw;
+    try { raw = pathOf(entry); } catch { return false; }
+    const value = String(raw || '').replace(/\\/g, '/');
     return wanted.has(isLocal ? value.toLowerCase() : value);
   });
 }
@@ -176,15 +179,38 @@ export function normalizePanelDragPayload(value) {
   if (!value || typeof value !== 'object') return { ok: false, reason: 'invalidPayload' };
   if (value.side !== 'local' && value.side !== 'remote') return { ok: false, reason: 'invalidSourceSide' };
   if (!Array.isArray(value.paths)) return { ok: false, reason: 'invalidPaths' };
-  const paths = value.paths.map((p) => String(p || '')).filter(Boolean);
-  if (!paths.length || paths.length !== value.paths.length) return { ok: false, reason: 'invalidPaths' };
+  if (!value.paths.length || value.paths.length > 10000) return { ok: false, reason: 'invalidPaths' };
+  const paths = [];
+  const seen = new Set();
+  for (const path of value.paths) {
+    if (typeof path !== 'string' || !path || path.includes('\0')) {
+      return { ok: false, reason: 'invalidPaths' };
+    }
+    const key = path.replace(/\\/g, '/');
+    const duplicateKey = value.side === 'local' ? key.toLowerCase() : key;
+    if (seen.has(duplicateKey)) return { ok: false, reason: 'duplicatePaths' };
+    seen.add(duplicateKey);
+    paths.push(path);
+  }
+  if (value.sessionId !== undefined && value.sessionId !== null
+      && (typeof value.sessionId !== 'string' || value.sessionId.includes('\0'))) {
+    return { ok: false, reason: 'invalidSessionId' };
+  }
+  if (value.panelId !== undefined && value.panelId !== null
+      && (typeof value.panelId !== 'string' || value.panelId.includes('\0'))) {
+    return { ok: false, reason: 'invalidPanelId' };
+  }
+  if (value.preferredEffect !== undefined
+      && value.preferredEffect !== 'copy' && value.preferredEffect !== 'move') {
+    return { ok: false, reason: 'invalidPreferredEffect' };
+  }
   return {
     ok: true,
     data: {
       side: value.side,
-      sessionId: value.sessionId == null ? null : String(value.sessionId),
+      sessionId: value.sessionId == null ? null : value.sessionId,
       paths,
-      panelId: value.panelId == null ? null : String(value.panelId),
+      panelId: value.panelId == null ? null : value.panelId,
       preferredEffect: value.preferredEffect === 'move' ? 'move' : 'copy',
     },
   };

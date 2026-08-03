@@ -280,6 +280,20 @@ test.describe('the reconciled subsystems are reachable from the application', ()
       ['/srv/b.txt']);
   });
 
+  test.it('rejects relative drag paths and malformed move flags at the real IPC boundary', async () => {
+    const relative = await app.api('explorer.dragDrop', {
+      effect: 1, files: ['relative.txt'], targetPath: '/srv', allowMove: false,
+    });
+    assert.equal(relative.ok, false);
+    assert.match(relative.error.message, /absolute local path/i);
+
+    const malformedFlag = await app.api('explorer.dragDrop', {
+      effect: 2, files: ['C:\\work\\alpha.txt'], targetPath: '/srv', allowMove: 'false',
+    });
+    assert.equal(malformedFlag.ok, false);
+    assert.match(malformedFlag.error.message, /allowMove must be true or false/i);
+  });
+
   test.it('never lets a selection contain the parent entry', async () => {
     await app.ok('explorer.setPanels', {
       remote: {

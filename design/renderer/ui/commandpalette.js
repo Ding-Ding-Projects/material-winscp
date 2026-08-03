@@ -6,7 +6,7 @@
 // setting delegates to the real Preferences surface; the palette never keeps
 // a second setting value or pretends that a read-only option is editable here.
 
-import { h, icon, clear, layer, focusMemory, announce, appearanceTarget } from '../dom.js';
+import { h, icon, clear, layer, focusMemory, announce, appearanceTarget, trapFocus } from '../dom.js';
 import { defineStrings, subscribe as subscribeI18n, t, tPair } from '../i18n.js';
 import { store, persistCurrent, bus } from '../state.js';
 import { listCommands, runCommand, registerCommand, registerTitlebarAction } from '../app.js';
@@ -14,9 +14,9 @@ import { createSearchBar } from './searchbar.js';
 import { ensureStyle } from './commands.js';
 import {
   PAGES, orderedPages, flattenControls, localized, bothOf, describeValue,
-  isPending, pendingMessage,
+  isPending, renderControl,
 } from './dialogs/prefpages.js';
-import { openPreferences, readPref } from './dialogs/preferences.js';
+import { openPreferences, readPref, writePref, maskField } from './dialogs/preferences.js';
 
 defineStrings({
   cpOpen: ['Command palette', '指令面板'],
@@ -40,11 +40,12 @@ const STYLE = `
 .cmdp-backdrop { position: fixed; inset: 0; z-index: 450; display: flex; align-items: flex-start;
   justify-content: center; padding: clamp(12px, 8vh, 72px) 12px 12px;
   background: color-mix(in srgb, var(--scrim, #000) 32%, transparent); }
+.cmdp-backdrop.is-full { align-items: stretch; padding: 12px; }
 .cmdp-surface { width: min(780px, calc(100vw - 24px)); max-height: min(720px, calc(100vh - 84px));
   display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--outline-var);
   border-radius: var(--shape-xl, 28px); background: var(--surface, var(--c-lowest));
   color: var(--ons, var(--on-surface)); box-shadow: var(--e3, 0 12px 32px #0003); }
-.cmdp-surface.is-full { width: 100%; max-height: none; height: 100%; border-radius: var(--shape-lg, 16px); }
+.cmdp-surface.is-full { width: 100%; max-height: none; height: auto; border-radius: var(--shape-lg, 16px); }
 .cmdp-head { display: flex; align-items: center; gap: 10px; padding: 16px 18px 8px; }
 .cmdp-title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: var(--type-title-lg, 1.35rem); font-weight: 500; }
 .cmdp-size, .cmdp-close { flex: 0 0 auto; }
@@ -55,6 +56,7 @@ const STYLE = `
 .cmdp-group { margin: 8px 10px 4px; color: var(--onsv, #666); font-size: var(--type-label-sm, .75rem); font-weight: 600; }
 .cmdp-row { display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 56px; padding: 9px 10px;
   border: 0; border-radius: var(--shape-md, 12px); background: transparent; color: inherit; text-align: start; cursor: pointer; }
+.cmdp-row.is-setting { cursor: default; }
 .cmdp-row:hover, .cmdp-row.is-active { background: color-mix(in srgb, var(--p, #0b57d0) 12%, transparent); }
 .cmdp-row:focus-visible { outline: 2px solid var(--p, #0b57d0); outline-offset: -2px; }
 .cmdp-row[aria-disabled="true"] { opacity: .62; }
@@ -64,12 +66,22 @@ const STYLE = `
 .cmdp-detail { display: block; margin-top: 2px; color: var(--onsv, #666); font-size: var(--type-label-sm, .76rem); overflow-wrap: anywhere; }
 .cmdp-value { flex: 0 1 24ch; min-width: 0; color: var(--onsv, #666); font-family: var(--mono, monospace); font-size: var(--type-label-md, .82rem);
   text-align: end; overflow-wrap: anywhere; }
+.cmdp-inline-control { flex: 0 1 min(30ch, 46%); min-width: 10ch; min-height: 30px; display: inline-flex; align-items: center; justify-content: flex-end; }
+.cmdp-inline-control .field-input { min-width: 0; width: min(30ch, 100%); }
+.cmdp-inline-control .pref-check { min-height: 30px; }
+.cmdp-inline-control .pref-check-label { display: none; }
+.cmdp-inline-control .pref-inline, .cmdp-inline-control .slider-wrap { max-width: 100%; min-width: 0; }
+.cmdp-inline-control .slider-wrap { display: inline-flex; align-items: center; gap: 6px; }
+.cmdp-inline-control .slider-value { min-width: 4ch; text-align: end; }
 .cmdp-shortcut { flex: 0 0 auto; color: var(--onsv, #666); font-family: var(--mono, monospace); font-size: var(--type-label-sm, .76rem); }
 .cmdp-empty { padding: 24px 12px; color: var(--onsv, #666); text-align: center; }
 .cmdp-foot { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 18px 12px; border-top: 1px solid var(--outline-var); color: var(--onsv, #666); font-size: var(--type-label-sm, .76rem); }
 @media (max-width: 560px) {
   .cmdp-backdrop { padding: 8px; }
+  .cmdp-backdrop.is-full { padding: 8px; }
   .cmdp-surface { width: 100%; max-height: calc(100vh - 16px); border-radius: var(--shape-lg, 16px); }
+  .cmdp-row { flex-wrap: wrap; }
+  .cmdp-inline-control { flex: 1 1 100%; justify-content: flex-start; padding-inline-start: 30px; }
   .cmdp-value { flex-basis: 14ch; }
 }
 `;
@@ -84,6 +96,48 @@ function pairForCommand(command) {
 
 function safeRead(read, key) {
   try { return read(key); } catch { return undefined; }
+}
+
+const INLINE_CONTROL_TYPES = new Set(['check', 'number', 'path', 'select', 'slider', 'text']);
+
+/** Primitive controls can safely share the Preferences renderer in this row. */
+export function canInlinePreference(control) {
+  return !!control && INLINE_CONTROL_TYPES.has(control.type)
+    && !control.secret && !control.actionId;
+}
+
+/** The palette must not steal keys from a nested editor or a clearing search. */
+export function shouldHandlePaletteKey({ key, inRegexBuilder = false, inInlineControl = false, searchHasValue = false } = {}) {
+  if (inRegexBuilder) return false;
+  if (inInlineControl && key !== 'Escape') return false;
+  if (key === 'Escape' && searchHasValue) return false;
+  return true;
+}
+
+function writeInlinePreference(control, value) {
+  const label = `Changed ${control.label?.en || control.key} to ${describeValue(control, value, 'en')}`;
+  return Promise.all([control.key, ...(control.alsoKeys || [])]
+    .map((key) => writePref(key, value, label)));
+}
+
+function inlineNodeFor(entry) {
+  if (!canInlinePreference(entry.control)) return null;
+  const rendered = renderControl(entry.control, {
+    read: readPref,
+    write: (control, value) => writeInlinePreference(control, value)
+      .catch((err) => {
+        console.warn('[command-palette] inline preference failed:', err);
+        announce(`${localized(control.label)} could not be saved: ${err?.message || err}`, true);
+      }),
+    custom: { mask: (control, input) => maskField(input) },
+  });
+  const node = rendered.querySelector?.('.pref-check, .pref-inline, .slider-wrap, select, input, textarea');
+  if (!node) return null;
+  node.classList.add('cmdp-inline-control');
+  const focusables = node.matches?.('input,select,textarea,button')
+    ? [node] : Array.from(node.querySelectorAll?.('input,select,textarea,button') || []);
+  for (const control of focusables) control.setAttribute('aria-label', localized(entry.control.label));
+  return node;
 }
 
 /** Build setting/page destinations without touching the DOM. */
@@ -130,6 +184,8 @@ export function preferenceDestinations(read = readPref) {
       fields: fields.filter(Boolean),
       value,
       pending: isPending(key),
+      control,
+      inline: canInlinePreference(control),
       detail: () => `${localized(entry.pageTitle)} › ${localized(entry.sectionTitle)}`,
       run: () => openPreferences({ pageId: entry.pageId, controlKey: key }),
     }];
@@ -216,7 +272,7 @@ export function openCommandPalette() {
   closeBtn.title = t('cpClose');
 
   const count = h('span', { 'aria-live': 'polite' });
-  const list = h('div', { class: 'cmdp-list', id: listId, role: 'listbox', tabindex: '-1', 'aria-label': t('cpTitle') });
+  const list = h('div', { class: 'cmdp-list', id: listId, role: 'list', tabindex: '-1', 'aria-label': t('cpTitle') });
   const footer = h('div', { class: 'cmdp-foot' }, h('span', {}, t('cpHint')), h('span', {}, 'JavaScript RegExp · local only'));
   const search = createSearchBar({
     id: 'command-palette', labelKey: 'cpSearch', placeholderKey: 'cpSearchPh',
@@ -248,6 +304,7 @@ export function openCommandPalette() {
     store.set('commandPalette.size', size);
     persistCurrent('commandPalette');
     root.classList.toggle('is-full', size === 'full');
+    backdrop.classList.toggle('is-full', size === 'full');
     sizeBtn.textContent = renderSizeLabel(size === 'full' ? 'card' : 'full');
     sizeBtn.setAttribute('aria-label', renderSizeLabel(size === 'full' ? 'card' : 'full'));
     sizeBtn.setAttribute('aria-pressed', String(size === 'full'));
@@ -264,6 +321,7 @@ export function openCommandPalette() {
     offI18n?.();
     offCommands?.();
     offPrefs?.();
+    untrap?.();
     search.destroy();
     backdrop.remove();
     openHandle = null;
@@ -292,7 +350,7 @@ export function openCommandPalette() {
     for (const [i, row] of Array.from(list.querySelectorAll('.cmdp-row')).entries()) {
       const active = i === index;
       row.classList.toggle('is-active', active);
-      row.setAttribute('aria-selected', String(active));
+      row.setAttribute('aria-current', active ? 'true' : 'false');
     }
     if (index >= 0) {
       const row = list.querySelector(`[data-cmdp-index="${index}"]`);
@@ -321,30 +379,47 @@ export function openCommandPalette() {
       }
       const rowId = `cmdp-row-${index}`;
       const detail = entry.detail();
-      const row = h('button', {
-        type: 'button', class: 'cmdp-row', id: rowId, 'data-cmdp-index': String(index),
-        role: 'option', 'aria-selected': String(index === currentIndex()),
+      const inline = entry.type === 'setting' ? inlineNodeFor(entry) : null;
+      const row = h(inline ? 'div' : 'button', {
+        type: inline ? undefined : 'button', id: rowId, 'data-cmdp-index': String(index),
+        role: inline ? 'group' : undefined,
+        tabindex: inline ? '0' : undefined,
+        'aria-current': String(index === currentIndex()),
         'aria-label': `${entryLabel(entry)} — ${detail}`,
+        'data-cmdp-key': entry.key || undefined,
+        'data-cmdp-inline': inline ? 'true' : 'false',
+        class: `cmdp-row${inline ? ' is-setting' : ''}`,
         // Pending preferences are still reachable destinations.  The real
         // Preferences surface explains why the control is unavailable; marking
         // the palette row disabled would make keyboard activation impossible
         // and contradict the palette's job of finding every setting.
         'data-cmdp-status': entry.pending ? 'unavailable' : 'available',
-        onclick: () => { activeIndex = index; selectActive(); },
+        onclick: (e) => {
+          if (inline && e.target.closest?.('.cmdp-inline-control')) return;
+          activeIndex = index; selectActive();
+        },
+        onfocusin: () => { activeIndex = index; paintActive(); },
         onmouseenter: () => { activeIndex = index; paintActive(); },
       },
       h('span', { class: 'cmdp-icon' }, icon(entryIcon(entry), 18)),
       h('span', { class: 'cmdp-main' },
         h('span', { class: 'cmdp-label' }, entryLabel(entry)),
         h('span', { class: 'cmdp-detail' }, entry.type === 'setting' ? `${detail} · ${entry.pending ? t('cpUnavailable') : t('cpDestination')}` : detail)),
-      entry.value ? h('span', { class: 'cmdp-value', title: entry.value }, entry.value) : null,
+      !inline && entry.value ? h('span', { class: 'cmdp-value', title: entry.value }, entry.value) : null,
+      inline,
       entry.shortcut ? h('kbd', { class: 'cmdp-shortcut' }, entry.shortcut) : null);
-      list.appendChild(row);
+      list.appendChild(h('div', { class: 'cmdp-item', role: 'listitem' }, row));
     });
     paintActive();
   }
 
   function onKey(e) {
+    if (!shouldHandlePaletteKey({
+      key: e.key,
+      inRegexBuilder: !!e.target?.closest?.('.rb-popover'),
+      inInlineControl: !!e.target?.closest?.('.cmdp-inline-control'),
+      searchHasValue: e.target === search.input && !!search.input.value,
+    })) return;
     if (e.key === 'Escape') { e.preventDefault(); close(); return; }
     if (e.key === 'ArrowDown') { e.preventDefault(); move(1); return; }
     if (e.key === 'ArrowUp') { e.preventDefault(); move(-1); return; }
@@ -363,6 +438,7 @@ export function openCommandPalette() {
   const offCommands = bus.on('shell:commandRegistered', render);
   const offPrefs = bus.on('prefs:changed', render);
 
+  const untrap = trapFocus(root);
   setSize(size);
   document.addEventListener('keydown', onKey, true);
   render();

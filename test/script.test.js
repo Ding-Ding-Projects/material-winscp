@@ -1722,6 +1722,21 @@ test('parseOpenUrl understands each protocol scheme and its default port', () =>
   assert.throws(() => parseOpenUrl('gopher://h'), /Unknown protocol 'gopher'\./);
 });
 
+test('parseOpenUrl accepts handler URLs and all shared protocol aliases', () => {
+  const specific = parseOpenUrl('winscp-sftp://user%40domain:p%2Bss@example.com/a+b');
+  assert.equal(specific.protocol, 'sftp');
+  assert.equal(specific.userName, 'user@domain');
+  assert.equal(specific.password, 'p+ss');
+  assert.equal(specific.remoteDirectory, '/a b');
+
+  const wrapped = parseOpenUrl('winscp://sftp://alice@example.com/');
+  assert.equal(wrapped.protocol, 'sftp');
+  assert.equal(wrapped.userName, 'alice');
+  assert.equal(parseOpenUrl('ssh://h').puttyProtocol, 'ssh');
+  assert.equal(parseOpenUrl('s3plain://h').protocol, 's3');
+  assert.equal(parseOpenUrl('sftp://h:70000').portNumber, 22);
+});
+
 test('the ftps:// scheme dials the implicit-TLS port, not the plaintext one', () => {
   // TSessionData::GetDefaultPort — fsFTP + ftpsImplicit is 990. Answering 21
   // connects to the plaintext control port and then tries to negotiate TLS on a
@@ -1792,9 +1807,10 @@ test('parseOpenUrl splits credentials, port, IPv6 host and remote path', () => {
 
 test('parseOpenUrl applies the documented open switches', () => {
   const o = new Options();
-  o.parse('-privatekey=key.ppk -hostkey=ssh-rsa -timeout=30 -username=u -password=p -implicit');
+  o.parse('-privatekey=key.ppk -clientcert=client.pem -hostkey=ssh-rsa -timeout=30 -username=u -password=p -implicit');
   const d = parseOpenUrl('ftp://example.com', o);
   assert.equal(d.publicKeyFile, 'key.ppk');
+  assert.equal(d.tlsCertificateFile, 'client.pem');
   assert.equal(d.hostKey, 'ssh-rsa');
   assert.equal(d.timeout, 30);
   assert.equal(d.userName, 'u');
@@ -1808,6 +1824,25 @@ test('parseOpenUrl collects -rawsettings key=value pairs', () => {
   o.param(1);
   const d = parseOpenUrl('sftp://h', o);
   assert.deepEqual(d.rawSettings, { FSProtocol: '2', Compression: '1' });
+  assert.equal(d.compression, true, 'raw settings must affect the session fields used to connect');
+  assert.equal(d.protocol, 'sftpOnly', 'FSProtocol=2 must select SFTP-only mode');
+  assert.equal(d.portNumber, 22, 'SFTP-only must retain the SSH default port');
+});
+
+test('generated stored-site warnings preserve URL parity without exposing secrets', () => {
+  const d = parseOpenUrl('sftp://user:secret@[2001:db8::1]/');
+  d.tlsCertificateFile = 'client.pem';
+  d.passphrase = 'private-secret';
+  d.timeout = 30;
+  d.compression = true;
+  const command = S.generateOpenCommandArgs(d);
+  assert.match(command, /^sftp:\/\/user:\*\*\*@\[2001:db8::1\]\//);
+  assert.match(command, /-clientcert="client\.pem"/);
+  assert.match(command, /-passphrase="\*\*\*"/);
+  assert.match(command, /-timeout=30/);
+  assert.match(command, /-rawsettings/);
+  assert.equal(command.includes('secret'), false);
+  assert.equal(command.includes('private-secret'), false);
 });
 
 test('maskPasswordInCommandLine hides the URL password and sensitive switches', () => {
@@ -2124,6 +2159,22 @@ test('the exit code is logged at the end of the run', async () => {
   const { r } = runner({}, { log: (kind, text) => logged.push(text) });
   await r.run({ scriptCommands: ['exit'] });
   assert.ok(logged.some((l) => l === 'Script: Exit code: 0'));
+});
+
+test('runConsole writes a redacted text log for /log=FILE', async () => {
+  const dir = tempDir('textlog');
+  const f = nodePath.join(dir, 'run.log');
+  const c = new CR.BufferConsole({});
+  const code = await CR.runConsole([
+    '/command', 'open sftp://martin:hunter2@example.com -password=second-secret',
+    'exit', `/log=${f}`,
+  ], { console: c, env: {} });
+  assert.equal(code, CR.RESULT_ANY_ERROR, 'the fixture has no session manager');
+  const log = fs.readFileSync(f, 'utf8');
+  assert.match(log, /Script: open sftp:\/\/martin:\*\*\*@example\.com -password=\*\*\*/);
+  assert.match(log, /Script: Exit code: 1/);
+  assert.equal(log.includes('hunter2'), false);
+  assert.equal(log.includes('second-secret'), false);
 });
 
 test('the runner closes every session it opened', async () => {

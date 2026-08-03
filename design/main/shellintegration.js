@@ -599,6 +599,47 @@ function canAcceptDrop(caps, opts) {
   return { ok: true };
 }
 
+// Windows Explorer places copied shell files in the FileNameW clipboard
+// format: NUL-separated UTF-16 paths followed by a second NUL. Electron
+// exposes the raw format but not a file-list helper, so decode it here and
+// keep the renderer/main clipboard contract as plain, absolute paths.
+function decodeShellFileListBuffer(value, encoding) {
+  if (!Buffer.isBuffer(value) || value.length === 0) return [];
+  const text = value.toString(encoding).replace(/\0+$/, '');
+  return text.split('\0').filter((entry) => {
+    if (!entry || entry.includes('\0')) return false;
+    return path.win32.isAbsolute(entry) || path.posix.isAbsolute(entry);
+  });
+}
+
+/** Read an Explorer file clipboard without logging or exposing its contents. */
+function readClipboardFilePaths(clipboardApi) {
+  if (!clipboardApi || typeof clipboardApi.readBuffer !== 'function') return [];
+  const formats = new Set(['FileNameW', 'FileName']);
+  if (typeof clipboardApi.availableFormats === 'function') {
+    try {
+      for (const format of clipboardApi.availableFormats() || []) {
+        if (/^filenamew?$/i.test(String(format))) formats.add(String(format));
+      }
+    } catch { /* an unavailable clipboard is an honest empty file list */ }
+  }
+  const seen = new Set();
+  for (const format of formats) {
+    let buffer;
+    try { buffer = clipboardApi.readBuffer(format); } catch { continue; }
+    const encoding = String(format).toLowerCase() === 'filenamew' ? 'utf16le' : 'latin1';
+    const paths = decodeShellFileListBuffer(buffer, encoding);
+    if (!paths.length) continue;
+    return paths.filter((entry) => {
+      const key = entry.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+  return [];
+}
+
 // ===========================================================================
 // Shell-extension presence (WinConfiguration.cpp:1770-1826)
 // ===========================================================================
@@ -638,6 +679,7 @@ module.exports = {
   warnLackOfTempSpace, formatBytes, targetUnknownMessage,
   DelayedDeletion, DragOut,
   classifyIncomingDrop, incomingDropOperation, canAcceptDrop,
+  readClipboardFilePaths,
   dragExtensionStatus, windowsBuildNumber,
   DragError,
 };

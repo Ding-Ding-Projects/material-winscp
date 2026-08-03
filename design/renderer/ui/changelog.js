@@ -187,6 +187,14 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "b53723c", kind: 'commit', ref: "b53723c", oid: "b53723c510699a586491e4e0c3947eb35d390dda", date: "2026-08-03",
+    title: "Keep changelog linked to current history",
+    changes: [
+      { category: "removed", text: "English: Regenerate the in-app development history from the repository's real commits so every current entry has a full resolvable SHA. The changelog no longer stops at yesterday's paperwork." },
+      { category: "changed", text: "廣東話: 用 repository 真正嘅 commit 重新生成 app 入面嘅 development history，全部 current entry 都有 full SHA 可以核對；changelog 唔再停喺尋日份 paperwork。" },
+    ],
+  },
+  {
     id: "87def2e", kind: 'commit', ref: "87def2e", oid: "87def2eedfb8ecef829ef3d738bd40800bc6a362", date: "2026-08-03",
     title: "Refresh handoff after protocol fixes",
     changes: [
@@ -658,13 +666,6 @@ export const DEVELOPMENT = [
       { category: "changed", text: "廣東話: 搜尋一改就由第一個結果開始，唔好畀舊 index 帶個指令去食茶點。" },
     ],
   },
-  {
-    id: "22bc236", kind: 'commit', ref: "22bc236", oid: "22bc236a25f2313f91040c539cb57f3901d653bc", date: "2026-08-03",
-    title: "Validate SCP time record fields",
-    changes: [
-      { category: "changed", text: "Reject unsafe timestamp fields before the wire parser nods along. 呢次 SCP 時間記錄唔再畀超大數字扮正常，免得協議食壞肚。" },
-    ],
-  },
 ];
 
 /**
@@ -1089,6 +1090,7 @@ function ensureStyles() {
   padding-top: calc(18px * var(--den)); }
 .dp-pop { position: fixed; z-index: 1; width: max-content; max-width: min(94vw, calc(420px * var(--uiscale)));
   background: var(--c-high); color: var(--onsfc); border-radius: var(--shape-lg);
+  border: 1px solid var(--outline-var);
   box-shadow: var(--e3); padding: calc(12px * var(--den)); display: flex; flex-direction: column;
   gap: calc(10px * var(--den)); overflow: auto; }
 .dp-head { display: flex; align-items: center; gap: calc(6px * var(--den)); }

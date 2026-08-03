@@ -65,10 +65,23 @@ test('the production overlay surfaces have an explicit scroll/background contrac
   const components = fs.readFileSync(path.join(__dirname, '..', 'design', 'renderer', 'styles', 'components.css'), 'utf8');
   const queue = fs.readFileSync(path.join(__dirname, '..', 'design', 'renderer', 'ui', 'queue.js'), 'utf8');
   const contextMenu = fs.readFileSync(path.join(__dirname, '..', 'design', 'renderer', 'ui', 'contextmenu.js'), 'utf8');
-  assert.match(components, /\.rb-popover, \.cp-popover, \.ts, \.ap, \.nc\s*\{[\s\S]*?background: var\(--c-high\)/);
+  assert.match(components, /\.menu\s*\{[\s\S]*?background: var\(--c\)[\s\S]*?box-shadow: var\(--e2\)/);
+  assert.match(components, /\.menu-label\s*\{[\s\S]*?overflow-wrap: anywhere;[\s\S]*?white-space: normal/);
+  assert.match(components, /\.rb-popover, \.cp-popover, \.ts, \.ap, \.nc\s*\{[\s\S]*?background: var\(--c-high\)[\s\S]*?box-shadow: var\(--e3\)/);
+  assert.match(components, /\.modal\s*\{[\s\S]*?border: 1px solid var\(--outline-var\);[\s\S]*?box-shadow: var\(--e3\)/);
   assert.match(queue, /\.tx-q-popover\s*\{[\s\S]*?overflow: hidden;/);
+  assert.match(queue, /\.tx-pg-window\s*\{[\s\S]*?background: var\(--c-high\);[\s\S]*?box-shadow: var\(--e3\)/);
   assert.match(queue, /\.tx-q-popbody\s*\{[\s\S]*?min-height: 0;[\s\S]*?overflow: hidden;/);
   assert.match(contextMenu, /root\.style\.maxHeight = `\$\{Math\.max\(1, viewportHeight - 12\)\}px`/);
+});
+
+test('anchored calendar and modeless editor surfaces carry their own border contract', () => {
+  const calendar = fs.readFileSync(path.join(__dirname, '..', 'design', 'renderer', 'ui', 'changelog.js'), 'utf8');
+  const editor = fs.readFileSync(path.join(__dirname, '..', 'design', 'renderer', 'ui', 'dialogs', 'editor.js'), 'utf8');
+  assert.match(calendar, /\.dp-pop\s*\{[\s\S]*?background: var\(--c-high\)[\s\S]*?border: 1px solid var\(--outline-var\)[\s\S]*?box-shadow: var\(--e3\)/);
+  assert.match(editor, /function setWindowSize\(nextWidth, nextHeight\)/);
+  assert.match(editor, /const nextW = clamp\(nextWidth, lowerWidth, Math\.max\(lowerWidth, width - 8\)\)/);
+  assert.match(editor, /max-width: calc\(100vw - 8px\); max-height: calc\(100vh - 8px\)/);
 });
 
 test('blocking dialogs keep a scrollable body inside a narrow viewport', () => {
