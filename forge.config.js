@@ -28,7 +28,6 @@ if (!hasIcon) {
 /** Squirrel needs a package id without spaces; humans get the pretty title. */
 const APP_ID = 'winscp_material';
 const EXE_NAME = 'WinSCPMaterial';
-const REPO = 'https://github.com/Ding-Ding-Projects/material-winscp';
 
 module.exports = {
   packagerConfig: {
@@ -90,9 +89,10 @@ module.exports = {
         copyright: `Copyright (c) ${new Date().getUTCFullYear()} ${pkg.author}`,
         // No MSI: Squirrel's own Setup.exe is what users run.
         noMsi: true,
-        // Add/Remove Programs reads the icon from this URL; the local .ico is
-        // what gets stamped into the executables.
-        iconUrl: `${REPO}/raw/main/build/icon.ico`,
+         // build/icon.ico is a local, ignored build product, not a tracked
+         // release asset. Do not advertise a raw/main URL that 404s after a
+         // clean checkout; setupIcon below is truthful when the local product
+         // was generated.
         ...(hasIcon ? { setupIcon: ICON_ICO } : {}),
         // No loadingGif is bundled. Squirrel then shows its default install
         // animation, which is correct behaviour rather than a missing asset.

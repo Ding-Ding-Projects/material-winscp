@@ -9,8 +9,12 @@ shell registry when opened, so commands added by dialogs, the queue, panels or
 the WinSCP action layer appear in the same list.
 
 The palette also indexes every page and control declared in the Preferences
-schema. A page row opens that page; a setting row opens the exact page, focuses
-the concrete editor inside the row, and flashes the exact control briefly. Safe
+schema, every Advanced Site Settings page/control, and every appearance-editor
+property in each editor state. A page row opens that page; a setting row opens
+the exact page, focuses the concrete editor inside the row, and flashes the
+exact control briefly. Advanced Site Settings destinations focus their exact
+control, while appearance destinations open the editor at the requested state
+and property. Safe
 primitive settings (`check`, `text`, `path`, `number`, `select` and `slider`) also
 render their live control inline. Those controls use the same schema renderer,
 range normalization, mask validation and configuration writer as Preferences;
@@ -56,8 +60,9 @@ Inline editing is deliberately limited to schema controls whose existing
 renderer can be mounted safely in a compact row. Pending capabilities, secret,
 dangerous values, master-password flows and custom editors remain destination-only: their
 row is labelled unavailable or protected and opens the exact Preferences control,
-where the canonical explanation and multi-step validation live. Site-properties
-and appearance-editor property destinations remain separate roadmap work.
+where the canonical explanation and multi-step validation live. The extra
+destination inventory is navigation metadata only; it does not duplicate or
+mutate either settings implementation.
 
 Closing a palette flushes its current query, regex pattern, flags and mode before
 the search field is detached, so a quick open–type–close cycle does not discard
@@ -66,9 +71,10 @@ the user's search.
 ## Verification
 
 - `test/commandpalette.test.js` checks that the inventory retains every
-  registered command, includes the Preferences page/control destinations,
-  identifies safe inline controls and excludes secret values; it also covers
-  keyboard ownership boundaries.
+  registered command, includes Preferences, Advanced Site Settings and
+  appearance-property destinations, identifies safe inline controls and
+  excludes secret values; it also covers keyboard ownership boundaries and
+  exact destination arguments.
 - `test/e2e-app.test.js` exercises the real Electron shortcut, search field,
   regex-builder affordance, size persistence and exact Preferences landing.
 - `node site/build.js --verify` confirms this article and its index entry are

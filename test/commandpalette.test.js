@@ -109,6 +109,25 @@ test('palette filtering is active only when the search bar has a query', () => {
   assert.equal(P.filterPaletteEntries(entries, predicate, false).length, 2);
 });
 
+test('palette registers every Advanced Site Settings and appearance destination', async () => {
+  const advanced = await import(R('ui/dialogs/siteadvanced.js'));
+  const appearance = await import(R('ui/appearance.js'));
+  const destinations = P.paletteDestinations();
+  const page = destinations.find((entry) => entry.destinationKind === 'site-advanced-page');
+  const control = destinations.find((entry) => entry.destinationKind === 'site-advanced-control');
+  const property = destinations.find((entry) => entry.destinationKind === 'appearance-property');
+  assert.equal(destinations.filter((entry) => entry.destinationKind === 'site-advanced-page').length, advanced.SITE_ADVANCED_PAGES.length);
+  assert.equal(destinations.filter((entry) => entry.destinationKind === 'site-advanced-control').length, advanced.allAdvancedControls().length);
+  assert.equal(destinations.filter((entry) => entry.destinationKind === 'appearance-property').length,
+    appearance.PROPS.length * appearance.STATES.length);
+  assert.ok(page.fields.includes(page.pageId));
+  assert.ok(control.fields.includes(control.controlKey));
+  assert.ok(property.fields.includes(property.propertyKey));
+  assert.equal(typeof page.run, 'function');
+  assert.equal(typeof control.run, 'function');
+  assert.equal(typeof property.run, 'function');
+});
+
 test('filtered result sets start keyboard selection at their first match', () => {
   const entries = P.paletteEntries([
     { id: 'alpha', label: 'Alpha command', run() {} },

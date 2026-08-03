@@ -1013,6 +1013,7 @@ export function createSiteAdvancedPanel(site, opts = {}) {
     site: cloneAdvancedSite(site),
     prefs: opts.prefs || {},
     pageId: opts.pageId || SITE_ADVANCED_PAGES[0].id,
+    controlKey: opts.controlKey || null,
     /** Secrets the user actually retyped, so the sentinel is never written back. */
     touchedSecrets: new Set(),
   };
@@ -1212,6 +1213,15 @@ export function createSiteAdvancedPanel(site, opts = {}) {
 
     if (bar.isActive) renderCrossPageHits(page, bar);
     restoreFocus(focusMark);
+    if (state.controlKey) {
+      const target = pageEl.querySelector(`[data-control="${CSS.escape(state.controlKey)}"] input, [data-control="${CSS.escape(state.controlKey)}"] select, [data-control="${CSS.escape(state.controlKey)}"] textarea, [data-control="${CSS.escape(state.controlKey)}"] button`);
+      if (target) {
+        target.focus({ preventScroll: true });
+        target.closest('[data-control]')?.classList.add('is-destination');
+        target.scrollIntoView?.({ block: 'nearest' });
+        state.controlKey = null;
+      }
+    }
   }
 
   function visibleControls(group, c, bar) {
@@ -1752,6 +1762,7 @@ export function registerSiteAdvancedDialog() {
     const panel = createSiteAdvancedPanel(working, {
       prefs: props.prefs,
       pageId: props.pageId,
+      controlKey: props.controlKey,
       onAction: props.onAction,
     });
     return {

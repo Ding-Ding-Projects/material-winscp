@@ -232,6 +232,9 @@ jobs:
             exit 1
           fi
 
+          node build/verify-squirrel-artifacts.js \
+            --setup "$setup" --nupkg "$nupkg" --releases "$releases"
+
           {
             echo "setup=$setup"
             echo "nupkg=$nupkg"

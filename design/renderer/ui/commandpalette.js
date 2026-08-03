@@ -17,6 +17,8 @@ import {
   isPending, renderControl,
 } from './dialogs/prefpages.js';
 import { openPreferences, readPref, writePref, maskField } from './dialogs/preferences.js';
+import { SITE_ADVANCED_PAGES, allAdvancedControls, openSiteAdvanced } from './dialogs/siteadvanced.js';
+import { PROPS, STATES, openAppearanceEditor } from './appearance.js';
 
 defineStrings({
   cpOpen: ['Command palette', '指令面板'],
@@ -205,8 +207,44 @@ export function preferenceDestinations(read = readPref) {
   return [...pageEntries, ...settingEntries];
 }
 
+function destinationLabel(value) { return typeof value === 'string' ? value : localized(value); }
+
+/** Navigation-only inventory for dialogs that are not Preferences controls. */
+export function paletteDestinations() {
+  const advancedPages = SITE_ADVANCED_PAGES.map((page) => ({
+    type: 'destination', destinationKind: 'site-advanced-page',
+    id: `site-advanced-page:${page.id}`, label: page.caption, pageId: page.id,
+    fields: [page.caption, page.id, ...(page.groups || []).map((group) => group.caption || group.id)],
+    detail: () => `Advanced site settings › ${page.caption}`,
+    run: () => openSiteAdvanced({ pageId: page.id }),
+  }));
+  const advancedControls = allAdvancedControls().map(({ page, group, control }) => ({
+    type: 'destination', destinationKind: 'site-advanced-control',
+    id: `site-advanced-control:${page.id}:${control.id}`, label: control.label,
+    pageId: page.id, controlKey: control.id,
+    fields: [control.label, control.key, control.id, page.caption, page.id, group.caption || group.id],
+    detail: () => `Advanced site settings › ${page.caption} › ${group.caption || group.id}`,
+    run: () => openSiteAdvanced({ pageId: page.id, controlKey: control.id }),
+  }));
+  const appearance = STATES.flatMap((state) => PROPS.map((prop) => {
+    const label = prop.label || prop.labelKey;
+    return {
+      type: 'destination', destinationKind: 'appearance-property',
+      id: `appearance-property:${state.id}:${prop.k}`, label, pageId: 'appearance',
+      stateId: state.id, propertyKey: prop.k,
+      fields: [destinationLabel(label), prop.k, state.label, state.id, 'appearance', 'appearance editor'],
+      detail: () => `Appearance editor › ${state.label} › ${destinationLabel(label)}`,
+      run: () => openAppearanceEditor({
+        key: 'command-palette-appearance-target', element: document.body,
+        label: 'Command palette appearance target', stateId: state.id, propertyKey: prop.k,
+      }),
+    };
+  }));
+  return [...advancedPages, ...advancedControls, ...appearance];
+}
+
 /** Build the complete palette inventory from the live shell registries. */
-export function paletteEntries(commands = listCommands(), settings = preferenceDestinations()) {
+export function paletteEntries(commands = listCommands(), settings = preferenceDestinations(), destinations = []) {
   const commandEntries = commands.map((command) => {
     const pair = pairForCommand(command);
     return {
@@ -221,7 +259,7 @@ export function paletteEntries(commands = listCommands(), settings = preferenceD
       run: () => runCommand(command.id),
     };
   });
-  return [...commandEntries, ...settings];
+  return [...commandEntries, ...settings, ...destinations];
 }
 
 function entryLabel(entry) { return localized(entry.label); }
@@ -268,7 +306,7 @@ export function openCommandPalette() {
   let closed = false;
   let focusFrame = null;
   let activeIndex = 0;
-  let entries = paletteEntries();
+  let entries = paletteEntries(listCommands(), preferenceDestinations(), paletteDestinations());
   let results = entries;
   const titleId = `cmdp-title-${Date.now().toString(36)}`;
   const listId = `cmdp-list-${Date.now().toString(36)}`;
@@ -410,7 +448,7 @@ export function openCommandPalette() {
 
   function render() {
     const focusMark = captureListFocus();
-    entries = paletteEntries();
+    entries = paletteEntries(listCommands(), preferenceDestinations(), paletteDestinations());
     results = filterPaletteEntries(entries, search.predicate, search.isActive);
     activeIndex = Math.max(0, Math.min(activeIndex, Math.max(0, results.length - 1)));
     clear(list);

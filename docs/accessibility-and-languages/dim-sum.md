@@ -22,6 +22,10 @@ it. It is a small delight, not a feature anyone has to manage.
   The level styles the copy *around* the dish; the dish's own name is a fact.
 - **Bundled local images only** — no network fetch, no third-party CDN, no
   tracking, no analytics.
+- In the normal app bridge path, the validated PNG is carried as a local
+  `data:` URI. In the headless/no-bridge fallback, the renderer resolves the
+  catalog filename against `design/assets` and accepts only the `dim-*.png`
+  shape; remote or malformed image URLs are rejected.
 - **Meaningful alt text naming the dish**, so screen-reader users get the same
   delight rather than "image".
 - **Respects reduced motion** and any quiet or do-not-disturb setting: with
@@ -84,6 +88,8 @@ dish appears rather than to gate whether one does.
   card can appear and that focus never moves to it.
 - Every catalog record is asserted to have an image that exists and decodes;
   records that fail are asserted to be skipped rather than substituted.
+- The renderer fallback is tested separately from the bridge path, including
+  its local file URL and rejection of remote image URLs.
 - Alt text is asserted present and to name the dish.
 - Reduced-motion behaviour is tested.
 - Migration of a legacy disable preference is tested to rejoin the draw.

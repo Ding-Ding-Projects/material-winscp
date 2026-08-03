@@ -1338,6 +1338,13 @@ test('-resumesupport takes on, off or a threshold in KB', async () => {
     /Unknown value/);
 });
 
+test('-resumesupport reports the option and rejects partial integers', async () => {
+  const { h, dir } = await transferFixture('resumesupport-partial');
+  await assert.rejects(
+    () => h.script.command(`put -resumesupport=64oops ${nodePath.join(dir, 'a.txt')}`),
+    /Unknown value '64oops' of option 'resumesupport'\./);
+});
+
 test('-filemask filters the files that are actually walked', async () => {
   const { h, dir, remote } = await transferFixture('filemask');
   remote.putDir('/home/user/tree');

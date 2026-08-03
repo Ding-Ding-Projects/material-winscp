@@ -357,13 +357,13 @@ let openEditor = null;
  * openAppearanceEditor({ key, element, label })
  * Non-modal, anchored to `element`, tracks it, returns focus on close.
  */
-export function openAppearanceEditor({ key, element, label } = {}) {
+export function openAppearanceEditor({ key, element, label, stateId: initialStateId = 'base', propertyKey = null } = {}) {
   if (!key) return null;
   if (openEditor) openEditor.close();
   const anchorEl = element && element.isConnected ? element : document.body;
   const restore = focusMemory();
 
-  let stateId = 'base';
+  let stateId = STATES.some((state) => state.id === initialStateId) ? initialStateId : 'base';
   const bodyEl = h('div', { class: 'ap-body' });
   const noticeEl = h('div', { class: 'ap-notice', hidden: true, role: 'status' });
 
@@ -522,6 +522,16 @@ export function openAppearanceEditor({ key, element, label } = {}) {
     }
     if (!bodyEl.children.length) {
       bodyEl.appendChild(h('div', { class: 'ts-empty' }, 'No appearance property matches that search.'));
+    }
+    if (propertyKey) {
+      const row = bodyEl.querySelector(`[data-prop="${CSS.escape(propertyKey)}"]`);
+      const target = row?.querySelector('input, select, textarea, button');
+      if (target) {
+        target.focus({ preventScroll: true });
+        row.classList.add('is-destination');
+        target.scrollIntoView?.({ block: 'nearest' });
+        propertyKey = null;
+      }
     }
   }
 

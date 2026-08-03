@@ -1402,9 +1402,9 @@ class Script {
       if (toggle.index >= 0) {
         copyParam.resumeSupport = toggle.index === 1 ? 'on' : 'off';
       } else {
-        const threshold = parseInt(r.value, 10);
-        if (!Number.isFinite(threshold) || !/^-?\d+$/.test(String(r.value).trim())) {
-          throw new ScriptError(MSG.VALUE_UNKNOWN('resumesupport', r.value));
+        const threshold = tryStrToInt(r.value);
+        if (threshold === null) {
+          throw new ScriptError(MSG.VALUE_UNKNOWN(r.value, 'resumesupport'));
         }
         copyParam.resumeSupport = 'smart';
         copyParam.resumeThreshold = threshold * 1024;

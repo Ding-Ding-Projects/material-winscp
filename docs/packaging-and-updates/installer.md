@@ -55,7 +55,7 @@ In `forge.config.js`, under the Squirrel maker:
 | `setupExe` | `WinSCP Material <version> Setup.exe` | The installer's filename. |
 | `authors`, `owners`, `description`, `copyright` | from `package.json` | Add/Remove Programs metadata. |
 | `setupIcon` | `build/icon.ico` | Stamped into the installer. |
-| `iconUrl` | the repository's raw URL for `build/icon.ico` | Add/Remove Programs fetches its icon from here. |
+| `iconUrl` | not configured | `build/icon.ico` is an ignored local build product, so the installer does not advertise a raw URL that would 404 from a clean checkout. |
 | `noMsi` | `true` | Squirrel's own Setup.exe is what users run. |
 | `loadingGif` | *not set* | None is bundled; Squirrel shows its default install animation, which is correct behaviour rather than a missing asset. |
 

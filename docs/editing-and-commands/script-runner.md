@@ -60,7 +60,7 @@ do not share a script transcript or XML log without reviewing it.
 | `/stdin` or `/stdout` has an unknown mode | The in-process runner prints the parser error and returns `1`, matching the console front end's process boundary. |
 | `/stdin=binary` | Transfer input is consumed as raw bytes; it is not UTF-8 decoded or split and reassembled by lines. |
 | `/log=FILE` is supplied | The console writes the script transcript through the existing session logger, including timestamps and `***` redaction for credentials; the file is closed before the runner returns. |
-| A numeric switch value is malformed (`-speed=64oops`, `-timeout=30oops`, `/loglevel=2oops`) | The runner reports the invalid value and returns `1` before starting the transfer, session, or command list. Decimal integers only are accepted; `/loglevel` also accepts WinSCP's historical `*` marker while this port still redacts secrets. |
+| A numeric switch value is malformed (`-speed=64oops`, `-resumesupport=64oops`, `-timeout=30oops`, `/loglevel=2oops`) | The runner reports the invalid value and the option name, then returns `1` before starting the transfer, session, or command list. Decimal integers only are accepted; `/loglevel` also accepts WinSCP's historical `*` marker while this port still redacts secrets. |
 | A session selector is malformed (`session 1oops`) | The selector is rejected instead of being truncated to session `1`. |
 | Repeated `/command` or `/parameter` switches are supplied | Every group is consumed in order; no implicit session or prompt is created. |
 | No script and no standard input | The non-interactive runner exits `0` without hanging. |

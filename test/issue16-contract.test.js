@@ -84,3 +84,19 @@ test('reduced-motion contract disables motion and explicit smooth scrolling', ()
   assert.match(dom, /export function isReducedMotion\(\)/);
   assert.match(preferences, /behavior: isReducedMotion\(\) \? 'auto' : 'smooth'/);
 });
+
+test('dim-sum UI uses verified local assets in bridge and fallback paths', async () => {
+  const dimsum = await import('../design/renderer/ui/dimsum.js');
+  const data = await import('../design/winscp-data.js');
+  const fallback = dimsum.normalizeDish(data.DISHES[0]);
+  assert.ok(fallback.img.startsWith('file:'), fallback.img);
+  assert.match(fallback.img, /dim-0001-har-gow\.png$/);
+
+  const dataUri = dimsum.normalizeDish({
+    id: 'main-catalog', en: 'Har Gow', zh: '蝦餃',
+    dataUri: 'data:image/png;base64,AAAA',
+    img: 'https://invalid.example/remote.png',
+  });
+  assert.equal(dataUri.img, 'data:image/png;base64,AAAA');
+  assert.equal(dimsum.normalizeDish({ en: 'Remote', zh: '遠端', img: 'https://invalid.example/x.png' }), null);
+});

@@ -24,6 +24,23 @@ import { DISHES } from '../../winscp-data.js';
 export const CHANCE = 0.10;
 const VISIBLE_MS = 8000;
 
+/** Resolve only the verified bundled PNGs when the bridge is unavailable. */
+export function localAssetUrl(value) {
+  const source = String(value || '');
+  if (/^data:image\//i.test(source) || /^file:/i.test(source)) return source;
+  const name = source.replace(/^.*[\\/]/, '');
+  if (!/^dim-\d+-[a-z0-9-]+\.png$/i.test(name)) return '';
+  return new URL(`../../assets/${name}`, import.meta.url).href;
+}
+
+/** Prefer main's validated data URI; reject remote or malformed records. */
+export function normalizeDish(dish) {
+  if (!dish) return null;
+  const img = localAssetUrl(dish.dataUri || dish.img);
+  if (!img || !(dish.en || dish.zh)) return null;
+  return { ...dish, img };
+}
+
 let drawnThisLaunch = false;
 
 function reducedMotion() {
@@ -51,12 +68,13 @@ export function migrateAwayFromOptOut() {
 async function pickDish() {
   try {
     const fromMain = await api.dimSumRandom();
-    if (fromMain && fromMain.img && (fromMain.en || fromMain.zh)) return fromMain;
+    const normalized = normalizeDish(fromMain);
+    if (normalized) return normalized;
   } catch { /* the bundled catalog is the floor, never a network call */ }
   const seen = new Set((store.get('dimSum.seen') || []).slice(-3));
   const fresh = DISHES.filter((d) => !seen.has(d.id));
   const pool = fresh.length ? fresh : DISHES;
-  return pool[Math.floor(Math.random() * pool.length)];
+  return normalizeDish(pool[Math.floor(Math.random() * pool.length)]);
 }
 
 /**
