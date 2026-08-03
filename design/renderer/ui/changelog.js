@@ -187,6 +187,46 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "f0b7bc1", kind: 'commit', ref: "f0b7bc1", oid: "f0b7bc1717e513c2d659d761380885c3836d94c2", date: "2026-08-03",
+    title: "Harden CLI and session UI boundaries",
+    changes: [
+      { category: "changed", text: "English: Reject inert drag plans, fail closed on reconnect and numeric input, keep local and remote panels honest, scope checklist actions through descendants, repair WOW64 and remote-extension edge cases, and make Squirrel completion headless and once-only. The code was trying to look helpful while quietly doing nothing; now it says no thanks, mate." },
+    ],
+    changesYue: [
+      { category: "changed", text: "粵語：拖放亂入嘅字眼、負數重連同亂碼數值而家唔再扮乖；本地面板、清單、Squirrel 同遠端副檔名各自守返條界線，個 code 終於識講『唔好亂嚟喎』。" },
+    ],
+  },
+  {
+    id: "44ab74d", kind: 'commit', ref: "44ab74d", oid: "44ab74dfe95a73a4eb115f1085058ccba4ec42ca", date: "2026-08-03",
+    title: "Fix remote extension extraction",
+    changes: [
+      { category: "removed", text: "English: Keep RemoteFiles extension sorting focused on the basename; the path no longer photobombs the suffix." },
+    ],
+    changesYue: [
+      { category: "changed", text: "粵語: RemoteFiles 而家只睇檔名尾巴，唔會畀上層路徑亂入，個 extension 終於唔再食錯位。" },
+    ],
+  },
+  {
+    id: "63ab2fd", kind: 'commit', ref: "63ab2fd", oid: "63ab2fd99e854e9da3bc047b1548623c61cea872", date: "2026-08-03",
+    title: "Record the verified handoff",
+    changes: [
+      { category: "changed", text: "English: The handoff records the real 59.0% logic ledger, 3,438-test verification, Docker smoke evidence, installer state, and the 22 still-open roadmap issues. It is a map, not a magic wand; the unported miles remain plainly marked." },
+    ],
+    changesYue: [
+      { category: "changed", text: "廣東話：交接文件記低真實 59.0% logic coverage、3,438 個測試、Docker smoke、安裝包同 22 個未完 roadmap issue。地圖畫得幾靚都唔會自己行，未搬嘅路照樣清楚標住。" },
+    ],
+  },
+  {
+    id: "778b30c", kind: 'commit', ref: "778b30c", oid: "778b30c89132364c7e080e402abeeaff50097f23", date: "2026-08-03",
+    title: "Refresh the in-app changelog",
+    changes: [
+      { category: "changed", text: "English: The viewer now knows about the latest verified CLI and safety work, with full commit links instead of a vague trail of breadcrumbs." },
+    ],
+    changesYue: [
+      { category: "changed", text: "廣東話：更新日誌終於追得返最新 CLI 同安全修正，仲有完整 commit 連結，唔使靠估邊粒包點心先係真。" },
+    ],
+  },
+  {
     id: "a281c72", kind: 'commit', ref: "a281c72", oid: "a281c72a0093def1bf5d55d5a77001aec9f20555", date: "2026-08-03",
     title: "Expand headless CLI and harden transfer boundaries",
     changes: [
@@ -653,34 +693,6 @@ export const DEVELOPMENT = [
     title: "Harden transfer console security and sync edges",
     changes: [
       { category: "added", text: "Close failed console channels, reject malformed AES verifiers, canonicalize relative symlink targets for cycle detection, stop cancelled transfers before byte movement, name SiteAdvanced order options for assistive technology, and explain a no-direction sync row honestly. Add focused tests and documentation. The edge cases now stop tripping over the same rake, which is frankly the rake's fault.\\n\\n廣東話：console channel、AES verifier、symlink、transfer、SiteAdvanced 同 sync 邊角位而家各自有路牌；個 rake 再伸腳都冇咁易中招。" },
-    ],
-  },
-  {
-    id: "33184f0", kind: 'commit', ref: "33184f0", oid: "33184f08ad23cee0b6680c41124d12730a1d8e71", date: "2026-08-03",
-    title: "Refresh handoff for CLI and lifecycle wave",
-    changes: [
-      { category: "fixed", text: "Update the factual handoff with the latest test count, 59.0% logic coverage, 114 outstanding units, open issue scan, and pushed CLI/lifecycle fixes. The handoff reports the map honestly, including the bits where the road is still under construction.\\n\\n廣東話：handoff 清楚報路況，邊段已鋪好、邊段仲係地盤，一樣講真話，唔會用油漆遮住坑洞。" },
-    ],
-  },
-  {
-    id: "14afd31", kind: 'commit', ref: "14afd31", oid: "14afd3181ff78de8d76c583d0404f7d513ba0b97", date: "2026-08-03",
-    title: "Refresh changelog for CLI and accessibility fixes",
-    changes: [
-      { category: "removed", text: "Record the pushed CLI drop-classification and progress accessibility changes in the in-app changelog with verified commit links. The changelog now keeps the receipts instead of waving from the balcony.\\n\\n廣東話：changelog 加齊 receipts，唔再淨係喺露台揮手話『有更新㗎喇』。" },
-    ],
-  },
-  {
-    id: "a74836c", kind: 'commit', ref: "a74836c", oid: "a74836cd985151cfe71f4b3479dd3a0a589e7288", date: "2026-08-03",
-    title: "Harden CLI drop classification and progress accessibility",
-    changes: [
-      { category: "added", text: "Reject missing-only drop classifications instead of handing an empty parcel to the transfer engine, and name progress bars with their visible labels for assistive technology. Add focused regressions and documentation. The CLI now refuses to serve imaginary files, and the progress bar finally knows who its label is.\\n\\n廣東話：空手 drop 唔再扮有貨，progress bar 亦終於認得自己個 label；兩邊都唔使再玩猜謎遊戲。" },
-    ],
-  },
-  {
-    id: "b03c84f", kind: 'commit', ref: "b03c84f", oid: "b03c84feea4cb89f7bfc211f63a4f1e8a61e7d9f", date: "2026-08-03",
-    title: "Cancel pending queue prompts on removal",
-    changes: [
-      { category: "fixed", text: "Resolve a queued item's credential prompt when its row is removed, so the transfer and idle lifecycle cannot remain blocked on a response from a vanished UI. Add a focused regression test and document the cancellation behavior. The queue no longer waits for a ghost password prompt, laah." },
     ],
   },
 ];

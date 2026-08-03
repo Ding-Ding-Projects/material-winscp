@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `778b30c`** — Refresh the in-app changelog
+**At commit `f0b7bc1`** — Harden CLI and session UI boundaries
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3438 run, **3437 pass, 0 fail**, 1 skipped |
-| Hand-written code | 220,377 lines across 436 files |
-| Commits | 190 on `main` |
+| Tests | not run in this regeneration |
+| Hand-written code | 220,530 lines across 437 files |
+| Commits | 193 on `main` |
 | Working tree | **1 uncommitted change(s)** |
-| Remote | `origin/main` at `d29d85d` — **differs from HEAD** |
+| Remote | `origin/main` at `63ab2fd` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `f0b7bc1` | 2026-08-03 | Harden CLI and session UI boundaries |
+| `44ab74d` | 2026-08-03 | Fix remote extension extraction |
+| `63ab2fd` | 2026-08-03 | Record the verified handoff |
 | `778b30c` | 2026-08-03 | Refresh the in-app changelog |
 | `a281c72` | 2026-08-03 | Expand headless CLI and harden transfer boundaries |
 | `2d7e22f` | 2026-08-03 | Reset command palette selection on search |
 | `22bc236` | 2026-08-03 | Validate SCP time record fields |
 | `85b7e96` | 2026-08-03 | Normalize S3 listing page sizes |
-| `710f6b7` | 2026-08-03 | Validate synchronization clock options |
-| `d29d85d` | 2026-08-03 | Record the pushed CLI handoff |
-| `61b8c11` | 2026-08-03 | Record the latest CLI handoff |
 
 ## Notes from whoever worked on this last
 
