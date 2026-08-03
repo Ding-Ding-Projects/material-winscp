@@ -94,9 +94,13 @@ other entry untrustworthy.
   levels with its version, date and category intact.
 - The empty and no-releases states are tested to be honest rather than blank.
 
-**No release has been published yet**, so the viewer currently has no released
-versions to show. That is the honest state, and the viewer says so rather than
-displaying a placeholder.
+**Remote verification (2026-08-03):** the project has published
+[v0.1.548](https://github.com/Ding-Ding-Projects/material-winscp/releases/tag/v0.1.548),
+and its [release workflow run](https://github.com/Ding-Ding-Projects/material-winscp/actions/runs/30822430826)
+completed successfully. The embedded viewer data still has no release entry in
+this source tree, so its no-released-version state remains accurate for the
+current application build; that state is separate from the published GitHub
+release.
 
 ## Suggested articles
 

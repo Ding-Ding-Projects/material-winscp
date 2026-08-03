@@ -404,7 +404,14 @@ class EditorManager extends EventEmitter {
 
     if (!o.force) {
       let current = null;
-      try { current = await adapter.stat(rec.remotePath); } catch { current = null; }
+      try {
+        current = await adapter.stat(rec.remotePath);
+      } catch (e) {
+        // Only an explicit not-found response means that recreating the
+        // remote file is safe. A timeout, authentication failure, or other
+        // transport error must never be mistaken for deletion.
+        if (!isNotFoundError(e)) throw e;
+      }
       if (current && rec.remoteStamp && changedSince(rec.remoteStamp, current)) {
         const detail = {
           id: rec.id,
@@ -783,6 +790,19 @@ function changedSince(was, now) {
   const a = Math.floor(Number(was.mtime || 0) / 1000);
   const b = Math.floor(Number(now.mtime || 0) / 1000);
   return a !== b;
+}
+
+function isNotFoundError(error) {
+  const code = String(error && (error.code || '')).toUpperCase();
+  const status = Number(error && (error.status || error.statusCode));
+  if (status === 404 || code === 'ENOENT' || code === 'NOT_FOUND' || code === 'NO_SUCH_FILE' || code === '550') {
+    return true;
+  }
+  // ssh2 uses numeric SSH_FX_NO_SUCH_FILE (2); WebDAV and the FTP fallback
+  // expose the same fact in a deliberately prefixed message instead.
+  if (Number(error && error.code) === 2) return true;
+  const message = String(error && (error.serverMessage || error.message || ''));
+  return /^No such (?:file|resource|key)|^The file path does not exist/i.test(message);
 }
 
 /**

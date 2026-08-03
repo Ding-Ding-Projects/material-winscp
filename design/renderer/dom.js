@@ -500,6 +500,11 @@ export function focusMemory() {
   };
 }
 
+/** A deferred overlay focus must not run after the surface has been torn down. */
+export function shouldFocusModal(isClosed, isConnected) {
+  return !isClosed && isConnected;
+}
+
 /* ------------------------------------------------------------------ */
 /* live region                                                         */
 /* ------------------------------------------------------------------ */
@@ -609,8 +614,10 @@ export function openModal(opts = {}) {
   const titleId = uid('modal-title');
 
   let scrim, dialog;
+  let closed = false;
   function close(reason) {
-    if (!scrim || !scrim.isConnected) return;
+    if (closed || !scrim || !scrim.isConnected) return;
+    closed = true;
     untrap();
     document.removeEventListener('keydown', onKey, true);
     scrim.remove();
@@ -655,6 +662,7 @@ export function openModal(opts = {}) {
   document.addEventListener('keydown', onKey, true);
 
   requestAnimationFrame(() => {
+    if (!shouldFocusModal(closed, dialog.isConnected)) return;
     // Content-owned dialogs such as Login know their most useful first field.
     // Honour native autofocus before falling back to the first focusable node;
     // modal action buttons still win when the caller chose one explicitly.

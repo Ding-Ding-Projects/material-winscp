@@ -120,8 +120,12 @@ images at `1254x1254`, assigns `Classic Har Gow · 蝦餃` to release 1, and rep
 exhaustion correctly at release 7. `build/release-notes.js` composes complete
 notes from a real 124.6 MB `Setup.exe` and a real catalog photo.
 
-**No release has been published yet.** No claim is made that a release exists or
-that CI is green.
+**Remote verification (2026-08-03):** [v0.1.548](https://github.com/Ding-Ding-Projects/material-winscp/releases/tag/v0.1.548)
+is a published, non-draft release with the Windows installer. Its [release
+workflow run](https://github.com/Ding-Ding-Projects/material-winscp/actions/runs/30822430826)
+completed successfully. Future release status belongs to the repository's
+[release list](https://github.com/Ding-Ding-Projects/material-winscp/releases),
+not to this dated verification note.
 
 ## Suggested articles
 

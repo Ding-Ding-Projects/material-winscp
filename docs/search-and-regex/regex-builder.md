@@ -74,6 +74,7 @@ pattern written for PCRE and pasted here is the most common source of confusion.
 | `\p{...}` without the `u` flag | The engine's own error. The builder offers to add the flag. | Yes |
 | A PCRE-only construct pasted in | The engine rejects it; the message names it as unsupported here rather than showing a raw syntax error. | Yes |
 | Pattern producing no matches | An honest "no matches" with the flags in effect, so a missing `i` is visible. | n/a |
+| Sticky search reused across fields | The `y` flag starts at index zero for each field; a previous field's match cannot leak its `lastIndex` into the next one. | n/a |
 
 ## Security considerations
 

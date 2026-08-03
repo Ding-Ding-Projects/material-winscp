@@ -50,14 +50,17 @@ remaining content instead of disappearing below the bottom edge.
 ## Security and accessibility
 
 Positioning is local DOM arithmetic. No overlay content or geometry is sent to
-the network. The existing focus restoration, non-modal `aria-modal="false"`
-contract, keyboard Escape handling and scrollable regions remain unchanged.
+the network. Modal focus is restored to the opener on close, and the deferred
+initial-focus pass is cancelled by state when Escape, the scrim, or another
+action closes the dialog before the next animation frame. A detached modal is
+never focused after teardown. Non-modal `aria-modal="false"` surfaces keep
+their existing keyboard Escape handling and scrollable-region contracts.
 
 ## Verification
 
 - `test/overlay.test.js` checks bounded geometry, side flipping, tiny viewport
-  dimensions, the modal narrow-window contract and the production
-  surface/scroll contracts.
+  dimensions, the modal narrow-window contract, the modal teardown/focus race,
+  and the production surface/scroll contracts.
 - `test/e2e-overlays.test.js` opens the real regex builder and queue popover in
   a 420×260 Electron window and checks their real rectangles, computed
   backgrounds and overflow behaviour.

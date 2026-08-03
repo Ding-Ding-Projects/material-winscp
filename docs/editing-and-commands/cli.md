@@ -27,7 +27,7 @@ headless switches as well as commands and parameters. Repeated `--command` and
 all values instead of accidentally leaving later values for an interactive
 prompt:
 `--log FILE`, `--loglevel N`, `--xmllog FILE`, `--xmllogrequired`,
-`--xmlgroups[=on|off]`, `--stdout[=binary|chunked]`, `--stdin=binary`,
+`--xmlgroups[=on|off]`, `--stdout[=binary|chunked]`, `--stdin[=binary]`,
 `--ini PATH`, `--rawsettings NAME=VALUE`, `--nointeractiveinput`, and
 `--unsafe`. They are translated to their WinSCP
 slash-switch equivalents before the existing console engine runs. For exact
@@ -120,6 +120,7 @@ accepted as an explicit synonym for the default machine-readable format.
 | A positional argument is supplied to `drag plan` | A concise error and exit code `2`; the inert argument is not reported as a successful plan. | Yes — use a named option |
 | Invalid Windows path/build or local-to-local plan | A concise input error and exit code `2`; no transfer starts. | Yes — correct the input |
 | A classified path is gone | It appears in `classification.missing`; the command still reports the other paths. If every path is gone, `accepted.ok` is `false` and no operation is planned. | Yes — restore or remove the path |
+| A value-taking option has no value | The command returns exit code `2` with an input error naming the option; it never treats the boolean word `true` as a path, host, target, or other value. | Yes — provide the option's value |
 | Read-only or incapable remote target | `accepted.ok` is `false` with the specific reason. | Yes — choose a writable target |
 | Stage source cannot be read | The command fails and removes its staging directory. | Yes — fix the path or permissions |
 | Different remote names sanitize to the same Windows name | The command fails with a collision error before staging; it never overwrites one item with another. | Yes — choose a transfer naming rule or drag the items separately |
@@ -144,7 +145,8 @@ accepted as an explicit synonym for the default machine-readable format.
 ## Verification
 
 - `test/cli.test.js` covers help/version, console-argument translation, drag
-  decisions, real-path classification, temporary staging and cleanup.
+  decisions, missing option values, real-path classification, temporary staging
+  and cleanup.
 - The `winscp-com --help` and `winscp-com --version` wrapper paths are covered
   with process-level smoke tests; neither starts the console runner.
 - `node --check bin/winscp.js` checks the executable syntax.

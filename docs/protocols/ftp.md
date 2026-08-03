@@ -25,7 +25,7 @@ Under **Site → Advanced → FTP** and **→ TLS/SSL**.
 | `ftpUseMlsd` | `auto` | Prefer `MLSD` (machine-readable) over `LIST` (human-readable, ambiguous). |
 | `ftpAccount` | `''` | The `ACCT` value, for the rare servers that want one. |
 | `ftpPingInterval` / `ftpPingType` | `30` / `dummy` | Keepalive on the control channel: `off`, `dummy` (`NOOP`), or `directory` (`PWD`). |
-| `ftpTransferActiveImmediately` | `auto` | Send the transfer command before or after the data connection is accepted. |
+| `ftpTransferActiveImmediately` | `auto` | Passive transfer ordering: `on` sends `RETR`/`STOR` before opening the data socket, `off` opens the socket during normal preparation, and `auto` enables the delayed-connect mode only for an Idea FTP Server welcome banner. Active mode already sends the command before the server dials the listening socket. |
 | `ftpListAll` | `auto` | Try `LIST -a` to reveal dot-files, falling back if the server treats `-a` as a filename. |
 | `ftpHost` | `auto` | Send `HOST` for virtual-host servers. |
 | `ftpDupFF` / `ftpUndupFF` | `false` | Work around servers that mangle `0xFF` bytes in filenames. |
@@ -51,6 +51,7 @@ Under **Site → Advanced → FTP** and **→ TLS/SSL**.
 | A post-login command contains a line break | The command is rejected before it reaches the control connection. FTP has no escaping for command record separators, so accepting one could append an unintended command. | Yes — correct the saved command |
 | A listing reports an unsafe or overflowing size | The entry is retained with size `0` (unknown) rather than propagating an inaccurate `Infinity` or rounded byte count into transfers and comparisons. | Yes — enable MLSD or fix the server listing |
 | A `SIZE` reply is unsafe or overflowing | `stat()` retains the file with size `0` (unknown) rather than trusting an unsafe JavaScript number returned by the FTP library. | Yes — enable MLST or fix the server response |
+| Server expects a different passive command/data ordering | `on` sends the transfer command before opening the data socket; `off` uses basic-ftp's normal pre-opened socket; `auto` detects Idea FTP Server from its welcome banner. Active mode always sends the command before accepting the server connection. | Yes — choose the ordering required by the server |
 
 The passive-host choice is applied when the FTP client is constructed, before
 the first `PASV`/`EPSV` negotiation. In particular, `on` is not merely a UI

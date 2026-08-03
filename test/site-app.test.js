@@ -395,6 +395,17 @@ test('every leveled entry has five distinct-enough levels in both languages', as
   }
 });
 
+test('the empty download state describes a missing verified asset, not a missing release', async () => {
+  const { DICT } = await load('i18n');
+  const [english, cantonese] = DICT.downloadNone;
+  for (const copy of [...english, ...cantonese]) {
+    assert.match(copy, /installer|安裝檔/i);
+    assert.match(copy, /page|呢版/i);
+    assert.doesNotMatch(copy, /no (?:published|released) installer|no release|未有安裝檔發佈過|未發佈過/i,
+      `empty-state copy made a repository-wide claim: ${copy}`);
+  }
+});
+
 /**
  * THE CENTRAL LANGUAGE TEST: the level changes voice, never facts.
  *

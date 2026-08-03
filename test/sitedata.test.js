@@ -172,6 +172,15 @@ test('advanced FTP host selection leaves auto and off alone', async () => {
   }
 });
 
+test('advanced FTP transfer ordering resolves on, off, and Idea auto modes', async () => {
+  const { FtpAdapter } = require('../design/main/protocols/ftp');
+  const adapter = new FtpAdapter(await siteOf({ protocol: 'ftp' }), {});
+  assert.strictEqual(adapter._resolveTransferActiveImmediately('on', ''), true);
+  assert.strictEqual(adapter._resolveTransferActiveImmediately('off', 'Idea FTP Server'), false);
+  assert.strictEqual(adapter._resolveTransferActiveImmediately('auto', '220 Idea FTP Server'), true);
+  assert.strictEqual(adapter._resolveTransferActiveImmediately('auto', '220 Microsoft FTP Service'), false);
+});
+
 test('advanced SFTP listing respects the configured queue depth', async () => {
   const { SftpAdapter } = require('../design/main/protocols/sftp');
   const adapter = new SftpAdapter(await siteOf({ protocol: 'sftp', sftpListingQueue: 1 }), {});

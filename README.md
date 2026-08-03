@@ -10,7 +10,7 @@
 [![Node](https://img.shields.io/badge/Node-22%20LTS-339933?style=flat-square&logo=nodedotjs&logoColor=white)](docs/packaging-and-updates/building.md)
 [![Installer](https://img.shields.io/badge/installer-Squirrel.Windows-brightgreen?style=flat-square)](docs/packaging-and-updates/installer.md)
 [![Design](https://img.shields.io/badge/design-Material%203-6750A4?style=flat-square&logo=materialdesign&logoColor=white)](docs/interface-and-appearance/material-3.md)
-[![CI](https://img.shields.io/badge/CI-no%20run%20yet-lightgrey?style=flat-square&logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
+[![CI](https://img.shields.io/badge/CI-GitHub_Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
 
 </div>
 
@@ -32,10 +32,11 @@ sliders, and a one-in-ten chance of dim sum at startup.
 
 ## Install
 
-> [!WARNING]
-> **No release has been published yet.** The installer builds and has been
-> verified locally, but there is nothing to download until the first CI run
-> completes. Build it yourself in the meantime:
+> [!NOTE]
+> **A published release is available:** [WinSCP Material 0.1.548](https://github.com/Ding-Ding-Projects/material-winscp/releases/tag/v0.1.548)
+> includes the Windows installer. Its [release workflow run](https://github.com/Ding-Ding-Projects/material-winscp/actions/runs/30822430826)
+> completed successfully on 2026-08-03. Build from source when you need the
+> current branch:
 
 ```sh
 git clone https://github.com/Ding-Ding-Projects/material-winscp
@@ -532,10 +533,15 @@ than one that says nothing.
   of reusing a dish.
 - `build/release-notes.js` composes complete notes from real artefact paths.
 
+**Verified remotely:**
+
+- The [release workflow run](https://github.com/Ding-Ding-Projects/material-winscp/actions/runs/30822430826)
+  completed successfully and published [v0.1.548](https://github.com/Ding-Ding-Projects/material-winscp/releases/tag/v0.1.548),
+  including the Windows installer. This records that release only; it does not
+  claim that later commits have already been released.
+
 **Not verified:**
 
-- **CI has never run.** There is no green run, no release, and no published
-  installer. The badge above says so.
 - The installer has not been run to completion on a clean machine in this
   session, so no end-to-end install/update/uninstall cycle is claimed.
 - The application source is being written concurrently; feature articles describe

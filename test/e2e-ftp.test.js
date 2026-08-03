@@ -665,6 +665,28 @@ test('passive mode is what the default session negotiates', () => {
     'and never asked the server to dial back');
 });
 
+test('resolves ftpTransferActiveImmediately from explicit mode or the Idea welcome banner', async () => {
+  assert.equal(ftp.transferActiveImmediately, false,
+    'ordinary FTP remains on the basic-ftp default in auto mode');
+
+  const forced = new FtpAdapter(siteFor(srv, { ftpTransferActiveImmediately: 'on' }), {
+    password: PASSWORD,
+  });
+  await forced.connect();
+  try {
+    assert.equal(forced.transferActiveImmediately, true,
+      'explicit on enables the early-transfer policy');
+    const payload = bytes(12 * 1024, 26);
+    await writeStream(await forced.createWriteStream('/delayed-passive.bin', { size: payload.length }), payload);
+    assert.ok((await fsp.readFile(path.join(srv.root, 'delayed-passive.bin'))).equals(payload),
+      'the delayed passive upload still reaches the server byte-for-byte');
+    assert.ok((await drain(await forced.createReadStream('/delayed-passive.bin'))).equals(payload),
+      'the delayed passive download still returns the same bytes');
+  } finally {
+    await forced.disconnect().catch(() => {});
+  }
+});
+
 // ---------------------------------------------------------------------------
 // active mode — the hand-written PORT/EPRT path
 // ---------------------------------------------------------------------------

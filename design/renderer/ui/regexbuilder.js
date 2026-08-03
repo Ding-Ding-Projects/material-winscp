@@ -584,7 +584,7 @@ export function openRegexBuilder(opts = {}) {
  */
 export function makePredicate({ query = '', pattern = '', flags = '', mode = 'text' } = {}) {
   if (mode === 'regex') {
-    const f = flags.replace(/g/g, '');            // a shared regex must not carry lastIndex
+    const f = flags.replace(/g/g, '');            // global matching is unnecessary for one field
     const c = compile(pattern, f);
     if (!c.ok) return { ok: false, error: c.error, test: () => false };
     // A predicate runs SYNCHRONOUSLY, once per field per item, on the UI
@@ -597,7 +597,12 @@ export function makePredicate({ query = '', pattern = '', flags = '', mode = 'te
     if (backtrackingRisk(pattern)) {
       return { ok: false, error: RUNAWAY_REFUSAL, mode: 'regex', describe: `/${pattern}/${f}`, test: () => false };
     }
-    return { ok: true, error: null, mode: 'regex', describe: `/${pattern}/${f}`, test: (v) => c.regex.test(String(v ?? '')) };
+    return {
+      ok: true, error: null, mode: 'regex', describe: `/${pattern}/${f}`,
+      // Sticky regexes retain lastIndex even without /g. Reset it because the
+      // same predicate is reused for every field in a palette/search result.
+      test: (v) => { c.regex.lastIndex = 0; return c.regex.test(String(v ?? '')); },
+    };
   }
   const needle = String(query || '').toLocaleLowerCase();
   return {

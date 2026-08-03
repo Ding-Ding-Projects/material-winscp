@@ -178,6 +178,9 @@ test('convenience commands forward the console runner control switches', () => {
     '/log=run.log', '/loglevel=2', '/xmllog=actions.xml', '/stdout=chunked', '/stdin=binary',
     '/xmllogrequired', '/nointeractiveinput', '/unsafe', '/xmlgroups=off',
   ]);
+  assert.deepEqual(cli.buildConsoleArgs(['--stdout', '--stdin'], 'command'), [
+    '/console', '/stdout', '/stdin',
+  ]);
 });
 
 test('convenience commands forward INI and raw-settings switches', () => {
@@ -262,6 +265,18 @@ test('drop classify refuses empty and missing-only drops', () => {
   assert.equal(result.classification.items.length, 0);
   assert.equal(result.accepted.ok, false);
   assert.match(result.accepted.reason, /No existing files or directories/);
+});
+
+test('drag/drop value options reject a missing value instead of becoming the path true', async () => {
+  assert.throws(() => cli.classifyDrop(['--file']), /--file expects a value/);
+  assert.throws(() => cli.dropTarget(['--queue', '--default-download-target']),
+    /--default-download-target expects a value/);
+
+  const result = output();
+  assert.equal(await cli.runCli(['drop', 'classify', '--file'], {
+    stdout: result.stream, stderr: result.stream,
+  }), 2);
+  assert.equal(result.text(), '--file expects a value\n');
 });
 
 test('drop target exercises the same Explorer target policy as IPC', async () => {

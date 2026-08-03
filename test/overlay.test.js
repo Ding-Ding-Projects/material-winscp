@@ -77,3 +77,12 @@ test('blocking dialogs keep a scrollable body inside a narrow viewport', () => {
   assert.match(components, /\.modal \{[\s\S]*?max-width: 100%;[\s\S]*?max-height: 100%;[\s\S]*?min-height: 0;[\s\S]*?box-sizing: border-box;[\s\S]*?overflow: hidden;/);
   assert.match(components, /\.modal-body \{[\s\S]*?overflow-y: auto;[\s\S]*?min-height: 0;/);
 });
+
+test('modal initial focus is skipped after the dialog has closed or detached', () => {
+  assert.equal(DOM.shouldFocusModal(false, true), true);
+  assert.equal(DOM.shouldFocusModal(true, true), false);
+  assert.equal(DOM.shouldFocusModal(false, false), false);
+
+  const dom = fs.readFileSync(path.join(__dirname, '..', 'design', 'renderer', 'dom.js'), 'utf8');
+  assert.match(dom, /let closed = false;[\s\S]*?if \(!shouldFocusModal\(closed, dialog\.isConnected\)\) return;/);
+});

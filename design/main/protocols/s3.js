@@ -911,6 +911,7 @@ class S3Adapter extends Adapter {
   async _listObjects(bucket, prefix, { delimiter = '/', onPage } = {}) {
     const contents = [];
     const prefixes = [];
+    const seenKeys = new Set();
     let token = null;
     let previousToken = null;
     const maxKeys = this._maxKeys();
@@ -934,9 +935,17 @@ class S3Adapter extends Adapter {
         etag: textOf(c, 'ETag').replace(/^"|"$/g, ''),
         storageClass: textOf(c, 'StorageClass'),
       }));
-      contents.push(...page);
+      const uniquePage = [];
+      for (const item of page) {
+        // A few S3-compatible gateways can overlap adjacent pages. Keep the
+        // first row so recursive operations do not process one object twice.
+        if (seenKeys.has(item.key)) continue;
+        seenKeys.add(item.key);
+        contents.push(item);
+        uniquePage.push(item);
+      }
       for (const cp of kids(result, 'CommonPrefixes')) prefixes.push(textOf(cp, 'Prefix'));
-      if (onPage) onPage(page);
+      if (onPage) onPage(uniquePage);
 
       token = textOf(result, 'IsTruncated') === 'true' ? textOf(result, 'NextContinuationToken') : null;
       // A truncated listing with no token would loop forever; some

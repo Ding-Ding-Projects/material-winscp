@@ -206,6 +206,46 @@ test('a failed watcher upload can be retried without modifying the temporary fil
   }
 });
 
+test('a remote stat outage is not mistaken for a missing file during upload', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-stat-outage-'));
+  P.setRoot(root);
+  const f = fixture();
+  try {
+    const opened = await f.manager.openRemote({ sessionId: f.session.id, remotePath: '/notes.txt', mode: 'internal' });
+    await fs.writeFile(opened.localPath, 'keep locally');
+    f.session.adapter.stat = async () => { throw Object.assign(new Error('connection reset'), { code: 'NETWORK' }); };
+
+    const result = await f.manager.executedFileChanged(opened.id);
+    assert.equal(result.changed, true);
+    assert.equal(result.uploaded, false);
+    assert.equal(result.error.code, 'NETWORK');
+    assert.equal((await f.session.adapter.readFile('/notes.txt')).toString(), 'before');
+    assert.equal((await fs.readFile(opened.localPath)).toString(), 'keep locally');
+    assert.equal(f.manager.list()[0].dirty, true);
+    await f.manager.close(opened.id, { keep: true });
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('an explicit not-found stat permits recreating the remote edit', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-stat-missing-'));
+  P.setRoot(root);
+  const f = fixture();
+  try {
+    const opened = await f.manager.openRemote({ sessionId: f.session.id, remotePath: '/notes.txt', mode: 'internal' });
+    await fs.writeFile(opened.localPath, 'recreate me');
+    f.session.adapter.stat = async () => { throw Object.assign(new Error('gone'), { status: 404 }); };
+
+    const result = await f.manager.executedFileChanged(opened.id);
+    assert.equal(result.uploaded, true);
+    assert.equal((await f.session.adapter.readFile('/notes.txt')).toString(), 'recreate me');
+    await f.manager.close(opened.id, {});
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('close drains an in-flight watcher upload before cleaning the temporary', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-close-'));
   P.setRoot(root);

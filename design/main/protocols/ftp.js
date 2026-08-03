@@ -25,7 +25,7 @@
 const net = require('net');
 const tls = require('tls');
 const fs = require('fs');
-const { PassThrough } = require('stream');
+const { PassThrough, pipeline } = require('stream');
 const { Client, FTPError } = require('basic-ftp');
 const { Adapter, entry } = require('./base');
 
@@ -426,6 +426,39 @@ function passiveClientOptions(forcePasvIp) {
   return { allowSeparateTransferHost: !force };
 }
 
+function privateIpv4Address(ip = '') {
+  const text = String(ip);
+  const normalized = text.startsWith('::ffff:') ? text.slice(7) : text;
+  const octets = normalized.split('.').map((part) => Number(part));
+  if (octets.length !== 4 || octets.some((part) => !Number.isInteger(part))) return false;
+  return octets[0] === 10
+    || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)
+    || (octets[0] === 192 && octets[1] === 168)
+    || normalized === '127.0.0.1';
+}
+
+/** Parse a PASV/EPSV reply without opening the data socket yet. */
+function passiveTarget(message, control, forcePasvIp) {
+  const text = String(message || '');
+  const extended = text.match(/[|!]{3}(\d+)[|!]/);
+  if (extended) {
+    const host = control.remoteAddress;
+    if (!host) throw new Error('FTP control connection has no remote address for EPSV');
+    return { host, port: Number(extended[1]) };
+  }
+  const match = text.match(/(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/);
+  if (!match) throw new Error(`Cannot parse FTP PASV response: ${text}`);
+  let host = match.slice(1, 5).join('.');
+  const port = Number(match[5]) * 256 + Number(match[6]);
+  const controlHost = control.remoteAddress;
+  const force = forcePasvIp === true || forcePasvIp === 'on' || forcePasvIp === 0;
+  // Keep basic-ftp's NAT repair semantics for the custom delayed-connect path.
+  if (controlHost && (force || (privateIpv4Address(host) && !privateIpv4Address(controlHost)))) {
+    host = controlHost;
+  }
+  return { host, port };
+}
+
 /** FTP command arguments must never contain record separators. */
 function assertSafeFtpArgument(value, label) {
   if (/[\r\n]/.test(String(value ?? ''))) {
@@ -552,6 +585,8 @@ class FtpAdapter extends Adapter {
     this._keepalive = null;
     this._busy = false;
     this._listCommand = null;   // locked in once one works, like WinSCP does
+    this.transferActiveImmediately = true;
+    this._welcomeMessage = '';
     this.caps = {
       ...this.caps,
       rights: false,          // set from FEAT/SITE HELP after login
@@ -673,6 +708,9 @@ class FtpAdapter extends Adapter {
     // with the ">"/"<" markers; anything else basic-ftp narrates is debug.
     this.client.ftp.log = (message) => {
       const text = String(message);
+      if (!this._welcomeMessage && text.startsWith('< 220')) {
+        this._welcomeMessage = text.slice(2).trim();
+      }
       if (text.startsWith('> ')) this._log('send', text);
       else if (text.startsWith('< ')) this._log('recv', text);
       else this._log('debug', text);
@@ -707,6 +745,19 @@ class FtpAdapter extends Adapter {
     await this._login();
     await this._sendHostCommand();
 
+    // WinSCP's `auto` mode enables the delayed passive-connect workaround for
+    // Idea FTP Server, whose transfer TLS handshake must begin before it emits
+    // the preliminary 1yz reply. The resolved policy is used by both passive
+    // file-transfer methods; active mode already sends its command before the
+    // server dials the listening socket.
+    this.transferActiveImmediately = this._resolveTransferActiveImmediately(
+      s.ftpTransferActiveImmediately,
+      this._welcomeMessage,
+    );
+    if (this.transferActiveImmediately) {
+      this._log('debug', 'FTP transfer command will be issued before the data TLS handshake');
+    }
+
     // TYPE I / STRU F / OPTS UTF8 / PBSZ+PROT for TLS.
     await this.client.useDefaultSettings();
     if (encodingFor(s.codePage) !== 'utf8') {
@@ -737,6 +788,12 @@ class FtpAdapter extends Adapter {
     this.connected = true;
     this._startKeepalive();
     return { home: this.home, features: [...this.features.keys()] };
+  }
+
+  _resolveTransferActiveImmediately(mode = 'auto', welcome = '') {
+    if (mode === 'on') return true;
+    if (mode === 'off') return false;
+    return /Idea FTP Server/i.test(String(welcome));
   }
 
   async _sendHostCommand() {
@@ -919,6 +976,10 @@ class FtpAdapter extends Adapter {
             if (r.code >= 400) { fail(new FTPError(r)); return; }
           }
 
+          // Active mode always sends the command before the server can dial
+          // the listening socket. The advanced ordering switch applies to the
+          // passive file-transfer path below; waiting here would only add an
+          // arbitrary delay to every normal active-mode transfer.
           await ftp.handle(command, (res, task) => {
             if (res instanceof Error) { fail(res); task.reject(res); return; }
             if (res.code === 150 || res.code === 125) {
@@ -1195,6 +1256,150 @@ class FtpAdapter extends Adapter {
     return this._run(() => this.client.send(`SITE CHMOD ${octal} ${path}`));
   }
 
+  /**
+   * WinSCP's `FtpTransferActiveImmediately=on` delays the passive data
+   * connection until after RETR/STOR is sent. basic-ftp always connects in
+   * `prepareTransfer`, which is the opposite ordering and breaks servers that
+   * require the data TLS handshake before their 1yz reply. Keep the normal
+   * basic-ftp strategy for `off`; this narrow path is only used for `on`/auto
+   * servers that actually need it.
+   */
+  async _passiveTarget() {
+    const ftp = this.client.ftp;
+    const control = ftp.socket;
+    const command = control.remoteFamily === 'IPv6' ? 'EPSV' : 'PASV';
+    const response = await ftp.request(command);
+    if (response.code >= 400) throw new FTPError(response);
+    return passiveTarget(response.message, control, this.session.ftpForcePasvIp);
+  }
+
+  _openPassiveDataSocket(target) {
+    const ftp = this.client.ftp;
+    const control = ftp.socket;
+    return new Promise((resolve, reject) => {
+      let socket = ftp._newSocket();
+      let settled = false;
+      let timer = null;
+      const timeout = Number(ftp.timeout) || 0;
+      const fail = (error) => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        try { socket.destroy(); } catch { /* already closed */ }
+        const message = error && error.message ? error.message : String(error);
+        reject(new Error(`Can't open data connection in passive mode: ${message}`));
+      };
+      const ready = () => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        socket.removeListener('error', fail);
+        socket.removeListener('timeout', onTimeout);
+        resolve(socket);
+      };
+      const onTimeout = () => fail(new Error(`Timeout when trying to open data connection to ${target.host}:${target.port}`));
+
+      socket.setTimeout(timeout);
+      socket.once('error', fail);
+      socket.once('timeout', onTimeout);
+      if (timeout > 0) timer = setTimeout(onTimeout, timeout);
+      socket.connect({ port: target.port, host: target.host, family: ftp.ipFamily }, () => {
+        if (!(control instanceof tls.TLSSocket)) {
+          ready();
+          return;
+        }
+        const raw = socket;
+        raw.removeListener('error', fail);
+        raw.removeListener('timeout', onTimeout);
+        raw.setTimeout(0);
+        socket = tls.connect({
+          ...ftp.tlsOptions,
+          socket: raw,
+          session: this.session.sslSessionReuse === false ? undefined : control.getSession(),
+        });
+        socket.setTimeout(timeout);
+        socket.once('error', fail);
+        socket.once('timeout', onTimeout);
+        socket.once('secureConnect', ready);
+      });
+    });
+  }
+
+  /** Transfer one passive file after the control command has been issued. */
+  async _passiveImmediateTransfer(command, { direction, source, destination, start = 0 }) {
+    const ftp = this.client.ftp;
+    const target = await this._passiveTarget();
+    if (start > 0) {
+      const restart = await ftp.request(`REST ${start}`);
+      if (restart.code >= 400) throw new FTPError(restart);
+    }
+
+    let taskRef = null;
+    let preliminary = false;
+    let controlDone = false;
+    let dataDone = false;
+    let socket = null;
+    let dataStarted = false;
+    let failed = false;
+    let earlyError = null;
+    let controlResponse = null;
+
+    const closeData = () => {
+      if (socket && !socket.destroyed) socket.destroy();
+      if (ftp.dataSocket === socket) ftp.dataSocket = undefined;
+    };
+    const fail = (error) => {
+      if (failed) return;
+      failed = true;
+      closeData();
+      if (taskRef) taskRef.reject(error);
+      else earlyError = error;
+    };
+    const finish = () => {
+      if (!failed && taskRef && controlDone && dataDone) {
+        taskRef.resolve(controlResponse);
+        closeData();
+      }
+    };
+    const startData = () => {
+      if (failed || dataStarted || !preliminary || !socket) return;
+      dataStarted = true;
+      ftp.dataSocket = socket;
+      const done = (error) => {
+        if (error) { fail(error); return; }
+        dataDone = true;
+        finish();
+      };
+      if (direction === 'download') pipeline(socket, destination, done);
+      else pipeline(source, socket, done);
+    };
+
+    // `handle()` writes the command synchronously before it returns. Starting
+    // the data connection on the next microtask therefore gives servers that
+    // wait for the TLS handshake before sending 150 a chance to proceed.
+    const transfer = ftp.handle(command, (response, task) => {
+      taskRef = task;
+      if (earlyError) { fail(earlyError); return; }
+      if (response instanceof Error) { fail(response); return; }
+      if (response.code === 150 || response.code === 125) {
+        preliminary = true;
+        startData();
+        return;
+      }
+      if (response.code >= 200) {
+        controlResponse = response;
+        controlDone = true;
+        finish();
+      }
+    });
+    this._openPassiveDataSocket(target).then((opened) => {
+      if (failed) { opened.destroy(); return; }
+      socket = opened;
+      startData();
+    }).catch(fail);
+    return transfer;
+  }
+
   // -- streaming -----------------------------------------------------------
 
   async createReadStream(p, opts = {}) {
@@ -1212,6 +1417,12 @@ class FtpAdapter extends Adapter {
           sock.pipe(out);
           sock.on('end', res);
         }));
+      }
+      if (this.transferActiveImmediately) {
+        const validPath = await this.client.protectWhitespace(path);
+        return this._passiveImmediateTransfer(`RETR ${validPath}`, {
+          direction: 'download', destination: out, start,
+        });
       }
       return this.client.downloadTo(out, path, start);
     });
@@ -1239,6 +1450,12 @@ class FtpAdapter extends Adapter {
       // REST+STOR resumes at the requested offset. APPE only appends at EOF,
       // so it corrupts a retry when the remote file is longer than the local
       // partial file (for example after a server-side retry or preallocation).
+      if (this.transferActiveImmediately) {
+        const validPath = await this.client.protectWhitespace(path);
+        return this._passiveImmediateTransfer(`STOR ${validPath}`, {
+          direction: 'upload', source: src, start,
+        });
+      }
       if (start > 0) {
         await this.client.send(`REST ${start}`);
         return this.client.uploadFrom(src, path);

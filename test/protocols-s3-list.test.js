@@ -40,3 +40,32 @@ test('deduplicates repeated common prefixes from overlapping pages', async () =>
   assert.deepEqual(rows.map((row) => row.name), ['folder', 'other']);
   assert.ok(rows.every((row) => row.type === 'dir'));
 });
+
+test('deduplicates overlapping object rows across paginated listings', async () => {
+  const adapter = new S3Adapter({ hostName: 's3.example.test', portNumber: 443, ftps: 'tls' });
+  let page = 0;
+  const pages = [];
+  adapter._s3 = async () => ({
+    body: Buffer.from(`<ListBucketResult>
+      <Contents><Key>same.txt</Key><Size>${page++ ? 99 : 7}</Size></Contents>
+      ${page === 1 ? '<Contents><Key>first.txt</Key><Size>3</Size></Contents>' : '<Contents><Key>second.txt</Key><Size>4</Size></Contents>'}
+      <IsTruncated>${page === 1 ? 'true' : 'false'}</IsTruncated>
+      ${page === 1 ? '<NextContinuationToken>next-page</NextContinuationToken>' : ''}
+    </ListBucketResult>`),
+  });
+
+  const result = await adapter._listObjects('bucket', '', {
+    delimiter: '/',
+    onPage: (items) => pages.push(items),
+  });
+
+  assert.deepEqual(result.contents.map((item) => [item.key, item.size]), [
+    ['same.txt', 7],
+    ['first.txt', 3],
+    ['second.txt', 4],
+  ]);
+  assert.deepEqual(pages.map((items) => items.map((item) => item.key)), [
+    ['same.txt', 'first.txt'],
+    ['second.txt'],
+  ]);
+});

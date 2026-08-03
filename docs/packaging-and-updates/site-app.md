@@ -258,8 +258,8 @@ Verified locally at the time of writing, on Node 26.5.1 and on Node 22.23.2
 - `node site/build.js --verify` → **VERIFY OK**, 14 categories, 128 articles,
   6 bundled images, 27 files. Before this change the same command reported
   `app.js` and `app.css` missing and exited 1.
-- `node --test test/site-app.test.js` — **36 tests, 36 passing.** With
-  `site/src/lib/`, `app.js` and `app.css` moved aside, **0 pass and 36 fail**:
+- `node --test test/site-app.test.js` — **37 tests, 37 passing.** With
+  `site/src/lib/`, `app.js` and `app.css` moved aside, **0 pass and 37 fail**:
   they test code that did not previously exist.
 - `node --test test/site-build.test.js` — **32 tests, 32 passing** (was 31).
   The five release-manifest tests and the two module-import tests all fail

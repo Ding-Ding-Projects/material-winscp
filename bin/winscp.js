@@ -67,6 +67,7 @@ const VALUE_OPTIONS = new Set([
   'stdout', 'stdin', 'default-download-target', 'fake-file-target', 'external-drop-directory',
   'protocol', 'host', 'port', 'username',
 ]);
+const OPTIONAL_VALUE_OPTIONS = new Set(['stdout', 'stdin']);
 const BOOLEAN_OPTIONS = new Set([
   'onto-session-tab', 'same-session', 'target-available', 'allow-move', 'read-only',
   'no-upload', 'no-mkdir', 'has-directories', 'queue', 'move', 'json', 'pretty',
@@ -96,6 +97,10 @@ function parseOptions(argv) {
     const next = i + 1 < argv.length ? String(argv[i + 1]) : '';
     const separatedBoolean = BOOLEAN_OPTIONS.has(key) && ['true', 'false', 'yes', 'no', 'on', 'off', '1', '0']
       .includes(next.toLowerCase());
+    if (value === true && VALUE_OPTIONS.has(key) && !OPTIONAL_VALUE_OPTIONS.has(key) &&
+        (i + 1 >= argv.length || next === '--' || next.startsWith('--'))) {
+      throw new Error(`--${key} expects a value`);
+    }
     if (value === true && i + 1 < argv.length && !next.startsWith('--') &&
         (VALUE_OPTIONS.has(key) || separatedBoolean)) {
       value = String(argv[++i]);
@@ -478,7 +483,9 @@ function buildConsoleArgs(argv, kind) {
   // /parameter would leave later values behind as interactive input.
   if (commands.length) consoleArgs.push('/command', ...commands.map(String));
   for (const name of ['log', 'loglevel', 'xmllog', 'ini', 'rawsettings', 'stdout', 'stdin']) {
-    for (const value of optionValues(options, name)) consoleArgs.push(`/${name}=${String(value)}`);
+    for (const value of optionValues(options, name)) {
+      consoleArgs.push(value === true ? `/${name}` : `/${name}=${String(value)}`);
+    }
   }
   for (const name of ['xmllogrequired', 'nointeractiveinput', 'unsafe']) {
     if (Object.prototype.hasOwnProperty.call(options, name) && booleanOption(options, name)) {

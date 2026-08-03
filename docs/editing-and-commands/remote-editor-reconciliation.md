@@ -9,5 +9,13 @@ Events for local-only editors, other sessions, and unrelated editor states are
 ignored. If the panel refresh operation is not wired, the hook reports that
 fact without turning a successful editor save into a failure.
 
+Before an upload, the manager re-checks the remote timestamp and size. A
+missing-file response may recreate the file and emits `remote-missing`; other
+`stat()` failures (for example a timeout or authentication error) abort the
+upload and keep the edited temporary copy dirty. This prevents a transport
+failure from being treated as permission to overwrite or recreate remote data.
+
 Verification: `node --test test/explorershell.test.js` covers the matching
 remote upload, local save, and other-session cases.
+
+The stat-failure guard is covered by `node --test test/editors.test.js`.
