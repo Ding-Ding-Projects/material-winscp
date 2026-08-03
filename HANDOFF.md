@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `1c63540`** — Refresh changelog for drag and protocol hardening
+**At commit `41e2d4c`** — Refresh changelog for accessibility hardening
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3348 run, **3347 pass, 0 fail**, 1 skipped |
-| Hand-written code | 217,421 lines across 401 files |
-| Commits | 147 on `main` |
+| Tests | 3355 run, **3354 pass, 0 fail**, 1 skipped |
+| Hand-written code | 217,561 lines across 401 files |
+| Commits | 150 on `main` |
 | Working tree | **1 uncommitted change(s)** |
-| Remote | `origin/main` at `599ae98` — **differs from HEAD** |
+| Remote | `origin/main` at `3d3efee` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `41e2d4c` | 2026-08-03 | Refresh changelog for accessibility hardening |
+| `ad9936c` | 2026-08-03 | Harden FTP IPC accessibility and shortcut edges |
+| `3d3efee` | 2026-08-03 | Refresh handoff for protocol and drag wave |
 | `1c63540` | 2026-08-03 | Refresh changelog for drag and protocol hardening |
 | `ae54b2a` | 2026-08-03 | Harden drag shell terminal and protocol security |
 | `599ae98` | 2026-08-03 | Refresh handoff for queue and panel wave |
 | `b80efd9` | 2026-08-03 | Refresh changelog for queue and platform fixes |
 | `aa5ee78` | 2026-08-03 | Harden queue sessions search panels and setup |
-| `a9b9fb3` | 2026-08-03 | Refresh handoff for Windows CI correction |
-| `a3d6bc5` | 2026-08-03 | Record Windows CI newline fix |
-| `0e0969b` | 2026-08-03 | Fix Windows line-ending test extraction |
 
 ## Notes from whoever worked on this last
 
