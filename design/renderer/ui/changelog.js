@@ -187,6 +187,30 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "3e1d057", kind: 'commit', ref: "3e1d057", oid: "3e1d057e89a65af7802474eb3ad072dca92f1704", date: "2026-08-03",
+    title: "Port Explorer, editor, preferences, queue, SFTP, and WinConfiguration slices",
+    changes: [
+      { category: "fixed", text: "English: Port local/remote property dispatch, editor clipboard actions, live tab preferences, retry-attempt state, safe SFTP STAT fallback, and portable configuration roots. Add focused regression coverage and documentation. The code now knows which side of the pane it is on, so it can stop playing hide-and-seek with its own settings." },
+    ],
+    changesYue: [
+      { category: "changed", text: "廣東話：補返本地／遠端屬性分流、編輯器剪貼簿操作、即時 tab 偏好、retry attempt 狀態、安全 SFTP STAT 後備，同 portable 設定根目錄，連埋測試同文件一齊上。啲 code 終於分得清左右邊，唔使再同自己啲設定玩捉迷藏。" },
+    ],
+  },
+  {
+    id: "48b7a5f", kind: 'commit', ref: "48b7a5f", oid: "48b7a5f83daef650ecbfb405fa90792ab28c3f7f", date: "2026-08-03",
+    title: "Refresh dialog protocol handoff metadata",
+    changes: [
+      { category: "fixed", text: "The handoff now records the 3,262-pass regression run, Docker smoke, the 8557de4 and b01e17a milestones, and the honest 59.0% coverage with 114 units outstanding. The project is moving; the coverage number is not wearing a disguise.\\n\\nHandoff 而家記低 3,262 pass regression、Docker smoke、8557de4 同 b01e17a milestone，仲有老實嘅 59.0% coverage 同 114 個未完成 unit。個 project 有郁，coverage number 就冇戴假鬍鬚扮 100%。" },
+    ],
+  },
+  {
+    id: "b01e17a", kind: 'commit', ref: "b01e17a", oid: "b01e17a36f464e9a9e7c19dff7befd80182e896c", date: "2026-08-03",
+    title: "Refresh in-app changelog for dialog protocol fixes",
+    changes: [
+      { category: "fixed", text: "The in-app history now records the verified 8557de4 RemoteTransfer, Progress, CustomCommand, FileFind, Session, and S3 cancellation fixes with full links and bilingual copy. The changelog now has a cancel button for its own memory.\\n\\nApp 入面嘅歷史而家記低已驗證嘅 8557de4 RemoteTransfer、Progress、CustomCommand、FileFind、Session 同 S3 cancellation 修正，連埋完整 link 同雙語 copy；changelog 自己都有粒 cancel button，唔怕失憶。" },
+    ],
+  },
+  {
     id: "8557de4", kind: 'commit', ref: "8557de4", oid: "8557de45e9b970c304ec15acdec7815d67c7cb77", date: "2026-08-03",
     title: "Harden dialogs, file search, and S3 cancellation",
     changes: [
@@ -779,63 +803,6 @@ export const DEVELOPMENT = [
       { category: "changed", text: "點解要改：條數係要「數」出嚟嘅，唔係打字打出嚟嘅。以前 count-lines.js 淨係識講呢個 project 有幾大，完全唔識講邊個寫，而 CI 更加索性冇 run 過佢， 所以 v0.1.459 個 release notes 一個數字都冇。而家用 `git blame` 逐條「仲喺度」 嘅 line 去計 — 寫咗又刪咗嘅唔算數，唔可以邊個改得最多就當邊個寫。" },
       { category: "changed", text: "兩個扮到好似好準嘅大話，而家一律唔講好過亂噏：shallow clone 嘅時候 blame 唔會炒，佢會笑笑口話你聽成個 repo 都係最尾嗰個 commit 寫嘅，靚仔 100%, 假到冇朋友 — 所以偵測到就唔出數，仲要話你知點救。第二個係佢自己同自己 對唔上數：一張表入面兩個數唔夾,兩個都信唔過,所以寧願唔出,而且直接 exit 1 拉 CI 落水。而家啱啱好對得住,全靠兩邊都記得唔好將檔案尾嗰個換行當一行。" },
       { category: "changed", text: "依家 CI 會喺打 tag 嗰個 commit 度行埋支script,再由 release notes 貼入去, 連點樣自己再行一次都寫埋。280 個檔案 8 條線行 1.6 秒,自己一條線行要 7.7 秒 — Windows 開 process 比 blame 本身仲貴,呢個先係樽頸。" },
-    ],
-  },
-  {
-    id: "e701a33", kind: 'commit', ref: "e701a33", oid: "e701a33e8775b7ef3659ed1e6d30cc4c0948c671", date: "2026-08-02",
-    title: "Merge branch 'worktree-wf_7340eadd-163-1' into worktree-wf_7340eadd-163-2",
-    changes: [
-    ],
-  },
-  {
-    id: "eb0939b", kind: 'commit', ref: "eb0939b", oid: "eb0939b316d5a228b57ea28eb33bec5966aa0c3e", date: "2026-08-02",
-    title: "Stop --verify exploding on the missing file it exists to report, and publish the site",
-    changes: [
-      { category: "fixed", text: "site/build.js --verify read app.js and app.css unconditionally and died ENOENT twelve lines before reaching its own \"referenced file is missing from the output\" check. Two files that were never committed made the one report that would have named them crash instead — and since an uncaught exception also exits 1, from the outside it looked exactly like a check doing its job. The site's homepage field has advertised a URL where every path 404s ever since." },
-      { category: "changed", text: "verify() now collects and returns every finding instead of throwing at the first one; reportVerify() prints them together and main sets the exit code. Nothing in it reads a file it has not agreed to survive missing. Today it says, in words:" },
-      { category: "changed", text: "VERIFY FAILED ✖ referenced file is missing from the output: /material-winscp/app.js ✖ referenced file is missing from the output: /material-winscp/app.css" },
-      { category: "changed", text: "app.js and app.css are deliberately still absent. That output is the check working, and it is the next change's finish line." },
-      { category: "changed", text: "What it now checks, all of it against the emitted bytes rather than config.json, because a config that merely SAYS the right base is exactly how a site deploys green and 404s on every asset:" },
-      { category: "changed", text: "index.html exists and references app.css, app.js and content.js with the prefix;" },
-      { category: "changed", text: "no root-absolute URL anywhere in the emitted HTML, CSS or JS lacks that prefix — src, <link href> and url(), the three things a browser fetches;" },
-      { category: "changed", text: "every referenced local file really exists, checked against the file listing so it stays case-sensitive on Windows the way Pages is in production;" },
-      { category: "changed", text: "no {{PLACEHOLDER}} survived the copy;" },
-      { category: "changed", text: "nothing fetches another host;" },
-      { category: "changed", text: "content.js parses and was generated for the same base as the markup." },
-      { category: "changed", text: "An <a href> is deliberately not a subresource, and content.js is exempt from the two text-shaped heuristics: it is generated prose, and an article documenting this builder is allowed to quote \"{{BASE}}\" without failing the build. It is not exempt from the precise scan, so an <img src> pointing at a CDN still fails." },
-      { category: "changed", text: "The copy loop walks subdirectories. It used to `continue` on any directory, which meant the client app had to be three files at the top of site/src/ forever: split it into modules and the build stayed green while shipping none of them. A skipped directory reports nothing at all." },
-      { category: "added", text: ".github/workflows/pages.yml is new, and ci.yml is untouched. Build, verify, run the builder's tests, then actions/deploy-pages — gated by `needs`, so a failing verify uploads nothing. ubuntu-latest and no npm ci, because the builder needs node:fs and node:path and nothing else. The base path comes from configure-pages' own output rather than a guess, and an empty value falls back to site/config.json. Branch filter AND tags-ignore: publishing must never retrigger a build, and this repository has already turned four commits into nine releases by learning that the hard way." },
-      { category: "added", text: "Also adds site/README.md, which README.md has been linking to for some time without it existing, and docs/packaging-and-updates/site.md." },
-      { category: "fixed", text: "Tests: test/site-build.test.js, 22 tests. 22 pass with this change; 21 of the 22 fail without it. The one that passes either way is the regression guard asserting the real emitted index.html carries the prefix — named here as a guard, not as evidence. The three CLI tests fail on the old builder for behavioural reasons rather than a missing export: \"VERIFY FAILED\" never appears, a source subdirectory never reaches the output, and a complete site with a module in a subdirectory cannot verify green. Verified on Node 26.5.1 and on Node 22.23.2, the version CI pins." },
-      { category: "changed", text: "---" },
-    ],
-    changesYue: [
-      { category: "changed", text: "驗證器本來就係為咗嗌「app.js 唔見咗」而寫嘅,結果佢見唔到 app.js 就即刻 ENOENT 爆炸,爆得仲要早過自己嗰句報告成十二行。兩個從來未 commit 過嘅檔案, 成功令到唯一會篤穿佢哋嘅檢查死喺半路;因為未捕捉嘅例外都係 exit 1,喺出面睇 仲以為佢好落力咁做緊嘢。個 homepage 就係咁樣掛住一條每頁都 404 嘅網址。" },
-      { category: "changed", text: "而家 verify() 唔再喺第一個問題度死,佢會將所有問題收晒返嚟一次過報,然後先 exit 1。全部檢查都係讀真正 emit 出嚟嘅 bytes,唔係讀 config.json —— 因為 config 講得啱唔代表 emit 出嚟啱,而「build 綠、deploy 綠、每一頁 404」正正就 係咁嚟。少咗個 /material-winscp/ 前綴,成個站就喺網域根目錄度撈嘢食,梗係 撈唔到啦。" },
-      { category: "changed", text: "複製迴圈依家識入資料夾。以前見到資料夾就 continue,即係話個 app 一世都只可以 係 site/src/ 頂層嗰三個檔案:一拆 module,build 照樣綠,但係一個 module 都冇 上到船。靜靜雞唔複製,係唔會出聲㗎。" },
-      { category: "changed", text: "app.js 同 app.css 依然故意冇喺度。上面嗰兩行 ✖ 就係檢查做緊嘢嘅證據,亦係 下一步嘅終點線。" },
-      { category: "changed", text: "新加 pages.yml 負責 build、verify、跑測試,然後先 deploy;ci.yml 一隻字都冇 郁。branch filter 同 tags-ignore 兩樣都留低 —— 出 release 會開 tag,開 tag 又 觸發 build,呢個 repo 已經用四個 commit 生出九個 release 示範過一次,唔使再 示範。" },
-      { category: "changed", text: "測試 22 個,有呢個改動 22 個全綠;冇呢個改動 21 個爆。剩返嗰個係防倒退嘅哨兵, 唔算證據,照直講。Node 26.5.1 同 CI 綁定嘅 Node 22.23.2 都跑過。" },
-    ],
-  },
-  {
-    id: "6e63642", kind: 'commit', ref: "6e63642", oid: "6e636428026c2d689037901fd4989aa090953db4", date: "2026-08-02",
-    title: "Capture what the documentation site actually renders today: nothing",
-    refs: ["#29"],
-    changes: [
-      { category: "changed", text: "Evidence for #29, taken from the real built output rather than described. The site was built, served over HTTP, and rendered in Edge on an off-screen Windows desktop through the low-level computer-use server — headless, so nothing touched the visible desktop." },
-      { category: "changed", text: "What the capture shows, and it is worse than \"unstyled\":" },
-      { category: "changed", text: "default serif type and blue underlined links — app.css 404s, so there is no Material Design 3 anywhere, only the browser's own stylesheet" },
-      { category: "changed", text: "the entire body below the nav is BLANK. 56 articles are generated correctly from docs/ into content.js, and not one of them renders, because app.js 404s and nothing is left to put them on the page" },
-      { category: "changed", text: "the skeleton is all there — skip link, title, search field, a few unlabelled buttons, four nav links — which is exactly why this went unnoticed: it looks like a page that is loading rather than a page that cannot load" },
-      { category: "changed", text: "Confirmed over HTTP against the built output, so this is not a path-resolution artefact of opening a file directly:" },
-      { category: "changed", text: "/material-winscp/ 200 /material-winscp/content.js 200 /material-winscp/app.js 404 /material-winscp/app.css 404" },
-      { category: "fixed", text: "This is the \"before\" half. The \"after\" belongs on the fix, from the same harness at the same size, so the pair is comparable rather than merely adjacent." },
-    ],
-    changesYue: [
-      { category: "changed", text: "呢個係 #29 嘅證據，唔係用嘴講，係真係 build 完、serve 出嚟、再喺一個離屏桌面度用 Edge 開嚟影 —— 全程 headless，冇掂過你個熒幕。" },
-      { category: "changed", text: "影出嚟仲慘過「冇 CSS」：字體係瀏覽器預設嘅襯線體、連結係藍色底線，因為 app.css 404；而導覽列以下**成版白晒** —— 56 篇文由 docs/ 生成得好地地，一篇都出唔到，因為 app.js 都係 404，冇人負責放佢哋上去。" },
-      { category: "changed", text: "最陰險係個骨架仲喺度（跳過連結、標題、搜尋框、幾個掣、四條連結），所以睇落似「載 緊」多過似「載唔到」—— 呢個就係佢可以一直冇人發現嘅原因。" },
     ],
   },
 ];
