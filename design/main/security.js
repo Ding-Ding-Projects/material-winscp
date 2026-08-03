@@ -332,12 +332,24 @@ function unscramblePassword(scrambled) {
     last = (last + x) % 255 + 1;
   }
 
-  let s = 0;
-  while (s < buf.length && !isDigitCode(buf[s])) s++;
-  if (buf.length - s < 3) return null;
-  const len = (buf[s] - 0x30) + 10 * (buf[s + 1] - 0x30) + 100 * (buf[s + 2] - 0x30);
-  const total = Math.trunc((len + 3) / 17) * 17 + 17;
-  if (len < 0 || total !== buf.length || total - s - 3 !== len) return null;
+  // A damaged padding byte can itself become an ASCII digit. Do not trust the
+  // first digit run: try each three-digit candidate and accept only the one
+  // whose encoded length and position agree with the complete blob. This is
+  // what preserves the format's self-synchronizing property without making a
+  // malformed blob look valid.
+  let s = -1;
+  let len = 0;
+  for (let i = 0; i + 2 < buf.length; i++) {
+    if (!isDigitCode(buf[i]) || !isDigitCode(buf[i + 1]) || !isDigitCode(buf[i + 2])) continue;
+    const candidate = (buf[i] - 0x30) + 10 * (buf[i + 1] - 0x30) + 100 * (buf[i + 2] - 0x30);
+    const total = Math.trunc((candidate + 3) / 17) * 17 + 17;
+    if (total === buf.length && total - i - 3 === candidate) {
+      s = i;
+      len = candidate;
+      break;
+    }
+  }
+  if (s < 0) return null;
   return buf.subarray(buf.length - len).toString('utf8');
 }
 

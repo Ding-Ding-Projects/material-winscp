@@ -66,6 +66,10 @@ believe something false.
 - **Nothing is obfuscated and called encrypted.** WinSCP's historical INI
   password scrambling is not reproduced. Imported scrambled passwords are
   unscrambled and immediately re-protected properly, or dropped.
+- **Legacy scramble parsing is fail-closed and damage-tolerant.** The decoder
+  checks every candidate length header against the complete blob, so a damaged
+  padding byte that happens to become a digit cannot make the decoder stop at
+  a false header or return a partial password.
 - **Authenticated encryption everywhere.** A modified ciphertext fails to
   decrypt rather than decrypting to something else.
 - **AAD is bound to a stable identifier**, not to a row id or array index. A
