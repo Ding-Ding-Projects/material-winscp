@@ -2110,7 +2110,15 @@ class ExplorerShell {
   async dragDropFileOperation(spec) {
     const s = spec || {};
     const DROPEFFECT = shellintegration.DROPEFFECT;
-    const operation = Number(s.effect) === DROPEFFECT.MOVE ? OPERATIONS.move : OPERATIONS.copy;
+    const effect = Number(s.effect);
+    // DDEnd normally resolves drInvalid before reaching this method, but a
+    // renderer or embedder can call the operation entry point directly.  Do
+    // not turn drNone, drCancel, or an unknown shell value into a COPY: that
+    // would upload files after the shell explicitly refused the drop.
+    if (effect !== DROPEFFECT.COPY && effect !== DROPEFFECT.MOVE) {
+      return { ok: false, reason: 'invalidDropEffect' };
+    }
+    const operation = effect === DROPEFFECT.MOVE ? OPERATIONS.move : OPERATIONS.copy;
     const files = s.files || [];
     if (!files.length) return { ok: false };
 

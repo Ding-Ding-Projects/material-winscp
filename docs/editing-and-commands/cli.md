@@ -27,6 +27,13 @@ this command only stages bytes; it never performs the destructive source
 deletion. It does not pretend to deliver a GUI drop; use a console script or
 the app for a real transfer.
 
+The application-side drop executor has the same safety boundary: only an
+explicit `COPY` or `MOVE` effect is actionable. `NONE`, cancel, and unknown
+shell effects are refused and cannot be interpreted as a copy. This matters
+for direct integrations because the normal Windows `DDEnd` path resolves an
+invalid result before dispatch, while an embedder may call the orchestration
+method directly.
+
 The direct `winscp run` form accepts every switch understood by the existing
 console runner, including `/script`, `/command`, `/parameter`, `/log`,
 `/xmllog`, `/stdout`, `/stdin`, `/nointeractiveinput` and `/unsafe`.
@@ -66,7 +73,7 @@ accepted as an explicit synonym for the default machine-readable format.
 | No subcommand or `--help` | The complete command reference is printed. | Yes |
 | Unknown drag/drop option or effect | A concise error and exit code `2`; no transfer starts. | Yes — correct the option |
 | Invalid Windows path/build or local-to-local plan | A concise input error and exit code `2`; no transfer starts. | Yes — correct the input |
-| A classified path is gone | It appears in `classification.missing`; the command still reports the other paths. | Yes — restore or remove the path |
+| A classified path is gone | It appears in `classification.missing`; the command still reports the other paths. If every path is gone, `accepted.ok` is `false` and no operation is planned. | Yes — restore or remove the path |
 | Read-only or incapable remote target | `accepted.ok` is `false` with the specific reason. | Yes — choose a writable target |
 | Stage source cannot be read | The command fails and removes its staging directory. | Yes — fix the path or permissions |
 | A console script fails | The existing console engine returns its normal non-zero script result. | Yes — inspect its log/XML output |

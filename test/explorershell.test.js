@@ -1074,6 +1074,24 @@ test('a drop suppresses the transfer dialog only when the preference says off', 
   assert.strictEqual(seen.length, 1);   // no dialog was shown the second time
 });
 
+test('a refused or unknown drop effect never becomes an upload', async () => {
+  const calls = [];
+  const shell = copyShell({
+    ops: {
+      copyToRemote: (...args) => { calls.push(args); return true; },
+    },
+  });
+  for (const effect of [0, 4, 99, 'not-a-drop-effect']) {
+    const result = await shell.dragDropFileOperation({
+      effect,
+      files: [{ name: 'alpha.txt', path: 'C:\\work\\alpha.txt' }],
+      targetPath: '/home/joe',
+    });
+    assert.deepStrictEqual(result, { ok: false, reason: 'invalidDropEffect' });
+  }
+  assert.strictEqual(calls.length, 0);
+});
+
 // ===========================================================================
 // transfer preset auto-selection
 // ===========================================================================
