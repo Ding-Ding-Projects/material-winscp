@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `e840449`** — Wire editor refresh, preference shortcut, and S3 listing guards
+**At commit `a95dc72`** — Harden reconnect queue WebDAV and menu parity
 
 ## Where the work stands
 
@@ -14,10 +14,10 @@
 | **Port coverage (logic)** | **60.5%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 71.5% — includes embedded hex resources, **do not quote this one** |
 | Tests | 3504 run, **3503 pass, 0 fail**, 1 skipped |
-| Hand-written code | 222,087 lines across 441 files |
-| Commits | 224 on `main` |
-| Working tree | **13 uncommitted change(s)** |
-| Remote | `origin/main` at `e840449` — in sync |
+| Hand-written code | 222,152 lines across 442 files |
+| Commits | 225 on `main` |
+| Working tree | clean |
+| Remote | `origin/main` at `a95dc72` — in sync |
 
 ### Coverage by area
 
@@ -127,6 +127,7 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `a95dc72` | 2026-08-03 | Harden reconnect queue WebDAV and menu parity |
 | `e840449` | 2026-08-03 | Wire editor refresh, preference shortcut, and S3 listing guards |
 | `5d0b038` | 2026-08-03 | Wire protocol edges and roadmap controls |
 | `abe0622` | 2026-08-03 | Refresh handoff after freshness fix |
@@ -134,7 +135,6 @@ bite a successor who assumes otherwise:
 | `68f8952` | 2026-08-03 | Make handoff freshness self-checking |
 | `dbb195b` | 2026-08-03 | Refresh final handoff evidence |
 | `ef2580a` | 2026-08-03 | Refresh handoff for Pages fix |
-| `aae7ad2` | 2026-08-03 | Fix Pages artifact selection |
 
 ## Notes from whoever worked on this last
 
