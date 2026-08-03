@@ -82,8 +82,31 @@ function lines() {
   return { files: hand ? hand[1] : '?', hand: hand ? hand[2] : '?', total: total ? total[1] : '?' };
 }
 
+const REPORT_FILES = new Set(['HANDOFF.md', 'ROADMAP.md']);
+
+/**
+ * A report commit cannot describe its own final hash: writing HANDOFF.md
+ * changes the commit whose hash the report would contain. Walk past commits
+ * that touch only the generated reports so the committed handoff remains
+ * checkable and still identifies the latest substantive source state.
+ */
+function substantiveCommit(ref) {
+  let current = sh('git', ['rev-parse', ref]).trim();
+  while (current) {
+    const files = sh('git', ['diff-tree', '--root', '--no-commit-id', '--name-only', '-r', current])
+      .split(/\r?\n/).filter(Boolean);
+    if (files.length && files.some((file) => !REPORT_FILES.has(file))) return current;
+    const parent = sh('git', ['rev-parse', `${current}^`]).trim();
+    if (!parent || parent === current) return current;
+    current = parent;
+  }
+  return sh('git', ['rev-parse', ref]).trim();
+}
+
 function git() {
   const names = (args) => sh('git', args).split(/\r?\n/).filter(Boolean);
+  const reportRef = substantiveCommit('HEAD');
+  const remoteRef = substantiveCommit('origin/main');
   const dirtyFiles = new Set([
     ...names(['diff', '--name-only']),
     ...names(['diff', '--cached', '--name-only']),
@@ -92,17 +115,17 @@ function git() {
   dirtyFiles.delete('HANDOFF.md');
   dirtyFiles.delete('ROADMAP.md');
   return {
-    head: sh('git', ['rev-parse', '--short', 'HEAD']).trim(),
-    headFull: sh('git', ['rev-parse', 'HEAD']).trim(),
-    subject: sh('git', ['log', '-1', '--format=%s']).trim(),
+    head: sh('git', ['rev-parse', '--short', reportRef]).trim(),
+    headFull: reportRef,
+    subject: sh('git', ['log', '-1', '--format=%s', reportRef]).trim(),
     branch: sh('git', ['rev-parse', '--abbrev-ref', 'HEAD']).trim(),
-    remote: sh('git', ['rev-parse', '--short', 'origin/main']).trim(),
-    count: sh('git', ['rev-list', '--count', 'HEAD']).trim(),
+    remote: sh('git', ['rev-parse', '--short', remoteRef]).trim(),
+    count: sh('git', ['rev-list', '--count', reportRef]).trim(),
     // The report files are the output of this command. Counting their own
     // pending rewrite means the committed report can never describe the state
     // it leaves behind, so exclude those two generated paths from the count.
     dirty: dirtyFiles.size,
-    recent: sh('git', ['log', '-8', '--format=%h\t%ad\t%s', '--date=short']).trim().split('\n').filter(Boolean),
+    recent: sh('git', ['log', '-8', '--format=%h\t%ad\t%s', '--date=short', reportRef]).trim().split('\n').filter(Boolean),
   };
 }
 
