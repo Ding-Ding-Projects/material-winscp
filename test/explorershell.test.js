@@ -1031,6 +1031,26 @@ test('a protocol that cannot move falls back to copy rather than doing nothing',
   assert.strictEqual(effect, 1);
 });
 
+test('dragging all files requires the panel to report an all-file selection', () => {
+  const shell = makeShell({
+    panels: {
+      local: panel({ side: 'local', filesCount: 2, entries: ENTRIES, selected: ['alpha.txt'] }),
+    },
+  });
+  assert.strictEqual(shell.draggingAllFilesFromDirView('local', [
+    { name: 'alpha.txt' }, { name: 'beta.txt' },
+  ], 'local'), false);
+
+  const all = makeShell({
+    panels: {
+      local: panel({ side: 'local', entries: ENTRIES, selected: ['alpha.txt', 'beta.log', 'sub'] }),
+    },
+  });
+  assert.strictEqual(all.draggingAllFilesFromDirView('local', [
+    { name: 'alpha.txt' }, { name: 'beta.log' }, { name: 'sub' },
+  ], 'local'), true);
+});
+
 test('an ambiguous drag result prefers copy — a wrong move deletes the source', () => {
   const shell = makeShell({});
   assert.strictEqual(shell.dropResultOperation('invalid', 0), 'copy');

@@ -2013,7 +2013,10 @@ class ExplorerShell {
     if (!this.hasDirView(side)) return false;
     if (dropSourceSide !== undefined && dropSourceSide !== this.getSide(side)) return false;
     const panel = this.panel(side);
-    return !!panel && (files || []).length === panel.filesCount;
+    // The payload count is not authoritative: a partial selection can have
+    // the same length as the directory after filtering or stale panel state.
+    // The panel's selection model is the source of truth for coAllFiles.
+    return !!panel && this.selectedAllFilesInDirView(side);
   }
 
   /**

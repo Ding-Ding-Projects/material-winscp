@@ -648,7 +648,19 @@ class Session extends EventEmitter {
 
     const now = this._now();
     if (!this._reconnect.startedAt) this._reconnect.startedAt = now;
-    const budget = Number(sec.sessionReopenTimeout) || 0;
+    const rawBudget = sec.sessionReopenTimeout;
+    const configuredBudget = rawBudget === undefined || rawBudget === null || rawBudget === ''
+      ? 0
+      : Number(rawBudget);
+    // Zero explicitly means "retry forever". A negative, NaN, or infinite
+    // budget is malformed and must not silently become an infinite retry
+    // window (or an unbounded timer calculation).
+    if (configuredBudget < 0 || !Number.isFinite(configuredBudget)) {
+      this.log.add('error', 'Automatic reconnect is disabled because its timeout is invalid.');
+      this._reconnect.startedAt = 0;
+      return;
+    }
+    const budget = configuredBudget;
     const elapsed = now - this._reconnect.startedAt;
     if (budget && elapsed >= budget) {
       this.log.add('error', 'Giving up reconnecting: the reconnect timeout elapsed.');

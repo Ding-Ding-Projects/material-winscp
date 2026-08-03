@@ -144,6 +144,16 @@ test('negative automatic reconnect delays disable the retry timer', () => {
   assert.equal(session.state.status, 'closed');
 });
 
+test('negative automatic reconnect timeout disables the retry timer', () => {
+  const session = new Session(
+    { protocol: 'sftp', hostName: 'invalid-timeout.example' },
+    { config: configFor({ sessionReopenAuto: 10, sessionReopenTimeout: -1 }), emit() {} },
+  );
+  session._scheduleReconnect(new Error('connection dropped'));
+  assert.equal(session._reconnect.timer, null);
+  assert.equal(session._reconnect.startedAt, 0);
+});
+
 test('a refused security prompt does not schedule an automatic reconnect', async () => {
   const session = new Session(
     { protocol: 'webdav', hostName: 'tls.example' },

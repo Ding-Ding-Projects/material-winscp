@@ -1562,7 +1562,6 @@ export function createSiteAdvancedPanel(site, opts = {}) {
       node.appendChild(h('span', { class: 'sd-hint sd-full' },
         `This site is stored with proxy type "${current}", which the ${c.protocol.toUpperCase()} engine cannot use. The stored value is kept; choosing another here replaces it.`));
     }
-    node.appendChild(h('span', { class: 'sd-hint sd-full' }, GAPS.proxyMethodSystem));
     return node;
   }
 

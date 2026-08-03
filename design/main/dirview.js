@@ -1484,6 +1484,12 @@ function acceptsSearchKey(key, options) {
 
 const DEFAULT_HISTORY_COUNT = 200;
 
+function normalizeHistoryCount(value) {
+  if (value === undefined || value === null || value === '') return DEFAULT_HISTORY_COUNT;
+  const count = Number(value);
+  return Number.isFinite(count) ? Math.max(0, Math.floor(count)) : DEFAULT_HISTORY_COUNT;
+}
+
 /**
  * TCustomDirView's back/forward history.
  *
@@ -1497,7 +1503,7 @@ class PathHistory {
     const o = options || {};
     this.paths = [];
     this.backCount = 0;
-    this.maxHistoryCount = o.maxHistoryCount || DEFAULT_HISTORY_COUNT;
+    this.maxHistoryCount = normalizeHistoryCount(o.maxHistoryCount);
     this.currentPath = o.currentPath || '';
     this._historyPath = o.currentPath || '';
     this._dontRecordPath = false;
@@ -1531,8 +1537,9 @@ class PathHistory {
   }
 
   setMaxHistoryCount(value) {
-    if (this.maxHistoryCount === value) return false;
-    this.maxHistoryCount = value;
+    const count = normalizeHistoryCount(value);
+    if (this.maxHistoryCount === count) return false;
+    this.maxHistoryCount = count;
     this.changed();
     return true;
   }
@@ -2163,7 +2170,7 @@ class DirectoryTree {
    * somewhere arbitrary.
    */
   updatePath(path, files) {
-    const node = this._byPath.get(this.excludeTrailing(path));
+    const node = this._byPath.get(this.pathKey(path));
     if (!node) return null;
     const listing = Array.isArray(files) ? files : [];
     const seen = new Map(node.children.map((child) => [
@@ -2176,10 +2183,11 @@ class DirectoryTree {
       if (!this.showHiddenDirs && file.hidden) continue;
       if (!this.showInaccesibleDirectories && file.isInaccesibleDirectory) continue;
 
-      const existing = seen.get(this.unixPath ? name : name.toLowerCase());
+      const childKey = this.unixPath ? name : name.toLowerCase();
+      const existing = seen.get(childKey);
       if (existing) {
         existing.file = file;
-        seen.delete(name);
+        seen.delete(childKey);
       } else {
         this._addNode(node, this.join(node.path, name), file);
       }

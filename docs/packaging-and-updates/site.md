@@ -77,7 +77,7 @@ VERIFY OK
   ✔ every referenced local file exists in the output
   ✔ no placeholder survived the build
   ✔ no remote subresource is fetched at runtime
-  ✔ 12 categories, 58 articles, 6 bundled images, 27 files
+  ✔ 14 categories, 128 articles, 6 bundled images, 27 files
 ```
 
 It did not always. Until the application was written, the same command reported
@@ -143,6 +143,7 @@ flowchart TD
 | A stylesheet in a subdirectory `@import`s a remote font | Reported. Exit 1, no deploy. |
 | `content.js` is unparseable | Reported as a problem; the verifier returns instead of throwing. |
 | The output directory does not exist | Reported as a problem, not an exception. |
+| Two builds run at once | A per-output lock serializes emission and verification, so Windows does not see overlapping removal and a verifier cannot inspect a half-written tree. |
 | Pages is not enabled on the repository | `configure-pages` enables it with the token chain. If the token is refused the job fails visibly rather than deploying nowhere. |
 | A push to a branch other than `main` | Nothing happens. One live site, published from one branch. |
 
@@ -165,11 +166,11 @@ flowchart TD
 Verified locally, with real output, at the time of writing, on Node 26.5.1 and
 on Node 22.23.2 (the version CI pins):
 
-- `node site/build.js --verify` builds 12 categories and 58 articles and exits
+- `node site/build.js --verify` builds 14 categories and 128 articles and exits
   **0** with `VERIFY OK`. Before the client application existed the same command
   reported both missing files and exited 1; before the collecting rewrite it
   died with an `ENOENT` stack trace and printed no report at all.
-- `node --test test/site-build.test.js` — **31 tests, 31 passing** (was 22).
+- `node --test test/site-build.test.js` — **32 tests, 32 passing** (was 31).
   Against the previous `site/build.js` the five release-manifest tests and the
   two module-import tests fail; the rest of the suite is the earlier change's.
 - `node --test test/site-app.test.js` — **36 tests, 36 passing**, covering the

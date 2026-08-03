@@ -26,7 +26,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 
 const ROOT = path.join(__dirname, '..');
 const BUILD = path.join(ROOT, 'site', 'build.js');
@@ -445,6 +445,27 @@ test('the repository itself now verifies clean, end to end, exactly as CI runs i
   assert.strictEqual(r.status, 0, `the real build must verify clean:\n${all}`);
   assert.match(all, /VERIFY OK/);
   assert.doesNotMatch(all, /VERIFY FAILED/);
+});
+
+test('concurrent CLI builds serialize their shared output and all verify clean', async () => {
+  const children = Array.from({ length: 6 }, () => spawn(process.execPath, [BUILD, '--verify'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }));
+  const results = await Promise.all(children.map((child) => new Promise((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('close', (status, signal) => resolve({ status, signal, stdout, stderr }));
+  })));
+
+  for (const result of results) {
+    assert.strictEqual(result.status, 0,
+      `concurrent build failed (${result.signal || 'exit ' + result.status}):\n${result.stdout}\n${result.stderr}`);
+    assert.match(`${result.stdout}\n${result.stderr}`, /VERIFY OK/);
+  }
 });
 
 test('the CLI catches a base-path trap inside a source subdirectory', () => {

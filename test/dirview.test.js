@@ -1320,6 +1320,17 @@ test('a Windows tree treats case-only refreshes as the same cached node and sele
   assert.deepStrictEqual(tree.pendingDeletes, []);
 });
 
+test('a Windows tree reconciles a case-only parent refresh without deleting its child', () => {
+  const tree = new dv.DirectoryTree({ unixPath: false, rootName: 'C:' });
+  tree.loadPath('C:\\Work');
+  tree.updatePath('C:\\Work', [{ name: 'Reports', type: 'dir' }]);
+  const node = tree.updatePath('c:\\work', [{ name: 'reports', type: 'dir' }]);
+
+  assert.ok(node);
+  assert.strictEqual(node.children.length, 1);
+  assert.strictEqual(node.children[0].file.name, 'reports');
+});
+
 /* ================================================================== */
 /* drive info                                                          */
 /* ================================================================== */
@@ -1374,6 +1385,15 @@ test('LastPaths ignores a path it cannot key, rather than throwing out of naviga
   const last = new dv.LastPaths();
   assert.doesNotThrow(() => last.record('/var/log'));
   assert.deepStrictEqual(last.tryGet('/var/log', () => true), { found: false, path: '' });
+});
+
+test('history limits clamp at zero instead of looping on negative values', () => {
+  const history = new dv.PathHistory({ currentPath: '/a', maxHistoryCount: 2 });
+  history.pathChanged('/b').pathChanged('/c');
+  assert.strictEqual(history.setMaxHistoryCount(-1), true);
+  assert.strictEqual(history.maxHistoryCount, 0);
+  assert.deepStrictEqual(history.paths, []);
+  assert.strictEqual(history.backCount, 0);
 });
 
 /* ================================================================== */
