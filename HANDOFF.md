@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `ec10eab`** — Refresh in-app changelog for lifecycle hardening
+**At commit `e3bec36`** — Refresh in-app changelog for protocol and surface hardening
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3286 run, **3285 pass, 0 fail**, 1 skipped |
-| Hand-written code | 215,814 lines across 393 files |
-| Commits | 110 on `main` |
+| Tests | 3294 run, **3293 pass, 0 fail**, 1 skipped |
+| Hand-written code | 216,010 lines across 394 files |
+| Commits | 113 on `main` |
 | Working tree | clean |
-| Remote | `origin/main` at `f114157` — **differs from HEAD** |
+| Remote | `origin/main` at `9430464` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `e3bec36` | 2026-08-03 | Refresh in-app changelog for protocol and surface hardening |
+| `7592b4c` | 2026-08-03 | Harden configuration, console, SCP, and progress surfaces |
+| `9430464` | 2026-08-03 | Refresh lifecycle-hardening handoff metadata |
 | `ec10eab` | 2026-08-03 | Refresh in-app changelog for lifecycle hardening |
 | `c95cd9d` | 2026-08-03 | Harden editor, session, sync, auth, and workspace lifecycles |
 | `f114157` | 2026-08-03 | Refresh boundary-hardening handoff metadata |
 | `d85b97c` | 2026-08-03 | Refresh in-app changelog for boundary hardening |
 | `6aee465` | 2026-08-03 | Harden terminal, protocol, checklist, and WinApi boundaries |
-| `c46bd62` | 2026-08-03 | Refresh unit-porting handoff metadata |
-| `6e6f5e3` | 2026-08-03 | Refresh in-app changelog for unit-porting wave |
-| `3e1d057` | 2026-08-03 | Port Explorer, editor, preferences, queue, SFTP, and WinConfiguration slices |
 
 ## Notes from whoever worked on this last
 
