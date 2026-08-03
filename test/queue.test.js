@@ -454,6 +454,35 @@ test('excludeEmptyDirectories prunes the empty directories and keeps the rest', 
   assert.ok(!remote.files.has('/r/tree/bc'));
 });
 
+test('a queued upload descends into a local directory symlink like the engine', async () => {
+  // DirectorySource recurses into local directory symlinks even when the
+  // remote-session follow setting is false. The queue used to skip the child
+  // before its structural empty-directory prune, so its plan disagreed with
+  // transfer.js and could drop the whole upload tree.
+  const { local, remote } = makePair();
+  local.putDir('/l/tree/linky');
+  Object.assign(local.files.get('/l/tree/linky'), { isSymlink: true });
+  local.put('/l/tree/linky/b.txt', 'b');
+  remote.putDir('/r');
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'upload',
+    source: '/l/tree',
+    target: '/r/tree',
+    sourceAdapter: local,
+    targetAdapter: remote,
+    copyParam: { excludeEmptyDirectories: true, followDirectorySymlinks: false },
+  });
+  await q.idle();
+
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.strictEqual(remote.read('/r/tree/linky/b.txt').toString(), 'b');
+  assert.deepStrictEqual(
+    item._plan.entries.filter((e) => e.kind === 'dir').map((e) => e.dstPath),
+    ['/r/tree', '/r/tree/linky']);
+});
+
 test('excludeEmptyDirectories does not destroy a download to a Windows target', async () => {
   // queue.js:_buildPlan used to prune with a hard-coded '/' — `startsWith(dir +
   // '/')`. Every dstPath of a download is built by the LOCAL adapter's join,

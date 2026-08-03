@@ -993,6 +993,10 @@ class TransferQueue extends EventEmitter {
     const dst = item.targetAdapter;
     const cp = item.copyParam;
     const toLocal = item.side === 'download';
+    // DirectorySource recurses into local directory symlinks regardless of the
+    // remote-session follow setting. Keep queued uploads on that same side of
+    // the contract; remote sources remain gated below.
+    const sourceIsLocal = item.side === 'upload';
     const mask = new FileMask(cp.includeFileMask, { root: item.source });
 
     const entries = [];
@@ -1023,7 +1027,7 @@ class TransferQueue extends EventEmitter {
           if (cp.excludeHiddenFiles && e.hidden) continue;
           const childSrc = src.join(srcPath, e.name);
           let isDir = e.type === 'dir';
-          if (e.isSymlink && isDir && !cp.followDirectorySymlinks) continue;
+          if (e.isSymlink && isDir && !sourceIsLocal && !cp.followDirectorySymlinks) continue;
           if (e.type === 'link' && cp.followDirectorySymlinks) {
             try {
               const st = await src.stat(childSrc);
@@ -1093,9 +1097,8 @@ class TransferQueue extends EventEmitter {
       // transferred — DoAllowLocalFileTransfer only disallows temporaries when
       // the caller asks, and the copy path never does. It is only the
       // *emptiness* question that ignores it.
-      const localSource = item.side !== 'download' && item.side !== 'remote-copy';
       const isContent = (o) => o.kind === 'file' &&
-        !(localSource && getPartialFileExtLen(src.basename(o.srcPath)) > 0);
+        !(sourceIsLocal && getPartialFileExtLen(src.basename(o.srcPath)) > 0);
       const sep = dst.sep || '/';
       const prefixOf = (e) => (e.dstPath.endsWith(sep) ? e.dstPath : e.dstPath + sep);
       // Everything under a dropped directory goes with it. Before `.filepart`

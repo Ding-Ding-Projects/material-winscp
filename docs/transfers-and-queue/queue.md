@@ -42,6 +42,13 @@ Under **Preferences → Transfer → Background**, stored in `PREF_DEFAULTS.queu
   correlation id; the IPC call that started it returns straight away.
 - **An item's settings are a snapshot.** See the note in the
   [category index](README.md) — this is intentional.
+- **Empty-directory planning agrees across transfer paths.** With
+  `excludeEmptyDirectories` enabled, queued local uploads descend into local
+  directory symlinks the same way as the foreground engine. Remote-source
+  plans still respect `followDirectorySymlinks`, so a remote symlink is not
+  followed unless the user explicitly enables it. A symlink-only directory is
+  therefore not created merely because the queue and engine took different
+  routes to the same copy operation.
 - **Failures are per item.** One unreadable file in a 4,000-file upload fails
   that file. `continueOnError` (in the environment preferences) controls whether
   the *foreground* progress dialog stops to ask.

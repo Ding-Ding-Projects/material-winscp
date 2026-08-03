@@ -111,6 +111,9 @@ Each queue item carries a **snapshot** of the transfer settings it was created
 with, so changing the defaults never retroactively reinterprets work you already
 asked for. Resume writes to a `.filepart` and renames on success — a target file
 is either complete or absent, never a truncated file that looks finished.
+When `excludeEmptyDirectories` is on, queued local uploads and foreground
+transfers agree about local directory symlinks; remote symlinks remain gated by
+`followDirectorySymlinks`.
 
 → [`docs/transfers-and-queue/`](docs/transfers-and-queue/README.md)
 

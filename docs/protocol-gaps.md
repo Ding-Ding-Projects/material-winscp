@@ -233,6 +233,8 @@ the two ways in. These rows are behaviour the original has and this does not.
 | **`OnTransferIn` / `OnTransferOut`** | the .NET assembly's `Session.GetFile` / `PutFile` | ➖ Not applicable | Streaming a transfer to or from a caller-supplied stream, with `CopyToLocal`'s `fcTransferOut` refusal. Nothing in this port has such a caller; the scripting surface's own `/stdout` path is implemented separately. |
 | **`InvalidCharsReplacement` defaults to `_`, not to token encoding** | "Replace invalid characters" | 🚧 Divergent | `TCopyParamType::Default` sets `InvalidCharsReplacement = TokenReplacement`, so a downloaded `a:b.txt` becomes `a%3Ab.txt` and re-uploads under its original name. This port defaults to `_`, so the reversible codec — which is implemented and tested — is inert in the shipped configuration and a round trip renames the file. Changing the default is a one-line change with a migration question attached, so it is recorded rather than made silently. |
 
+Follow-up to issue #26: the queued local-upload collector now preserves the foreground engine's local directory-symlink descent, while remote-source plans retain the `followDirectorySymlinks` guard. The third divergence described in the `ExcludeEmptyDirectories` row above is therefore closed; the remaining differences are the documented depth bound and conservative unreadable-directory answer.
+
 ## The message resources (`resource/`)
 
 | Gap | WinSCP feature affected | Status | Consequence today |
