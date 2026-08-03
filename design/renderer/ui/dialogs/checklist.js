@@ -61,6 +61,7 @@ defineStrings({
   txClReverse: ['Reverse the direction', '調轉方向'],
   txClInvert: ['Invert the selection', '反轉選取'],
   txClGroup: ['Group by directory', '按目錄分組'],
+  txClSort: ['Sort checklist', '排序清單'],
   txClSearchPh: ['Search the checklist', '搵清單'],
   txClScope: ['this checklist', '呢張清單'],
   txClApply: ['Synchronize', '開始同步'],
@@ -332,6 +333,19 @@ export function groupByDirectory(items) {
   return map;
 }
 
+/** Stable sort for the checklist toolbar. Sorting only changes presentation. */
+export function sortChecklistItems(items, field = 'name', direction = 'asc') {
+  const sign = direction === 'desc' ? -1 : 1;
+  const value = (item) => {
+    if (field === 'action') return actionLabelKey(item?.action);
+    if (field === 'directory') return rowDirectory(item);
+    return item?.local?.name || item?.remote?.name || item?.local?.path || item?.remote?.path || '';
+  };
+  return (items || []).map((item, index) => ({ item, index, value: String(value(item)).toLocaleLowerCase() }))
+    .sort((a, b) => (a.value.localeCompare(b.value) || a.index - b.index) * sign)
+    .map(({ item }) => item);
+}
+
 /* ================================================================== */
 /* the dialog                                                          */
 /* ================================================================== */
@@ -349,6 +363,8 @@ export function openChecklistDialog(result = {}) {
   const original = (result.items || []).map((i) => ({ ...i }));
   let rows = original.map((i) => ({ ...i }));
   let grouped = true;
+  let sortField = 'name';
+  let sortDirection = 'asc';
 
   const listEl = h('div', { class: 'tx-cl-list', role: 'group', 'aria-label': t('txClTitle') });
   const summaryEl = h('div', { class: 'tx-cl-summary', role: 'status', 'aria-live': 'polite' });
@@ -415,6 +431,16 @@ export function openChecklistDialog(result = {}) {
 
   function applyToAll(fn) {
     rows = rows.map((r) => fn(r) || r);
+    render();
+  }
+
+  function sortRows() {
+    const fields = ['name', 'action', 'directory'];
+    const current = fields.indexOf(sortField) * 2 + (sortDirection === 'desc' ? 1 : 0);
+    const next = (current + 1) % (fields.length * 2);
+    sortField = fields[Math.floor(next / 2)];
+    sortDirection = next % 2 ? 'desc' : 'asc';
+    rows = sortChecklistItems(rows, sortField, sortDirection);
     render();
   }
 
@@ -575,6 +601,7 @@ export function openChecklistDialog(result = {}) {
     toolButton('remove', 'txClUncheckAll', uncheckEverything),
     toolButton('flip', 'txClInvert', invertSelection),
     toolButton('swap_horiz', 'txClReverse', () => applyToAll((r) => { const x = reverseAction(r); return x.ok ? x.item : r; })),
+    toolButton('sort', 'txClSort', sortRows),
     groupToggle(),
     toolButton('content_copy', 'txClCopyList', copyChecklist),
     h('span', { class: 'spacer' }),

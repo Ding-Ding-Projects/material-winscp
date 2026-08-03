@@ -263,6 +263,33 @@ test('a failed external launch rolls back its watcher, registry record, and temp
   }
 });
 
+test('a failed local external launch never deletes the source file', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-local-launch-'));
+  P.setRoot(root);
+  const localPath = path.join(root, 'source.txt');
+  await fs.writeFile(localPath, 'keep this file');
+  const f = fixture();
+  const originalSpawn = cp.spawn;
+  try {
+    cp.spawn = () => {
+      const child = new (require('node:events').EventEmitter)();
+      child.kill = () => {};
+      process.nextTick(() => child.emit('error', Object.assign(new Error('editor missing'), { code: 'ENOENT' })));
+      return child;
+    };
+
+    await assert.rejects(
+      () => f.manager.openLocal({ localPath, mode: 'external', external: 'missing-editor.exe' }),
+      /could not be started: editor missing/,
+    );
+    assert.equal(await fs.readFile(localPath, 'utf8'), 'keep this file');
+    assert.deepEqual(f.manager.list(), []);
+  } finally {
+    cp.spawn = originalSpawn;
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('discarding an unsaved remote edit records an audit revision before close', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-history-'));
   P.setRoot(root);

@@ -667,7 +667,7 @@ test('loadFiles counts hidden and filtered entries separately', () => {
   const parsed = M.parse('*.txt');
   const r = G.loadFiles(files, {
     showHiddenFiles: false,
-    showInaccesibleDirectories: false,
+    showInaccessibleDirectories: false,
     mask: '*.txt',
     matchesMask: (raw, ff) => M.matches(ff.name, { isDir: ff.isDirectory, size: ff.size }, parsed),
   });
@@ -1122,7 +1122,7 @@ test('DirectoryTree.updatePath honours the hidden and inaccessible switches', ()
   t.updatePath(t.root, [d('.git'), d('locked', { inaccessible: true }), d('src')]);
   assert.deepStrictEqual(t.root.children.map((c) => c.name), ['locked', 'src']);
 
-  const t2 = new G.DirectoryTree({ showHiddenDirs: true, showInaccesibleDirectories: false });
+  const t2 = new G.DirectoryTree({ showHiddenDirs: true, showInaccessibleDirectories: false });
   t2.updatePath(t2.root, [d('.git'), d('locked', { inaccessible: true }), d('src')]);
   assert.deepStrictEqual(t2.root.children.map((c) => c.name), ['.git', 'src']);
 });

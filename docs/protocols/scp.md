@@ -47,8 +47,10 @@ for a non-overwrite duplicate.
 
 Checksum requests use the matching `md5sum`, `sha1sum`, `sha256sum`, or
 `sha512sum` command. On systems without a GNU-style SHA utility, SHA-1,
-SHA-256, and SHA-512 retry with `shasum -a N`; this is limited to shell exit
-codes 126/127, so real checksum failures remain visible.
+SHA-256, and SHA-512 retry with `shasum -a N`, then `openssl dgst -N` when both
+are unavailable. MD5 falls back directly to `openssl dgst -md5`. These retries
+are limited to shell exit codes 126/127, so real checksum failures remain
+visible.
 
 ## Failure modes
 

@@ -52,6 +52,7 @@ pending list; a control without one must appear there.
 | `dDAllowMove` | `design/renderer/ui/panels.js` → panel drag/drop | Shift-drag is offered as move only when this persisted preference is enabled; otherwise the drop remains a copy. |
 | `queue.keepDoneItemsFor` | `design/main/queue.js` → `pruneDoneItems()` | Completed rows are swept according to `0`, positive seconds, or `-1`. |
 | `tabs.truncateTitles` | `design/renderer/ui/tabs.js` → tab strip class and `components.css` | Tab labels use ellipsis by default and retain their full text when truncation is disabled; changes apply live. |
+| `showInaccessibleDirectories` | `design/main/dirview.js`, `design/main/guitools.js`, `design/main/ipc.js` | The file lists and traversal code now read the correctly spelled key, so inaccessible directories obey the toggle. |
 
 The real-Electron regression changes another live queue preference through the
 Preferences surface: `queue.noConfirmations` is persisted by `config:setPref`
@@ -89,7 +90,6 @@ successful settings.
 | `refreshRemotePanelInterval` | `design/renderer/ui/panels.js` — refreshes the attached remote panel at the configured interval; `0` disables it. |
 | `security.randomSeedFile` | None |
 | `security.sessionReopenAutoStall` | None |
-| `showInaccessibleDirectories` | None |
 | `timeoutOnStartup` | None |
 | `updates.authenticationEmail` | None |
 | `versionHistory.snapshotSettings` | None |

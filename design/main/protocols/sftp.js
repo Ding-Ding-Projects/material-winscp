@@ -1137,6 +1137,21 @@ function streamQueueDepth(value) {
   return Math.max(1, Math.min(256, n));
 }
 
+async function mapWithConcurrency(items, concurrency, mapper) {
+  const out = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({
+    length: Math.max(1, Math.min(streamQueueDepth(concurrency), items.length || 1)),
+  }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await mapper(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
 function validateStreamOffset(value, name) {
   if (value === undefined) return undefined;
   const offset = Number(value);
@@ -1596,9 +1611,13 @@ class SftpAdapter extends Adapter {
     this.caps.owner = this.serverAbilities.ownerChanging;
     this.caps.rights = this.serverAbilities.modeChanging;
     this.caps.symlink = this.serverAbilities.symbolicLink;
-    // `checksum()` still falls back to a shell hash, so the capability stays
-    // true when the server offers no hash extension but does offer a shell.
-    this.caps.checksum = this.serverAbilities.calculatingChecksum || this.caps.exec;
+    // `checksum()` can come from the generic `check-file` extension, the
+    // older OpenSSH `md5-hash` extension, or a shell hash. The capability
+    // must stay honest for every route, or the UI hides a checksum action
+    // that actually works.
+    this.caps.checksum = !!(this.serverAbilities.calculatingChecksum
+      || this.serverAbilities.md5Hash
+      || this.caps.exec);
 
     this.home = await this.realpath('.');
     // WinSCP's guard against a server that answers realpath with nothing:
@@ -1667,11 +1686,12 @@ class SftpAdapter extends Adapter {
     const target = this.normalize(dir);
     const rows = await this._call('readdir', target);
     const resolveLinks = this.session.resolveSymlinks !== false;
+    const concurrency = this._listingConcurrency();
 
     // '.' and '..' are navigation, not content; the panel synthesizes its own.
     const visible = rows.filter((row) => row.filename !== '.' && row.filename !== '..');
 
-    const out = await Promise.all(visible.map(async (row) => {
+    const out = await mapWithConcurrency(visible, concurrency, async (row) => {
       let a = row.attrs || {};
       // SFTP permits directory entries without an attribute block. Do not
       // turn those into zero-sized regular files: recover the remote metadata
@@ -1712,8 +1732,18 @@ class SftpAdapter extends Adapter {
         readOnly: !(mode & 0o200),
         raw: { mode, uid: a.uid, gid: a.gid, atime: this._seconds(a.atime) * 1000, longname: row.longname },
       });
-    }));
+    });
     return out;
+  }
+
+  /** Return the configured bounded request window for one directory listing. */
+  _listingConcurrency() {
+    const requested = Math.floor(Number(this.session.sftpListingQueue));
+    const depth = streamQueueDepth(requested);
+    if (requested > 256) {
+      this._log('warn', `SFTP sftpListingQueue=${requested} exceeds the safe adapter bound; using 256 outstanding requests`);
+    }
+    return depth;
   }
 
   async stat(p) {
@@ -1819,7 +1849,7 @@ class SftpAdapter extends Adapter {
       const dir = stack.pop();
       dirs.push(dir);
       const rows = await this._call('readdir', dir);
-      for (const row of rows) {
+      const withAttrs = await mapWithConcurrency(rows, this._listingConcurrency(), async (row) => {
         const child = this.join(dir, row.filename);
         let mode = (row.attrs && row.attrs.mode) || 0;
         // SFTP permits servers to omit attributes from directory entries. In
@@ -1830,6 +1860,9 @@ class SftpAdapter extends Adapter {
           const childAttrs = await this._call('lstat', child);
           mode = childAttrs.mode || 0;
         }
+        return { child, mode };
+      });
+      for (const { child, mode } of withAttrs) {
         if ((mode & S_IFMT) === S_IFDIR) stack.push(child);
         else await this._call('unlink', child);
       }

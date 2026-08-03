@@ -94,6 +94,28 @@ test.describe('SCP adapter contract', () => {
     assert.deepEqual(commands, ["sha256sum -- '/tmp/file'", "shasum -a 256 -- '/tmp/file'"]);
   });
 
+  test('falls back to OpenSSL digest when other checksum utilities are unavailable', async () => {
+    const commands = [];
+    const adapter = new ScpAdapter({}, {
+      transport: {
+        exec: async (command) => {
+          commands.push(command);
+          if (command.startsWith('sha512sum ') || command.startsWith('shasum ')) {
+            return { code: 127, stdout: '', stderr: 'not found' };
+          }
+          return { code: 0, stdout: 'SHA2-512(/tmp/file)= 0123456789abcdef', stderr: '' };
+        },
+      },
+    });
+
+    assert.equal(await adapter.checksum('/tmp/file', 'sha-512'), '0123456789abcdef');
+    assert.deepEqual(commands, [
+      "sha512sum -- '/tmp/file'",
+      "shasum -a 512 -- '/tmp/file'",
+      "openssl dgst -sha512 -- '/tmp/file'",
+    ]);
+  });
+
   test('drains login-shell startup output before probing the working directory', async () => {
     const commands = [];
     const logs = [];

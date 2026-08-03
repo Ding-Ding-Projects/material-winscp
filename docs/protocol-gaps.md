@@ -111,7 +111,7 @@ reads underneath it are covered by the resume tests).
 | **Active mode** | `ftpPasvMode` | ✅ Closed | `basic-ftp` is passive-only; `PORT`/`EPRT` is implemented directly against the control connection, including RFC 4217's rule that we remain the TLS client on a connection the server opened. Verified end to end against a real server in `test/e2e-ftp.test.js` — listing, download, resumed download and upload, over plain FTP and over FTPS. |
 | **A resumed upload uses `APPE` in passive mode and `REST` + `STOR` in active mode** | resume support on upload | 🔁 Worked around | `basic-ftp` exposes no start offset for an upload, so the passive path can only append; the hand-written active path sends the offset properly because it owns the control dialogue. Appending gives the identical result whenever the partial file on the server is exactly as long as the client thinks it is, which is the case the queue creates — but the two paths fail differently, and that difference is invisible to the user. A server that implements `REST STREAM` while refusing `APPE` cannot resume a passive upload at all (the transfer restarts from zero rather than failing), and a server whose `REST` + `STOR` truncates instead of overwriting in place would corrupt an active one. Both are exercised end to end in `test/e2e-ftp.test.js`. |
 | **Multi-byte code pages** | `codePage` | 🚧 Partial | Encodings outside Node's built-in set fall back to `latin1`, which preserves bytes rather than mangling names. A real Big5/GB18030 filename needs an encoding table. |
-| `ftpTransferActiveImmediately`, `ftpHost`, `ftpDupFF`, `ftpUndupFF` | as named | ⬜ Not wired | Session-level options not yet threaded through to the adapter. |
+| `ftpTransferActiveImmediately`, `ftpDupFF`, `ftpUndupFF` | as named | ⬜ Not wired | Session-level options not yet threaded through to the adapter. `ftpHost` is closed: the explicit `on` value sends `HOST <hostName>` after login, while `auto` and `off` preserve the default no-command behaviour. |
 
 **Closed by the end-to-end run**, and listed here so nobody re-opens them from
 the commit history alone: the generic `HASH` command (draft-bryan-ftpext-hash)
@@ -228,7 +228,10 @@ for CI and automation.
 
 `design/main/transfer.js` is the decision layer and `design/main/queue.js` is
 the one byte mover; `transfer:copyToRemote` / `copyToLocal` and `queue:add` are
-the two ways in. These rows are behaviour the original has and this does not.
+the two ways in. The foreground route is now wired all the way through the app:
+`window.api.transfer` is exposed, the command layer calls it for the
+`*NonQueueAction` paths, and `design/main/ipc.js` forwards it to the terminal
+engine. These rows are behaviour the original has and this does not.
 
 | Gap | WinSCP option affected | Status | Consequence today |
 |---|---|---|---|

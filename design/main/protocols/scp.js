@@ -1018,10 +1018,18 @@ class ScpAdapter extends Adapter {
       const candidate = await this._run(`shasum -a ${bits} -- ${target}`);
       if (candidate.code === 0) res = candidate;
     }
+    // Some BSD/minimal hosts have neither GNU *sum nor shasum, but do ship
+    // OpenSSL. Retry only for an unavailable utility; real checksum errors
+    // must remain visible to the caller.
+    if (res.code === 126 || res.code === 127) {
+      const digest = { md5: 'md5', sha1: 'sha1', sha256: 'sha256', sha512: 'sha512' }[alg];
+      const candidate = await this._run(`openssl dgst -${digest} -- ${target}`);
+      if (candidate.code === 0) res = candidate;
+    }
     if (res.code !== 0) throw scpError(new Error(`${tool} failed: ${(res.stderr || res.stdout || '').trim() || `exit code ${res.code}`}`), {
       category: 'protocol', code: 'EPROTO', operation: 'checksum',
     });
-    const hex = /^([0-9a-f]+)\s/i.exec(res.stdout.trim());
+    const hex = /(?:^|=\s*)([0-9a-f]+)(?:\s|$)/i.exec(res.stdout.trim());
     if (!hex) throw new Error(`${tool} produced no usable output`);
     return hex[1].toLowerCase();
   }

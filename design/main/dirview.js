@@ -646,7 +646,7 @@ function buildView(options) {
   const o = options || {};
   const files = Array.isArray(o.files) ? o.files : [];
   const showHiddenFiles = o.showHiddenFiles !== false;
-  const showInaccesibleDirectories = o.showInaccesibleDirectories !== false;
+  const showInaccessibleDirectories = o.showInaccessibleDirectories !== false;
   const mask = String(o.mask || '');
   const match = typeof o.matchMask === 'function' ? o.matchMask : defaultMatchMask;
 
@@ -660,9 +660,9 @@ function buildView(options) {
     const name = itemFileName(file);
     const isDir = itemIsDirectory(file);
     const isHidden = itemIsHidden(file);
-    const inaccessible = !!file.isInaccesibleDirectory;
+    const inaccessible = !!file.isInaccessibleDirectory;
 
-    if ((!showHiddenFiles && isHidden) || (!showInaccesibleDirectories && inaccessible)) {
+    if ((!showHiddenFiles && isHidden) || (!showInaccessibleDirectories && inaccessible)) {
       hiddenCount += 1;
     } else if (mask !== '' && C.isRealFile(name)
       && !match(name, isDir, typeof file.size === 'number' ? file.size : 0, itemFileTime(file), mask, true)) {
@@ -2061,7 +2061,7 @@ class DirectoryTree {
     this.unixPath = o.unixPath !== false;
     this.rootName = o.rootName || (this.unixPath ? '/ <root>' : '');
     this.showHiddenDirs = o.showHiddenDirs !== false;
-    this.showInaccesibleDirectories = o.showInaccesibleDirectories !== false;
+    this.showInaccessibleDirectories = o.showInaccessibleDirectories !== false;
     this.naturalOrderNumericalSorting = !!o.naturalOrderNumericalSorting;
     this.root = null;
     this._byPath = new Map();
@@ -2181,7 +2181,7 @@ class DirectoryTree {
       const name = itemFileName(file);
       if (!itemIsDirectory(file) || !C.isRealFile(name)) continue;
       if (!this.showHiddenDirs && file.hidden) continue;
-      if (!this.showInaccesibleDirectories && file.isInaccesibleDirectory) continue;
+      if (!this.showInaccessibleDirectories && file.isInaccessibleDirectory) continue;
 
       const childKey = this.unixPath ? name : name.toLowerCase();
       const existing = seen.get(childKey);

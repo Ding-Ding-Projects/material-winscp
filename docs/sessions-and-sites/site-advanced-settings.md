@@ -26,4 +26,10 @@ Numeric fields also expose named increment/decrement buttons. They remain in the
 keyboard tab order and are not hidden from assistive technology, so users can
 make the same bounded adjustment without relying on a pointer.
 
+The FTP page's `HOST` selector now reaches the FTP adapter, which sends the
+server-selection command when the site asks for it. The SFTP page's listing
+pipelining depth also now feeds the directory-entry metadata walker, so the
+queue setting affects the number of simultaneous `lstat`/`readlink` lookups
+during a listing and recursive delete.
+
 Verification: `node --test test/sitedata.test.js`.

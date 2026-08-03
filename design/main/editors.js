@@ -565,7 +565,9 @@ class EditorManager extends EventEmitter {
     this._unwatch(rec);
     if (rec.child) { try { rec.child.kill(); } catch { /* already gone */ } rec.child = null; }
     this.open.delete(rec.id);
-    await this._removeTemp(rec);
+    // openLocal() points at the user's real file, not a manager-owned
+    // temporary copy. Never remove it while rolling back a failed launch.
+    if (!rec.localOnly) await this._removeTemp(rec);
   }
 
   async _onFileChanged(rec) {

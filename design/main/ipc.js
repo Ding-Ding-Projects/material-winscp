@@ -1870,7 +1870,7 @@ class Ipc {
         side: s,
         mask: optStr(r.mask, 'mask', LIMITS.small),
         showHiddenFiles: r.showHiddenFiles !== false,
-        showInaccesibleDirectories: r.showInaccesibleDirectories !== false,
+        showInaccessibleDirectories: r.showInaccessibleDirectories !== false,
       });
       if (r.sortColumn) {
         const key = str(r.sortColumn, 'sortColumn', 64);

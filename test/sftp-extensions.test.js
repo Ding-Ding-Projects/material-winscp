@@ -963,6 +963,28 @@ test('SFTP extended requests against a real server', async (t) => {
     } finally { await srv.close(); }
   });
 
+  await t.test('md5-hash also keeps the checksum capability on for the UI', async () => {
+    const srv = await startRawSftpServer({
+      extensions: [['md5-hash', '']],
+      handlers: {
+        'md5-hash': (r) => {
+          assert.equal(r.string(), '/f');
+          assert.equal(r.uint64(), 0);
+          assert.equal(r.uint64(), 0);
+          assert.equal(r.bytes().length, 0);
+          return Buffer.concat([str('md5-hash'), str(Buffer.alloc(16, 0xab))]);
+        },
+      },
+    });
+    try {
+      const { adapter } = await connectAdapter(srv);
+      assert.equal(adapter.caps.checksum, true);
+      assert.equal(await adapter.checksum('/f', 'md5'),
+        Buffer.alloc(16, 0xab).toString('hex'));
+      await adapter.disconnect();
+    } finally { await srv.close(); }
+  });
+
   await t.test('fsync@openssh.com flushes an open handle', async () => {
     let seen = null;
     const srv = await startRawSftpServer({

@@ -1385,7 +1385,6 @@ export const PENDING_KEYS = new Set([
   // in ipc.js started reading it. Nothing measures a stall, so this one still
   // describes behaviour that does not exist.
   'security.sessionReopenAutoStall',
-  'showInaccessibleDirectories',
   'timeoutOnStartup',
   'updates.authenticationEmail',
   'versionHistory.snapshotSettings',

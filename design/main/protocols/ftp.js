@@ -705,6 +705,7 @@ class FtpAdapter extends Adapter {
     }
 
     await this._login();
+    await this._sendHostCommand();
 
     // TYPE I / STRU F / OPTS UTF8 / PBSZ+PROT for TLS.
     await this.client.useDefaultSettings();
@@ -736,6 +737,28 @@ class FtpAdapter extends Adapter {
     this.connected = true;
     this._startKeepalive();
     return { home: this.home, features: [...this.features.keys()] };
+  }
+
+  async _sendHostCommand() {
+    const s = this.session;
+    const mode = s.ftpHost || 'auto';
+    // Auto is WinSCP's default: only the explicit "on" choice changes the
+    // dialogue. Sending HOST speculatively can select the wrong virtual host
+    // on servers that accept the command without supporting this site.
+    if (mode !== 'on') return;
+    if (!s.hostName) return;
+    // WinSCP's HOST setting is a server-side selector, not a proxy. We only
+    // exercise the command when the site asks for it explicitly. The host
+    // name itself is the selector the original dialog stores.
+    try {
+      const reply = await this.client.sendIgnoringError(`HOST ${s.hostName}`);
+      if (reply && reply.code >= 400) {
+        this._log('debug', `HOST ${s.hostName} rejected with ${reply.code}`);
+      }
+    } catch (err) {
+      if (mode === 'on') throw err;
+      this._log('debug', `HOST ${s.hostName} skipped: ${err.message}`);
+    }
   }
 
   /** USER / PASS / ACCT. basic-ftp's `login()` rejects 332, which is the one

@@ -8,7 +8,7 @@ The goal is stated in [`docs/porting-mandate.md`](docs/porting-mandate.md) and i
 not negotiable: **port 100% of WinSCP, however many lines it takes.** Scale is
 not a reason to narrow scope.
 
-**Currently 59.0% of 209,889 logic lines.**
+**Currently 60.5% of 209,889 logic lines.**
 
 ## Done
 
@@ -25,7 +25,7 @@ not a reason to narrow scope.
 ## In progress
 
 - `forms/CustomScpExplorer` — 7,023 weighted lines remaining
-- `core/Terminal` — 6,792 weighted lines remaining
+- `core/Terminal` — 4,180 weighted lines remaining
 - `forms/Preferences` — 3,677 weighted lines remaining
 - `forms/Editor` — 3,667 weighted lines remaining
 - `core/SftpFileSystem` — 3,341 weighted lines remaining

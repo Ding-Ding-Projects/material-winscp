@@ -910,6 +910,18 @@ test('a test that names an option is not a consumer of it', async () => {
   }
 });
 
+test('show inaccessible directories is now consumed by the runtime file lists', async () => {
+  const { schema } = await load();
+  const corpus = scan.readCorpus(repoRoot);
+  assert.ok(!schema.PENDING_KEYS.has('showInaccessibleDirectories'),
+    'the preferences row should no longer warn that nothing acts on it');
+  assert.deepEqual(scan.consumersOf('showInaccessibleDirectories', corpus).sort(), [
+    'design/main/dirview.js',
+    'design/main/guitools.js',
+    'design/main/ipc.js',
+  ], 'the live consumers should all read the correctly spelled key');
+});
+
 test('a comment that names an option is not a consumer of it either', async () => {
   const { schema } = await load();
   const corpus = scan.readCorpus(repoRoot);

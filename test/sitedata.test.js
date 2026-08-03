@@ -149,6 +149,55 @@ test('fieldVisibility disables the credentials when there is nothing to type', a
   assert.strictEqual(ftp.userNameEnabled, true);
 });
 
+test('advanced FTP host selection sends HOST when enabled', async () => {
+  const { FtpAdapter } = require('../design/main/protocols/ftp');
+  const adapter = new FtpAdapter(await siteOf({ protocol: 'ftp', hostName: 'files.example.org', ftpHost: 'on' }), {});
+  const calls = [];
+  adapter.client = {
+    sendIgnoringError: async (cmd) => { calls.push(cmd); return { code: 200 }; },
+  };
+  adapter._log = () => {};
+  await adapter._sendHostCommand();
+  assert.deepStrictEqual(calls, ['HOST files.example.org']);
+});
+
+test('advanced FTP host selection leaves auto and off alone', async () => {
+  const { FtpAdapter } = require('../design/main/protocols/ftp');
+  for (const ftpHost of ['auto', 'off']) {
+    const adapter = new FtpAdapter(await siteOf({ protocol: 'ftp', hostName: 'files.example.org', ftpHost }), {});
+    const calls = [];
+    adapter.client = { sendIgnoringError: async (cmd) => { calls.push(cmd); return { code: 200 }; } };
+    await adapter._sendHostCommand();
+    assert.deepStrictEqual(calls, [], `${ftpHost} must not send HOST`);
+  }
+});
+
+test('advanced SFTP listing respects the configured queue depth', async () => {
+  const { SftpAdapter } = require('../design/main/protocols/sftp');
+  const adapter = new SftpAdapter(await siteOf({ protocol: 'sftp', sftpListingQueue: 1 }), {});
+  let inFlight = 0;
+  let peak = 0;
+  adapter._call = async (method, target) => {
+    if (method === 'readdir') {
+      return [
+        { filename: 'a' },
+        { filename: 'b' },
+      ];
+    }
+    if (method === 'lstat') {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
+      return { mode: 0o100644, size: target.endsWith('a') ? 1 : 2, mtime: 1 };
+    }
+    throw new Error(method);
+  };
+  const rows = await adapter.list('/remote');
+  assert.strictEqual(rows.length, 2);
+  assert.strictEqual(peak, 1, 'queue depth 1 must serialize metadata lookups');
+});
+
 test('a read-only view swaps the combos for their text views', async () => {
   const { tree } = await modules;
   const vis = tree.fieldVisibility(await siteOf({ protocol: 'ftp' }), { editable: false });

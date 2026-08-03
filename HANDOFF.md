@@ -11,21 +11,21 @@
 
 | | |
 |---|---|
-| **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
-| Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3486 run, **3485 pass, 0 fail**, 1 skipped |
-| Hand-written code | 221,591 lines across 440 files |
+| **Port coverage (logic)** | **60.5%** of 209,889 lines that are actually code |
+| Port coverage (raw) | 71.5% — includes embedded hex resources, **do not quote this one** |
+| Tests | 3495 run, **3494 pass, 0 fail**, 1 skipped |
+| Hand-written code | 221,876 lines across 440 files |
 | Commits | 221 on `main` |
-| Working tree | clean |
+| Working tree | **27 uncommitted change(s)** |
 | Remote | `origin/main` at `fbb9bae` — in sync |
 
 ### Coverage by area
 
 | Area | Units ported | Coverage |
 |---|---:|---:|
-| `forms` | 10 / 51 | 82.1% |
-| `core` | 1 / 36 | 52.5% |
-| `windows` | 0 / 20 | 44.3% |
+| `forms` | 10 / 51 | 82.5% |
+| `core` | 1 / 36 | 56.0% |
+| `windows` | 0 / 20 | 44.4% |
 | `resource` | 0 / 9 | 66.0% |
 | `components` | 0 / 6 | 49.1% |
 | `console` | 0 / 2 | 75.8% |
@@ -56,7 +56,7 @@ The largest outstanding units, ranked by weighted lines still unported.
 | Remaining lines (weighted) | State | Unit |
 |---:|---|---|
 | 7,023 | in progress | `forms/CustomScpExplorer` |
-| 6,792 | in progress | `core/Terminal` |
+| 4,180 | in progress | `core/Terminal` |
 | 3,677 | in progress | `forms/Preferences` |
 | 3,667 | in progress | `forms/Editor` |
 | 3,341 | in progress | `core/SftpFileSystem` |
@@ -68,13 +68,13 @@ The largest outstanding units, ranked by weighted lines still unported.
 | 2,617 | in progress | `core/Common` |
 | 2,613 | in progress | `forms/ScpCommander` |
 | 2,245 | in progress | `windows/WinConfiguration` |
-| 2,223 | in progress | `forms/SynchronizeChecklist` |
 | 2,068 | in progress | `core/Queue` |
 | 1,925 | in progress | `core/SecureShell` |
 | 1,802 | in progress | `windows/TerminalManager` |
 | 1,674 | in progress | `windows/ConsoleRunner` |
 | 1,666 | in progress | `windows/GUITools` |
 | 1,658 | in progress | `core/RemoteFiles` |
+| 1,523 | in progress | `core/S3FileSystem` |
 
 114 units remain outstanding in total. The full list is in
 [`docs/port-coverage.md`](docs/port-coverage.md).

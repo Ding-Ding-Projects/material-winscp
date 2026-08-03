@@ -1244,7 +1244,7 @@ function isRealFile(name) {
 function loadFiles(files, options) {
   const o = options || {};
   const showHiddenFiles = o.showHiddenFiles !== false;
-  const showInaccesibleDirectories = o.showInaccesibleDirectories !== false;
+  const showInaccessibleDirectories = o.showInaccessibleDirectories !== false;
   const matchesMask = o.matchesMask;      // (file) => boolean, from masks.js
   const hasMask = !!o.mask && !!matchesMask;
 
@@ -1257,7 +1257,7 @@ function loadFiles(files, options) {
   for (const raw of files || []) {
     const f = fileFields(raw);
     if ((!showHiddenFiles && f.hidden)
-        || (!showInaccesibleDirectories && f.inaccessible && f.isDirectory)) {
+        || (!showInaccessibleDirectories && f.inaccessible && f.isDirectory)) {
       hiddenCount++;
       continue;
     }
@@ -1900,7 +1900,7 @@ class DirectoryTree {
     const o = options || {};
     this.rootName = o.rootName || '/';
     this.showHiddenDirs = !!o.showHiddenDirs;
-    this.showInaccesibleDirectories = o.showInaccesibleDirectories !== false;
+    this.showInaccessibleDirectories = o.showInaccessibleDirectories !== false;
     this.compareText = o.compareText || ((a, b) => compareTextCaseInsensitive(a, b));
     this.root = this._makeNode(null, '/', this.rootName, null);
     // Nodes we wanted to delete but could not, because the selection sits
@@ -2008,7 +2008,7 @@ class DirectoryTree {
       const f = fileFields(raw);
       if (!f.isDirectory || !isRealFile(f.name)) continue;
       if (!this.showHiddenDirs && f.hidden) continue;
-      if (!this.showInaccesibleDirectories && f.inaccessible) continue;
+      if (!this.showInaccessibleDirectories && f.inaccessible) continue;
 
       const existing = byName.get(f.name);
       if (existing) {

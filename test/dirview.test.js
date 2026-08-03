@@ -305,10 +305,10 @@ test('a mask never filters out the parent directory', () => {
 });
 
 test('inaccessible directories are hidden separately from hidden files', () => {
-  const files = [dir('ok'), dir('locked', { isInaccesibleDirectory: true })];
-  const shown = dv.buildView({ files, showInaccesibleDirectories: true });
+  const files = [dir('ok'), dir('locked', { isInaccessibleDirectory: true })];
+  const shown = dv.buildView({ files, showInaccessibleDirectories: true });
   assert.strictEqual(shown.items.length, 2);
-  const hidden = dv.buildView({ files, showInaccesibleDirectories: false });
+  const hidden = dv.buildView({ files, showInaccessibleDirectories: false });
   assert.deepStrictEqual(names(hidden.items), ['ok']);
   assert.strictEqual(hidden.hiddenCount, 1);
   assert.strictEqual(hidden.filteredCount, 0);
@@ -1245,10 +1245,10 @@ test('updatePath adds new directories, keeps existing ones and removes the gone'
 });
 
 test('updatePath skips "." and ".." and honours the hidden/inaccessible switches', () => {
-  const tree = new dv.DirectoryTree({ unixPath: true, showHiddenDirs: false, showInaccesibleDirectories: false });
+  const tree = new dv.DirectoryTree({ unixPath: true, showHiddenDirs: false, showInaccessibleDirectories: false });
   tree.loadPath('/x');
   tree.updatePath('/x', [
-    dir('.'), dir('..'), dir('.git'), dir('locked', { isInaccesibleDirectory: true }), dir('src'),
+    dir('.'), dir('..'), dir('.git'), dir('locked', { isInaccessibleDirectory: true }), dir('src'),
   ]);
   assert.deepStrictEqual(tree.findNodeToPath('/x').children.map((c) => c.name), ['src']);
 });

@@ -716,6 +716,34 @@ test('the watcher uses a native adapter watch when one is offered', async () => 
   assert.strictEqual(closed, true, 'the native watcher is closed on stop');
 });
 
+test('a local-direction watcher uses the remote native change source', async () => {
+  const local = new MemoryAdapter('local');
+  const remote = new MemoryAdapter('remote');
+  local.putDir('/l'); remote.putDir('/r');
+  let fire;
+  let watchedPath;
+  remote.watch = (path, cb) => {
+    watchedPath = path;
+    fire = cb;
+    return { close() {} };
+  };
+  local.watch = () => { throw new Error('the target side must not be watched'); };
+
+  const q = makeQueue();
+  const watcher = sync.startWatch(local, '/l', remote, '/r', q, {
+    direction: 'local', criteria: 'time', intervalMs: 5,
+  });
+  try {
+    assert.strictEqual(watchedPath, '/r');
+    remote.put('/r/download.txt', 'remote', T);
+    fire();
+    await waitFor(() => local.has('/l/download.txt'), 4000, 'the native remote download');
+    assert.strictEqual(local.read('/l/download.txt').toString(), 'remote');
+  } finally {
+    sync.stopWatch(watcher);
+  }
+});
+
 test('a file mask does not prune directories before filtering their children', async () => {
   const local = new MemoryAdapter('local');
   const remote = new MemoryAdapter('remote');

@@ -79,11 +79,11 @@
     },
     "core/ScpFileSystem": {
       "status": "partial",
-      "progress": 0.48,
+      "progress": 0.52,
       "targets": [
         "design/main/protocols/scp.js"
       ],
-      "note": "SCP over the shared SSH transport with shell-safe path quoting, real -f/-t file and tree transfers, bounded control records, validated modes/sizes, progress, classified errors and honest no-resume capability. Remaining: startup/banner and return-variable autodetection, batch overwrite semantics, ASCII/EOL transfer modes, user/group enumeration, portable checksum/copy fallbacks and the broader WinSCP transfer UI."
+      "note": "SCP over the shared SSH transport with shell-safe path quoting, real -f/-t file and tree transfers, bounded control records, validated modes/sizes, progress, classified errors, portable checksum fallback and honest no-resume capability. Remaining: startup/banner and return-variable autodetection, batch overwrite semantics, ASCII/EOL transfer modes, user/group enumeration, portable copy fallback and the broader WinSCP transfer UI."
     },
     "core/SecureShell": {
       "status": "partial",
@@ -181,18 +181,18 @@
       "targets": [
         "design/main/sync.js"
       ],
-      "note": "Comparison checklist across all direction/mode/criteria combinations, DST handling, keep-up-to-date watching."
+      "note": "Comparison checklist across all direction/mode/criteria combinations, DST handling, and direction-aware keep-up-to-date native watching."
     },
     "core/Terminal": {
       "status": "partial",
-      "progress": 0.35,
+      "progress": 0.6,
       "targets": [
         "design/main/terminal.js",
         "design/main/transfer.js",
         "design/main/session.js",
         "design/main/sync.js"
       ],
-      "note": "Operation lifecycle, delete/rename/move with real confirmations, retry/skip/abort, caches. The transfer half (transfer.js) is written but its adversarial verifier rated it 0.30 and REACHABLE=false: only the overwrite decision is live via queue.js; copyToRemote/copyToLocal, source/sink and ParallelOperation have no IPC channel and no production caller. Do not raise this without proving reachability."
+      "note": "Operation lifecycle, delete/rename/move with real confirmations, retry/skip/abort, caches, and the foreground transfer path. transfer.js copyToRemote/copyToLocal, source/sink, parallel decisions, progress, cancellation and non-queue renderer commands are production-reachable through transfer:* and covered by the real SFTP reconcile suite. Synchronization and broader workspace lifecycle remain gaps."
     },
     "windows/TerminalManager": {
       "status": "partial",
@@ -204,11 +204,11 @@
     },
     "windows/EditorManager": {
       "status": "partial",
-      "progress": 0.4,
+      "progress": 0.42,
       "targets": [
         "design/main/editors.js"
       ],
-      "note": "Internal and external editor lifecycle with upload-on-save."
+      "note": "Internal and external editor lifecycle with upload-on-save; failed launches of a real local file no longer delete the user's source during rollback."
     },
     "forms/Glyphs": {
       "status": "replaced",
@@ -634,12 +634,12 @@
     },
   "forms/SynchronizeChecklist": {
     "status": "partial",
-    "progress": 0.62,
+    "progress": 0.75,
     "targets": [
       "design/renderer/ui/dialogs/checklist.js",
       "design/main/ipc.js"
       ],
-      "note": "The checklist arranged around one question, with per-row overrides only where legal and deletions needing a second explicit yes. Check/uncheck-all, Move and the Calculate and Commands menus are not built."
+      "note": "The checklist arranged around one question, with per-row overrides only where legal, directory-scoped and global selection, inversion, search, stable name/action/directory sorting, export, and deletions needing a second explicit yes. Move and the Calculate and Commands menus remain unbuilt."
     },
     "forms/SynchronizeProgress": {
       "status": "partial",

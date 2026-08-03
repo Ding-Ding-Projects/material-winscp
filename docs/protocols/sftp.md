@@ -18,7 +18,9 @@ Checksum fallback is exact: shell execution is used only for MD5, SHA-1,
 SHA-256, and SHA-512. If an extension cannot compute another requested
 algorithm, the adapter refuses it instead of returning a digest from a
 different algorithm. Extension-provided private algorithms remain available
-when the server implements them.
+when the server implements them, and the older OpenSSH `md5-hash` extension
+still keeps checksum mode enabled even when no broader hash extension is
+advertised.
 
 ## Configuration
 
@@ -78,6 +80,7 @@ behaviour, and only then apply it.
 | SSH handshake, host-key or authentication failure | Any partially opened SSH socket, channel, or tunnel listener is closed before the classified error is returned. The transport remains retryable unless the classification says otherwise. | Yes, when the classification is retriable |
 | Server rejects `SSH_FXP_LSTAT` | A read-only `stat()` probe retries with `STAT` only when the detected workaround applies. Symlink identity is not guessed, and the followed result keeps its `file`, `dir`, or `special` type; mutating operations continue to require `LSTAT`. | Yes for ordinary files/directories |
 | Directory entries omit SFTP attributes | The listing performs an `LSTAT` for that entry so size, times, ownership, permissions, and symlink identity are not fabricated from zero values. If the probe fails, the partial directory row is retained. | Yes, when the server permits `LSTAT` |
+| Server offers only `md5-hash` | The checksum action stays enabled and the adapter uses the extension for MD5 instead of hiding the feature behind shell access. | Yes |
 | Rekey during a large transfer | Handled by the transport; the transfer pauses for a few hundred milliseconds. No user action. | n/a |
 | `sftpDownloadQueue` or `sftpUploadQueue` too high for the server | Stalls or resets. Lower it to 8 or 16. Values above 256 are clamped and logged; the server may still need a smaller value. | Yes |
 

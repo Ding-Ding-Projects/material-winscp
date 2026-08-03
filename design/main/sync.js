@@ -536,9 +536,18 @@ class Watcher extends EventEmitter {
     this.queue.on('item-done', this._onDone);
     this.queue.on('item-error', this._onError);
 
-    if (typeof this.localAdapter.watch === 'function') {
+    // Watch the side whose changes are authoritative.  With direction
+    // "remote" that is the local tree (uploads); with direction "local" it
+    // is the remote tree (downloads).  Watching the wrong side is especially
+    // harmful when a native watcher exists because it suppresses the polling
+    // fallback entirely.
+    const sourceAdapter = this.options.direction === 'local'
+      ? this.remoteAdapter : this.localAdapter;
+    const sourcePath = this.options.direction === 'local'
+      ? this.remotePath : this.localPath;
+    if (typeof sourceAdapter.watch === 'function') {
       try {
-        this._native = this.localAdapter.watch(this.localPath, (event) => {
+        this._native = sourceAdapter.watch(sourcePath, (event) => {
           // A monitor can become invalid (for example when its watched
           // directory disappears).  Treat an Error callback as a terminal
           // change-source failure, like SynchronizeInvalid does upstream.
