@@ -187,6 +187,13 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "3361a3f", kind: 'commit', ref: "3361a3f", oid: "3361a3f5abf946982f18bf39422f2cccc5f28eda", date: "2026-08-03",
+    title: "Fix headless protocol, queue, sync, and UI guards",
+    changes: [
+      { category: "fixed", text: "English: Harden SFTP/SCP cleanup, WebDAV capability checks, queue copy-parameter normalization, synchronization empty-source safety, CLI validation, drag/drop, command palette, editor, history, and empty-state behavior. Add focused tests and categorized documentation.\\n\\n粵語：SFTP/SCP 收口唔好漏水，WebDAV 唔好亂發 COPY/MOVE，queue 參數唔好食生字，sync 空來源唔好扮滿倉；CLI、拖放、指令面板同 editor/history 亦補齊測試，等啲 bug 冇位扮失蹤。" },
+    ],
+  },
+  {
     id: "cbd2066", kind: 'commit', ref: "cbd2066", oid: "cbd2066f65d56458e4f2954d0f5dd0246cdd7404", date: "2026-08-03",
     title: "Make dialog contract tests line-ending neutral",
     changes: [
@@ -663,13 +670,6 @@ export const DEVELOPMENT = [
     title: "Harden transfer console security and sync edges",
     changes: [
       { category: "added", text: "Close failed console channels, reject malformed AES verifiers, canonicalize relative symlink targets for cycle detection, stop cancelled transfers before byte movement, name SiteAdvanced order options for assistive technology, and explain a no-direction sync row honestly. Add focused tests and documentation. The edge cases now stop tripping over the same rake, which is frankly the rake's fault.\\n\\n廣東話：console channel、AES verifier、symlink、transfer、SiteAdvanced 同 sync 邊角位而家各自有路牌；個 rake 再伸腳都冇咁易中招。" },
-    ],
-  },
-  {
-    id: "a74836c", kind: 'commit', ref: "a74836c", oid: "a74836cd985151cfe71f4b3479dd3a0a589e7288", date: "2026-08-03",
-    title: "Harden CLI drop classification and progress accessibility",
-    changes: [
-      { category: "added", text: "Reject missing-only drop classifications instead of handing an empty parcel to the transfer engine, and name progress bars with their visible labels for assistive technology. Add focused regressions and documentation. The CLI now refuses to serve imaginary files, and the progress bar finally knows who its label is.\\n\\n廣東話：空手 drop 唔再扮有貨，progress bar 亦終於認得自己個 label；兩邊都唔使再玩猜謎遊戲。" },
     ],
   },
 ];
