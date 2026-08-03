@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `88d55a8`** — Update the in-app changelog
+**At commit `d85484b`** — Refresh handoff for the second verified wave
 
 ## Where the work stands
 
@@ -15,9 +15,9 @@
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
 | Tests | 3377 run, **3376 pass, 0 fail**, 1 skipped |
 | Hand-written code | 218,455 lines across 407 files |
-| Commits | 159 on `main` |
+| Commits | 160 on `main` |
 | Working tree | **1 uncommitted change(s)** |
-| Remote | `origin/main` at `09b1239` — **differs from HEAD** |
+| Remote | `origin/main` at `d85484b` — in sync |
 
 ### Coverage by area
 
@@ -127,6 +127,7 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `d85484b` | 2026-08-03 | Refresh handoff for the second verified wave |
 | `88d55a8` | 2026-08-03 | Update the in-app changelog |
 | `bcc1fd8` | 2026-08-03 | Fix workspace, search, session, and SFTP edge cases |
 | `09b1239` | 2026-08-03 | Refresh handoff for the verified CLI wave |
@@ -134,7 +135,6 @@ bite a successor who assumes otherwise:
 | `69004b4` | 2026-08-03 | Expand headless CLI and close transfer edge cases |
 | `35f0fd5` | 2026-08-03 | Update handoff for verified lifecycle fixes |
 | `4f16742` | 2026-08-03 | Refresh changelog for transfer edge fixes |
-| `43eb4db` | 2026-08-03 | Fix CLI staging and transfer lifecycle edges |
 
 ## Notes from whoever worked on this last
 
