@@ -609,7 +609,13 @@ class Session extends EventEmitter {
    */
   _scheduleReconnect(cause) {
     const sec = (this.config && this.config.prefs.security) || {};
-    const baseDelay = Number(sec.sessionReopenAuto) || 0;
+    const configuredDelay = Number(sec.sessionReopenAuto);
+    // Invalid and negative delays are not meaningful timer values. Fail closed
+    // by disabling automatic reconnect rather than turning a bad preference
+    // into an immediate retry loop.
+    const baseDelay = Number.isFinite(configuredDelay) && configuredDelay > 0
+      ? configuredDelay
+      : 0;
     if (!baseDelay || this._closing || !this._reconnectWanted()) return;
     if (this._reconnect.timer) return;
 

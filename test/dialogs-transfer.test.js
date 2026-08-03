@@ -624,6 +624,14 @@ test('directory-scoped check and uncheck preserve other directories and actions'
   assert.deepEqual(unchecked[2], checked[2], 'a different directory is untouched');
 });
 
+test('directory menu scope includes actionable descendants', () => {
+  const rows = [
+    item({ local: { ...item().local, directory: '/local/root/child' }, checked: false }),
+    item({ local: { ...item().local, directory: '/local/root-sibling' }, checked: false }),
+  ];
+  assert.deepEqual(CL.itemsInDirectory(rows, '/local/root'), [rows[0]]);
+});
+
 // ---------------------------------------------------------------------------
 // what will happen — the statement above the OK button
 // ---------------------------------------------------------------------------

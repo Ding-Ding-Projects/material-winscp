@@ -444,7 +444,7 @@ export function createFilePanel(opts = {}) {
 
   const header = createColumnHeader(columns, {
     panel: null,        // filled in below once the handle exists
-    measure: makeMeasurer(() => view, () => getComputedStyle(viewport).font),
+    measure: makeMeasurer(() => view, () => getComputedStyle(viewport).font, { side }),
     onSort: () => { applyView(); render(); },
   });
 

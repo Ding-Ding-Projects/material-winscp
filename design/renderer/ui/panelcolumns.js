@@ -667,10 +667,15 @@ export function measureText(text, font) {
 export function makeMeasurer(getEntries, getFont, opts = {}) {
   const pad = opts.padding ?? 26;
   const cap = opts.max ?? 480;
+  const side = opts.side === 'local' ? 'local' : 'remote';
   return function measure(key) {
     const font = getFont();
     const entries = getEntries();
-    let widest = measureText(t(defaultColumns('remote').find((c) => c.key === key)?.labelKey || 'colName'), font) + 18;
+    // Commander has different local/remote column sets. Using the remote
+    // defaults here made local-only columns (notably Attr) auto-size against
+    // the wrong header, and made a future side-specific column silently fall
+    // back to Name. Keep the measurement tied to the panel that owns it.
+    let widest = measureText(t(defaultColumns(side).find((c) => c.key === key)?.labelKey || 'colName'), font) + 18;
     // Sampling keeps auto-size instant on a very large directory; the first
     // 4 000 rows determine the width, and the column can still be dragged.
     const limit = Math.min(entries.length, 4000);

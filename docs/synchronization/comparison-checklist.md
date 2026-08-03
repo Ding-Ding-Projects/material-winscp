@@ -80,7 +80,9 @@ as an explicit opt-in, with the builder anchored beside the field.
   no-direction reason.
 - Directory-scoped check and uncheck is tested for changing only the displayed
   directory subtree, preserving each row's action, excluding similarly named
-  siblings, and never ticking `Do nothing`.
+  siblings, and never ticking `Do nothing`. The context-menu availability check
+  uses that same subtree boundary, so a parent directory with only descendant
+  rows still offers the action.
 - Changed-since-comparison detection is tested by mutating a file between
   comparison and execution.
 - The search field is covered by the shared search-surface tests: plain-text

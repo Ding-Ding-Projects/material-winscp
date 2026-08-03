@@ -99,6 +99,10 @@ test('simulation output is compact JSON by default and pretty JSON on request', 
   assert.deepEqual(JSON.parse(pretty.text()).source, 'remote');
 });
 
+test('drag plan rejects stray positional arguments instead of reporting a no-op plan', () => {
+  assert.throws(() => cli.dragPlan(['--source', 'remote', 'typo']), /does not accept positional arguments/);
+});
+
 test('winscp-com prints help and version without starting the console runner', () => {
   const entry = path.join(__dirname, '..', 'bin', 'winscp-com.js');
   const help = spawnSync(process.execPath, [entry, '--help'], { encoding: 'utf8' });

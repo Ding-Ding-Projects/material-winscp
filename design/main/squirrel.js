@@ -2,7 +2,8 @@
 // Squirrel launches the freshly installed exe with a flag so the app can create
 // shortcuts, clean them up, or step out of the way during an update.
 'use strict';
-const { app } = require('electron');
+let app = null;
+try { ({ app } = require('electron')); } catch { /* headless tests and tooling */ }
 const path = require('path');
 const cp = require('child_process');
 
@@ -11,11 +12,19 @@ function updateExe() {
   return path.resolve(path.dirname(process.execPath), '..', 'Update.exe');
 }
 
-function runUpdate(args, done) {
-  try {
-    cp.spawn(updateExe(), args, { detached: true }).on('close', done);
-  } catch {
+function runUpdate(args, done, spawn = cp.spawn) {
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
     done();
+  };
+  try {
+    const child = spawn(updateExe(), args, { detached: true, windowsHide: true });
+    child.once('close', finish);
+    child.once('error', finish);
+  } catch {
+    finish();
   }
 }
 
@@ -33,16 +42,16 @@ function handleSquirrelEvent() {
     case '--squirrel-install':
     case '--squirrel-updated':
       // Create Desktop and Start Menu shortcuts, then quit.
-      runUpdate(['--createShortcut', exeName], () => app.quit());
+      runUpdate(['--createShortcut', exeName], () => app && app.quit());
       return true;
 
     case '--squirrel-uninstall':
-      runUpdate(['--removeShortcut', exeName], () => app.quit());
+      runUpdate(['--removeShortcut', exeName], () => app && app.quit());
       return true;
 
     case '--squirrel-obsolete':
       // The outgoing version is told to step aside before it is deleted.
-      app.quit();
+      if (app) app.quit();
       return true;
 
     case '--squirrel-firstrun':
@@ -54,4 +63,4 @@ function handleSquirrelEvent() {
   }
 }
 
-module.exports = { handleSquirrelEvent, updateExe };
+module.exports = { handleSquirrelEvent, updateExe, runUpdate };

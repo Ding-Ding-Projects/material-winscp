@@ -39,6 +39,10 @@ RELEASES
 # release body. Committing it would freeze one release's figure into the tree.
 /LINE_COUNT.md
 
+# Local helper bundles are generated from the tracked scripts and must not be
+# committed alongside their source.
+scripts.zip
+
 # --- site build -------------------------------------------------------------
 site/_site/
 site/.cache/

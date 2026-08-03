@@ -28,6 +28,9 @@ Keepalives are per site; reconnection policy is global, under
 
 - **Retries back off.** The interval grows on repeated failure, so a server that
   is down does not receive a connection attempt every two seconds for an hour.
+- **Invalid retry delays fail closed.** A non-finite or negative
+  `sessionReopenAuto` value disables automatic reconnect rather than becoming an
+  immediate timer and retry loop.
 - **Idle sessions reconnect lazily.** With `sessionReopenAutoIdle`, a session
   nobody is using does not reconnect until it is needed. This is the difference
   between a laptop waking to twelve reconnect attempts and waking to none.

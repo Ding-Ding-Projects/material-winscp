@@ -18,4 +18,8 @@ Secrets remain protected: untouched stored secrets are omitted from the patch,
 and enabling file encryption requires either a new key or the protected-key
 sentinel.
 
+Numeric editable combos such as the local tunnel port are normalized before
+they enter site state: non-finite input becomes `0`, fractional input is
+truncated, and ports are limited to `0`–`65535`.
+
 Verification: `node --test test/sitedata.test.js`.

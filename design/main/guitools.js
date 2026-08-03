@@ -554,9 +554,12 @@ function findFile(path, options) {
 
   const programFiles32 = env.ProgramFiles ? includeTrailingBackslash(env.ProgramFiles) : '';
   const programFiles64 = env.ProgramW6432 ? includeTrailingBackslash(env.ProgramW6432) : '';
+  const programFiles32Root = excludeTrailingBackslash(programFiles32);
+  const programFiles64Root = excludeTrailingBackslash(programFiles64);
   if (programFiles32 && programFiles64
-      && sameText(p.slice(0, programFiles32.length), programFiles32)) {
-    const path64 = programFiles64 + p.slice(programFiles32.length);
+      && sameText(p.slice(0, programFiles32Root.length), programFiles32Root)
+      && (p.length === programFiles32Root.length || p[programFiles32Root.length] === '\\' || p[programFiles32Root.length] === '/')) {
+    const path64 = programFiles64Root + p.slice(programFiles32Root.length);
     if (exists(path64)) return { found: true, path: path64 };
   }
 

@@ -275,6 +275,7 @@ function dragPlan(argv) {
     'same-session', 'target-available', 'allow-move', 'read-only', 'no-upload', 'no-mkdir',
     'has-directories', 'queue', 'windows-build', 'json', 'pretty',
   ]), 'drag plan');
+  if (positional.length) throw new Error('drag plan does not accept positional arguments');
   const source = String(optionValue(options, 'source', 'remote')).toLowerCase();
   if (!['remote', 'local'].includes(source)) throw new Error('--source must be remote or local');
   const defaultDestination = source === 'remote' ? 'local' : 'remote';
@@ -332,7 +333,6 @@ function dragPlan(argv) {
   } else {
     plan.effectiveOperation = plan.operation;
   }
-  plan.arguments = positional;
   return plan;
 }
 

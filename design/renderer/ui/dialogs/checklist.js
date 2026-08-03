@@ -225,6 +225,11 @@ export function setCheckedInDirectory(items, directory, checked) {
   });
 }
 
+/** Rows covered by a directory action, including all descendants. */
+export function itemsInDirectory(items, directory) {
+  return (items || []).filter((item) => isInDirectory(directory, rowDirectory(item)));
+}
+
 /**
  * WinSCP's "Reverse": upload <-> download, deleteLocal <-> deleteRemote.
  * A row that cannot legally hold the mirrored action is refused with its reason
@@ -427,7 +432,7 @@ export function openChecklistDialog(result = {}) {
   }
 
   function directoryItems(directory) {
-    return rows.filter((r) => rowDirectory(r) === directory);
+    return itemsInDirectory(rows, directory);
   }
 
   function rowElement(item) {

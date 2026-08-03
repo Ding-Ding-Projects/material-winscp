@@ -1118,6 +1118,14 @@ test('advanced timezone normalization rejects offsets beyond the ±24:00 boundar
   assert.deepStrictEqual(adv.normalizeAdvancedTimezone(-1, 30), { hours: -1, minutes: -30, value: -1.5 });
 });
 
+test('numeric advanced combos keep tunnel ports finite, integral, and in range', async () => {
+  const { adv } = await modules;
+  assert.equal(adv.normalizeAdvancedComboNumber('Infinity'), 0);
+  assert.equal(adv.normalizeAdvancedComboNumber('22.9'), 22);
+  assert.equal(adv.normalizeAdvancedComboNumber('-4'), 0);
+  assert.equal(adv.normalizeAdvancedComboNumber('70000'), 65535);
+});
+
 test('WebDAV legacy authentication persists its real key and exposes the enabled warning', async () => {
   const { adv, tree } = await modules;
   const control = adv.allAdvancedControls().find(({ control: c }) => c.id === 'WebDavAuthLegacyCheck').control;

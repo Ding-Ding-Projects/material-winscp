@@ -134,6 +134,16 @@ test('reconnect uses bounded backoff and refuses to cross the total budget', () 
   assert.equal(session._reconnect.timer, null);
 });
 
+test('negative automatic reconnect delays disable the retry timer', () => {
+  const session = new Session(
+    { protocol: 'sftp', hostName: 'invalid-delay.example' },
+    { config: configFor({ sessionReopenAuto: -1 }), emit() {} },
+  );
+  session._scheduleReconnect(new Error('connection dropped'));
+  assert.equal(session._reconnect.timer, null);
+  assert.equal(session.state.status, 'closed');
+});
+
 test('a refused security prompt does not schedule an automatic reconnect', async () => {
   const session = new Session(
     { protocol: 'webdav', hostName: 'tls.example' },

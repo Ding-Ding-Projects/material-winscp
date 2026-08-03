@@ -847,6 +847,13 @@ export function normalizeAdvancedTimezone(hours, minutes) {
   return { hours: hh, minutes: mm, value: hh + mm / 60 };
 }
 
+/** Numeric editable combos must not let invalid port values reach the site store. */
+export function normalizeAdvancedComboNumber(raw, { min = 0, max = 65535 } = {}) {
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, Math.trunc(value)));
+}
+
 /** Everything a `visible`/`enabled` predicate is handed. */
 export function advancedContext(site, prefs = {}) {
   const info = protocolInfo(site.protocol);
@@ -1423,8 +1430,8 @@ export function createSiteAdvancedPanel(site, opts = {}) {
     const input = h('input', {
       type: 'text', id, class: 'sd-input', list: listId, spellcheck: 'false',
       autocomplete: 'off', placeholder: control.placeholder || '',
-      oninput: () => setKey(state.site, control.key, control.numeric ? Number(input.value) || 0 : input.value),
-      onchange: () => commit(control.numeric ? Number(input.value) || 0 : input.value),
+      oninput: () => setKey(state.site, control.key, control.numeric ? normalizeAdvancedComboNumber(input.value) : input.value),
+      onchange: () => commit(control.numeric ? normalizeAdvancedComboNumber(input.value) : input.value),
     });
     input.value = String(getKey(state.site, control.key) ?? '');
     input.disabled = !enabled;

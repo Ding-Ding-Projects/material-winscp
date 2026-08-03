@@ -115,6 +115,7 @@ accepted as an explicit synonym for the default machine-readable format.
 | --- | --- | --- |
 | No subcommand or `--help` | The complete command reference is printed. | Yes |
 | Unknown drag/drop option or effect | A concise error and exit code `2`; no transfer starts. | Yes — correct the option |
+| A positional argument is supplied to `drag plan` | A concise error and exit code `2`; the inert argument is not reported as a successful plan. | Yes — use a named option |
 | Invalid Windows path/build or local-to-local plan | A concise input error and exit code `2`; no transfer starts. | Yes — correct the input |
 | A classified path is gone | It appears in `classification.missing`; the command still reports the other paths. If every path is gone, `accepted.ok` is `false` and no operation is planned. | Yes — restore or remove the path |
 | Read-only or incapable remote target | `accepted.ok` is `false` with the specific reason. | Yes — choose a writable target |

@@ -203,6 +203,17 @@ test('findFile searches PATH only for a bare name', () => {
     { found: false, path: 'sub\\t.exe' });
 });
 
+test('findFile does not redirect a path that merely shares the Program Files prefix', () => {
+  const env = { ProgramFiles: 'C:\\Program Files (x86)', ProgramW6432: 'C:\\Program Files' };
+  const checked = [];
+  const r = G.findFile('C:\\Program Files (x86)Tools\\t.exe', {
+    env,
+    exists: (p) => { checked.push(p); return p === 'C:\\Program Files (x86)Tools\\t.exe'; },
+  });
+  assert.deepStrictEqual(r, { found: true, path: 'C:\\Program Files (x86)Tools\\t.exe' });
+  assert.deepStrictEqual(checked, ['C:\\Program Files (x86)Tools\\t.exe']);
+});
+
 test('findFile uses the host PATH delimiter and separator off Windows', () => {
   const env = { PATH: '/opt/tools:/usr/local/bin' };
   const exists = (p) => p === '/usr/local/bin/tool';

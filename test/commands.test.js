@@ -379,6 +379,25 @@ test('cell text formats what each column shows', () => {
   assert.equal(PC.extensionOf('archive.tar.gz'), 'gz');
 });
 
+test('column auto-size measures the header from the owning panel side', () => {
+  const previousDocument = global.document;
+  global.document = {
+    createElement: () => ({ getContext: () => ({
+      font: '', measureText: (value) => ({ width: String(value).length }),
+    }) }),
+  };
+  try {
+    const remote = PC.makeMeasurer(() => [], () => '13px system-ui', { side: 'remote', padding: 0 });
+    const local = PC.makeMeasurer(() => [], () => '13px system-ui', { side: 'local', padding: 0 });
+    // `rights` exists only on the remote set. The local measurer must use its
+    // Name fallback rather than borrowing the longer remote header label.
+    assert.ok(remote('rights') > local('rights'));
+  } finally {
+    if (previousDocument === undefined) delete global.document;
+    else global.document = previousDocument;
+  }
+});
+
 /* ------------------------------------------------------------------ */
 /* file masks                                                          */
 /* ------------------------------------------------------------------ */
