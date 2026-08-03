@@ -187,6 +187,18 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "12dd655", kind: 'commit', ref: "12dd655", oid: "12dd6555a08866e5a7f73919a8b8a7650fc23ff3", date: "2026-08-02",
+    title: "Exclude agent worktrees from Electron packages",
+    changes: [
+      { category: "fixed", text: "Electron Forge now excludes linked-agent worktrees from the packaged application. Without that guard, a local worktree could contain an earlier out/ tree and recursively inflate app.asar from a normal desktop bundle into a multi-gigabyte archive." },
+      { category: "fixed", text: "Added a packaging regression test and verified the real Windows makers: a 31,407,852-byte app.asar, 130,832,896-byte Setup.exe, matching Squirrel manifest, and 133,137,285-byte portable zip." },
+    ],
+    changesYue: [
+      { category: "fixed", text: "Electron Forge 而家唔會再打包 linked-agent worktree。之前個 worktree 入面有舊 out/，結果 app.asar 由正常 desktop bundle 脹到幾 GB，成隻 app 好似食完自助餐咁。" },
+      { category: "fixed", text: "加咗 packaging 回歸測試，亦真係跑過 Windows makers：31,407,852 bytes 嘅 app.asar、130,832,896 bytes Setup.exe、同 RELEASES 對得上嘅 Squirrel package，同 133,137,285 bytes portable zip。" },
+    ],
+  },
+  {
     id: "640d1f4", kind: 'commit', ref: "640d1f4", oid: "640d1f4f795d987b98fb1dadf610ca93b0ddf50c", date: "2026-08-02",
     title: "Align queued local symlink planning with foreground transfers",
     changes: [
