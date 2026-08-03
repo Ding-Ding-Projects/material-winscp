@@ -187,6 +187,27 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "1e1c543", kind: 'commit', ref: "1e1c543", oid: "1e1c54392fd27c023399c85434ddbc32f7edc7c2", date: "2026-08-03",
+    title: "Expand headless CLI and harden lifecycle boundaries",
+    changes: [
+      { category: "added", text: "The winscp-com wrapper now supports help and version without launching the console, ConsoleRunner turns invalid stream modes into exit code 1, reconnect cancellation wins over retries, failed SFTP handshakes clean up every socket, remote-file lists reject malformed duplicates, and Preferences gains keyboard tree navigation. Tests and docs follow each boundary, so the CLI can do its job without summoning a window-shaped ghost.\\n\\n而家 winscp-com 有 help 同 version，唔會偷開 console；ConsoleRunner 遇到壞 stream mode 會回 exit code 1，cancel 會贏過 reconnect，SFTP handshake 爆咗會清晒 socket，remote file list 唔收壞 duplicate，Preferences tree 又識用鍵盤行。測試文件一齊跟，CLI 做嘢唔使召喚視窗鬼魂。" },
+    ],
+  },
+  {
+    id: "6942a18", kind: 'commit', ref: "6942a18", oid: "6942a18028d57fe11b3537e93d77758005f7887c", date: "2026-08-03",
+    title: "Refresh interaction wave handoff metadata",
+    changes: [
+      { category: "fixed", text: "The handoff now records the 3,220-pass regression run, Docker evidence, the 9412e5b and d443d90 milestones, and the honest 59.0% coverage with 114 units outstanding. The paperwork is following the code at a brisk walk.\\n\\nHandoff 而家記低 3,220 pass regression、Docker evidence、9412e5b 同 d443d90 milestone，仲有老實嘅 59.0% coverage 同 114 個未完成 unit。文件用快步追住 code，冇再迷路。" },
+    ],
+  },
+  {
+    id: "d443d90", kind: 'commit', ref: "d443d90", oid: "d443d9078e5acdab1d72d5772653ca5a44658cd0", date: "2026-08-03",
+    title: "Refresh in-app changelog for interaction fixes",
+    changes: [
+      { category: "fixed", text: "The in-app history now records the verified 9412e5b interaction, queue, checklist, malformed-row, and WebDAV fixes with real links and bilingual copy. The changelog remembers the plot, even when the plot involves a 405 response.\\n\\nApp 入面嘅歷史而家記低已驗證嘅 9412e5b interaction、queue、checklist、壞 row 同 WebDAV 修正，連埋真 link 同雙語 copy；就算劇情係 405 response，changelog 都冇失憶。" },
+    ],
+  },
+  {
     id: "9412e5b", kind: 'commit', ref: "9412e5b", oid: "9412e5b1ee72923e8d529f4dab43c42490ddb288", date: "2026-08-03",
     title: "Fix palette, shortcuts, queue, checklist, and WebDAV",
     changes: [
@@ -904,61 +925,6 @@ export const DEVELOPMENT = [
       { category: "changed", text: "改 `fetch-depth: 0`。唔寫死數字，因為 changelog 每加一條就伸長少少，寫 50 今日夠用，聽日就靜靜雞唔夠 —— 呢種先至最恐怖。順帶一提，`submodules: false` 照舊，vendor/winscp 嗰三十萬行 C++ 唔會跟埋入嚟，多咗歷史都係貴 2MB 咋。" },
       { category: "changed", text: "release job 都一齊改。今日佢真係一次 git 都冇 call 過，但 release notes 遲早要用 `git blame` 數邊行邊個寫。而 `git blame` 喺 shallow clone 唔會報錯, 佢會笑住 exit 0，然後話你知全世界每一行都係同一個 commit 寫嘅 —— README.md 有歷史數到三個 commit，冇歷史就淨返一個，數字錯得好有自信。" },
       { category: "changed", text: "最誘人嗰個錯誤修法係：見到 shallow 就 skip 個 sha 檢查。咁做等於叫唯一會跑 呢個 test 嘅機器永遠開綠燈,個 test 就變咗擺設。所以寧願補返歷史，再加個 guard 守住段 YAML：數 checkout 對唔對得上 fetch-depth，將來多開一個 job 唔記得寫就 即刻嘈,寫死數字都照踢。" },
-    ],
-  },
-  {
-    id: "334c993", kind: 'commit', ref: "334c993", oid: "334c99359968cdb4e487d3d8accf995ff43b2338", date: "2026-08-02",
-    title: "Stop the resource extractor exiting the test process that called it",
-    changes: [
-      { category: "changed", text: "CI reported test/messages.test.js as a file-level failure at messages.test.js:1:1 with no detail beyond \"test failed\", and the suspicion was that a sibling file had poisoned it. It had not. The failure is real, deterministic, and reproduces with messages.test.js as the ONLY file in the run — no console.test.js anywhere near it." },
-      { category: "changed", text: "tools/extract-resources.js readSource() called process.exit(1) when vendor/winscp was missing. That is fine in a command line and fatal in a library: test/messages.test.js calls build(), .github/workflows/ci.yml checks out with `submodules: false`, and so the extractor shot the test runner halfway through reporting. node --test had no test left to blame, so it invented a file-level entry, and every assertion that had already passed died with the process — 45 tests collapse to `# tests 1 # fail 1`. The one line naming the missing file went to stderr, where the TAP reader renders it as a comment that looks like it belongs to something else entirely." },
-      { category: "changed", text: "readSource() now throws an ENOVENDOR error carrying the path and the remedy; the `require.main === module` boundary catches it and reproduces the old message and the old exit code exactly, because there exiting IS the right answer. The two tests that genuinely need the submodule declare `{ skip }` with the reason, so CI prints why it stood down instead of dying, and the directory-listing assertion was split out of the table arithmetic so the arithmetic keeps running everywhere." },
-      { category: "fixed", text: "Measured on Node 22.23.2 with vendor absent, which is CI's condition: before # tests 1 # pass 0 # fail 1 after # tests 45 # pass 43 # fail 0 # skipped 2 With vendor present: 45 pass on both Node 22.23.2 and Node 26.5.1. The new test fails without the fix in the loudest way available — the process dies inside assert.throws and the file reports `# tests 1 # fail 1`, the exact signature CI was showing." },
-      { category: "changed", text: "While in there: node --test gives every test FILE its own process (proven with a pid probe on both runtimes) and runs them concurrently, so cross-file process-state interference is not possible in this suite at all. The two channels that ARE shared are the filesystem and the port space, and both are already clean: every scratch directory is mkdtemp, every server is listen(0), and test/helpers/ftp-server.js even replaces ftp-srv's passive-port walker for exactly that reason." },
-      { category: "changed", text: "---" },
-    ],
-    changesYue: [
-      { category: "changed", text: "個 library 開槍打死咗叫佢嘅測試程序，仲要死得無聲無息" },
-      { category: "changed", text: "CI 話 test/messages.test.js 喺第一行就爆咗，成份報告得「test failed」四個字， 大家仲以為係隔籬個檔案累佢。冤枉。佢自己一個行都一樣爆，關人哋乜事。" },
-      { category: "changed", text: "tools/extract-resources.js 嘅 readSource() 見唔到 vendor/winscp 就直接 process.exit(1)。做命令行冇問題，做 library 就係謀殺：測試檔案叫 build()， CI 又 `submodules: false`，於是個 extractor 喺測試機報緊成績嗰陣一槍拉埋佢。 node --test 搵唔到兇手，唯有寫一句「呢個檔案死咗」交數，45 個測試齊齊陪葬， 淨返 `# tests 1 # fail 1`。真正嗰句「邊個檔案唔見咗」就飄咗去 stderr， 喺 TAP 度睇落似係隔籬張單嘅註腳。" },
-      { category: "changed", text: "而家 readSource() 掟 ENOVENDOR，錯誤訊息連路徑同解決方法一齊帶走； 真係命令行嗰個入口先接住佢，原汁原味吐返舊嗰句同舊嗰個 exit code—— 喺嗰度死係啱嘅。兩個真係要 submodule 嘅測試改成 `{ skip }` 兼寫明原因， CI 而家識講「我點解唔行」；順手將讀資料夾嗰句同數數目嗰啲拆開， 數數目嗰啲邊部機都照行。" },
-      { category: "changed", text: "Node 22.23.2、冇 vendor（即係 CI 嗰個世界）： 改之前 # tests 1 # pass 0 # fail 1 改之後 # tests 45 # pass 43 # fail 0 # skipped 2 有 vendor 嘅話：Node 22.23.2 同 Node 26.5.1 都係 45 全中。 新測試冇改動一定死，死法同 CI 一模一樣——喺 assert.throws 入面成個 process 冇咗，個檔案報 `# tests 1 # fail 1`。" },
-      { category: "changed", text: "順帶查埋：node --test 每個測試檔案都自己一個 process（用 pid 探針喺兩個 runtime 都證實過），仲要一齊跑，所以呢個 suite 根本冇可能靠 process 狀態 互相干擾。真係共用嘅得檔案系統同 port，兩樣都已經好乾淨：所有臨時資料夾 都係 mkdtemp，所有 server 都 listen(0)，test/helpers/ftp-server.js 連 ftp-srv 自己嗰個 passive port 掃描器都換咗，理由一模一樣。" },
-    ],
-  },
-  {
-    id: "168fac5", kind: 'commit', ref: "168fac5", oid: "168fac564745760ba407686a7eb31ee4e212bca6", date: "2026-08-02",
-    title: "Keep the prompt timers ref'd, so a waiting prompt cannot quietly exit instead",
-    changes: [
-      { category: "changed", text: "Three timers in the console front-end were `unref()`ed: the idle timer in `KeySource.readKey` (Input()'s timer thread), the `Sleep(Timer)` a timeouting Choice does on redirected input, and the send watchdog in `CommChannel.send`. Each is the *only* other thing that can settle the promise its caller is awaiting — the alternative being a keypress that, by the definition of a timeout, is not coming. Unref'ing a timer tells Node \"do not stay alive for this\", so the front-end sat there owing ProcessInputEvent an answer while the event loop drained out from under it, and the process left. Not hung, not failed — gone, status 0, nothing on stderr. `winscp.com` got as far as \"wait five seconds, then take the timeout answer\" and took the fifth second off permanently." },
-      { category: "changed", text: "They are real timers now, and each is cleared the moment the other side wins, which is the job unref had been press-ganged into doing: readKey never cleared its timer after the key that answered it, so a ref'd 60-second prompt timer would have held the process open for 59 seconds after the user pressed Enter. The timed-out waiter is spliced out too — Choice polls readKey every 50 ms while a prompt sits untouched, and the old code pushed a closure per poll and never took one back." },
-      { category: "added", text: "The same anti-pattern appears five times in the test file, which is why nobody noticed. Its `await new Promise(r => setTimeout(r, 30).unref())` sleeps are the same unresolvable wait, so on Node 22 the runner did exactly what it should: `cancelledByParent: Promise resolution is still pending but the event loop has already resolved`, and everything after the first offender was cancelled with it. Node 26 keeps a ref'd handle alive for the run and papers the whole thing over. So the file read 118/118 on Node 26 and 57 pass / 61 cancelled on the Node 22 that CI pins: a suite reporting zero failures while quietly declining to sit half the exam." },
-      { category: "changed", text: "Counts, per runtime:" },
-      { category: "changed", text: "Node 22.23.2 before 118 tests, 57 pass, 0 fail, 61 cancelled Node 22.23.2 after 121 tests, 121 pass, 0 fail, 0 cancelled Node 26.5.1 before 118 tests, 118 pass, 0 fail, 0 cancelled Node 26.5.1 after 121 tests, 121 pass, 0 fail, 0 cancelled" },
-      { category: "changed", text: "The product half alone takes Node 22 from 57 to 73 passing; the harness half carries the rest. test/script.test.js, the other consumer of this module, is 192/192 on both." },
-      { category: "fixed", text: "Three new tests guard the product fix on *both* majors, because a regression test that only fires on one of them is precisely how this shipped. They run the real module in a bare `node -e` child where nothing else is on the loop, which is the honest question anyway: would the shipped binary still be alive to take this branch? All three fail on Node 26 with the module reverted and pass with it." },
-      { category: "changed", text: "三個計時器俾人 `unref()` 咗:等鍵盤嗰個、redirected input 度 Choice 瞓嗰陣、" },
-    ],
-    changesYue: [
-      { category: "changed", text: "同埋等 front-end 覆機嗰個看門狗。`unref()` 即係同 Node 講「唔使為咗我留低」, 於是個 prompt 一路等緊人答,event loop 喺佢腳下面收晒工,成個 process 就咁走咗。 唔係卡死,唔係報錯,係唔見咗,仲要 exit code 0,乜都冇出。明明講到明「等五秒 然後自動答」,點知第五秒佢自己請咗假。" },
-      { category: "changed", text: "而家係真計時器,而且邊邊贏都即刻 clear 返另一邊 —— 呢樣先係 unref 想做但做錯咗 嘅嘢:以前答完個掣都唔 clear,所以一個 60 秒 timeout 嘅 prompt,user 撳完 Enter 之後個 process 仲要企多 59 秒。timeout 咗嗰個 waiter 都撠返出嚟:Choice 每 50 毫秒 poll 一次,舊 code 一 poll 就塞個 closure 入去,從來冇攞返。" },
-      { category: "changed", text: "測試檔一樣衰同一味,五次,亦即係點解冇人發現。Node 22 老老實實話你聽「個 promise 仲未有結果,但 event loop 已經完咗」,跟住成堆測試全部 cancel;Node 26 自己留住 個 handle,幫佢冚咗。同一個檔案:Node 26 118/118 全綠,CI 揀嗰個 Node 22 得 57 條 真係考過 —— 零個 fail,一半冇入過試場。" },
-      { category: "changed", text: "新加三條測試喺兩個版本都守得住,喺乾淨嘅 child process 度跑真 module:個 binary 到時仲活唔活得到嚟答呢一句?呢條先係真問題。" },
-    ],
-  },
-  {
-    id: "00d661d", kind: 'commit', ref: "00d661d", oid: "00d661dd697eae9b5d837d84e175d9e502411ac4", date: "2026-08-02",
-    title: "Refresh the sanitized instruction mirror, which had drifted fourteen sections behind",
-    changes: [
-      { category: "changed", text: "Every project keeps a sanitized copy of the shared agent instructions in README.md and AGENTS.md so anyone working here sees the rules without access to the canonical repository. The copy had gone stale: fourteen sections existed upstream and in neither mirror." },
-      { category: "changed", text: "Missing entirely: the scoping rule that every instruction applies to every surface individually; destructive-action super confirmation; the release line-count contract and its \"agents never count lines by hand\" corollary; export-everything; bulk actions; the command palette; overlays painting their own surface; context menus showing their shortcuts; long operations reporting progress where they were started; recovering from a failed operation; provider-authored text being rendered rather than printed; publishing to a forge; collapsible filters; delegated task sessions; and the scope rule that says a project-local file may narrow these but may not silently disable them." },
-      { category: "changed", text: "That last omission is the one that stings. A mirror missing the rule about what to do when local instructions conflict is a mirror that quietly answers the question by being incomplete." },
-      { category: "changed", text: "Verified: all eighteen checked sections now present, and a grep for the private working vocabulary across both files returns nothing — that vocabulary is conversation-only and never belongs in a public repository, which is exactly the kind of thing a mechanical mirror leaks. AGENTS.md 847 -> 1163 lines, README.md +117." },
-      { category: "changed", text: "Also ignoring .claude/worktrees/. Parallel agents each get a linked worktree there, and committing one would commit a second copy of the entire tree." },
-    ],
-    changesYue: [
-      { category: "changed", text: "份「淨化版」指示鏡像落後咗十四節。最核心嗰條 —— 「本地指示可以更嚴，但唔可以靜 雞雞廢咗全域規則，撞到就要停低講」—— 竟然係冇抄到嗰批入面。一份連「撞規矩點算」 都冇抄到嘅鏡像，其實已經用「唔齊」變相答咗你。" },
-      { category: "changed", text: "順手 grep 過兩個檔案，確認冇漏任何私人用語出去 —— 嗰啲字係傾偈先用，永遠唔應該 出現喺公開 repo，而機械式抄鏡像正正就係會漏呢啲嘢。仲有 .claude/worktrees/ 要 ignore，唔係就會 commit 多一份成個 tree。" },
     ],
   },
 ];
