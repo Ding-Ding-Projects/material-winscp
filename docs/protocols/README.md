@@ -24,7 +24,9 @@ run time.
 | [sftp.md](sftp.md) | SFTP over SSH — versions 3–6, packet sizing, queueing, server bugs. |
 | [scp.md](scp.md) | SCP and the shell session it depends on. |
 | [ftp.md](ftp.md) | FTP, FTPS (explicit and implicit), passive-host policy, active mode, MLSD, TLS session reuse, resume and encoding/error behaviour. |
+| [ftp-mlsd-fallback.md](ftp-mlsd-fallback.md) | Why `MLST` does not imply `MLSD`, and how directory listings fall back safely to `LIST`. |
 | [webdav.md](webdav.md) | WebDAV and WebDAVS, XML listings, escaping, redirect origin isolation, and legacy authentication. |
+| [webdav-range-resume.md](webdav-range-resume.md) | Safe HTTP byte-range reads for resumed WebDAV downloads, and why uploads remain non-resumable. |
 | [s3.md](s3.md) | Amazon S3 and S3-compatible endpoints, URL styles, pagination, multipart copy, and storage classes. |
 | [s3-multipart-abort.md](s3-multipart-abort.md) | Idempotent cleanup of failed, cancelled and incomplete multipart uploads. |
 | [local.md](local.md) | The local filesystem backend and Windows path handling. |

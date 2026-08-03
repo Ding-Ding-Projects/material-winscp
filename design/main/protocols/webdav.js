@@ -1161,11 +1161,18 @@ class WebDavAdapter extends Adapter {
 
   async createReadStream(p, opts = {}) {
     const path = this.normalize(p);
-    const start = Number(opts.start || 0);
+    const start = opts.start === undefined ? 0 : Number(opts.start);
+    const end = opts.end === undefined ? null : Number(opts.end);
+    if (!Number.isSafeInteger(start) || start < 0) {
+      throw new Error('WebDAV range start must be a non-negative integer');
+    }
+    if (end !== null && (!Number.isSafeInteger(end) || end < start)) {
+      throw new Error('WebDAV range end must be an integer at or after the start');
+    }
     const headers = {};
     if (start > 0) {
       if (!this.rangeReads) throw new Error('Server does not advertise byte ranges; cannot resume');
-      headers.Range = opts.end ? `bytes=${start}-${opts.end}` : `bytes=${start}-`;
+      headers.Range = end === null ? `bytes=${start}-` : `bytes=${start}-${end}`;
     }
 
     const res = await this.request('GET', path, { headers, raw: true });

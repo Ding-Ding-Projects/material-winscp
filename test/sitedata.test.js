@@ -1111,6 +1111,13 @@ test('enabling site encryption requires a key while preserving stored secrets', 
   assert.equal(adv.encryptionKeyState({ encryptFiles: true, encryptKey: 'new-key' }).valid, true);
 });
 
+test('advanced timezone normalization rejects offsets beyond the ±24:00 boundary', async () => {
+  const { adv } = await modules;
+  assert.deepStrictEqual(adv.normalizeAdvancedTimezone(24, 59), { hours: 24, minutes: 0, value: 24 });
+  assert.deepStrictEqual(adv.normalizeAdvancedTimezone(-24, -59), { hours: -24, minutes: 0, value: -24 });
+  assert.deepStrictEqual(adv.normalizeAdvancedTimezone(-1, 30), { hours: -1, minutes: -30, value: -1.5 });
+});
+
 test('WebDAV legacy authentication persists its real key and exposes the enabled warning', async () => {
   const { adv, tree } = await modules;
   const control = adv.allAdvancedControls().find(({ control: c }) => c.id === 'WebDavAuthLegacyCheck').control;

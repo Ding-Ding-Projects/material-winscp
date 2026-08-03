@@ -17,6 +17,7 @@ const { Readable } = require('node:stream');
 const S = require('../design/main/security');
 const FB = require('../design/main/filebuffer');
 const C = require('../design/main/crypto');
+const { Config } = require('../design/main/config');
 
 const zeroRng = () => 0;
 
@@ -227,6 +228,24 @@ test('AES-GCM storage rejects malformed base64 before decoding', () => {
   const payload = stored.slice(3);
   assert.strictEqual(C.unprotect(`mp:${payload.slice(0, 4)}!${payload.slice(4)}`), '');
   assert.strictEqual(C.unprotect(`mp:${payload.replace(/=+$/u, '')}`), '');
+  C.lockMaster();
+});
+
+test('master-password rewrap refuses to delete an unreadable stored secret', () => {
+  C.lockMaster();
+  const config = new Config();
+  config.data.sites = [{ id: 'site-corrupt', password: 'mp:not-valid', passphrase: '',
+    proxyPassword: '', tunnelPassword: '', tunnelPassphrase: '', encryptKey: '', s3SessionToken: '' }];
+  const before = JSON.stringify(config.data);
+
+  assert.strictEqual(config.enableMasterPassword('new master password'), false);
+  assert.strictEqual(JSON.stringify(config.data), before);
+
+  const verifier = C.makeVerifier('current master password');
+  config.data.prefs.security.useMasterPassword = true;
+  config.data.prefs.security.masterPasswordVerifier = verifier;
+  assert.strictEqual(config.disableMasterPassword('current master password'), false);
+  assert.strictEqual(config.data.sites[0].password, 'mp:not-valid');
   C.lockMaster();
 });
 

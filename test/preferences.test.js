@@ -461,6 +461,13 @@ test('the first matching preset wins, in list order', async () => {
   assert.equal(copy.selectPreset(list, { hostName: 'other.net' }), null);
 });
 
+test('numeric preference edits normalize the visible value before persistence', async () => {
+  const { schema } = await load();
+  const control = { type: 'number', min: 1, max: 10, def: 4, scale: 1000 };
+  assert.deepEqual(schema.normalizeNumberInput(control, '12'), { ui: 10, stored: 10000 });
+  assert.deepEqual(schema.normalizeNumberInput(control, 'not-a-number'), { ui: 1, stored: 1000 });
+});
+
 test('numeric controls reject invalid ranges and out-of-range defaults', async () => {
   const { schema } = await load();
   const result = schema.validateSchema({ pages: [{

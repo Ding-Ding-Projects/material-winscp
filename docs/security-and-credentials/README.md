@@ -10,6 +10,7 @@ proof safe on disk.
 | [host-keys.md](host-keys.md) | SSH host key and TLS certificate verification, and the trust store. |
 | [credential-storage.md](credential-storage.md) | How a saved secret is protected — and when it is refused rather than stored. |
 | [master-password.md](master-password.md) | The master password, its derivation, and what it does and does not cover. |
+| [master-password-rewrap-fail-closed.md](master-password-rewrap-fail-closed.md) | Fail-closed handling when a credential cannot be rewrapped. |
 | [file-encryption.md](file-encryption.md) | At-rest encryption of transferred files. |
 | [logging.md](logging.md) | Session logs, redaction, and what debug levels expose. |
 | [putty-interop.md](putty-interop.md) | Safe PuTTY key and session metadata import, normalization, and failure handling. |

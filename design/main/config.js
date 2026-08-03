@@ -141,12 +141,14 @@ class Config extends EventEmitter {
         try { fs.copyFileSync(file, file + '.corrupt-' + Date.now()); } catch { /* best effort */ }
         this.emit('error', new Error('Configuration could not be read and was reset: ' + e.message));
       }
-    } else if (fs.existsSync(P.ini())) {
+    } else {
       // Portable WinSCP installations may leave an INI beside the app data.
       // Import it once into our protected JSON store instead of silently
       // starting with an empty site list.
-      try {
-        const imported = this._parseIniSites(fs.readFileSync(P.ini(), 'utf8'));
+      const portableIni = [P.root() + path.sep + 'WinSCP.ini', P.ini()]
+        .find((candidate) => fs.existsSync(candidate));
+      if (portableIni) try {
+        const imported = this._parseIniSites(fs.readFileSync(portableIni, 'utf8'));
         this.data.sites = imported.sites;
         this.data.folders = imported.folders;
         migratedIni = true;
@@ -525,14 +527,25 @@ class Config extends EventEmitter {
   }
 
   // -------------------------------------------------------- master password
+  _readSecretsForRewrap() {
+    const plain = this.data.sites.map((s) => {
+      const o = {};
+      for (const f of SECRET_FIELDS) {
+        o[f] = crypt.unprotect(s[f]);
+        // An unreadable non-empty envelope is corruption or a missing key.
+        // Treating it as empty would silently destroy the credential.
+        if (s[f] && !o[f]) return null;
+      }
+      return o;
+    });
+    return plain.some((o) => o === null) ? null : plain;
+  }
+
   enableMasterPassword(password) {
     const verifier = crypt.makeVerifier(password);
     // Re-wrap every stored secret under the new master key.
-    const plain = this.data.sites.map((s) => {
-      const o = {};
-      for (const f of SECRET_FIELDS) o[f] = crypt.unprotect(s[f]);
-      return o;
-    });
+    const plain = this._readSecretsForRewrap();
+    if (!plain) return false;
     crypt.unlockMaster(password, verifier);
     this.data.prefs.security.useMasterPassword = true;
     this.data.prefs.security.masterPasswordVerifier = verifier;
@@ -550,11 +563,8 @@ class Config extends EventEmitter {
 
   disableMasterPassword(password) {
     if (!crypt.unlockMaster(password, this.data.prefs.security.masterPasswordVerifier)) return false;
-    const plain = this.data.sites.map((s) => {
-      const o = {};
-      for (const f of SECRET_FIELDS) o[f] = crypt.unprotect(s[f]);
-      return o;
-    });
+    const plain = this._readSecretsForRewrap();
+    if (!plain) return false;
     crypt.lockMaster();
     this.data.prefs.security.useMasterPassword = false;
     this.data.prefs.security.masterPasswordVerifier = '';

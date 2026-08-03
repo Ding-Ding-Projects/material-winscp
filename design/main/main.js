@@ -31,7 +31,7 @@ const { Config } = require('./config');
 const { Ipc } = require('./ipc');
 const dimsum = require('./dimsum');
 const { UsageStore } = require('./usage');
-const { parseSwitches } = require('./progparams');
+const { parseSwitches, resolveIniLocation } = require('./progparams');
 
 const IS_WIN = process.platform === 'win32';
 const DEV = process.argv.includes('--dev') || !!process.env.WINSCP_MATERIAL_DEV;
@@ -538,8 +538,9 @@ function start() {
     // `/ini=FILE` redirects the whole data tree, exactly as WinSCP's does, so
     // portable installs and tests keep their configuration together.
     if (early.ini && early.ini.toLowerCase() !== 'nul') {
-      const target = path.resolve(early.ini);
-      P.setRoot(fs.existsSync(target) && fs.statSync(target).isDirectory() ? target : path.dirname(target));
+      const iniLocation = resolveIniLocation(early.ini, process.cwd());
+      if (iniLocation.root) P.setRoot(iniLocation.root);
+      if (iniLocation.warning) dialog.showErrorBox('WinSCP Material', iniLocation.warning);
     }
 
     // Keep only bounded, local startup facts. Usage persistence is diagnostic,

@@ -834,6 +834,19 @@ export function encryptionKeyState(site) {
   return { enabled, available, valid: !enabled || available };
 }
 
+/** Normalize the split timezone inputs to the supported inclusive ±24:00 range. */
+export function normalizeAdvancedTimezone(hours, minutes) {
+  let hh = Math.min(24, Math.max(-24, Math.trunc(Number(hours) || 0)));
+  let mm = Math.min(59, Math.max(-59, Math.trunc(Number(minutes) || 0)));
+  if (Math.abs(hh) === 24) {
+    hh = Math.sign(hh) * 24;
+    mm = 0;
+  } else if (hh !== 0 && Math.sign(mm) === -Math.sign(hh)) {
+    mm = -mm;
+  }
+  return { hours: hh, minutes: mm, value: hh + mm / 60 };
+}
+
 /** Everything a `visible`/`enabled` predicate is handed. */
 export function advancedContext(site, prefs = {}) {
   const info = protocolInfo(site.protocol);
@@ -1512,14 +1525,10 @@ export function createSiteAdvancedPanel(site, opts = {}) {
     minutesInput.disabled = !enabled;
 
     function write() {
-      const hh = Math.min(24, Math.max(-24, Math.trunc(Number(hoursInput.value) || 0)));
-      let mm = Math.min(59, Math.max(-59, Math.trunc(Number(minutesInput.value) || 0)));
-      // Once there is a whole hour it decides the sign, so a "−1 h 30 m" that
-      // the user meant as −1:30 is not read as −0:30.
-      if (hh !== 0 && Math.sign(mm) === -Math.sign(hh)) mm = -mm;
-      hoursInput.value = String(hh);
-      minutesInput.value = String(mm);
-      commit(hh + mm / 60);
+      const normalized = normalizeAdvancedTimezone(hoursInput.value, minutesInput.value);
+      hoursInput.value = String(normalized.hours);
+      minutesInput.value = String(normalized.minutes);
+      commit(normalized.value);
     }
 
     return labelled(control, id, h('div', { class: 'sd-row is-tight' },

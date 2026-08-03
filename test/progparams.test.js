@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { parseSwitches } = require('../design/main/progparams');
+const { parseSwitches, resolveIniLocation } = require('../design/main/progparams');
 
 test('production startup parsing preserves upstream first-switch semantics', () => {
   const parsed = parseSwitches(['/ini=first.ini', '/ini=second.ini', '/log:run.log']);
@@ -22,4 +22,19 @@ test('production parsing accepts both switch marks without treating a path as a 
   assert.equal(parsed.switches.get('console').valueSet, false);
   assert.equal(parsed.switches.get('timeout').value, '45');
   assert.deepEqual(parsed.params, ['/var/log/winscp']);
+});
+
+test('missing /ini files keep the parent root but return an actionable warning', () => {
+  const parsed = resolveIniLocation('profiles/missing.ini', 'C:\\portable', {
+    statSync() { const error = new Error('missing'); error.code = 'ENOENT'; throw error; },
+  });
+  assert.equal(parsed.root, 'C:\\portable\\profiles');
+  assert.match(parsed.warning, /profiles\\missing\.ini.*was not found/);
+});
+
+test('existing /ini directories become the portable root without a warning', () => {
+  const parsed = resolveIniLocation('profiles', 'C:\\portable', {
+    statSync() { return { isDirectory: () => true }; },
+  });
+  assert.deepEqual(parsed, { root: 'C:\\portable\\profiles', warning: null, target: 'C:\\portable\\profiles' });
 });

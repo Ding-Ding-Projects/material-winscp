@@ -6,6 +6,8 @@
 // in design/main/options.js.
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
 const { ProgramParams, OPTION_SWITCH } = require('./options');
 
 /**
@@ -33,4 +35,26 @@ function parseSwitches(argv) {
   return { switches, params: bareParams };
 }
 
-module.exports = { parseSwitches };
+/**
+ * Resolve the root used by a portable /ini launch and report a recoverable
+ * warning when the requested file is not present or cannot be inspected.
+ * WinSCP keeps the parent location usable for a first save; silently doing so
+ * makes a typo look like the user's configuration disappeared.
+ */
+function resolveIniLocation(ini, cwd = process.cwd(), fsApi = fs) {
+  if (!ini || String(ini).toLowerCase() === 'nul') return { root: null, warning: null, target: null };
+  const target = path.resolve(cwd, String(ini));
+  try {
+    const stat = fsApi.statSync(target);
+    return { root: stat.isDirectory() ? target : path.dirname(target), warning: null, target };
+  } catch (error) {
+    const detail = error && error.code === 'ENOENT' ? 'was not found' : 'could not be inspected';
+    return {
+      root: path.dirname(target),
+      target,
+      warning: `The INI file "${target}" ${detail}. The parent directory will be used for this run.`,
+    };
+  }
+}
+
+module.exports = { parseSwitches, resolveIniLocation };

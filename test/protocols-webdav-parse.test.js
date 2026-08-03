@@ -385,6 +385,42 @@ test('Digest SHA-256 with qop=auth matches the RFC 7616 worked example', () => {
   );
 });
 
+test('range reads reject invalid offsets before making a request', async () => {
+  const adapter = new WebDavAdapter({ hostName: 'dav.example.test', ftps: 'none' });
+  adapter.rangeReads = true;
+  let sent = false;
+  adapter.request = async () => { sent = true; return { statusCode: 206, headers: {}, body: Readable.from([]) }; };
+
+  await assert.rejects(() => adapter.createReadStream('/file.bin', { start: -1 }),
+    /range start must be a non-negative integer/);
+  await assert.rejects(() => adapter.createReadStream('/file.bin', { start: Infinity }),
+    /range start must be a non-negative integer/);
+  await assert.rejects(() => adapter.createReadStream('/file.bin', { start: 8, end: 7 }),
+    /range end must be an integer at or after the start/);
+  assert.equal(sent, false, 'invalid offsets never reach the server');
+});
+
+test('bounded range reads send the requested inclusive byte range', async () => {
+  const adapter = new WebDavAdapter({ hostName: 'dav.example.test', ftps: 'none' });
+  adapter.rangeReads = true;
+  let seen;
+  adapter.request = async (method, path, opts) => {
+    seen = { method, path, range: opts.headers.Range };
+    const res = Readable.from([Buffer.from('tail')]);
+    res.statusCode = 206;
+    return res;
+  };
+
+  const stream = await adapter.createReadStream('/file.bin', { start: 8, end: 11 });
+  assert.deepEqual(seen, { method: 'GET', path: '/file.bin', range: 'bytes=8-11' });
+  assert.equal((await new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('end', () => resolve(Buffer.concat(chunks).toString()));
+    stream.on('error', reject);
+  })), 'tail');
+});
+
 test('Digest SHA-512-256 uses the standardized SHA-512/256 function', () => {
   const params = { realm: 'r', nonce: 'n', qop: 'auth', algorithm: 'SHA-512-256' };
   const header = buildDigestHeader({

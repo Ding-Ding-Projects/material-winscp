@@ -77,7 +77,7 @@ test('Config imports INI hierarchy, protects portable passwords, and rejects mac
 }));
 
 test('a portable WinSCP INI beside app data is migrated into the JSON store on load', () => withRoot((root) => {
-  fs.writeFileSync(P.ini(), ini, 'utf8');
+  fs.writeFileSync(path.join(root, 'WinSCP.ini'), ini, 'utf8');
   const config = new Config().load();
 
   assert.equal(config.sites.length, 1);

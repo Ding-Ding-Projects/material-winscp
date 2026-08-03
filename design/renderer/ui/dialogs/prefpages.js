@@ -1499,6 +1499,12 @@ export function clampToRange(control, ui) {
   return v;
 }
 
+/** Normalize a numeric editor to the exact value that will be persisted. */
+export function normalizeNumberInput(control, ui) {
+  const clamped = clampToRange(control, ui);
+  return { ui: clamped, stored: toStoredValue(control, clamped) };
+}
+
 /**
  * A human-readable rendering of a control's current value, in both languages.
  * The search matches against this, so typing "Debug 2" finds the logging level
@@ -1881,7 +1887,11 @@ export function renderControl(control, ctx) {
         const input = h('input', {
           type: 'number', id, class: 'field-input pref-number', inputmode: 'decimal',
           min: control.min, max: control.max, step: control.step || 1,
-          onchange: () => commit(toStoredValue(control, clampToRange(control, input.value))),
+          onchange: () => {
+            const normalized = normalizeNumberInput(control, input.value);
+            input.value = String(normalized.ui);
+            commit(normalized.stored);
+          },
         });
         input.value = String(toUiValue(control, stored ?? control.def));
         const wrap = control.unit

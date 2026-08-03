@@ -937,7 +937,11 @@ class FtpAdapter extends Adapter {
     const mlsd = s.ftpUseMlsd || 'auto';
     const all = s.ftpListAll || 'auto';
     const out = [];
-    const supportsMlsd = this.features.has('MLSD') || this.features.has('MLST');
+    // MLST and MLSD are separate RFC 3659 commands.  MLST only proves that
+    // the server can describe one path; it does not mean it can produce a
+    // directory listing.  Treating MLST as MLSD support makes old servers
+    // fail every listing before the LIST fallback gets a chance.
+    const supportsMlsd = this.features.has('MLSD');
     if (mlsd === 'on' || (mlsd === 'auto' && supportsMlsd)) out.push('MLSD');
     if (mlsd !== 'on') {
       if (all === 'on' || all === 'auto') out.push('LIST -a');
