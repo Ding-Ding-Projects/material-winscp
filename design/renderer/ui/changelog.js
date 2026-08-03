@@ -187,6 +187,30 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "abe24d9", kind: 'commit', ref: "abe24d9", oid: "abe24d943e60264d6c1983705b4b84efbe389c0f", date: "2026-08-03",
+    title: "Harden editor, terminal, SCP, and configuration lifecycles",
+    changes: [
+      { category: "added", text: "English: Add editor keyboard commands, propagate nested cancellation, keep WinConfiguration preset selections valid, add SCP checksum fallbacks, make CopyParams remembering one-shot, and support keyboard editor-list reordering. Add focused tests and documentation. The lifecycle machinery now exits the maze with its breadcrumbs intact." },
+      { category: "changed", text: "廣東話：補返 editor keyboard commands、nested cancellation、WinConfiguration preset selection、SCP checksum fallback、CopyParams one-shot remember，同 EditorPreferences 鍵盤排序。加 tests 同 docs，lifecycle machinery 終於帶住麵包屑行出迷宮。" },
+    ],
+  },
+  {
+    id: "2494d85", kind: 'commit', ref: "2494d85", oid: "2494d8531fe0c7ebea3c3ad40a59417adcb8dbfb", date: "2026-08-03",
+    title: "Refresh roadmap-slice handoff metadata",
+    changes: [
+      { category: "changed", text: "English: Record the verified 3,314/3,315 test result, unchanged 59.0% logic coverage, 114 remaining units, and the current high-weight checkpoint. The handoff is still a map, but the path has fewer potholes." },
+      { category: "changed", text: "廣東話：記低已驗證嘅 3,314/3,315 測試、仍然 59.0% logic coverage、剩低 114 個 units 同今次 high-weight checkpoint。交更紙仲係地圖，不過條路少咗幾個窿。" },
+    ],
+  },
+  {
+    id: "dfd9fe4", kind: 'commit', ref: "dfd9fe4", oid: "dfd9fe4e9f6c9ff88e7d07bb24e10c0183bbfc9a", date: "2026-08-03",
+    title: "Refresh in-app changelog for high-weight roadmap slices",
+    changes: [
+      { category: "security", text: "English: Record the Login, command, security, LocationProfiles, WebDAV, and S3 wave in the in-app history. The diary now contains fewer dragons hiding behind unchecked controls." },
+      { category: "security", text: "廣東話：將 Login、command、security、LocationProfiles、WebDAV 同 S3 呢輪寫入 app history，少啲火龍可以躲喺未驗證嘅掣後面。" },
+    ],
+  },
+  {
     id: "10f6d8a", kind: 'commit', ref: "10f6d8a", oid: "10f6d8a63c0cbd41640b27c372518e0add29c6f8", date: "2026-08-03",
     title: "Harden Login, commands, site security, and S3 WebDAV",
     changes: [
@@ -628,33 +652,6 @@ export const DEVELOPMENT = [
     changes: [
       { category: "changed", text: "The name-list rewrite deduplicates dirty paths in a Set, so the report must read size rather than the old array length. Keep the smoke test honest: undefined is not a count, it is the tool shrugging at its own arithmetic.\\n\\nRefs #26 #27 #28" },
       { category: "changed", text: "name-list rewrite 用 Set 去重，所以 handoff 要讀 size，唔可以仲用舊 array length。smoke test 個數字要講人話：undefined 唔係 count，係個工具對住自己份 arithmetic 聳吓膊頭。\\n\\nRefs #26 #27 #28" },
-    ],
-  },
-  {
-    id: "883b33f", kind: 'commit', ref: "883b33f", oid: "883b33f10adeb369fe7e8f310fa9d69a9fb0d0ae", date: "2026-08-02",
-    title: "Count handoff dirt from Git name lists",
-    refs: ["#26", "#27", "#28"],
-    changes: [
-      { category: "removed", text: "Use git diff, cached diff, and untracked name lists instead of guessing where a Windows porcelain status line starts. The report no longer loses the H from HANDOFF.md when that file is staged, so its smoke-test state can converge honestly.\\n\\nRefs #26 #27 #28" },
-      { category: "changed", text: "唔再估 Windows porcelain status 行由邊格開始，改用 git 嘅 unstaged、staged 同 untracked name list。HANDOFF.md 就算 staged 都唔會畀 parser 食咗個 H，smoke test 個狀態終於可以老實收斂。\\n\\nRefs #26 #27 #28" },
-    ],
-  },
-  {
-    id: "225b7ae", kind: 'commit', ref: "225b7ae", oid: "225b7ae08d0d29a2fa222e70156218eea5812600", date: "2026-08-02",
-    title: "Trim Windows status paths before counting handoff dirt",
-    refs: ["#26", "#27", "#28"],
-    changes: [
-      { category: "changed", text: "Git status lines carry CRLF on this host, so the generated handoff failed to recognise its own HANDOFF.md path and counted it as user work. Trim the parsed path before excluding generated outputs, keeping the report honest on Windows too.\\n\\nRefs #26 #27 #28" },
-      { category: "changed", text: "Windows 個 git status 行帶 CRLF，之前 handoff parser 認唔到自己個 HANDOFF.md，於是無端端當佢係 user work。解析完 trim 返條 path，再排除 generated output，Windows 個報告都講返真話。\\n\\nRefs #26 #27 #28" },
-    ],
-  },
-  {
-    id: "cb56f8a", kind: 'commit', ref: "cb56f8a", oid: "cb56f8a1cbe7f126a27e27fe108a0477f4488129", date: "2026-08-02",
-    title: "Keep generated handoff state self-consistent",
-    refs: ["#26", "#27", "#28"],
-    changes: [
-      { category: "changed", text: "The handoff generator now excludes HANDOFF.md and ROADMAP.md from its own dirty count. Without that guard, the report counted the files it had just rewritten and became stale the moment its generated output was committed.\\n\\nRefs #26 #27 #28" },
-      { category: "changed", text: "handoff generator 而家唔再將自己重寫緊嘅 HANDOFF.md 同 ROADMAP.md 計入 dirty count。之前份報告一寫完就算兩份文件未 commit，commit 完又即刻講錯；而家個數字終於同佢留下嘅狀態對得返。\\n\\nRefs #26 #27 #28" },
     ],
   },
 ];
