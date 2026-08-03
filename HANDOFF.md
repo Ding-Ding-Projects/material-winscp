@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `8884879`** — Expand explorer preferences and SFTP reachability
+**At commit `b47e589`** — Harden protocol, sync, and panel boundaries
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3468 run, **3467 pass, 0 fail**, 1 skipped |
-| Hand-written code | 221,105 lines across 439 files |
-| Commits | 206 on `main` |
-| Working tree | **2 uncommitted change(s)** |
-| Remote | `origin/main` at `30b2408` — **differs from HEAD** |
+| Tests | 3472 run, **3471 pass, 0 fail**, 1 skipped |
+| Hand-written code | 221,174 lines across 439 files |
+| Commits | 208 on `main` |
+| Working tree | clean |
+| Remote | `origin/main` at `b47e589` — in sync |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `b47e589` | 2026-08-03 | Harden protocol, sync, and panel boundaries |
+| `4734d06` | 2026-08-03 | Refresh explorer and SFTP evidence |
 | `8884879` | 2026-08-03 | Expand explorer preferences and SFTP reachability |
 | `30b2408` | 2026-08-03 | Refresh console and transfer evidence |
 | `da2d937` | 2026-08-03 | Harden console drag queue and editor paths |
 | `40c8886` | 2026-08-03 | Refresh S3 and UI hardening evidence |
 | `924064a` | 2026-08-03 | Harden S3 UI sync and config edges |
 | `9db8af1` | 2026-08-03 | Refresh lifecycle hardening evidence |
-| `8c87551` | 2026-08-03 | Harden editor security and session lifecycles |
-| `72f52c0` | 2026-08-03 | Refresh protocol hardening evidence |
 
 ## Notes from whoever worked on this last
 
