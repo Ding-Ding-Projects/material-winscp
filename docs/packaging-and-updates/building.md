@@ -54,7 +54,7 @@ is stamped in.
 | `packagerConfig.name` | `WinSCP Material` |
 | `packagerConfig.executableName` | `WinSCPMaterial` — no space, so paths and shortcuts stay simple |
 | `packagerConfig.icon` | `build/icon` (`.ico` appended by the packager) |
-| `packagerConfig.ignore` | Excludes `.git`, `.github`, `vendor`, `test`, `docs`, `site`, `out`, uploads and screenshots |
+| `packagerConfig.ignore` | Excludes `.git`, `.github`, `.claude` linked worktrees, `vendor`, `test`, `docs`, `site`, `out`, uploads and screenshots |
 | `makers[0]` | `@electron-forge/maker-squirrel` — see [installer](installer.md) |
 | `makers[1]` | `@electron-forge/maker-zip` |
 | `publishers` | **Empty, deliberately.** [CI](ci.md) publishes with the `gh` CLI so the notes can carry the dim sum code name and photo. |
@@ -88,7 +88,9 @@ tracked input always yields the same icon.
   material and is not something this repository can hold.
 - **`packagerConfig.ignore` keeps the porting reference, the tests, the docs and
   the site out of the shipped app**, which reduces both size and the amount of
-  material distributed with the binary.
+  material distributed with the binary. It also excludes `.claude/worktrees/`:
+  linked-agent checkouts are local development state and can otherwise recurse
+  into a previous `out/` tree, turning a 130 MB app into a multi-gigabyte asar.
 - **`prune: true`** means devDependencies are not shipped.
 - **No absolute local toolchain path is committed**, and no installed dependency
   is committed. `out/` and `node_modules/` are ignored.

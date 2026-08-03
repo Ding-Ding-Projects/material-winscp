@@ -44,6 +44,7 @@ module.exports = {
     ignore: [
       /^\/\.git($|\/)/,
       /^\/\.github($|\/)/,
+      /^\/\.claude($|\/)/,
       /^\/vendor($|\/)/,
       /^\/test($|\/)/,
       /^\/docs($|\/)/,
