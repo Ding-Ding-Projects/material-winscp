@@ -187,6 +187,20 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "924064a", kind: 'commit', ref: "924064a", oid: "924064a4a5beefa2e0dee56fc44ba5887185f4af", date: "2026-08-03",
+    title: "Harden S3 UI sync and config edges",
+    changes: [
+      { category: "changed", text: "English: Preserve malformed S3 entities, guard palette focus, serialize Login submits, atomically save host keys, and keep watcher windows attached during IPC. The edge-case buffet now has smaller plates.\\n\\n粵語：S3 壞 entity 唔再爆、palette focus 唔會追住死人 input、Login 唔重複開 session、host key 原子寫入，watcher IPC 未完之前個 window 唔會走佬。Edge-case buffet 而家啲碟細咗，冇咁易打翻。" },
+    ],
+  },
+  {
+    id: "9db8af1", kind: 'commit', ref: "9db8af1", oid: "9db8af125e4905eef5afe1d4c41c750eef95e90e", date: "2026-08-03",
+    title: "Refresh lifecycle hardening evidence",
+    changes: [
+      { category: "fixed", text: "English: Record the verified editor, crypto, IPv6, and cache-boundary fixes with their test totals, so the handoff has receipts instead of vibes.\\n\\n粵語：Editor、crypto、IPv6 同 cache boundary 修正而家有晒測試收據，handoff 唔使再靠感覺估數。" },
+    ],
+  },
+  {
     id: "8c87551", kind: 'commit', ref: "8c87551", oid: "8c8755121f7b5b2d84d358d0ac0191baffbeae41", date: "2026-08-03",
     title: "Harden editor security and session lifecycles",
     changes: [
@@ -688,20 +702,6 @@ export const DEVELOPMENT = [
     title: "Harden queue sessions search panels and setup",
     changes: [
       { category: "added", text: "Include queue prompt state in once-done requests, fail closed on stale exec capabilities, tolerate watcher errors without items, short-circuit empty find limits, normalize Windows directory caches case-insensitively, and keep shortcut cleanup Windows-only. Add focused tests and indexed documentation. The queue now carries its paperwork, the search knows when zero means zero, and setup stops visiting the wrong operating system.\\n\\n廣東話：queue 帶齊文件、find 明白零就係零、setup 唔再去錯 OS 探親；panel 同 session 都有新路牌。" },
-    ],
-  },
-  {
-    id: "a9b9fb3", kind: 'commit', ref: "a9b9fb3", oid: "a9b9fb3a6976bc07c513281809fd248f1e0d3b42", date: "2026-08-03",
-    title: "Refresh handoff for Windows CI correction",
-    changes: [
-      { category: "fixed", text: "Record the verified Windows newline correction, 3337-test local gate, 59.0% logic coverage, 114 outstanding units and 22 open issues. The handoff now includes the exact fix for the one remote red light instead of hiding it under the carpet.\\n\\n廣東話：handoff 寫清楚今次點樣熄咗嗰盞紅燈，唔會掃埋張地氈下面扮冇事。" },
-    ],
-  },
-  {
-    id: "a3d6bc5", kind: 'commit', ref: "a3d6bc5", oid: "a3d6bc513e21efe4741a11e54f81c62a47016632", date: "2026-08-03",
-    title: "Record Windows CI newline fix",
-    changes: [
-      { category: "added", text: "Add the location-profile CRLF-safe test correction to the in-app changelog with its verified commit link. The build diary now notes that Windows newline fashion was the culprit, not the profile logic.\\n\\n廣東話：changelog 記低今次係 Windows CRLF 搞事，唔係 profile logic；換行符號都有自己嘅戲份。" },
     ],
   },
 ];
