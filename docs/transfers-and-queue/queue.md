@@ -67,6 +67,11 @@ controller.
   as a failed command instead of a false success.
 - **An item's settings are a snapshot.** See the note in the
   [category index](README.md) — this is intentional.
+- **Headless speed limits are canonicalized at the queue boundary.** A numeric
+  string such as `"2048"` becomes `2048`; negative, non-finite, and malformed
+  `cpsLimit` values become `0` before the item snapshot, public view, or
+  throttle sees them. GUI validation remains useful, but IPC and CLI callers
+  cannot poison queue state.
 - **Empty-directory planning agrees across transfer paths.** With
   `excludeEmptyDirectories` enabled, queued local uploads descend into local
   directory symlinks the same way as the foreground engine. Remote-source

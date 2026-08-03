@@ -734,6 +734,26 @@ test('setSpeedLimit changes the limit of an item already queued', async () => {
   assert.strictEqual(item.state, 'done');
 });
 
+test('queue canonicalizes headless cpsLimit values before exposing the item', () => {
+  const { local, remote } = makePair();
+  const q = new TransferQueue({ prefs: prefs({ queue: { enabledByDefault: false } }), progressMs: 0 });
+
+  const numeric = q.add({
+    side: 'upload', source: '/l/a.txt', target: '/r/a.txt',
+    sourceAdapter: local, targetAdapter: remote, copyParam: { cpsLimit: '2048' },
+  });
+  assert.strictEqual(numeric.copyParam.cpsLimit, 2048);
+  assert.strictEqual(numeric.cpsLimit, 2048);
+  assert.strictEqual(q.view(numeric).cpsLimit, 2048);
+
+  const invalid = q.add({
+    side: 'upload', source: '/l/a.txt', target: '/r/b.txt',
+    sourceAdapter: local, targetAdapter: remote, copyParam: { cpsLimit: '-1' },
+  });
+  assert.strictEqual(invalid.copyParam.cpsLimit, 0);
+  assert.strictEqual(invalid.cpsLimit, 0);
+});
+
 test('setSpeedLimit immediately replaces an active bucket schedule', async () => {
   const { local, remote } = makePair({ chunkSize: 1024 });
   local.put('/l/a.bin', bigBuffer(4096));

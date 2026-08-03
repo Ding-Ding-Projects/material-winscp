@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `5d0b038`** — Wire protocol edges and roadmap controls
+**At commit `e840449`** — Wire editor refresh, preference shortcut, and S3 listing guards
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **60.5%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 71.5% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3499 run, **3498 pass, 0 fail**, 1 skipped |
-| Hand-written code | 221,993 lines across 440 files |
-| Commits | 223 on `main` |
+| Tests | 3504 run, **3503 pass, 0 fail**, 1 skipped |
+| Hand-written code | 222,087 lines across 441 files |
+| Commits | 224 on `main` |
 | Working tree | **13 uncommitted change(s)** |
-| Remote | `origin/main` at `5d0b038` — in sync |
+| Remote | `origin/main` at `e840449` — in sync |
 
 ### Coverage by area
 
@@ -127,6 +127,7 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `e840449` | 2026-08-03 | Wire editor refresh, preference shortcut, and S3 listing guards |
 | `5d0b038` | 2026-08-03 | Wire protocol edges and roadmap controls |
 | `abe0622` | 2026-08-03 | Refresh handoff after freshness fix |
 | `fbb9bae` | 2026-08-03 | Ignore expected handoff test artefact |
@@ -134,7 +135,6 @@ bite a successor who assumes otherwise:
 | `dbb195b` | 2026-08-03 | Refresh final handoff evidence |
 | `ef2580a` | 2026-08-03 | Refresh handoff for Pages fix |
 | `aae7ad2` | 2026-08-03 | Fix Pages artifact selection |
-| `023b8b6` | 2026-08-03 | Refresh handoff after site and reconnect hardening |
 
 ## Notes from whoever worked on this last
 

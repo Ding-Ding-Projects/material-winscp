@@ -111,6 +111,26 @@ test('a close event from a replaced adapter cannot take down the new adapter', (
   assert.equal(session.state.status, 'connected');
 });
 
+test('an adapter close retires the dead adapter before reconnect is scheduled', () => {
+  const session = new Session(
+    { protocol: 'sftp', hostName: 'closed.example' },
+    { config: configFor({ sessionReopenAuto: 10 }), emit() {} },
+  );
+  const adapter = new EventEmitter();
+  adapter.connected = true;
+  session.adapter = adapter;
+  session._wireAdapter(adapter);
+
+  adapter.emit('close', 'network dropped');
+
+  assert.equal(session.adapter, null);
+  assert.equal(adapter.listenerCount('close'), 0);
+  assert.equal(adapter.listenerCount('error'), 0);
+  assert.ok(session._reconnect.timer, 'the retry remains scheduled after cleanup');
+  clearTimeout(session._reconnect.timer);
+  session._reconnect.timer = null;
+});
+
 test('reconnect uses bounded backoff and refuses to cross the total budget', () => {
   let now = 100;
   const session = new Session(

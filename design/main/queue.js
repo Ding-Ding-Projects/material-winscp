@@ -301,6 +301,16 @@ function useTextMode(copyParam, name, params, asciiMask) {
   }
 }
 
+/**
+ * Copy dialogs normally validate this field, but headless callers and IPC can
+ * still supply form-shaped strings. Keep the queue's public state numeric and
+ * apply the same non-negative contract as the CopyParams validator.
+ */
+function normalizeCpsLimit(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
 // ---------------------------------------------------------------------------
 // the queue
 // ---------------------------------------------------------------------------
@@ -372,6 +382,7 @@ class TransferQueue extends EventEmitter {
    */
   add(spec) {
     const copyParam = { ...COPY_PARAM_DEFAULTS, ...(spec.copyParam || {}) };
+    copyParam.cpsLimit = normalizeCpsLimit(copyParam.cpsLimit);
     const item = {
       id: spec.id || newId(),
       side: spec.side || 'upload',
@@ -383,7 +394,7 @@ class TransferQueue extends EventEmitter {
       targetAdapter: spec.targetAdapter,
       session: spec.session || null,
       copyParam,
-      cpsLimit: copyParam.cpsLimit || 0,
+      cpsLimit: copyParam.cpsLimit,
       state: 'queued',
       error: null,
       addedAt: Date.now(),
@@ -396,7 +407,7 @@ class TransferQueue extends EventEmitter {
       },
       // internal
       _gate: new Gate(true),
-      _throttle: new Throttle(copyParam.cpsLimit || 0),
+      _throttle: new Throttle(copyParam.cpsLimit),
       _plan: null,
       _entryIndex: 0,
       _reconnects: 0,

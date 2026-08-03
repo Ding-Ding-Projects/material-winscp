@@ -246,6 +246,17 @@ test('a collection signalled only by a trailing slash is still a directory', () 
   assert.strictEqual(items[0].name, 'incoming');
 });
 
+test('an empty resourcetype does not hide a trailing-slash collection', () => {
+  const xml = `<?xml version="1.0"?><D:multistatus xmlns:D="DAV:">
+    <D:response><D:href>/pub/incoming/</D:href>
+      <D:propstat><D:prop><D:resourcetype/></D:prop>
+        <D:status>HTTP/1.1 200 OK</D:status></D:propstat>
+    </D:response></D:multistatus>`;
+  const items = parseMultistatus(xml, { baseUrl: 'http://h/pub/' });
+  assert.strictEqual(items[0].type, 'dir');
+  assert.strictEqual(items[0].isCollection, true);
+});
+
 test('per-response failure statuses survive for MOVE/DELETE reporting', () => {
   const xml = `<?xml version="1.0"?><D:multistatus xmlns:D="DAV:">
     <D:response>

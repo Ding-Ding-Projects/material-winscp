@@ -233,8 +233,9 @@ function parseMultistatus(xml, opts = {}) {
 
     const resourcetype = props.resourcetype;
     const isCollection = !!(resourcetype && firstNamed(resourcetype, DAV_NS, 'collection'))
-      // Some servers only signal a collection by ending the href in a slash.
-      || (!resourcetype && href.endsWith('/') && href !== '/');
+      // Some servers only signal a collection by ending the href in a slash,
+      // even when they include an empty <resourcetype/> property.
+      || (href.endsWith('/') && href !== '/');
 
     const textOf = (name) => (props[name] ? props[name].text.trim() : '');
     const lastMod = textOf('getlastmodified');

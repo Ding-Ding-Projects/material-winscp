@@ -598,6 +598,12 @@ class Session extends EventEmitter {
   _onAdapterClosed(adapter, reason) {
     if (adapter !== this.adapter) return;
     if (this.adapter) this.adapter.connected = false;
+    // Retire the closed adapter before scheduling a retry. Keeping it attached
+    // lets late protocol events from the dead connection leak into the new
+    // session, and makes reconnect replace a live listener graph without
+    // giving the old adapter a final cleanup boundary.
+    adapter.removeAllListeners();
+    this.adapter = null;
     if (this._closing) return;
     this.state.status = 'closed';
     this.log.add('error', `The connection was closed${reason ? `: ${reason}` : '.'}`);

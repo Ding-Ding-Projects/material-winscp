@@ -67,7 +67,7 @@
         "design/renderer/ui/commands.js",
         "design/renderer/ui/wiring.js"
       ],
-      "note": "All 301 actions are registered and reachable from the running app: 296 have a working handler, 5 are declared unavailable with a reason the UI shows. 79 shortcut-carrying actions over 52 combinations, one conflict WinSCP itself has."
+      "note": "All 301 actions are registered and reachable from the running app: 296 have a working handler, 5 are declared unavailable with a reason the UI shows. 79 shortcut-carrying actions over 52 combinations, one conflict WinSCP itself has; context-menu builders now inherit and display registered shortcuts for focused and legacy aliases."
     },
     "core/SftpFileSystem": {
       "status": "partial",
@@ -107,7 +107,7 @@
       "targets": [
         "design/main/protocols/webdav.js"
       ],
-      "note": "Hand-written client; PROPFIND parsing and RFC 7616 Digest auth covered by tests."
+      "note": "Hand-written client; PROPFIND parsing, trailing-slash collection detection for empty resource types, and RFC 7616 Digest auth covered by tests."
     },
     "core/S3FileSystem": {
       "status": "partial",
@@ -147,7 +147,7 @@
       "targets": [
         "design/main/queue.js"
       ],
-      "note": "The queue engine, its throttle, pause gates and text converter, and now the single byte mover both it and the session transfer path move their bytes through. Server-side copy is taken when the protocol offers it."
+      "note": "The queue engine, its throttle, pause gates and text converter, and now the single byte mover both it and the session transfer path move their bytes through. Headless copy parameters are canonicalized before queue state or throttling uses them. Server-side copy is taken when the protocol offers it."
     },
     "core/CopyParam": {
       "status": "partial",
@@ -200,7 +200,7 @@
       "targets": [
         "design/main/session.js"
       ],
-      "note": "Multiple sessions, reconnect policy, verification callbacks."
+      "note": "Multiple sessions, reconnect policy, verification callbacks, and dead-adapter listener cleanup before retry."
     },
     "windows/EditorManager": {
       "status": "partial",

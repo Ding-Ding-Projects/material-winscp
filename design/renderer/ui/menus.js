@@ -13,7 +13,7 @@
 import { h, icon, appearanceTarget, rovingFocus } from '../dom.js';
 import { t } from '../i18n.js';
 import { bus } from '../state.js';
-import { attachMenuButton, SEPARATOR, openMenu } from './contextmenu.js';
+import { attachMenuButton, SEPARATOR, openMenu, shortcutForAction } from './contextmenu.js';
 import {
   runAction, commandState, actionLabel, getCommand, readPref, ensureStyle,
 } from './commands.js';
@@ -322,7 +322,10 @@ export function buildMenuItems(nodes, over = {}) {
         // No glyph rather than a generic one: an icon in a menu is a hint, and
         // a wrong hint is worse than none.
         icon: cmd.hasIcon ? cmd.icon : null,
-        shortcut: cmd.shortcut,
+        // Keep the declarative builder in parity with the renderer: focused
+        // and legacy action names may inherit a registered counterpart's
+        // shortcut even when their own descriptor has none.
+        shortcut: cmd.shortcut || shortcutForAction({ action: node.action }),
         disabled: !state.enabled,
         description: state.reason || cmd.hint || '',
         onSelect: () => runAction(node.action, over),

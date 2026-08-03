@@ -48,6 +48,7 @@ trusted endpoint, preferably over HTTPS.
 | Situation | What the user sees | Recoverable |
 | --- | --- | --- |
 | Server returns HTML for `PROPFIND` (a login page, a proxy interstitial) | The listing fails with "the server did not return WebDAV XML", quoting the first line of what it did return. Guessing is deliberately not attempted. | Yes |
+| Server returns an empty `resourcetype` for a collection | A trailing slash in the response `href` is used as the collection signal, so the directory is not shown as a file. | Yes |
 | `401` on every request with `webDavAuthLegacy` off | The adapter waits for a challenge by default. Some servers never issue one, or require streamed PUTs to be authenticated before the body starts; turning the option on fixes those cases — with the caveat below. | Yes |
 | Paths containing `+`, `#`, `%` or non-ASCII | Servers disagree about encoding. `webDavLiberalEscaping` widens the escaping set. | Usually |
 | `MOVE`/`COPY` across a quota boundary | The server's `507` is surfaced verbatim, including its message. | Depends on the server |
