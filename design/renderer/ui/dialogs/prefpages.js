@@ -1385,11 +1385,11 @@ export const PENDING_KEYS = new Set([
   'security.randomSeedFile',
   // session.js:532-537 documents four sessionReopen* settings above
   // _scheduleReconnect, and that function reads two of them —
-  // sessionReopenAuto for the delay and sessionReopenTimeout for the budget. A
-  // session here has no notion of being queue-only, and nothing measures a
-  // stall, so the other two describe behaviour that does not exist.
+  // sessionReopenAuto for the delay and sessionReopenTimeout for the budget.
+  // sessionReopenBackground was here too until the queue's reconnect supervisor
+  // in ipc.js started reading it. Nothing measures a stall, so this one still
+  // describes behaviour that does not exist.
   'security.sessionReopenAutoStall',
-  'security.sessionReopenBackground',
   'showInaccessibleDirectories',
   'tabs.truncateTitles',
   'timeoutOnStartup',

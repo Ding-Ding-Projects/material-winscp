@@ -437,10 +437,20 @@ class Ipc {
     if (Number.isFinite(limit) && limit >= 1 && limit <= 32 && typeof q.setTransfersLimit === 'function') {
       try { q.setTransfersLimit(limit); } catch { /* the queue keeps the limit it was running with */ }
     }
-    // TTerminalQueue::SetKeepDoneItemsFor (core/Queue.cpp:1126) sweeps as soon
-    // as the setting changes, so shortening "Keep completed items for" clears
-    // the rows that are already past the new window instead of leaving them
-    // until the next transfer finishes.
+    // Shortening "Keep completed items for" sweeps the rows already past the
+    // new window, rather than leaving them until the next transfer finishes.
+    //
+    // This is a DELIBERATE DIVERGENCE, not a port. WinSCP's
+    // TTerminalQueue::SetKeepDoneItemsFor (core/Queue.cpp:1126-1136) assigns
+    // the field under a guard and stops — it is conspicuously the only setter
+    // in that block that does NOT call TriggerEvent(), which SetTransfersLimit
+    // (:1122) and SetEnabled (:1148) both do. Upstream, the next queue event
+    // does the sweeping.
+    //
+    // Diverging because the setting is displayed as a duration and the rows are
+    // in front of the user: changing it to "5 seconds" and watching a
+    // ten-minute-old row sit there reads as a broken preference. Recorded here
+    // because a divergence nobody wrote down becomes a bug report later.
     if (typeof q.pruneDoneItems === 'function') {
       try { q.pruneDoneItems(); } catch { /* a sweep that fails leaves the rows alone */ }
     }

@@ -327,10 +327,11 @@ class TransferQueue extends EventEmitter {
     this.onceDone = qp.onceEmpty || 'none';
     this.progressMs = options.progressMs === undefined ? 250 : options.progressMs;
     // Was a fixed 5. A user who set "Keep reconnecting for" to twenty minutes
-    // got five attempts on the path fifteen of the sixteen transfer commands
-    // take, because this number was the whole reconnect policy and nothing here
-    // had ever read security.sessionReopenTimeout
-    // (Ding-Ding-Projects/material-winscp#28).
+    // got five attempts on the path TWELVE of the sixteen transfer commands
+    // take — the four `queue: 'off'` *NonQueueAction commands go foreground and
+    // honoured the preference correctly — because this number was the whole
+    // reconnect policy and nothing here had ever read
+    // security.sessionReopenTimeout (Ding-Ding-Projects/material-winscp#28).
     this.maxReconnects = options.maxReconnects === undefined ? 0 : options.maxReconnects;
     this._now = options.now || (() => Date.now());
 
@@ -725,6 +726,10 @@ class TransferQueue extends EventEmitter {
     if (!this._wasIdle) {
       this._wasIdle = true;
       this.emit('idle', { onceDone: this._onceDoneAction() });
+      // The batch is over and its request has been announced. Clearing it here
+      // is what stops "disconnect when this finishes" from being answered a
+      // second time by the next unrelated batch.
+      this._doneOnceDone = null;
       this._beepIfDue();
     }
   }
@@ -769,6 +774,19 @@ class TransferQueue extends EventEmitter {
       const a = it.copyParam.onceDoneOperation;
       if (a && a !== 'none') return a;
     }
+    // A completed item's request outlives the row it was asked on.
+    //
+    // With "Keep completed items for" set to "Do not keep them", the sweep runs
+    // synchronously the moment an item finishes — so by the time the queue goes
+    // idle the item asking to disconnect is no longer in `this.items`, and the
+    // loop above finds nothing. The user picked "on completion: disconnect",
+    // the transfer completed, and the app stayed connected: a per-item choice
+    // silently cancelled by an unrelated display preference.
+    //
+    // So the request is remembered when the item finishes rather than read back
+    // off a list that a sweep is allowed to empty. `_checkIdle` clears it after
+    // announcing, so the next batch starts from the global preference again.
+    if (this._doneOnceDone && this._doneOnceDone !== 'none') return this._doneOnceDone;
     return this.onceDone || 'none';
   }
 
@@ -795,6 +813,13 @@ class TransferQueue extends EventEmitter {
         item.finishedAt = Date.now();
         this._setState(item, 'done');
         this.emit('item-done', this.view(item));
+        // Take the item's "on completion" request before anything can remove
+        // the item — see _onceDoneAction. First non-none wins, matching the
+        // live-item scan it stands in for.
+        {
+          const asked = item.copyParam && item.copyParam.onceDoneOperation;
+          if (asked && asked !== 'none' && !this._doneOnceDone) this._doneOnceDone = asked;
+        }
         // The sweep runs AFTER the event, so "do not keep them" still announces
         // that the transfer finished before the row disappears.
         this._scheduleDonePrune();

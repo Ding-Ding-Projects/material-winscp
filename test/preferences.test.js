@@ -731,11 +731,26 @@ test('a comment that names an option is not a consumer of it either', async () =
   const session = require('node:fs')
     .readFileSync(require('node:path').join(repoRoot, 'design', 'main', 'session.js'), 'utf8');
   assert.ok(session.includes('sessionReopenBackground'), 'the comment under test is gone');
-  for (const key of ['security.sessionReopenBackground', 'security.sessionReopenAutoStall',
-    'editor.warnOrphans']) {
+  for (const key of ['security.sessionReopenAutoStall', 'editor.warnOrphans']) {
     assert.deepEqual(scan.consumersOf(key, corpus), [], `${key} has a consumer now`);
     assert.ok(schema.PENDING_KEYS.has(key), `${key} is read by nothing and says so on no row`);
   }
+
+  // sessionReopenBackground was in that list until the queue's reconnect
+  // supervisor landed and actually read it — two changes from the same wave,
+  // one declaring the key dead and the other bringing it to life. They merged
+  // without a textual conflict and the guard caught it, which is the whole
+  // point of the guard: it is the only thing that noticed.
+  //
+  // Asserting the read rather than deleting the case keeps that permanent. If
+  // the supervisor is ever removed, this fails loudly instead of the option
+  // quietly going back to doing nothing while its row says it works.
+  assert.deepEqual(scan.consumersOf('security.sessionReopenBackground', corpus),
+    ['design/main/ipc.js'],
+    'the queue reconnect supervisor is what reads this — if it moved, say where');
+  assert.ok(!schema.PENDING_KEYS.has('security.sessionReopenBackground'),
+    'a key with a real consumer must not still tell the user nothing acts on it');
+
   // The two that ARE read still read as read, so the comment rule did not take
   // its neighbours down with it.
   assert.ok(scan.consumersOf('security.sessionReopenAuto', corpus).includes('design/main/session.js'));

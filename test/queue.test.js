@@ -756,7 +756,8 @@ test('a dropped connection resumes the item rather than restarting it', async ()
 //
 // The queue used to cap reconnects at a hard-coded 5 and never look at
 // security.sessionReopenTimeout, so "Keep reconnecting for 20 minutes" bought
-// five attempts on the path fifteen of the sixteen transfer commands take.
+// five attempts on the path twelve of the sixteen transfer commands take (the
+// four `queue: 'off'` *NonQueueAction commands go foreground instead).
 // WinSCP has no such counter: TUploadQueueItem::DoTransferExecute calls
 // TTerminal::CopyToRemote (Queue.cpp:2324), so a queued transfer walks into the
 // same TRobustOperationLoop as a foreground one and gets the same budget.
@@ -1747,6 +1748,63 @@ test('the "once done" action is reported when the queue drains', async () => {
   assert.deepStrictEqual(idles, ['disconnect']);
 });
 
+test('"do not keep them" does not cancel the item\'s own "on completion" action', async () => {
+  // keepDoneItemsFor: 0 is a real user choice ("Do not keep them"), and it makes
+  // the sweep run synchronously the moment an item finishes. The idle
+  // announcement used to read the action back off `items` — which the sweep had
+  // just emptied — so the user picked "disconnect", the transfer completed, and
+  // the app stayed connected. A per-item choice silently cancelled by an
+  // unrelated display preference, with no error anywhere.
+  const { local, remote } = makePair();
+  local.put('/l/a.txt', 'a');
+
+  const q = new TransferQueue({ prefs: prefs({ queue: { keepDoneItemsFor: 0 } }), progressMs: 0 });
+  const idles = [];
+  q.on('idle', (e) => idles.push(e.onceDone));
+  q.add({
+    side: 'upload', source: '/l/a.txt', target: '/r/a.txt',
+    sourceAdapter: local, targetAdapter: remote,
+    copyParam: { onceDoneOperation: 'disconnect' },
+  });
+  await q.idle();
+  await sleep(5);
+
+  assert.strictEqual(q.items.length, 0, 'the sweep really did run — otherwise this proves nothing');
+  assert.deepStrictEqual(idles, ['disconnect'],
+    'the request outlives the row it was made on');
+});
+
+test('the "once done" request does not leak into the next batch', async () => {
+  // The other half of remembering it: a batch that asked to disconnect must not
+  // answer for a later batch that did not.
+  const { local, remote } = makePair();
+  local.put('/l/a.txt', 'a');
+  local.put('/l/b.txt', 'b');
+
+  const q = new TransferQueue({ prefs: prefs({ queue: { keepDoneItemsFor: 0 } }), progressMs: 0 });
+  const idles = [];
+  q.on('idle', (e) => idles.push(e.onceDone));
+
+  q.add({
+    side: 'upload', source: '/l/a.txt', target: '/r/a.txt',
+    sourceAdapter: local, targetAdapter: remote,
+    copyParam: { onceDoneOperation: 'disconnect' },
+  });
+  await q.idle();
+  await sleep(5);
+
+  q.add({
+    side: 'upload', source: '/l/b.txt', target: '/r/b.txt',
+    sourceAdapter: local, targetAdapter: remote,
+    copyParam: {},
+  });
+  await q.idle();
+  await sleep(5);
+
+  assert.deepStrictEqual(idles, ['disconnect', 'none'],
+    'the second batch asked for nothing and must be told nothing');
+});
+
 test('a failed item reports item-error and does not stop the queue', async () => {
   const { local, remote } = makePair();
   local.put('/l/ok.txt', 'ok');
@@ -1965,8 +2023,10 @@ test('changing the preference on a running queue takes effect without a restart'
   await q.idle();
   assert.strictEqual(q.list().length, 1);
 
-  // Exactly what ipc.js's refreshQueuePrefs does when the store changes, and
-  // then the sweep TTerminalQueue::SetKeepDoneItemsFor runs on the spot.
+  // Exactly what ipc.js's refreshQueuePrefs does when the store changes. The
+  // immediate sweep is this port's own choice — WinSCP's SetKeepDoneItemsFor
+  // (Queue.cpp:1126-1136) only assigns the field and lets the next queue event
+  // do it. See the comment at that call site for why we diverge.
   q.queuePrefs = { ...q.queuePrefs, keepDoneItemsFor: 0 };
   assert.strictEqual(q.pruneDoneItems(), 1);
   assert.deepStrictEqual(q.list(), []);
