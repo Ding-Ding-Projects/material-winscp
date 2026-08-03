@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `dfd9fe4`** — Refresh in-app changelog for high-weight roadmap slices
+**At commit `9e8c679`** — Refresh in-app changelog for editor and lifecycle hardening
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3315 run, **3314 pass, 0 fail**, 1 skipped |
-| Hand-written code | 216,538 lines across 398 files |
-| Commits | 122 on `main` |
-| Working tree | clean |
-| Remote | `origin/main` at `046c0df` — **differs from HEAD** |
+| Tests | 3321 run, **3320 pass, 0 fail**, 1 skipped |
+| Hand-written code | 216,720 lines across 398 files |
+| Commits | 125 on `main` |
+| Working tree | **1 uncommitted change(s)** |
+| Remote | `origin/main` at `2494d85` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `9e8c679` | 2026-08-03 | Refresh in-app changelog for editor and lifecycle hardening |
+| `abe24d9` | 2026-08-03 | Harden editor, terminal, SCP, and configuration lifecycles |
+| `2494d85` | 2026-08-03 | Refresh roadmap-slice handoff metadata |
 | `dfd9fe4` | 2026-08-03 | Refresh in-app changelog for high-weight roadmap slices |
 | `10f6d8a` | 2026-08-03 | Harden Login, commands, site security, and S3 WebDAV |
 | `046c0df` | 2026-08-03 | Refresh session-wave handoff metadata |
 | `6ae0377` | 2026-08-03 | Refresh in-app changelog for session and surface hardening |
 | `f61f353` | 2026-08-03 | Harden session, panel, search, bookmark, and About surfaces |
-| `19b22bb` | 2026-08-03 | Refresh preference-wave handoff metadata |
-| `058e002` | 2026-08-03 | Refresh changelog and stabilize empty-history coverage |
-| `bf1d6de` | 2026-08-03 | Harden preferences, SFTP, queue, sync, and import dialogs |
 
 ## Notes from whoever worked on this last
 
