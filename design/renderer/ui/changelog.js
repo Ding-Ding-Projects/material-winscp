@@ -187,6 +187,17 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "e5ed31b", kind: 'commit', ref: "e5ed31b", oid: "e5ed31bcd49308ef28bfba45afe8a7dc61a9f101", date: "2026-08-03",
+    title: "Refresh changelog for CLI hardening",
+    changes: [
+      { category: "fixed", text: "Record the verified repeated-switch parser and drag collision fix with links to the exact commit." },
+      { category: "changed", text: "English humour: The release diary now remembers which commands stopped wandering off." },
+    ],
+    changesYue: [
+      { category: "changed", text: "廣東話玩笑：changelog 終於記得邊啲 command 唔再周街迷路，唔使靠估。" },
+    ],
+  },
+  {
     id: "afbe57d", kind: 'commit', ref: "afbe57d", oid: "afbe57d891913aa7d1c1c9d7bcf929541213be4c", date: "2026-08-03",
     title: "Fix repeated CLI batches and drag-name collisions",
     changes: [
@@ -661,14 +672,6 @@ export const DEVELOPMENT = [
     changes: [
       { category: "security", text: "English: Record the Login, command, security, LocationProfiles, WebDAV, and S3 wave in the in-app history. The diary now contains fewer dragons hiding behind unchecked controls." },
       { category: "security", text: "廣東話：將 Login、command、security、LocationProfiles、WebDAV 同 S3 呢輪寫入 app history，少啲火龍可以躲喺未驗證嘅掣後面。" },
-    ],
-  },
-  {
-    id: "10f6d8a", kind: 'commit', ref: "10f6d8a", oid: "10f6d8a63c0cbd41640b27c372518e0add29c6f8", date: "2026-08-03",
-    title: "Harden Login, commands, site security, and S3 WebDAV",
-    changes: [
-      { category: "added", text: "English: Open nested Login folders in tree order, reopen the queue surface, validate SiteAdvanced encryption keys, cap WebDAV buffered responses, reject incomplete AssumeRole credentials, and add accessible LocationProfiles duplication. Add focused tests and documentation. The protocol edges now bring a clipboard, a seatbelt, and a very strict bouncer." },
-      { category: "security", text: "廣東話：Login folder 會按 tree order 開 nested sites、queue surface 會重開、SiteAdvanced encryption key 會驗、WebDAV response 有上限、AssumeRole 唔完整就拒絕，同 LocationProfiles 有 accessible duplicate。加 tests 同 docs，protocol edges 而家有 clipboard、安全帶，同一個好嚴嘅門口保安。" },
     ],
   },
 ];
