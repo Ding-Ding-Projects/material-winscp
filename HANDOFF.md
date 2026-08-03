@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `ecd6ef0`** — Refresh genuine Electron smoke capture
+**At commit `cfc9631`** — Refresh handoff after smoke evidence
 
 ## Where the work stands
 
@@ -15,9 +15,9 @@
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
 | Tests | 3190 run, **3189 pass, 0 fail**, 1 skipped |
 | Hand-written code | 212,194 lines across 369 files |
-| Commits | 75 on `main` |
-| Working tree | clean |
-| Remote | `origin/main` at `4b86bb2` — **differs from HEAD** |
+| Commits | 76 on `main` |
+| Working tree | **1 uncommitted change(s)** |
+| Remote | `origin/main` at `cfc9631` — in sync |
 
 ### Coverage by area
 
@@ -127,6 +127,7 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `cfc9631` | 2026-08-03 | Refresh handoff after smoke evidence |
 | `ecd6ef0` | 2026-08-03 | Refresh genuine Electron smoke capture |
 | `e1909fd` | 2026-08-03 | Normalize Windows coverage checks and target panel fixtures |
 | `4b86bb2` | 2026-08-03 | Refresh handoff after CI stabilization |
@@ -134,7 +135,6 @@ bite a successor who assumes otherwise:
 | `50233a0` | 2026-08-03 | Refresh real Electron smoke capture |
 | `5d0e67a` | 2026-08-03 | Port core session, protocol, UI, and transfer seams |
 | `20c2b38` | 2026-08-02 | Refresh the post-packaging handoff |
-| `8935691` | 2026-08-02 | Record the packaging guard in the changelog |
 
 ## Notes from whoever worked on this last
 
