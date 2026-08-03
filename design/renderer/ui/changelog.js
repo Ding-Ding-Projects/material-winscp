@@ -187,6 +187,27 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "9412e5b", kind: 'commit', ref: "9412e5b", oid: "9412e5b1ee72923e8d529f4dab43c42490ddb288", date: "2026-08-03",
+    title: "Fix palette, shortcuts, queue, checklist, and WebDAV",
+    changes: [
+      { category: "fixed", text: "Command-palette destinations stay keyboard-reachable, context menus borrow only exact shortcuts, directory checklist selection includes descendants, queue cancellation stops delayed writes, malformed panel rows become honest diagnostics, and WebDAV MKCOL verifies a 405 resource is really a directory. Regression tests, localized copy, docs, and a genuine Electron smoke capture keep the edges from doing improv comedy.\\n\\nCommand palette 仍然畀鍵盤行到，context menu 只借 exact shortcut，checklist 包埋子目錄，queue cancel 唔再偷偷寫 delayed chunk，panel 壞 row 會老實報告，WebDAV 遇到 405 會驗清楚係咪真係 directory。測試、翻譯、文件同真實 Electron capture 一齊補齊，等啲邊界唔好再即興加戲。" },
+    ],
+  },
+  {
+    id: "f8d2a55", kind: 'commit', ref: "f8d2a55", oid: "f8d2a55b6c839cf5811877a90e0700615d938eb8", date: "2026-08-03",
+    title: "Refresh hardening handoff metadata",
+    changes: [
+      { category: "changed", text: "The handoff now records the 7d90403 and 92a9211 milestones, the verified 3,213-pass suite, and the honest 59.0% coverage with 114 units still outstanding. The paperwork has finally caught up with the code instead of chasing it down the corridor.\\n\\nHandoff 而家記低 7d90403 同 92a9211、已驗證嘅 3,213 pass 測試，同埋老實嘅 59.0% coverage 及 114 個未完成 unit。文件終於追返上 code，唔使再喺走廊追住份紙跑。" },
+    ],
+  },
+  {
+    id: "92a9211", kind: 'commit', ref: "92a9211", oid: "92a921191ee5b397d7fcd9026b3d66c9714dc032", date: "2026-08-03",
+    title: "Refresh in-app changelog for hardening wave",
+    changes: [
+      { category: "fixed", text: "The in-app history now includes the verified 7d90403 configuration, crypto, mask, storage, and WinAPI fixes with full commit links and bilingual copy. The changelog no longer forgets the latest plot twist.\\n\\nApp 入面嘅歷史而家收錄已驗證嘅 7d90403 設定、crypto、mask、storage 同 WinAPI 修正，連埋完整 commit link 同雙語 copy；changelog 唔再漏咗最新一幕。" },
+    ],
+  },
+  {
     id: "7d90403", kind: 'commit', ref: "7d90403", oid: "7d9040307ce9bcbe971ab34f9aea4ac3e325f697", date: "2026-08-03",
     title: "Harden config, masks, crypto, storage, and WinAPI",
     changes: [
@@ -938,55 +959,6 @@ export const DEVELOPMENT = [
     changesYue: [
       { category: "changed", text: "份「淨化版」指示鏡像落後咗十四節。最核心嗰條 —— 「本地指示可以更嚴，但唔可以靜 雞雞廢咗全域規則，撞到就要停低講」—— 竟然係冇抄到嗰批入面。一份連「撞規矩點算」 都冇抄到嘅鏡像，其實已經用「唔齊」變相答咗你。" },
       { category: "changed", text: "順手 grep 過兩個檔案，確認冇漏任何私人用語出去 —— 嗰啲字係傾偈先用，永遠唔應該 出現喺公開 repo，而機械式抄鏡像正正就係會漏呢啲嘢。仲有 .claude/worktrees/ 要 ignore，唔係就會 commit 多一份成個 tree。" },
-    ],
-  },
-  {
-    id: "80e7814", kind: 'commit', ref: "80e7814", oid: "80e781447b762009faeafb2fedac4e386cd8c179", date: "2026-08-02",
-    title: "Reach the foreground transfer engine from the UI, and honour the recycle bin on overwrite",
-    changes: [
-      { category: "changed", text: "Two gaps closed, both verified against the real SFTP harness." },
-      { category: "added", text: "REACHABILITY. Commit 41becd9 said the transfer engine was unreachable because \"no ipc.js channel exists (grep: zero hits)\" and the byte mover was never supplied. Both halves were false when written: the channels landed in 74a92c6, the commit immediately before, and ipc.js:623 has always passed copyBytes. What was actually missing sat one hop further out — nothing in the RENDERER ever called them. All sixteen transfer actions ended at queue:add, including the four *CopyNonQueueAction entries, which in WinSCP are precisely the foreground CopyToRemote path (NonVisual.cpp:566 -> CustomScpExplorer.cpp:3181 Param.Queue = asOff -> :1337 -> :2858)." },
-      { category: "added", text: "The TRANSFERS table now carries WinSCP's asAuto/asOn/asOff, and queueTransfer branches to the engine on 'off'. Threading that through commands.js alone would have changed nothing a user can see: wiring.js:387 registers a dialog override for all sixteen actions, and THAT is what runs in the app — the unit test would have passed while the product ignored it." },
-      { category: "changed", text: "Two defects found on the way. ipc.js emitted the live OperationProgress, whose callbacks are own function properties, so webContents.send's structured clone refused the payload and emit() swallowed the DataCloneError by design: the foreground path reported nothing at all while it ran. It sends snapshot() now. And transfer:canParallel could only ever answer false, because ipc.js called a predicate whose first term is !!parallelOperation with two arguments." },
-      { category: "changed", text: "RECYCLE BIN. OverwrittenToRecycleBin was stored, mapped and displayed, and honoured by nothing: recycleFile() had exactly one caller, in deleteFile. A user who ticked the safety net for overwritten remote files did not get it, and the file was simply gone — the worst kind of missing feature, invisible until it matters." },
-      { category: "added", text: "The gate is protocolName === 'SFTP', not caps.recycleBin, which no adapter sets true; gating on the capability would have built something that could never fire. The subtler trap was the probe: the plan recycled when destFileExists, but that was only computed inside checkRemoteFile(), which returns false whenever confirmations are off — the queue's own default. The feature would have shipped and never once run. WinSCP warns about exactly this at SftpFileSystem.cpp:5129 (\"we need to find out that they exist first... even if overwrite confirmation is disabled\"), which is why its EXCL flag is OR'd with the setting rather than gated on confirmation. Both overwrite paths now probe when confirming OR preserving, and restore the recycled file's permissions onto the replacement." },
-      { category: "added", text: "Honest limits, not absorbed: a symlink is trusted from the adapter's stat rather than resolved via ReadSymlink; the resume-branch recycle surfaces a failure instead of offering WinSCP's retry/skip/abort; and four of the ten new queue tests are negative gates that pass either way by construction." },
-      { category: "changed", text: "443 unit + 82 e2e pass, 0 fail. Each behavioural test was proved to fail without its change." },
-    ],
-    changesYue: [
-      { category: "changed", text: "兩條罅一次補晒，兩邊都喺真 SFTP 上試過。" },
-      { category: "changed", text: "**接得通**：41becd9 話個引擎接唔到，話 ipc 冇 channel、又冇 byte mover。兩樣講嗰陣 都已經唔啱 —— channel 前一個 commit 就加咗，byte mover 一直都有畀。真正甩嗰橛喺 更出面：**個 renderer 由頭到尾冇叫過**。十六個動作全部行去 queue:add。仲有，淨係 改 commands.js 係一啲用都冇 —— `wiring.js` 個 override 先係真正行嗰個，測試會過, 但個 app 照樣唔理你。順手執到兩件：進度物件過唔到 structured clone，錯又俾人靜靜 吞咗，所以前景傳輸行緊嗰陣乜都唔出聲；`canParallel` 就永遠答 false。" },
-      { category: "changed", text: "**回收桶**：個設定存得、對得、畫得出，但冇人理。剔咗個安全網嘅人根本冇安全網, 檔案就咁冇咗 —— 最衰嗰種，唔出事你唔會知。閘要用 protocolName 而唔係 caps （冇 adapter 開過），仲有個更陰嘅陷阱：本來只喺開咗確認先去 stat，而 queue 預設 係唔確認 —— 即係出咗街都永遠唔會行過一次。WinSCP 自己份 source 都特登寫低咗呢點。" },
-      { category: "changed", text: "冇扮嘢嘅限制：symlink 信 adapter 講，冇自己解;續傳嗰邊失敗係照拋唔係畀你揀重試; 十個新 queue 測試入面有四個係死閘，改唔改都過。" },
-    ],
-  },
-  {
-    id: "eb9c43e", kind: 'commit', ref: "eb9c43e", oid: "eb9c43e7996c63102757e3d3a2648a97df1b8257", date: "2026-08-02",
-    title: "Time-limit the handoff's own test run, so it stops recommending --skip-tests",
-    changes: [
-      { category: "changed", text: "tools/handoff.js runs the suite itself to fill in the Tests row, and did it with no --test-timeout. So the same hang that stalls CI also freezes handoff generation — and the obvious way out is --skip-tests, after which the file cheerfully reports \"Tests | not run in this regeneration\"." },
-      { category: "changed", text: "That is exactly what the last handoff said. A document whose whole purpose is that it \"cannot flatter the state of the work\" ended up with its most important row blank, because the only way to make it finish was to stop asking." },
-      { category: "changed", text: "Same 120s as package.json, for the same reason." },
-      { category: "changed", text: "handoff.js 自己會跑測試去填嗰行「Tests」，但一直冇 --test-timeout。所以吊死 CI" },
-    ],
-    changesYue: [
-      { category: "changed", text: "嗰個問題，一樣會吊死份 handoff —— 而最順手嘅出路就係 --skip-tests，跟住份文件就 好開心咁寫住「今次冇跑測試」。" },
-      { category: "changed", text: "上一份 handoff 寫嘅就係咁。一份成篇強調「唔識講大話」嘅文件，最緊要嗰行係空白嘅, 因為唯一令佢跑得完嘅方法，就係唔好問。" },
-    ],
-  },
-  {
-    id: "c027fc6", kind: 'commit', ref: "c027fc6", oid: "c027fc64ace7fdeffa9c4235ce456914a8bfc857", date: "2026-08-02",
-    title: "Give the test suite a timeout, so a hung test is a red build and not a lost hour",
-    changes: [
-      { category: "changed", text: "`npm test` IS the CI test job, and node --test has no default per-test timeout. One test that never settles therefore hangs the runner until GitHub's six-hour ceiling kills it — and because concurrency.group is keyed on the ref with cancel-in-progress false, that run also blocks every later push to main behind it. Both halves happened today: a main run sat in \"Test (windows-latest)\" for over an hour while every other run of the day finished in three to six minutes, and the next push queued behind it and never started." },
-      { category: "changed", text: "A hang is the worst thing a suite can do, because it produces no output at all. A failure names a test. A hang leaves nothing to grep and looks, from outside, exactly like slow." },
-      { category: "changed", text: "120s per test against a suite that runs in ~14s is slack, not a constraint. The guard test asserts the flag is present and non-zero; removing it from package.json turns that test red with the reason spelled out." },
-      { category: "changed", text: "`npm test` 就係 CI 個 test job，而 node --test 預設冇 per-test timeout。一個唔識 停嘅測試就吊住成個 runner，直到 GitHub 六個鐘上限先斬 —— 加上 concurrency 係跟" },
-    ],
-    changesYue: [
-      { category: "changed", text: "ref 而且唔 cancel-in-progress，仲要順手擋住之後所有 push。今日兩樣都發生咗：一個 main run 喺 \"Test (windows-latest)\" 坐咗成粒鐘，而全日其他 run 三到六分鐘就完, 跟住嗰個 push 排喺後面永遠冇開過。" },
-      { category: "changed", text: "吊死係測試最衰嘅結局，因為佢乜都唔出。衰咗起碼講到邊個測試；吊死連 grep 都冇得 grep，喺出面睇落同「行得慢」一模一樣。" },
-      { category: "changed", text: "成套跑 14 秒，畀 120 秒一個測試係鬆到冇朋友。守門測試會查住個 flag 仲喺唔喺度。" },
     ],
   },
 ];
