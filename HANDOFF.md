@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `6050d27`** — Stop ssh2 handing us a key its own parser rejects, roughly once in 350
+**At commit `c0cf846`** — Document queued symlink planning in the changelog
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **55.3%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 67.9% — includes embedded hex resources, **do not quote this one** |
-| Tests | 2903 run, **2902 pass, 0 fail**, 1 skipped |
-| Hand-written code | 191,829 lines across 275 files |
-| Commits | 37 on `main` |
-| Working tree | **4 uncommitted change(s)** |
-| Remote | `origin/main` at `6050d27` — in sync |
+| Tests | 3019 run, **3018 pass, 0 fail**, 1 skipped |
+| Hand-written code | 201,701 lines across 301 files |
+| Commits | 60 on `main` |
+| Working tree | **3 uncommitted change(s)** |
+| Remote | `origin/main` at `8f3b126` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -93,9 +93,11 @@ bite a successor who assumes otherwise:
 
 ## Open issues
 
-23 open on the tracker.
+25 open on the tracker.
 
-- [#24](https://github.com/Ding-Ding-Projects/material-winscp/issues/24) 🐛 excludeEmptyDirectories prunes every directory on a Windows download, losing the whole transfer · Windows 下載成個死
+- [#28](https://github.com/Ding-Ding-Projects/material-winscp/issues/28) 🐛 The queue ignores "Keep reconnecting for" — five hardcoded attempts on the path most transfers take · 佇列唔理重連設定
+- [#27](https://github.com/Ding-Ding-Projects/material-winscp/issues/27) 🐛 Eight preferences are stored, rendered, and read by nothing — with no row warning the user · 八個設定得個樣
+- [#26](https://github.com/Ding-Ding-Projects/material-winscp/issues/26) 🐛 isEmptyDirectory recurses through symlinks WinSCP refuses to follow, and the remote size calculation still ignores the rule · 空目錄判斷會經 symlink 行落去
 - [#23](https://github.com/Ding-Ding-Projects/material-winscp/issues/23) 🗺️ Roadmap: truthful empty states and auditable discards · 真實空白狀態同可追蹤嘅捨棄
 - [#22](https://github.com/Ding-Ding-Projects/material-winscp/issues/22) 🚫 Policy: no promotional nags — do not port WinSCP's donation prompts · 唔好扭錢
 - [#21](https://github.com/Ding-Ding-Projects/material-winscp/issues/21) 🗺️ Roadmap: changelog entries link to their commits · 更新日誌要連到 commit
@@ -123,14 +125,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
-| `6050d27` | 2026-08-02 | Stop ssh2 handing us a key its own parser rejects, roughly once in 350 |
-| `90759dc` | 2026-08-02 | Stop winscp.com exiting mid-prompt, and stop the preferences guard lying in reverse |
-| `3b3b14c` | 2026-08-02 | Prune empty directories with the target adapter's separator, and teach the engine the rule at all |
-| `8e75cb2` | 2026-08-02 | Impose the FTP reconnect budget tfUseFileTransferAny was always meant to set |
-| `bc6fbed` | 2026-08-02 | Stop the queue's resume from deleting the symlink it was told to upload over |
-| `1c7bbce` | 2026-08-02 | Give CI's checkouts full history so changelog shas can resolve |
-| `334c993` | 2026-08-02 | Stop the resource extractor exiting the test process that called it |
-| `168fac5` | 2026-08-02 | Keep the prompt timers ref'd, so a waiting prompt cannot quietly exit instead |
+| `c0cf846` | 2026-08-02 | Document queued symlink planning in the changelog |
+| `640d1f4` | 2026-08-02 | Align queued local symlink planning with foreground transfers |
+| `328be29` | 2026-08-02 | Record funny-level disclosure capture |
+| `8f3b126` | 2026-08-02 | Fix what the verifiers caught: a lost "on completion" action, and two false claims |
+| `618ad8d` | 2026-08-02 | Merge branch 'worktree-wf_1e396398-c91-3' |
+| `b675271` | 2026-08-02 | Merge branch 'worktree-wf_1e396398-c91-2' |
+| `56e44da` | 2026-08-02 | Stop the pending-options guard proving its own subject matter consumed |
+| `148b6cc` | 2026-08-02 | Let the queue read "Keep reconnecting for", instead of counting to five |
 
 ## Notes from whoever worked on this last
 
