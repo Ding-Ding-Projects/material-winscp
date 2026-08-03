@@ -187,6 +187,30 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "7592b4c", kind: 'commit', ref: "7592b4c", oid: "7592b4ca950d1cebf62a8f680d9fd6f74cded36b", date: "2026-08-03",
+    title: "Harden configuration, console, SCP, and progress surfaces",
+    changes: [
+      { category: "added", text: "English: Roll back failed configuration imports, drain SCP startup output, scope console events by session, validate optional custom-command prompts, announce terminal progress states, and expose directory execution decisions. Add focused tests and documentation. The boundaries now check their passports before crossing, which is excellent news for the tiny state machines." },
+      { category: "changed", text: "廣東話：設定匯入失敗會 rollback、SCP 會食走 startup banner、console event 按 session 分流、custom command optional prompt 會驗、progress terminal state 會講清楚，同 dirview 有 ExecuteFile decision。加 tests 同 docs，啲 boundaries 終於識查 passport，細細粒 state machines 安心晒。" },
+    ],
+  },
+  {
+    id: "9430464", kind: 'commit', ref: "9430464", oid: "9430464453b81f19bef3640a476797d6ab83bc72", date: "2026-08-03",
+    title: "Refresh lifecycle-hardening handoff metadata",
+    changes: [
+      { category: "changed", text: "English: Record the verified 3,285/3,286 test result, unchanged 59.0% logic coverage, 114 remaining units, and this lifecycle checkpoint. The map stays honest while the expedition keeps moving." },
+      { category: "changed", text: "廣東話：記低已驗證嘅 3,285/3,286 測試、仍然 59.0% logic coverage、剩低 114 個 units 同今次 lifecycle checkpoint。張地圖照講真話，隊伍繼續行。" },
+    ],
+  },
+  {
+    id: "ec10eab", kind: 'commit', ref: "ec10eab", oid: "ec10eab31515c37c8e2d67000a83b5435f9ed0f2", date: "2026-08-03",
+    title: "Refresh in-app changelog for lifecycle hardening",
+    changes: [
+      { category: "fixed", text: "English: Record the editor, session, sync, authentication, preset, and workspace lifecycle fixes in the in-app release history. The diary now remembers who cleaned up after the last scene." },
+      { category: "fixed", text: "廣東話：將 editor、session、sync、authentication、preset 同 workspace lifecycle fixes 寫入 app changelog，日記終於記得邊個執返最後一幕啲道具。" },
+    ],
+  },
+  {
     id: "c95cd9d", kind: 'commit', ref: "c95cd9d", oid: "c95cd9d45a09042bd3528e38457f5b1464a2c68b", date: "2026-08-03",
     title: "Harden editor, session, sync, auth, and workspace lifecycles",
     changes: [
@@ -674,67 +698,6 @@ export const DEVELOPMENT = [
       { category: "changed", text: "順手救返個更大鑊嘅：ipc.js 之前將 reconnect 同其他 event 一齊掟去 renderer，個 payload 入面有 function，webContents.send 一 clone 就仆街，而 queue 一見到有人聽就唔行自己嗰個 backoff —— 即係有人舉手答問題，舉完手唔出聲。結果第一次斷線，件嘢就企喺度企一世，仲 佔住個傳送位。而家真係有人答佢喇。用家撞到嘅從來唔係「試咗五次」，係「一次都未試完」。" },
       { category: "changed", text: "Tests: test/queue.test.js 44 -> 52 (all 8 new cases fail against the unmodified source: 44 pass / 8 fail), test/terminal.test.js 100 -> 101 (the new case fails without the change). Also green and unchanged: test/transfer.test.js 88, test/sync.test.js 20, test/script.test.js 194, test/dialogs-transfer.test.js 83, on Node 26.5.1 and on CI's Node 22.23.2. The two ipc cases fail by HANGING for two seconds against the old wiring, which is the production symptom exactly. No test asserts the `_reopenStart === null` guard in _run; it is defensive against a zero-based injected clock and against a _pump re-entry, and neither is reachable from a test today." },
       { category: "changed", text: "Not done here: the in-app changelog. It is generated from git log by tools/changelog.js and cannot contain the commit that has not been made yet; it was already stale at a700402 before this change. HANDOFF.md likewise needs the full `npm test` run this worktree deliberately does not do." },
-    ],
-  },
-  {
-    id: "f5c7ba9", kind: 'commit', ref: "f5c7ba9", oid: "f5c7ba9a32316fa948d50517ff60a1507020fa6d", date: "2026-08-02",
-    title: "Stop the emptiness check walking through symlinks the copy then refuses",
-    refs: ["#26"],
-    changes: [
-      { category: "changed", text: "Issue #26, all three defects, verified against the tree and vendor/ first." },
-      { category: "fixed", text: "1. transfer.js isEmptyDirectory recursed on child.type === 'dir' with no CanRecurseToDirectory guard, so it counted the files under a symlinked directory it was never going to follow. WinSCP gates the descent (Terminal.cpp:4727) and counts an unfollowable directory in Stats->Directories only, so `Stats.Files == 0` survives and the parent is empty. Ours said \"not empty\", the copy dutifully mkdir'd the parent, and then sink refused the very same symlink - leaving on disk exactly the empty directory the option exists to prevent. SFTP makes this ordinary rather than exotic: protocols/sftp.js:1311 resolves an S_IFLNK to type:'dir' while keeping isSymlink, so every session with resolveSymlinks on can hit it. The guard is remote-only, because DirectorySource (Terminal.cpp:7852) and directorySource here both walk into any local directory, symlink or not, and a predicate that disagreed with the copy it is predicting would be a different bug wearing the same hat." },
-      { category: "changed", text: "2. terminal.js allowRemoteFileTransfer was two thirds of DoAllowRemoteFileTransfer: it had the mask and the .filepart rules and not the cpNoEmptyDirectories clause (Terminal.cpp:5806). A remote count therefore reported directories the copy would then refuse. Bytes never diverged - a directory contributes none - so it hid in stats.directories and in the collected file list a transfer is driven from, while calculateLocalFilesSize honoured the clause and the two sides of one option disagreed with each other. Ported IsEmptyRemoteDirectory as the original builds it: the ordinary size walk with csStopOnFirstFile, excludeEmptyDirectories cleared on the inner copy param (\":6438, to avoid endless recursion\"), and the answer read off Stats.Files. The predicate is async now and calculateFileSize awaits it." },
-      { category: "removed", text: "One thing deliberately not copied: the original returns `Params.Result && (Stats.Files == 0)` and Params.Result is untouched by a listing that failed under csIgnoreErrors, so an unreadable directory comes back \"empty\" and is dropped along with everything under it. We also require the listing to have succeeded - the value DoCalculateDirectorySize returns and the original computes and discards (:4785/:4810). Agreeing with the copy is the whole job." },
-      { category: "changed", text: "3. queue.js _buildPlan is a second collector and it was one filter apart: IsEmptyLocalDirectory hard-codes DisallowTemporaryTransferFiles=true for its child predicate (:6199), so a local directory of nothing but report.filepart is empty; the queue kept it. It now ignores leftovers when the source is local, drops the files under a directory it prunes (only kind:'dir' entries are mkdir'd, so an orphan is an ENOENT), and recounts files/bytes from the plan that will actually run. The remote asymmetry is preserved: :6441 passes the caller's flag through and the copy path never sets it, so a remote directory of leftovers is genuinely not empty." },
-      { category: "removed", text: "Recursion bound: MAX_EMPTY_DIRECTORY_DEPTH = 128, in isEmptyDirectory only. The remote side no longer needs it once CanRecurseToDirectory is in, but the local side is unguarded by design and a POSIX /a/link -> /a yields /a/link/link/link/... forever. calculateFileSize already had its guard at terminal.js:2733, so isEmptyRemoteDirectory did not get a second one. The answer at the bound is the conservative one an unreadable directory already gets: not empty." },
-      { category: "added", text: "Tests, each proven by reverting the source hunk and leaving the tests: test/transfer.test.js 92 pass / 0 fail (90/2 without the transfer.js hunk; the parent directory was created as '/l/d/linky', and the cyclic listing answered \"empty\" after 1001 listings) test/terminal.test.js 105 pass / 0 fail (100/5 without the terminal.js hunk; directories 3 vs 2, 5 vs 2, 4 vs 2, and isEmptyRemoteDirectory absent) test/queue.test.js 47 pass / 0 fail (46/1 without the queue.js hunk; '/r/tree/leftovers' and '/r/tree/numbered' survived the prune) Three of the new cases are controls that pass either way and are labelled as such in the file: followDirectorySymlinks putting the link back in scope, the local upload still descending into a directory symlink, and a .filepart beside a real file still going up." },
-      { category: "changed", text: "docs/protocol-gaps.md: the Partial row now describes the depth bound, the unreadable-directory divergence, and the one gap left standing - queue.js:810 skips a symlinked directory on both sides, so a queued upload of a local directory symlink is skipped where the engine uploads it." },
-      { category: "changed", text: "---" },
-    ],
-    changesYue: [
-      { category: "changed", text: "唔好再跟住條 symlink 行落去，行完個 copy 又話唔要" },
-      { category: "changed", text: "同一個掣三宗罪，睇過 vendor/ 先落手：" },
-      { category: "changed", text: "一、isEmptyDirectory 見到 type 係 'dir' 就衝入去，冇問過 CanRecurseToDirectory。條 symlink 指去嘅目錄入面有檔案，佢就當個阿爸「唔 空」，個 copy 乖乖 mkdir 咗個阿爸出嚟，跟住 sink 一睇：symlink 喎，唔跟。硬係 整咗個空目錄出嚟 —— 而「唔理空目錄」呢個掣，存在嘅意義就係唔好整呢啲嘢。 WinSCP 見到跟唔到嘅目錄，淨係 Directories++，Files 一個都唔加，所以佢話「空」。 本地嗰邊照舊唔加閘，因為 directorySource 真係會行入去；個預言同個現實要講同一 句話。" },
-      { category: "changed", text: "二、allowRemoteFileTransfer 得三分之二 —— mask 同 .filepart 有，空目錄嗰句冇。 所以「計大細」數到嘅目錄，個 copy 跟住就唔要。Bytes 冇錯（目錄本身零 byte）， 錯喺目錄數同埋成個 transfer 靠嚟行嘅檔案清單；而本地嗰邊一直做啱，同一個掣兩 邊講唔同嘢。而家照 WinSCP 寫法搬過嚟。得一樣故意唔照抄：原著開唔到個目錄都當 「空」，連入面啲嘢一齊唔要；我哋要求真係 list 得成先算數。" },
-      { category: "changed", text: "三、queue.js 係第二個收集器，差咗一個篩：本地目錄入面淨係得 report.filepart， WinSCP 當空，佢當有嘢。而家補返，連帶被剪走嘅目錄底下啲檔案一齊剪（唔剪就 mkdir 唔到，ENOENT 等緊你），數目同 bytes 都重新數過。遠端嗰邊唔郁 —— 原著本 身就係唔對稱。" },
-      { category: "changed", text: "遞歸上限 128 層，淨係加喺 isEmptyDirectory。遠端有咗 symlink 嗰道閘就唔驚，但 本地係特登唔加閘嘅，`/a/link -> /a` 可以行到天光。行到上限就答「唔空」，同開唔 到個目錄一樣咁保守。" },
-      { category: "changed", text: "測試：transfer 92 全過（唔改 source 就 90/2）、terminal 105 全過（100/5）、 queue 47 全過（46/1）。有三個係對照組，兩邊都過，已經喺檔案入面寫明。" },
-    ],
-  },
-  {
-    id: "a700402", kind: 'commit', ref: "a700402", oid: "a700402a82eb0ed49aa7f5e73a304ab602be8450", date: "2026-08-02",
-    title: "Make starting a site a labelled button, not just the first row of a list",
-    changes: [
-      { category: "added", text: "WinSCP puts New Site at the top of the site tree and offers no button. This port copied that faithfully, and faithful turned out not to mean findable: the row carries no affordance saying it is the way to begin, so once a few sites are saved the list reads as *saved sites* and the one row that is really a command looks like an entry nobody has filled in yet." },
-      { category: "added", text: "The row is untouched. This adds a second, labelled way to reach it, next to Manage and Tools — which is what the tree's own `add` icon has been promising all along." },
-      { category: "added", text: "It also resets. select() re-runs onSelect even when the node is already current, so clicking New Site while a half-filled new site is on screen starts over — the same thing Manage ▸ Reset does, one click closer." },
-      { category: "added", text: "Verified against the running app rather than by reading: with a saved site loaded the host field reads `probe.example`, and after clicking the button it is empty and the tree selection has moved to New Site. The e2e test asserts exactly that, and asserts the CLEARING rather than only the selection — a button that moved the highlight without clearing the form would look right and quietly start the user from someone else's settings." },
-      { category: "added", text: "Fails without the change: \"the site manager must expose New Site as a button, not only as a tree row\". e2e-app 37/37, full suite 2980 tests / 2979 pass / 0 fail on Node 26." },
-      { category: "changed", text: "The screenshot is the real dialog, captured through the project's own harness running on an off-screen desktop, so nothing appeared on anyone's screen." },
-    ],
-    changesYue: [
-      { category: "changed", text: "WinSCP 本身就係將「New Site」擺喺個站點樹最頂，冇掣。呢個 port 照抄咗，但係「忠於 原著」唔等於「搵得到」：嗰行completely冇任何跡象話畀你聽佢係開始嘅地方，所以你一 儲咗幾個站點之後，成個 list 睇落就係「已儲存嘅站點」，而唯一一行其實係指令嘅，就 好似一個未填完嘅項目咁。" },
-      { category: "changed", text: "嗰行冇郁過。呢個係第二條有名有姓嘅路，擺喺 Manage 同 Tools 隔籬 —— 其實個樹自己 嗰個 `add` 圖示一路都係咁承諾緊。" },
-      { category: "changed", text: "順便仲識 reset：喺已經揀咗 New Site 嘅時候再撳，會重新開過。" },
-      { category: "changed", text: "係對住真嘅 app 驗嘅，唔係睇 code 估：載入咗一個已儲存站點之後 host 係 `probe.example`, 撳完個掣就變空，而且個樹跳咗去 New Site。個測試特登 assert 埋「會清空」而唔淨係 assert「揀咗邊行」—— 一個郁咗高亮但冇清空表單嘅掣，睇落一模一樣，但會靜靜雞用返 上一個站點嘅設定開始。" },
-    ],
-  },
-  {
-    id: "a1eb363", kind: 'commit', ref: "a1eb363", oid: "a1eb363c4b8472398ff7d2af87ccb8e8fcb63385", date: "2026-08-02",
-    title: "The site is live: production renders, and the download button is a real installer",
-    refs: ["#29"],
-    changes: [
-      { category: "removed", text: "#29 said the repository advertised a URL where every path 404s. It no longer does. This is the capture of https://ding-ding-projects.github.io/material-winscp/ itself — production, not a local server — taken through the same headless harness at the same 1400x1000 as the \"before\"." },
-      { category: "changed", text: "The Pages workflow ran for the first time and went green, and configure-pages enabled Pages on its own, which was the one step nobody could verify in advance." },
-      { category: "changed", text: "/ 200 /content.js 200 /app.js 200 /lib/router.js 200 /app.css 200 /404.html 200" },
-      { category: "changed", text: "The download button is the part worth checking rather than admiring. The rule is that it must carry an immutable release asset URL from a verified manifest, or not exist. The local build showed the second half working — no manifest, no button, and a sentence saying so. Production shows the first:" },
-      { category: "changed", text: "https://github.com/.../releases/download/v0.1.465/WinSCP.Material.0.1.465.Setup.exe ranged fetch HTTP 206 first two bytes MZ — a real Windows executable Content-Length 130,823,168 bytes = 124.8 MB" },
-      { category: "changed", text: "which is exactly what the button says: \"Version 0.1.465 · 124.8 MB\". Not a guessed URL, not a link to a tag page, not a number typed next to a link that points somewhere else." },
-    ],
-    changesYue: [
-      { category: "changed", text: "#29 個原文係話「個 repo 賣廣告嗰條網址，每一頁都係 404」。而家唔係喇。呢張相影嘅 係**線上真嘅網站**，唔係本機 server，同「之前」嗰張用返一模一樣嘅方法同尺寸。" },
-      { category: "changed", text: "Pages workflow 第一次行就綠，而且 configure-pages 自己開咗 Pages —— 呢一步之前 係冇人驗證得到嘅。" },
-      { category: "changed", text: "個下載掣先係要查嘅嘢，唔係影完就算。規矩係：要用可驗證嘅 release asset 真 URL, 唔係就唔好出個掣。本機 build 示範咗後半（冇 manifest 就冇掣，仲寫明點解）；線上 示範咗前半 —— 抓真嗰個檔案返嚟，206、MZ 開頭、130,823,168 bytes，即係 124.8 MB, 同個掣上面寫嘅一個字都唔差。" },
     ],
   },
 ];
