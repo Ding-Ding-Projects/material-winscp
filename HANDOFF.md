@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `c0cf846`** — Document queued symlink planning in the changelog
+**At commit `c212107`** — Use the set size for the handoff count
 
 ## Where the work stands
 
@@ -14,9 +14,9 @@
 | **Port coverage (logic)** | **55.3%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 67.9% — includes embedded hex resources, **do not quote this one** |
 | Tests | 3019 run, **3018 pass, 0 fail**, 1 skipped |
-| Hand-written code | 201,701 lines across 301 files |
-| Commits | 60 on `main` |
-| Working tree | **3 uncommitted change(s)** |
+| Hand-written code | 201,712 lines across 301 files |
+| Commits | 65 on `main` |
+| Working tree | **1 uncommitted change(s)** |
 | Remote | `origin/main` at `8f3b126` — **differs from HEAD** |
 
 ### Coverage by area
@@ -125,14 +125,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `c212107` | 2026-08-02 | Use the set size for the handoff count |
+| `883b33f` | 2026-08-02 | Count handoff dirt from Git name lists |
+| `225b7ae` | 2026-08-02 | Trim Windows status paths before counting handoff dirt |
+| `cb56f8a` | 2026-08-02 | Keep generated handoff state self-consistent |
+| `5853825` | 2026-08-02 | Refresh the verified handoff and roadmap |
 | `c0cf846` | 2026-08-02 | Document queued symlink planning in the changelog |
 | `640d1f4` | 2026-08-02 | Align queued local symlink planning with foreground transfers |
 | `328be29` | 2026-08-02 | Record funny-level disclosure capture |
-| `8f3b126` | 2026-08-02 | Fix what the verifiers caught: a lost "on completion" action, and two false claims |
-| `618ad8d` | 2026-08-02 | Merge branch 'worktree-wf_1e396398-c91-3' |
-| `b675271` | 2026-08-02 | Merge branch 'worktree-wf_1e396398-c91-2' |
-| `56e44da` | 2026-08-02 | Stop the pending-options guard proving its own subject matter consumed |
-| `148b6cc` | 2026-08-02 | Let the queue read "Keep reconnecting for", instead of counting to five |
 
 ## Notes from whoever worked on this last
 
