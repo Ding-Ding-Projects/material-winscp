@@ -317,6 +317,8 @@ test('PutObject then GetObject is byte-identical, and Range works', async () => 
   assert.equal(await adapter.checksum('/bucket-one/blob.bin'),
     crypto.createHash('md5').update(payload).digest('hex'),
     'the ETag of a single-part object really is its MD5');
+  await assert.rejects(() => adapter.checksum('/bucket-one/blob.bin', 'sha256'),
+    /does not support sha256; only md5 is available/i);
   await adapter.disconnect();
 });
 

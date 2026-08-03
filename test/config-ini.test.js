@@ -151,6 +151,20 @@ test('failed JSON import rolls back the live configuration before reporting the 
   assert.deepEqual(config.exportState(), before);
 }));
 
+test('malformed JSON import reports a configuration error without mutating sites', () => withRoot((root) => {
+  const source = path.join(root, 'broken.json');
+  fs.writeFileSync(source, '{"sites": [', 'utf8');
+  const config = new Config();
+  config.data.sites = [{ id: 'existing', name: 'Existing' }];
+
+  assert.throws(() => config.importFile(source), (error) => {
+    assert.match(error.message, /^The configuration file is not valid JSON:/);
+    assert.ok(error.cause instanceof SyntaxError);
+    return true;
+  });
+  assert.deepEqual(config.data.sites, [{ id: 'existing', name: 'Existing' }]);
+}));
+
 test('failed INI import rolls back sites and folders before reporting the write error', () => withRoot(() => {
   const config = new Config();
   config.data.sites = [{ id: 'existing', name: 'Existing' }];

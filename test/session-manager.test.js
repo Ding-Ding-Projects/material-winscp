@@ -72,6 +72,27 @@ test('disconnect cancels an active Terminal operation before closing the adapter
   assert.equal(cancelled, 1);
 });
 
+test('concurrent disconnects share one adapter teardown', async () => {
+  const session = new Session({ protocol: 'sftp', hostName: 'once.example' }, { emit() {} });
+  let disconnects = 0;
+  let release;
+  const adapter = cacheAdapter();
+  adapter.disconnect = async () => {
+    disconnects++;
+    await new Promise((resolve) => { release = resolve; });
+    adapter.connected = false;
+  };
+  session.adapter = adapter;
+
+  const first = session.disconnect({ keepOpen: true });
+  const second = session.disconnect({ keepOpen: true });
+  assert.strictEqual(first, second);
+  assert.equal(disconnects, 1);
+  release();
+  await Promise.all([first, second]);
+  assert.equal(session.state.status, 'closed');
+});
+
 test('a close event from a replaced adapter cannot take down the new adapter', () => {
   const session = new Session({ protocol: 'sftp', hostName: 'race.example' }, { emit() {} });
   const oldAdapter = new EventEmitter();

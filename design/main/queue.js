@@ -99,8 +99,13 @@ class Throttle {
   }
 
   setRate(rate) {
-    this.rate = rate > 0 ? rate : 0;
-    if (!this.rate) this.available = Date.now();
+    const next = rate > 0 ? rate : 0;
+    this.rate = next;
+    // A live preference change must not inherit reservations made at the old
+    // rate.  Otherwise increasing the limit (or disabling it) still waits on
+    // the old bucket's future debt, contradicting setSpeedLimit's immediate
+    // effect.  The next chunk starts a fresh schedule at the new rate.
+    this.available = Date.now();
   }
 
   async take(n) {

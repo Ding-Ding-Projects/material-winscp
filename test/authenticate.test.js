@@ -13,6 +13,12 @@ test('host-key acceptance closes only after answer delivery succeeds', () => {
   assert.match(source, /onSelect: \(close\) => \{ accept\(false, close\); return true; \}/);
 });
 
+test('host-key acceptance fails closed when the presented fingerprint is missing', () => {
+  assert.match(source, /const presentedFingerprint = String\(payload\?\.fingerprintSHA256 \|\| ''\)\.trim\(\);/);
+  assert.match(source, /if \(!presentedFingerprint\) \{[\s\S]*?notify\.error\(t\('hostKeyTitle'\), t\('txHkRejected', hostPort\)\);[\s\S]*?return;/);
+  assert.match(source, /fingerprintBlock\(changed \? 'txHkPresented' : 'txHkFingerprint', presentedFingerprint\)/);
+});
+
 test('changed host-key replacement keeps the second confirmation before delivery', () => {
   assert.match(source, /defaultAnswer: 'no'/);
   assert.match(source, /if \(r\.answer === 'yes'\) accept\(true, close\)/);

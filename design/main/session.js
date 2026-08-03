@@ -135,6 +135,7 @@ class Session extends EventEmitter {
     this._reconnect = { attempts: 0, timer: null, wanted: false, startedAt: 0 };
     this._closing = false;
     this._connectPromise = null;
+    this._disconnectPromise = null;
     this._connectGeneration = 0;
     this._promptRefused = false;
     this._promptCancelled = false;
@@ -698,7 +699,17 @@ class Session extends EventEmitter {
    * is indistinguishable from the network dropping unless we say so here.
    * connect() clears the flag again.
    */
-  async disconnect(options) {
+  disconnect(options) {
+    if (this._disconnectPromise) return this._disconnectPromise;
+    const promise = this._disconnect(options);
+    const gate = promise.finally(() => {
+      if (this._disconnectPromise === gate) this._disconnectPromise = null;
+    });
+    this._disconnectPromise = gate;
+    return gate;
+  }
+
+  async _disconnect(options) {
     const o = options || {};
     this._closing = true;
     this._connectGeneration++;

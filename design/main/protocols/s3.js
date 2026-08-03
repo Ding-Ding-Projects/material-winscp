@@ -1259,8 +1259,9 @@ class S3Adapter extends Adapter {
    * and must not be presented as one.
    */
   async checksum(p, algorithm = 'md5') {
-    if (String(algorithm).toLowerCase() !== 'md5') {
-      throw new Error('S3 exposes only the ETag, which is an MD5 for single-part objects');
+    const requested = String(algorithm).toLowerCase();
+    if (requested !== 'md5') {
+      throw new Error(`S3 checksum does not support ${algorithm}; only md5 is available from single-part ETags`);
     }
     const info = await this.stat(p);
     const etag = info.raw && info.raw.etag ? info.raw.etag : '';

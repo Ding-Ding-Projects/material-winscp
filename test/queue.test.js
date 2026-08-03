@@ -734,6 +734,25 @@ test('setSpeedLimit changes the limit of an item already queued', async () => {
   assert.strictEqual(item.state, 'done');
 });
 
+test('setSpeedLimit immediately replaces an active bucket schedule', async () => {
+  const { local, remote } = makePair({ chunkSize: 1024 });
+  local.put('/l/a.bin', bigBuffer(4096));
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote,
+    copyParam: { cpsLimit: 2000 },
+  });
+
+  await waitFor(() => item.progress.bytes > 0, 4000, 'the throttled transfer to start');
+  const started = Date.now();
+  assert.strictEqual(q.setSpeedLimit(item.id, 0), true);
+  await q.idle();
+
+  assert.ok(Date.now() - started < 1000, 'removing the limit must not wait on old token debt');
+  assert.ok(remote.read('/r/a.bin').equals(local.read('/l/a.bin')));
+});
+
 test('resume continues from the partial file instead of restarting', async () => {
   const { local, remote } = makePair({ chunkSize: 4096 });
   const payload = bigBuffer(40960);

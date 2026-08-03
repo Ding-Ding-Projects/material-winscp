@@ -293,7 +293,12 @@ class Config extends EventEmitter {
     const source = path.resolve(String(file));
     const text = fs.readFileSync(source, 'utf8');
     if (isIniConfiguration(source, text)) return this.importIni(text, label);
-    const state = JSON.parse(text);
+    let state;
+    try {
+      state = JSON.parse(text);
+    } catch (e) {
+      throw new Error(`The configuration file is not valid JSON: ${e.message}`, { cause: e });
+    }
     if (!state || typeof state !== 'object' || Array.isArray(state)) {
       throw new Error('The configuration file must contain an object.');
     }

@@ -318,6 +318,7 @@ function openHostKeyDialog(request) {
   const { promptId, payload } = request;
   const changed = !!payload?.changed;
   const hostPort = payload?.hostPort || '—';
+  const presentedFingerprint = String(payload?.fingerprintSHA256 || '').trim();
   let answered = false;
 
   const facts = h('div', { class: 'tx-au-kv' },
@@ -340,13 +341,19 @@ function openHostKeyDialog(request) {
     changed
       ? h('div', { class: 'tx-au-expected' }, fingerprintBlock('txHkStored', payload?.expected))
       : null,
-    fingerprintBlock(changed ? 'txHkPresented' : 'txHkFingerprint', payload?.fingerprintSHA256),
+    fingerprintBlock(changed ? 'txHkPresented' : 'txHkFingerprint', presentedFingerprint),
     facts,
     h('p', { class: 'tx-sy-note' }, t('txHkAcceptOnceHint')),
     h('p', { class: 'tx-sy-note' }, t('txHkAcceptStoreHint')),
     log.element);
 
   function accept(remember, close) {
+    // A missing fingerprint is an incomplete verification result, never a
+    // reason to let the user approve a key that the dialog cannot identify.
+    if (!presentedFingerprint) {
+      notify.error(t('hostKeyTitle'), t('txHkRejected', hostPort));
+      return;
+    }
     deliver(request, { accept: true, remember })
       .then((ok) => {
         if (!ok) return;

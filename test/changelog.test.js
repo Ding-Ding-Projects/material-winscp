@@ -26,6 +26,14 @@ const MODULE = url.pathToFileURL(
   path.join(__dirname, '..', 'design', 'renderer', 'ui', 'changelog.js'),
 ).href;
 
+test('the date-range grid labels itself with localized from/to text', async () => {
+  const source = await require('node:fs').promises.readFile(
+    path.join(__dirname, '..', 'design', 'renderer', 'ui', 'changelog.js'), 'utf8',
+  );
+  assert.match(source, /class: 'spacer sr-only', id: titleId/);
+  assert.match(source, /\$\{s\('dpFrom'\)\} \/ \$\{s\('dpTo'\)\}/);
+});
+
 /** Filled by the before hook; a CJS test file cannot await at module scope. */
 let C = null;
 

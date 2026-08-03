@@ -9,3 +9,4 @@ applicable.
 | Article | Covers |
 | --- | --- |
 | [migration.md](migration.md) | Legacy JSON and portable WinSCP INI migration, protection, rollback and verification. |
+| [import-validation.md](import-validation.md) | Malformed JSON errors, parser causes, and no-mutation import failure behavior. |
