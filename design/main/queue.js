@@ -479,6 +479,10 @@ class TransferQueue extends EventEmitter {
     item._cancelled = true;
     item._gate.open();                 // let a paused loop notice the cancel
     if (item._pendingQuery) this.answerQuery(id, 'skip');
+    // A credential/keyboard-interactive prompt is another await point. If it
+    // is left pending, removing the row leaves _run() (and therefore idle())
+    // waiting forever for a response that can no longer come from the UI.
+    if (item._pendingPrompt) this.answerPrompt(id, null);
     const i = this.items.indexOf(item);
     this.items.splice(i, 1);
     this.emit('item-updated', { ...this.view(item), state: 'removed' });

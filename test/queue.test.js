@@ -1788,6 +1788,18 @@ test('cancellation during throttling does not write the delayed chunk', async ()
   assert.equal(remote.read('/r/a.bin'), null, 'cancelled transfer must not publish a target');
 });
 
+test('removing an item cancels a pending prompt so idle can settle', async () => {
+  const q = new TransferQueue({ prefs: prefs({ queue: { enabledByDefault: false } }), progressMs: 0 });
+  const item = q.add({ id: 'prompt-cancel', source: '/l/a', target: '/r/a' });
+  const prompt = q._prompt(item, { type: 'password', message: 'unlock' });
+
+  assert.equal(item.state, 'prompt');
+  assert.equal(q.remove(item.id), true);
+  assert.equal(await prompt, null, 'removing the row must resolve its prompt');
+  await q.idle();
+  assert.equal(q.get(item.id), null);
+});
+
 test('queue management: enable/disable, reorder, delete, delete all done', async () => {
   const { local, remote } = makePair();
   for (const n of ['a', 'b', 'c']) local.put(`/l/${n}.txt`, n);

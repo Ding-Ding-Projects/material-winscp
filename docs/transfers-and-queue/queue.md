@@ -111,6 +111,7 @@ their place and run first.
 | The session behind a queued item is closed while it is reconnecting | The item fails with the connection error rather than retrying into a session that no longer exists. Closing the session is this port's Abort answer to WinSCP's reconnect query. | n/a |
 | Target file exists | Resolved by the item's own overwrite rule, decided when it was queued. Only a foreground transfer with `confirmOverwriting` stops to ask. | Yes |
 | Local disk fills | Every active item fails with `ENOSPC`; resumable partials are kept. The queue does not keep retrying into a full disk. | Yes |
+| An item is removed while a credential prompt is open | The prompt is answered with cancellation, the transfer unwinds, and `idle()` can settle; the removed row is not left waiting for a UI response. | n/a |
 | An item is cancelled mid-write | Partial target removed, unless it is a `.filepart` being kept for resume. | n/a |
 | `onceEmpty` is `shutdown` and a transfer fails | The action does **not** run. A failed queue never shuts the machine down. | n/a |
 | Queue panel hidden while work runs | A corner notification still reports completion and failure, and the notification centre keeps the history. Work is never invisible. | n/a |
