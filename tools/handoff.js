@@ -85,7 +85,7 @@ function lines() {
 function git() {
   const dirtyFiles = sh('git', ['status', '--porcelain']).trim().split('\n')
     .filter(Boolean)
-    .map((line) => line.slice(3).split(' -> ')[0])
+    .map((line) => line.slice(3).split(' -> ')[0].trimEnd())
     .filter((file) => file !== 'HANDOFF.md' && file !== 'ROADMAP.md');
   return {
     head: sh('git', ['rev-parse', '--short', 'HEAD']).trim(),
