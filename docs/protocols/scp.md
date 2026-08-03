@@ -76,9 +76,9 @@ codes 126/127, so real checksum failures remain visible.
   the quoting layer, and any code path that builds a remote command by string
   concatenation is a bug to be fixed, not a style preference.
 - **Wire parsing is a parser fed by a remote party.** SCP control records are
-  capped at 64 KiB and file sizes must be safe integers, so a hostile peer
-  cannot turn a header into an unbounded allocation or a successful truncated
-  download.
+  capped at 64 KiB and all numeric file/time fields must be safe integers, so a
+  hostile peer cannot turn a header into an unbounded allocation or smuggle a
+  malformed timestamp record through the transfer handshake.
 - **Shell failures cross the adapter boundary as classified errors.** Remote
   permission failures are `permission`/`EACCES`; malformed SCP records and
   command failures are `protocol`/`EPROTO`; invalid local transfer arguments

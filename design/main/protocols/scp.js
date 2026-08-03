@@ -337,7 +337,7 @@ function parseControl(line) {
   }
   if (kind === 'T') {
     const m = /^T(\d+)\s+(\d+)\s+(\d+)\s+(\d+)$/.exec(line);
-    if (!m || !Number.isSafeInteger(Number(m[1])) || !Number.isSafeInteger(Number(m[3]))) {
+    if (!m || m.slice(1).some((value) => !Number.isSafeInteger(Number(value)))) {
       throw scpProtocolError(`The remote scp sent a time record this client cannot read: ${line}`);
     }
     return { kind, mtime: Number(m[1]) * 1000, atime: Number(m[3]) * 1000 };

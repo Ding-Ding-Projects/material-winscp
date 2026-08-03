@@ -122,6 +122,8 @@ test.describe('SCP adapter contract', () => {
     assert.throws(() => parseControl('C0999 1 file'), (error) => error.code === 'EPROTO');
     assert.throws(() => parseControl('E unexpected'), (error) => error.code === 'EPROTO');
     assert.throws(() => parseControl('C0644 9007199254740992 file'), (error) => error.code === 'EPROTO');
+    assert.throws(() => parseControl('T1 9007199254740992 1 0'), (error) => error.code === 'EPROTO');
+    assert.throws(() => parseControl('T1 0 1 9007199254740992'), (error) => error.code === 'EPROTO');
     assert.equal(parseControl('C0644 4 file').size, 4);
     assert.equal(modeString('0755'), '0755');
     assert.throws(() => modeString('0999'), (error) => error.code === 'INVALID_INPUT');
