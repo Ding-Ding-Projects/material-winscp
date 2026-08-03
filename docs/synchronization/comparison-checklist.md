@@ -83,6 +83,9 @@ as an explicit opt-in, with the builder anchored beside the field.
   deletion totals, and leave the checklist rows unchanged. The toolbar command
   is informational only; applying still requires the separate Synchronize
   action and deletion confirmation.
+- Sorting before changing a selection or per-row action is tested to preserve
+  row identity when the checklist sends its decisions back to the comparison
+  engine.
 - Directory-scoped check and uncheck is tested for changing only the displayed
   directory subtree, preserving each row's action, excluding similarly named
   siblings, and never ticking `Do nothing`. The context-menu availability check
