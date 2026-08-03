@@ -53,6 +53,10 @@ function boundedProgress(value) {
   return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : null;
 }
 
+function normalizedProgress(value) {
+  return value == null ? null : boundedProgress(value);
+}
+
 /**
  * Keep only reviewable data in the persisted notification history. Action
  * callbacks are executable renderer state and must never cross a config write
@@ -108,6 +112,12 @@ function stack() {
   appearanceTarget(stackEl, 'toast-stack', 'Notification toasts');
   layer('toast').appendChild(stackEl);
   return stackEl;
+}
+
+function keepLatestToastVisible() {
+  if (!stackEl) return;
+  const distanceFromEnd = stackEl.scrollHeight - stackEl.scrollTop - stackEl.clientHeight;
+  if (distanceFromEnd <= 48) stackEl.scrollTop = stackEl.scrollHeight;
 }
 
 function emitChange() {
@@ -170,7 +180,7 @@ export function show(opts = {}) {
     at: Date.now(),
     read: false,
     dismissed: false,
-    progress: opts.progress,
+    progress: normalizedProgress(opts.progress),
   };
 
   const existing = live.get(id);
@@ -266,6 +276,7 @@ export function show(opts = {}) {
 
   function update(next) {
     Object.assign(record, next);
+    record.progress = normalizedProgress(record.progress);
     titleEl.textContent = record.title;
     bodyEl.textContent = record.body;
     if (record.body && !bodyEl.isConnected) el.querySelector('.toast-main').insertBefore(bodyEl, actionsEl);
@@ -285,6 +296,7 @@ export function show(opts = {}) {
   }
 
   stack().appendChild(el);
+  keepLatestToastVisible();
   resume();
 
   history.unshift(record);

@@ -1252,6 +1252,12 @@ test('an incoming drop rejects malformed paths and non-boolean move controls', a
   assert.deepStrictEqual(await shell.dragDropFileOperation({
     effect: '2', files: ['C:\\work\\alpha.txt'], targetPath: '/home/joe',
   }), { ok: false, reason: 'invalidDropEffect' });
+  assert.deepStrictEqual(await shell.dragDropFileOperation({
+    effect: SI.DROPEFFECT.COPY, files: ['C:\\work\\alpha.txt'], targetPath: '/home/joe\n/other',
+  }), { ok: false, reason: 'invalidTarget' });
+  assert.deepStrictEqual(await shell.dragDropFileOperation({
+    effect: SI.DROPEFFECT.COPY, files: ['C:\\work\\alpha.txt'], targetPath: '  /home/joe  ',
+  }).then((result) => result.ok), true, 'safe surrounding whitespace is normalized before planning');
 });
 
 // ===========================================================================

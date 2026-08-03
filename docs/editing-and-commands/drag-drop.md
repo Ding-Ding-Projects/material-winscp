@@ -54,6 +54,13 @@ renderer’s optimistic drag-over preview start a move.
   IPC boundary as absolute local paths; malformed `allowMove` and `dragDrop`
   flags are refused instead of being coerced into a potentially destructive
   move.
+- A desktop drop is atomic at the validation boundary: if any item has no
+  usable absolute path, contains a NUL, or duplicates another item, the whole
+  drop is refused. The renderer never filters out the bad item and uploads a
+  misleading partial payload.
+- Effect negotiation is fail-closed when the main-process bridge is unavailable;
+  the renderer never guesses COPY or MOVE from its preview state. The target is
+  trimmed and control characters are refused before transfer planning.
 - Queue, fake-file, and external-extension drop targets must be absolute local
   paths. Relative targets are refused before they can resolve against the
   application process directory.

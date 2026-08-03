@@ -277,3 +277,22 @@ test('the release notes embed the counted table and the command that produced it
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('the release notes carry generated changelog dates and exact full-SHA links', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wscp-notes-ledger-'));
+  try {
+    const outFile = path.join(dir, 'RELEASE_NOTES.md');
+    const r = cp.spawnSync(process.execPath, [path.join(ROOT, 'build', 'release-notes.js'), '--tag', 'v0.0.1', '--out', outFile],
+      { cwd: ROOT, encoding: 'utf8' });
+    assert.strictEqual(r.status, 0, r.stderr);
+    const notes = fs.readFileSync(outFile, 'utf8');
+    const first = JSON.parse(cp.execFileSync(process.execPath, ['-e',
+      "process.stdout.write(JSON.stringify(require('./tools/changelog').collect()[0]))"],
+    { cwd: ROOT, encoding: 'utf8' }));
+    assert.ok(notes.includes(`full SHA: \`${first.oid}\``));
+    assert.ok(notes.includes(`[\`${first.ref}\`](https://github.com/Ding-Ding-Projects/material-winscp/commit/${first.oid})`),
+      'the release notes must link the short reference to the full object');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

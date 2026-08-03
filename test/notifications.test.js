@@ -55,3 +55,12 @@ test('the production module writes history through the existing notifications pr
   assert.match(source, /store\.set\('notifications\.history'/);
   assert.match(source, /persistCurrent\('notifications'\)/);
 });
+
+test('progress values are normalized before they reach the accessible bar', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'design/renderer/ui/notifications.js'), 'utf8');
+  assert.match(source, /progress: normalizedProgress\(opts\.progress\)/);
+  assert.match(source, /record\.progress = normalizedProgress\(record\.progress\)/);
+  assert.match(source, /function normalizedProgress\(value\)/);
+  assert.match(source, /function keepLatestToastVisible\(\)/);
+  assert.match(source, /stack\(\)\.appendChild\(el\);[\s\S]*?keepLatestToastVisible\(\);/);
+});

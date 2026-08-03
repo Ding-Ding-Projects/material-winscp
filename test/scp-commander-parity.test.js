@@ -9,6 +9,7 @@ const {
   panelDropMoveRequested,
   panelDropEffectSpec,
   negotiatePanelDropEffect,
+  normalizeOsDropPaths,
 } = require('../design/renderer/ui/panels.js');
 
 function adapter(commands) {
@@ -78,6 +79,18 @@ test('Commander drag/drop refuses malformed private payloads instead of swallowi
   });
 });
 
+test('Commander OS drops refuse partial or duplicate file payloads', () => {
+  assert.deepEqual(normalizeOsDropPaths([{ path: 'C:\\a.txt' }, { name: 'virtual item' }]), {
+    ok: false, reason: 'invalidFiles',
+  });
+  assert.deepEqual(normalizeOsDropPaths([{ path: 'C:\\a.txt' }, { path: 'c:/A.TXT' }]), {
+    ok: false, reason: 'duplicateFiles',
+  });
+  assert.deepEqual(normalizeOsDropPaths([{ path: 'C:\\a.txt' }, { path: 'C:\\b.txt' }]), {
+    ok: true, paths: ['C:\\a.txt', 'C:\\b.txt'],
+  });
+});
+
 test('Commander drag/drop ignores a source path resolver that throws', () => {
   assert.deepEqual(entriesForDragPaths(
     [{ name: 'file.txt' }], ['/file.txt'], () => { throw new Error('stale row'); },
@@ -120,5 +133,6 @@ test('Commander panel drops fail closed when main rejects or cannot negotiate', 
   assert.equal(await negotiatePanelDropEffect({
     present: true, explorer: async () => { throw new Error('bridge closed'); },
   }, { effect: 1 }, 2), 0);
-  assert.equal(await negotiatePanelDropEffect({ present: false }, { effect: 2 }, 2), 2);
+  assert.equal(await negotiatePanelDropEffect({ present: false }, { effect: 2 }, 2), 0);
+  assert.equal(await negotiatePanelDropEffect(null, { effect: 1 }, 1), 0);
 });

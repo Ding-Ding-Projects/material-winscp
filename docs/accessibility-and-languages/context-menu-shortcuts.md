@@ -5,6 +5,11 @@ edge of the item. The shared renderer in
 `design/renderer/ui/contextmenu.js` is the single normalization path for both
 action-backed descriptors and hand-written providers.
 
+The menu's accessible name is localized through `contextMenuLabel` in all
+three language modes. This covers both pointer right-click and keyboard
+<kbd>Shift</kbd>+<kbd>F10</kbd>/<kbd>Context Menu</kbd> entry paths; shortcut
+glyphs remain platform-correct while the menu name follows the active language.
+
 ## What is shown
 
 The action registry remains authoritative for the shortcut that actually runs.

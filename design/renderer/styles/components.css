@@ -659,8 +659,9 @@ textarea.field-input { padding: 8px 12px; resize: vertical; }
 
 .toast-stack {
   display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
-  padding: 16px;
-  max-height: 100vh; overflow: hidden;
+  width: 100%; box-sizing: border-box;
+  padding: clamp(4px, 2vw, 16px);
+  max-height: 100%; overflow-x: hidden; overflow-y: auto;
   pointer-events: none;
 }
 .toast-stack > * { pointer-events: auto; }
@@ -669,7 +670,7 @@ textarea.field-input { padding: 8px 12px; resize: vertical; }
 
 .toast {
   display: flex; align-items: flex-start; gap: 10px;
-  width: min(400px, calc(100vw - 32px));
+  width: min(400px, 100%); max-width: 100%; box-sizing: border-box;
   padding: calc(12px * var(--den)) calc(12px * var(--den));
   border-radius: var(--shape-md);
   background: var(--inv-sfc);
@@ -701,8 +702,9 @@ textarea.field-input { padding: 8px 12px; resize: vertical; }
 .toast-progress-fill { height: 100%; background: currentColor; border-radius: inherit; width: 0; transition: width var(--motion-medium) var(--ease-standard); }
 .toast-progress.is-indeterminate .toast-progress-fill { width: 35%; animation: m3-indeterminate 1.4s var(--ease-standard) infinite; }
 
-.nc { width: min(420px, calc(100vw - 24px)); max-height: min(560px, calc(100vh - 80px)); display: flex; flex-direction: column; }
-.nc-head-title { flex: 1 1 auto; font-size: var(--type-title-md); font-weight: 500; }
+.nc { width: min(420px, 100%); max-width: calc(100vw - 16px); max-height: min(560px, calc(100vh - 16px)); min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; }
+.nc-head { min-width: 0; flex-wrap: wrap; }
+.nc-head-title { flex: 1 1 10ch; min-width: 0; overflow-wrap: anywhere; font-size: var(--type-title-md); font-weight: 500; }
 .nc-searchrow { padding: calc(10px * var(--den)) calc(12px * var(--den)); }
 .nc-list { flex: 1 1 auto; overflow-y: auto; padding: 0 calc(8px * var(--den)) calc(10px * var(--den)); display: flex; flex-direction: column; gap: 3px; }
 .nc-item { display: flex; gap: 10px; padding: calc(9px * var(--den)) calc(10px * var(--den)); border-radius: var(--shape-sm); background: var(--c-low); }
@@ -771,7 +773,7 @@ textarea.field-input { padding: 8px 12px; resize: vertical; }
   background: var(--c-high);
   box-shadow: var(--e3);
 }
-.modal-title { font-size: var(--type-title-lg); font-weight: 400; }
+.modal-title { min-width: 0; overflow-wrap: anywhere; font-size: var(--type-title-lg); font-weight: 400; }
 .modal-body { flex: 1 1 auto; overflow-y: auto; min-height: 0; font-size: var(--type-body-md); line-height: 1.5; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 
@@ -815,7 +817,27 @@ textarea.field-input { padding: 8px 12px; resize: vertical; }
 @media (max-width: 520px) {
   .tb-titles .tb-version { display: none; }
   .statusbar { font-size: 10px; }
-  .toast { width: calc(100vw - 32px); }
+  .toast { width: min(400px, 100%); }
+}
+
+:root[data-rm="1"] .modal-scrim,
+:root[data-rm="1"] .rb-popover,
+:root[data-rm="1"] .cp-popover,
+:root[data-rm="1"] .ts,
+:root[data-rm="1"] .ap,
+:root[data-rm="1"] .nc,
+:root[data-rm="1"] .toast,
+:root[data-rm="1"] .toast-progress-fill,
+:root[data-osrm="1"] .modal-scrim,
+:root[data-osrm="1"] .rb-popover,
+:root[data-osrm="1"] .cp-popover,
+:root[data-osrm="1"] .ts,
+:root[data-osrm="1"] .ap,
+:root[data-osrm="1"] .nc,
+:root[data-osrm="1"] .toast,
+:root[data-osrm="1"] .toast-progress-fill {
+  animation: none !important;
+  transition: none !important;
 }
 /* At 150% and 200% UI scale the strip's tools must stay reachable, so the
    scroller yields width before the tool cluster does. */

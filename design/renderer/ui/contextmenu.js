@@ -498,7 +498,7 @@ export function installContextMenus() {
     const items = collectItems(ctx);
     if (!items.length) return;
     e.preventDefault();
-    openMenu({ items, x: e.clientX, y: e.clientY, label: 'Context menu' });
+    openMenu({ items, x: e.clientX, y: e.clientY, label: t('contextMenuLabel') });
   });
 
   document.addEventListener('keydown', (e) => {
@@ -512,7 +512,7 @@ export function installContextMenus() {
     const items = collectItems(ctx);
     if (!items.length) return;
     e.preventDefault();
-    openMenu({ items, anchor: el, placement: 'bottom-start', label: 'Context menu' });
+    openMenu({ items, anchor: el, placement: 'bottom-start', label: t('contextMenuLabel') });
   });
 
   // Escape anywhere closes menus; a window blur does too.

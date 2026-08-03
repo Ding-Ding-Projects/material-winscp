@@ -42,6 +42,19 @@ Both honour the active filter and search, so the export matches what is on
 screen, and **the exported file states the range** — a changelog extract with no
 stated range is a document nobody can trust later.
 
+## Documentation-site parity
+
+The documentation site renders the same generated commit ledger beneath this
+article. `site/build.js` obtains entries through `tools/changelog.js`, preserving
+the full object name, author date, title and issue references. Each short SHA is
+an accessible link whose target is the exact full SHA on the repository's own
+forge. A source archive without a Git object database shows an honest empty
+ledger; it never guesses a neighbouring ref.
+
+Release notes carry the same date, full SHA and commit URL for the generated
+entries they present. This keeps the in-app viewer, copied Markdown, site and
+published release presentation traceable to one source of truth.
+
 ## Language and tone
 
 The viewer obeys the three

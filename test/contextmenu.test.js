@@ -12,11 +12,13 @@ const R = (rel) => pathToFileURL(path.join(ROOT, 'design', 'renderer', rel)).hre
 let C;
 let M;
 let ACTIONS;
+let I18N;
 
 test.before(async () => {
   C = await import(R('ui/contextmenu.js'));
   M = await import(R('ui/menus.js'));
   ({ ACTIONS } = await import(R('actions.js')));
+  ({ I18N } = await import(R('i18n.js')));
 });
 
 class MenuTestNode {
@@ -148,6 +150,13 @@ test('action descriptors resolve through the shared registry and use platform no
   assert.equal(C.shortcutForMenu({ action: 'LocalBackAction' }, { platform: 'darwin' }), '⌥+←');
   assert.equal(C.shortcutForMenu({ action: 'LocalBackAction' }, { platform: 'MacIntel' }), '⌥+←');
   assert.equal(C.ariaShortcutForMenu({ action: 'LocalBackAction' }), 'Alt+ArrowLeft');
+});
+
+test('document context-menu paths use the localized accessible menu name', () => {
+  assert.deepEqual(I18N.contextMenuLabel, ['Context menu', '內容選單']);
+  const source = fs.readFileSync(path.join(ROOT, 'design/renderer/ui/contextmenu.js'), 'utf8');
+  assert.equal((source.match(/label: t\('contextMenuLabel'\)/g) || []).length, 2);
+  assert.doesNotMatch(source, /label:\s*['"]Context menu['"]/);
 });
 
 test('Meta uses the host platform name while ARIA keeps the canonical modifier', () => {

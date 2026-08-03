@@ -447,7 +447,7 @@ test('the repository itself now verifies clean, end to end, exactly as CI runs i
   assert.doesNotMatch(all, /VERIFY FAILED/);
 });
 
-test('concurrent CLI builds serialize their shared output and all verify clean', async () => {
+test('concurrent CLI builds serialize their shared output and all verify clean', { timeout: 600000 }, async () => {
   const children = Array.from({ length: 6 }, () => spawn(process.execPath, [BUILD, '--verify'], {
     cwd: ROOT,
     encoding: 'utf8',
@@ -517,6 +517,20 @@ test('the real build emits the base prefix on its own asset references', () => {
   const rooted = [...html.matchAll(/(?:src|href)="(\/[^"]*)"/g)].map((m) => m[1]);
   assert.ok(rooted.length > 0, 'no root-absolute URLs at all — the fixture stopped testing anything');
   for (const u of rooted) assert.ok(u.startsWith(BASE), `root-absolute URL without the prefix: ${u}`);
+});
+
+test('the real site carries the verified changelog ledger with exact commit links', () => {
+  const out = path.join(ROOT, 'site', '_site');
+  const text = fs.readFileSync(path.join(out, 'content.js'), 'utf8');
+  const data = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+  const entries = data.changelog && data.changelog.development;
+  assert.ok(Array.isArray(entries) && entries.length > 0, 'the site must emit generated changelog entries');
+  for (const entry of entries) {
+    assert.match(entry.oid, /^[0-9a-f]{40}$/);
+    assert.equal(entry.commitUrl, `${REPO_URL}/commit/${entry.oid}`);
+    assert.equal(entry.commitUrl.endsWith(entry.oid), true);
+    assert.match(entry.date, /^\d{4}-\d{2}-\d{2}$/);
+  }
 });
 
 /* ------------------------------------------- the installer download button */

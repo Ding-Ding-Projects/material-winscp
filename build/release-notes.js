@@ -13,6 +13,8 @@ const path = require('path');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const pkg = require('../package.json');
+let collectChangelog = () => [];
+try { collectChangelog = require('../tools/changelog').collect; } catch { /* source archive */ }
 
 function arg(name, fallback) {
   const i = process.argv.indexOf(`--${name}`);
@@ -46,6 +48,17 @@ function readLineCount() {
     const text = fs.readFileSync(f, 'utf8').trim();
     return text || null;
   } catch { return null; }
+}
+
+function readChangelog(repo, server) {
+  try {
+    return collectChangelog().map((entry) => ({
+      ...entry,
+      url: `${server}/${repo}/commit/${entry.oid}`,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 function main() {
@@ -134,6 +147,24 @@ function main() {
   L.push('');
   L.push('- **English:** every WinSCP feature, rebuilt on Material Design 3, with tabs, an appearance editor for every element, a regex builder beside every search bar, and local version history.');
   L.push('- **粵語：** 成個 WinSCP 搬咗過嚟 Material Design 3，仲有分頁、每個元件都改得靚、每個搜尋框都有 regex 產生器，同埋本機版本記錄。');
+  L.push('');
+
+  // --------------------------------------------------------- changelog -----
+  // The viewer, site and release notes must travel together.  collect() has
+  // already verified every object name with git cat-file; if this is a source
+  // archive, an empty section is more honest than a guessed neighbouring ref.
+  const changelog = readChangelog(repo, server);
+  L.push('## 🧾 Changes recorded in this build');
+  L.push('');
+  if (!changelog.length) {
+    L.push('> No Git changelog entries are available in this build environment; no commit reference was guessed.');
+  } else {
+    L.push('Every entry below keeps its author date, full object name and exact commit link.');
+    L.push('');
+    for (const entry of changelog) {
+      L.push(`- **${entry.date} — ${entry.title}** — [\`${entry.ref}\`](${entry.url}) (full SHA: \`${entry.oid}\`)`);
+    }
+  }
   L.push('');
 
   // ------------------------------------------------------------ line count --

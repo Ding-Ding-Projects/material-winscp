@@ -51,6 +51,19 @@ its viewport cap and scrolls the remaining rows. The same rule applies to the
 keyboard path: selecting an item resets the opener's `aria-expanded` state and
 detached handle, so the menu can be reopened without a mouse.
 
+The toast stack owns a vertical scrollbar when persistent messages exceed the
+viewport, so a warning or error never becomes unreachable behind the window
+edge. New toasts stay visible when the user is at the latest end, while a
+reader who has scrolled up is not pulled away from older messages. Toasts and
+the notification centre cap their width against the available
+viewport, and modal titles wrap inside the dialog. Progress values are clamped
+before they reach the accessible progress bar, preventing malformed producer
+data from creating `NaN` geometry or announcements.
+
+Overlay animations and progress motion stop when either the persisted reduced-
+motion preference or the operating-system `prefers-reduced-motion` signal is
+active, including for surfaces that were already open when the setting changed.
+
 Resizable modeless editor windows clamp both pointer and keyboard resizing to
 an 8px viewport gutter. Their shell has a direct surface and border contract,
 and their body remains the scroll owner when the viewport is shorter than the

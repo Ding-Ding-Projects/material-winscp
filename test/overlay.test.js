@@ -89,6 +89,11 @@ test('blocking dialogs keep a scrollable body inside a narrow viewport', () => {
   assert.match(components, /padding: clamp\(8px, 4vh, 24px\) clamp\(8px, 4vw, 24px\)/);
   assert.match(components, /\.modal \{[\s\S]*?max-width: 100%;[\s\S]*?max-height: 100%;[\s\S]*?min-height: 0;[\s\S]*?box-sizing: border-box;[\s\S]*?overflow: hidden;/);
   assert.match(components, /\.modal-body \{[\s\S]*?overflow-y: auto;[\s\S]*?min-height: 0;/);
+  assert.match(components, /\.toast-stack \{[\s\S]*?overflow-x: hidden; overflow-y: auto;/);
+  assert.match(components, /\.toast \{[\s\S]*?width: min\(400px, 100%\); max-width: 100%; box-sizing: border-box;/);
+  assert.match(components, /\.nc \{[\s\S]*?max-width: calc\(100vw - 16px\);[\s\S]*?min-height: 0;/);
+  assert.match(components, /\.modal-title \{[\s\S]*?overflow-wrap: anywhere;/);
+  assert.match(components, /:root\[data-rm="1"\][\s\S]*?animation: none !important;[\s\S]*?transition: none !important;/);
 });
 
 test('modal initial focus is skipped after the dialog has closed or detached', () => {

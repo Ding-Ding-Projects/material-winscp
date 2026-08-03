@@ -2,6 +2,11 @@
 
 ## What a release contains
 
+Release notes also include the generated changelog ledger: each presented
+change keeps its author date, full commit SHA and a link to that exact commit.
+The notes do not construct a `latest` or neighbouring-ref URL, so copied notes
+remain auditable after the release page is closed.
+
 Every successful [CI](ci.md) run publishes exactly one **non-draft** GitHub
 Release carrying:
 

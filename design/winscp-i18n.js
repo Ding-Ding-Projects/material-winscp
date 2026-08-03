@@ -436,6 +436,7 @@ export const I18N = {
   tips: [['Press F5 to copy files between panels. The function-key bar at the bottom mirrors classic Commander shortcuts.','Shift+right-click any element to edit its appearance. Every element, no exceptions.','Every search box has a regex builder — the .* button beside it.','Right-click a session tab for groups, pinning and bulk close by text.','Ctrl+F opens Find Files on the remote panel; the mask supports * and ?.','The command line at the bottom runs shell-style commands on the active panel — type help.'],[
     '撳 F5 喺兩個面板之間複製檔案。下面嘅功能鍵列同經典 Commander 快捷鍵一樣。','Shift+右掣撳任何元素就可以編輯佢外觀。每個元素都得，冇例外。','每個搜尋欄都有正規表達式建構器——旁邊個 .* 掣。','右掣撳工作階段分頁有群組、釘選同按文字批量閂。','Ctrl+F 喺遠端面板開「搵檔案」；遮罩支援 * 同 ?。','下面嘅指令列會喺作用中面板執行 shell 風格指令——打 help 睇下。']],
   menuSearchPh: ['Search this menu','搜尋呢個選單'],
+  contextMenuLabel: ['Context menu','內容選單'],
   nothingSelected: ['Nothing selected.','未揀嘢。'],
   notConnected: ['This tab is not connected.','呢個分頁未連線。'],
   featureSim: ['{0} — performed in the simulated environment.','{0}——喺模擬環境入面完成咗。'],

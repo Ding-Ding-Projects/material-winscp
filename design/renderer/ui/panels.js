@@ -227,6 +227,30 @@ export function normalizePanelDragPayload(value) {
   };
 }
 
+/**
+ * Normalize an OS file drop without silently discarding part of its payload.
+ * Electron can expose a FileList where one virtual/shell item has no usable
+ * path. Uploading the remaining entries would make the user believe the
+ * complete drop succeeded, so one unusable entry refuses the whole gesture.
+ */
+export function normalizeOsDropPaths(files) {
+  if (!Array.isArray(files) || !files.length) return { ok: false, reason: 'missingFiles' };
+  const paths = [];
+  const seen = new Set();
+  for (const file of files) {
+    const value = file && file.path;
+    if (typeof value !== 'string' || !value || value.includes('\0')
+        || (!/^[A-Za-z]:[\\/]/.test(value) && !/^\\\\/.test(value) && !value.startsWith('/'))) {
+      return { ok: false, reason: 'invalidFiles' };
+    }
+    const key = value.replace(/\\/g, '/').toLowerCase();
+    if (seen.has(key)) return { ok: false, reason: 'duplicateFiles' };
+    seen.add(key);
+    paths.push(value);
+  }
+  return { ok: true, paths };
+}
+
 /** The move gesture used by both OS drops and in-app panel drops. */
 export function panelDropMoveRequested({ shiftKey = false, ctrlKey = false, allowMove = false, startAsMove = false } = {}) {
   return allowMove === true && !ctrlKey && (shiftKey || startAsMove);
@@ -252,8 +276,11 @@ export function panelDropEffectSpec({
 
 /** The real window and the browser preview share one fail-closed drop result. */
 export async function negotiatePanelDropEffect(bridge, spec, fallbackEffect = 1) {
-  const fallback = fallbackEffect === 2 ? 2 : 1;
-  if (!bridge || bridge.present !== true || typeof bridge.explorer !== 'function') return fallback;
+  // A renderer-only fallback is unsafe: without main-process capability and
+  // target negotiation, a guessed MOVE can delete the source. The fallback
+  // argument is retained for API compatibility but is deliberately ignored.
+  void fallbackEffect;
+  if (!bridge || bridge.present !== true || typeof bridge.explorer !== 'function') return 0;
   try {
     if (spec && spec.sessionId != null) {
       await bridge.explorer('setPanels', {
@@ -1252,8 +1279,7 @@ export function createFilePanel(opts = {}) {
   }
 
   async function acceptOsDrop(files, move) {
-    const paths = files.map((f) => f.path).filter(Boolean);
-    if (!paths.length) {
+    if (!Array.isArray(files) || files.length === 0) {
       // Electron 32 removed File.path, so a drop from the desktop carries no
       // usable path. Saying so and offering the picker is honest; silently
       // doing nothing is not.
@@ -1271,6 +1297,12 @@ export function createFilePanel(opts = {}) {
       });
       return;
     }
+    const normalized = normalizeOsDropPaths(files);
+    if (!normalized.ok) {
+      notify.warning(t('dragDropDownloads'), 'The desktop drop contained a file without a usable path or a duplicate item. No part of the drop was uploaded.');
+      return;
+    }
+    const paths = normalized.paths;
     await queueDroppedFiles(paths, move);
   }
 

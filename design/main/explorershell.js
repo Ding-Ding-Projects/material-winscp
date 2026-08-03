@@ -2181,8 +2181,9 @@ class ExplorerShell {
     if (s.targetPath !== undefined && s.targetPath !== null && typeof s.targetPath !== 'string') {
       return { ok: false, reason: 'invalidTarget' };
     }
-    const targetDirectory = String(s.targetPath || '');
+    const targetDirectory = String(s.targetPath || '').trim();
     if (!targetDirectory.trim()) return { ok: false, reason: 'missingTarget' };
+    if (/[\0\r\n]/.test(targetDirectory)) return { ok: false, reason: 'invalidTarget' };
     if (!this.hasAvailableTerminal()) return { ok: false, reason: 'notConnected' };
 
     if (s.allowMove !== undefined && typeof s.allowMove !== 'boolean') {

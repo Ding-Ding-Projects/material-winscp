@@ -122,6 +122,7 @@ export function renderArticle(host, ctx, route) {
         h('a', { href: `#${c.id}`, text: store.get().lang === 'yue' ? c.label[1] : c.label[0] })),
       h('p.doc-meta', { text: `${T('words', opts(), [a.words])} · ${T('readingTime', opts(), [readingMinutes(a.words)])}` }),
       h('div.prose', { html: a.html }),
+      a.id === '/packaging-and-updates/changelog' ? renderGeneratedChangelog(data, store) : null,
       renderSuggested(ctx, c, a)),
     toc));
 
@@ -130,6 +131,41 @@ export function renderArticle(host, ctx, route) {
     if (target) target.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
   void data;
+}
+
+/**
+ * The article above is generated from docs/, while this ledger is generated
+ * from git by site/build.js. Keeping the two layers separate means prose can
+ * explain the contract without becoming a second hand-maintained history.
+ * Every row carries the full object name in data and a short, accessible link
+ * to that exact object; an empty ledger is shown honestly for source archives.
+ */
+export function renderGeneratedChangelog(data, store) {
+  const entries = data.changelog && Array.isArray(data.changelog.development)
+    ? data.changelog.development : [];
+  const repo = data.changelog && data.changelog.repository
+    ? data.changelog.repository : data.repository;
+  return h('section.generated-changelog', null,
+    h('h2', { text: store.get().lang === 'yue' ? '由 commit 生成嘅更新記錄' : 'Generated commit history' }),
+    h('p.prose.muted', { text: entries.length
+      ? (store.get().lang === 'yue'
+        ? '每條記錄都帶住完整 SHA，同埋連到呢個 repository 入面真正嘅 commit。'
+        : 'Each entry carries its full SHA and links to the real commit in this repository.')
+      : (store.get().lang === 'yue'
+        ? '呢個 source archive 冇 git object database，所以冇亂估 commit。'
+        : 'This source archive has no git object database, so no commit is guessed.') }),
+    entries.length ? h('ol.changelog-ledger', null, entries.map((entry) => {
+      const url = entry.commitUrl || (repo && entry.oid ? `${repo}/commit/${entry.oid}` : '');
+      return h('li.changelog-ledger-entry', null,
+        h('div.changelog-ledger-head', null,
+          h('strong', { text: entry.title || entry.ref || entry.oid }),
+          h('time.mono', { dateTime: entry.date, text: entry.date })),
+        url && entry.oid
+          ? h('a.mono', { href: url, target: '_blank', rel: 'noopener noreferrer',
+            title: entry.oid, 'aria-label': `Commit ${entry.oid}`, text: entry.ref || entry.oid.slice(0, 7) })
+          : h('span.mono.muted', { title: 'No commit recorded', text: entry.ref || 'No commit' }),
+        (entry.changes || []).map((change) => h('p', { text: change.text })));
+    })) : null);
 }
 
 const cssId = (s) => (window.CSS && CSS.escape ? CSS.escape(s) : String(s).replace(/[^\w-]/g, ''));

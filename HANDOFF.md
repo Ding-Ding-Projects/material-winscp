@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `7d4d84a`** — Verify releases and complete headless parity
+**At commit `47a3a4e`** — Refresh reports after release parity audit
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **60.5%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 71.5% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3714 run, **3713 pass, 0 fail**, 1 skipped |
-| Hand-written code | 229,757 lines across 451 files |
-| Commits | 271 on `main` |
-| Working tree | **1 uncommitted change(s)** |
-| Remote | `origin/main` at `7d4d84a` — in sync |
+| Tests | 3719 run, **3718 pass, 0 fail**, 1 skipped |
+| Hand-written code | 230,011 lines across 451 files |
+| Commits | 272 on `main` |
+| Working tree | **21 uncommitted change(s)** |
+| Remote | `origin/main` at `47a3a4e` — in sync |
 
 ### Coverage by area
 
@@ -127,6 +127,7 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `47a3a4e` | 2026-08-03 | Refresh reports after release parity audit |
 | `7d4d84a` | 2026-08-03 | Verify releases and complete headless parity |
 | `7913c89` | 2026-08-03 | Refresh reports after dialog and security audit |
 | `aca79a7` | 2026-08-03 | Harden dialogs panels editors and secrets |
@@ -134,7 +135,6 @@ bite a successor who assumes otherwise:
 | `0a1939a` | 2026-08-03 | Extend headless config and settings surfaces |
 | `4e1193f` | 2026-08-03 | Refresh handoff and changelog after audit wave |
 | `3361a3f` | 2026-08-03 | Fix headless protocol, queue, sync, and UI guards |
-| `cbd2066` | 2026-08-03 | Make dialog contract tests line-ending neutral |
 
 ## Notes from whoever worked on this last
 
