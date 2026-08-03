@@ -2718,7 +2718,7 @@ class Terminal extends EventEmitter {
       }
     }
 
-    if (params.copyParam && !this.allowRemoteFileTransfer(file, params.copyParam,
+    if (params.copyParam && !await this.allowRemoteFileTransfer(file, params.copyParam,
       !!(params.params & CALC_FLAGS.disallowTemporaryTransferFiles))) {
       return;
     }
@@ -2806,19 +2806,85 @@ class Terminal extends EventEmitter {
    * TCopyParamType::AllowTransfer, via TTerminal::DoAllowRemoteFileTransfer.
    * Hidden files lose to `excludeHiddenFiles` before the mask is even
    * consulted — an explicit include mask does not resurrect them.
+   *
+   * Async for the last clause only. `cpNoEmptyDirectories` is the third
+   * conjunct of DoAllowRemoteFileTransfer (Terminal.cpp:5806) and cannot be
+   * answered from the entry in hand — it is a listing. Without it the size
+   * calculation counted directories the copy would then refuse, so a remote
+   * count and the transfer that followed it disagreed about how many
+   * directories existed. Bytes never diverged, because a directory contributes
+   * none; the number that was wrong was `stats.directories` and the collected
+   * file list built from it. `transfer.js` `calculateLocalFilesSize` shares the
+   * engine's predicate and has always honoured the clause, so until now the
+   * two sides of the same option disagreed with each other as well.
    */
-  allowRemoteFileTransfer(file, copyParam, disallowTemporaryTransferFiles) {
+  async allowRemoteFileTransfer(file, copyParam, disallowTemporaryTransferFiles) {
     const cp = copyParam || {};
     if (file.hidden && cp.excludeHiddenFiles) return false;
     if (disallowTemporaryTransferFiles && this._isTemporaryTransferFile(file.name)) return false;
-    if (!cp.includeFileMask) return true;
-    const mask = cp._parsedMask || (cp._parsedMask = new FileMask(cp.includeFileMask, { root: file.directory }));
-    return mask.matches(file.name, {
-      isDir: file.type === 'dir',
-      size: file.size,
-      mtime: file.mtime,
-      path: excludeTrailingSlash(file.fullFileName),
-    });
+    if (cp.includeFileMask) {
+      const mask = cp._parsedMask || (cp._parsedMask = new FileMask(cp.includeFileMask, { root: file.directory }));
+      if (!mask.matches(file.name, {
+        isDir: file.type === 'dir',
+        size: file.size,
+        mtime: file.mtime,
+        path: excludeTrailingSlash(file.fullFileName),
+      })) return false;
+    }
+    if (file.type === 'dir' && cp.excludeEmptyDirectories &&
+        await this.isEmptyRemoteDirectory(file, cp, disallowTemporaryTransferFiles)) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * TTerminal::IsEmptyRemoteDirectory (Terminal.cpp:6432).
+   *
+   * The original does not walk the tree itself: it runs the ordinary size
+   * calculation over the directory with `csStopOnFirstFile` and asks whether
+   * it found any FILES. That is why the answer is `Stats.Files == 0` and not
+   * "the listing was empty" — directories, and symlinks to directories it will
+   * not follow, do not count, and every filter the copy applies (the mask,
+   * `excludeHiddenFiles`, `.filepart` when the caller asked) is applied by
+   * `calculateFileSize` on the way past.
+   *
+   * Two details are copied deliberately:
+   *
+   *   * `excludeEmptyDirectories` is cleared on the inner copy param, exactly
+   *     as Terminal.cpp:6438 does and for the reason its comment gives ("to
+   *     avoid endless recursion"): the predicate is in the middle of being
+   *     asked, and letting `calculateFileSize` re-enter it for every
+   *     subdirectory would re-walk the same subtree once per level.
+   *   * `csStopOnFirstFile` is what makes this cheap. `calculateFileSize`
+   *     stops descending as soon as `stats.files > 0` (Terminal.cpp:4733), so
+   *     a directory whose first entry is a file costs one listing.
+   *
+   * One detail is NOT copied. The original returns `Params.Result && (Stats.Files == 0)`
+   * and `Params.Result` is untouched by a listing that failed under
+   * `csIgnoreErrors` — so an unreadable directory comes back "empty" there and
+   * is dropped from the transfer, along with everything under it. We also
+   * require the listing to have succeeded, which is the value
+   * `DoCalculateDirectorySize` returns and the original computes and discards
+   * (Terminal.cpp:4785/4810). That makes an unreadable directory "not empty",
+   * matching what `transfer.js` `isEmptyDirectory` already answers — the whole
+   * point of this method is that the count and the copy agree.
+   */
+  async isEmptyRemoteDirectory(file, copyParam, disallowTemporaryTransferFiles) {
+    const params = {
+      params: CALC_FLAGS.stopOnFirstFile | CALC_FLAGS.ignoreErrors |
+        (disallowTemporaryTransferFiles ? CALC_FLAGS.disallowTemporaryTransferFiles : 0),
+      copyParam: { ...(copyParam || {}), excludeEmptyDirectories: false },
+      allowDirs: true,
+      useCache: false,
+      size: 0,
+      result: true,
+      files: null,
+      stats: { files: 0, directories: 0, symLinks: 0 },
+    };
+    const listed = await this.doCalculateDirectorySize(
+      excludeTrailingSlash(file.fullFileName), params);
+    return listed && params.result && params.stats.files === 0;
   }
 
   /**

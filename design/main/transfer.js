@@ -100,6 +100,28 @@ const BATCH_OVERWRITE = Object.freeze({
   resume: 'resume',                   // boResume
 });
 
+/**
+ * How deep `isEmptyDirectory` will descend before it gives up and answers
+ * "not empty".
+ *
+ * WinSCP has no such bound, and does not need one on the remote side: every
+ * descent there goes through `CanRecurseToDirectory` (Terminal.cpp:9018), so
+ * the only way a remote tree can be infinite — a symlink pointing at one of
+ * its own ancestors — is refused before the first extra level. The LOCAL side
+ * has no such guard in the original (`DirectorySource`, Terminal.cpp:7852,
+ * recurses on `SearchRec.IsDirectory()` alone) and this port keeps it that
+ * way, because `directorySource` here recurses just as unconditionally and the
+ * predicate must agree with the copy it is predicting. On a POSIX host
+ * `/a/link -> /a` therefore produces `/a/link/link/link/…` for as long as
+ * anyone is willing to list it.
+ *
+ * 128 is far past any real tree — Windows' own MAX_PATH cannot express a
+ * hundred nested names — and the answer at the bound is the same conservative
+ * one an unreadable directory gets: not empty. Guessing "empty" would drop the
+ * directory and everything under it from the transfer in silence.
+ */
+const MAX_EMPTY_DIRECTORY_DEPTH = 128;
+
 /** TSFTPOverwriteMode — what the byte mover is actually told to do. */
 const OVERWRITE_MODE = Object.freeze({
   overwrite: 'overwrite',
@@ -1686,8 +1708,27 @@ class TransferEngine {
    * A listing that fails answers "not empty". Refusing to copy a directory
    * because we could not look inside it would drop it from the transfer in
    * silence, which is worse than creating one empty directory too many.
+   *
+   * The REMOTE descent is gated on `CanRecurseToDirectory` (Terminal.cpp:9018:
+   * `!File->IsSymLink || FSessionData->FollowDirectorySymlinks`), because
+   * that is where the remote walk this predicate is predicting stops too:
+   * `CalculateFileSize` counts a symlinked directory it will not follow in
+   * `Stats->Directories` and never opens it (Terminal.cpp:4727-4755), and
+   * `sink` here refuses it outright. Counting the files under a symlink we
+   * will not follow made a directory whose only content was such a link look
+   * non-empty; the copy then created it and skipped the link, leaving on disk
+   * exactly the empty directory `excludeEmptyDirectories` exists to prevent.
+   * SFTP makes this the common case rather than an exotic one —
+   * `protocols/sftp.js:1311` resolves an `S_IFLNK` to `type:'dir'` while
+   * keeping `isSymlink`, so every session with `resolveSymlinks` on can hit it.
+   *
+   * The LOCAL descent deliberately has no such gate: `DirectorySource`
+   * (Terminal.cpp:7852) and `directorySource` here both recurse into any
+   * directory, symlink or not, so the predicate must too or it would report a
+   * directory as empty and then watch the copy fill it. See
+   * `MAX_EMPTY_DIRECTORY_DEPTH` for what stops that being unbounded.
    */
-  async isEmptyDirectory(side, dirName, copyParam, disallowTemporaryTransferFiles) {
+  async isEmptyDirectory(side, dirName, copyParam, disallowTemporaryTransferFiles, depth = 0) {
     const a = this.adapterFor(side);
     const dir = excludeTrailingSlash(dirName);
     const inner = { ...(copyParam || {}), excludeEmptyDirectories: false };
@@ -1711,7 +1752,15 @@ class TransferEngine {
       }, inner, side, childDisallowsTemporary);
       if (!allowed) continue;
       if (!isDir) return false;
-      if (!await this.isEmptyDirectory(side, childName, copyParam, disallowTemporaryTransferFiles)) {
+      // CanRecurseToDirectory — remote only, see the note above.
+      if (side === SIDES.remote && !this.terminal.canRecurseToDirectory(child)) continue;
+      if (depth >= MAX_EMPTY_DIRECTORY_DEPTH) {
+        this.logEvent(`Not descending past ${MAX_EMPTY_DIRECTORY_DEPTH} levels under ` +
+          `"${childName}" to decide emptiness; treating it as not empty.`);
+        return false;
+      }
+      if (!await this.isEmptyDirectory(side, childName, copyParam,
+        disallowTemporaryTransferFiles, depth + 1)) {
         return false;
       }
     }
@@ -3349,7 +3398,7 @@ module.exports = {
   // constants
   COPY_FLAGS, TRANSFER_FLAGS, BATCH_OVERWRITE, OVERWRITE_MODE, OVERWRITE_ANSWERS,
   QUEUE_FILE_STATE, LOCAL_INVALID_CHARS, TOKENIZIBLE_CHARS,
-  TOKEN_PREFIX, TOKEN_REPLACEMENT, NO_REPLACEMENT,
+  TOKEN_PREFIX, TOKEN_REPLACEMENT, NO_REPLACEMENT, MAX_EMPTY_DIRECTORY_DEPTH,
   // copy-param logic
   validLocalFileName, restoreChars, changeFileName, allowResume, useAsciiTransfer,
   remoteFileRights, localFileReadOnly, resumeTransfer, skipTransfer, allowAnyTransfer,

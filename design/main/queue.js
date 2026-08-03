@@ -28,6 +28,7 @@ const { EventEmitter } = require('events');
 const { finished } = require('stream/promises');
 
 const { FileMask } = require('./masks');
+const { getPartialFileExtLen } = require('./remotefiles');
 const { COPY_PARAM_DEFAULTS, PREF_DEFAULTS } = require('./defaults');
 // The overwrite decision (ConfirmFileOverwrite / EffectiveBatchOverwrite) and
 // the robust retry substrate live in transfer.js, the port of Terminal.cpp's
@@ -860,13 +861,46 @@ class TransferQueue extends EventEmitter {
       // The trailing separator is what keeps '/a/b' from swallowing '/a/bc';
       // a dstPath that already ends in one (a drive or share root) must not
       // grow a second, which would match nothing at all.
+      //
+      // A `.filepart` leftover does not count as content when the SOURCE is
+      // local, because IsEmptyLocalDirectory asks its child predicate with
+      // DisallowTemporaryTransferFiles hard-coded true (Terminal.cpp:6199): a
+      // half-finished download of ours is not a file worth keeping a directory
+      // for. IsEmptyRemoteDirectory passes the caller's flag instead
+      // (Terminal.cpp:6441), and the copy path never sets it, so a REMOTE
+      // directory holding only leftovers is genuinely not empty. Without this
+      // the queue kept a local directory of nothing but `report.filepart` that
+      // `transfer.js` `isEmptyDirectory` drops — two collectors for the same
+      // option, one filter apart, and whichever engine ran decided whether the
+      // directory appeared on the far side.
+      // A leftover under a directory that survives for other reasons is still
+      // transferred — DoAllowLocalFileTransfer only disallows temporaries when
+      // the caller asks, and the copy path never does. It is only the
+      // *emptiness* question that ignores it.
+      const localSource = item.side !== 'download' && item.side !== 'remote-copy';
+      const isContent = (o) => o.kind === 'file' &&
+        !(localSource && getPartialFileExtLen(src.basename(o.srcPath)) > 0);
       const sep = dst.sep || '/';
-      const pruned = entries.filter((e) => {
-        if (e.kind !== 'dir') return true;
-        const prefix = e.dstPath.endsWith(sep) ? e.dstPath : e.dstPath + sep;
-        return entries.some((o) => o.kind === 'file' && o.dstPath.startsWith(prefix));
-      });
-      return { entries: pruned, bytes, files };
+      const prefixOf = (e) => (e.dstPath.endsWith(sep) ? e.dstPath : e.dstPath + sep);
+      // Everything under a dropped directory goes with it. Before `.filepart`
+      // stopped counting, a dropped directory held no file entries at all and
+      // this could not arise; now it can, and an orphaned file entry would be
+      // the ENOENT-on-first-write failure described above, arriving by a
+      // different route — `_run` only mkdirs from `kind:'dir'` entries.
+      const dropped = entries
+        .filter((e) => e.kind === 'dir' &&
+          !entries.some((o) => isContent(o) && o.dstPath.startsWith(prefixOf(e))))
+        .map(prefixOf);
+      const pruned = entries.filter((e) => (e.kind === 'dir'
+        ? !dropped.includes(prefixOf(e))
+        : !dropped.some((p) => e.dstPath.startsWith(p))));
+      return {
+        entries: pruned,
+        // Recounted, not carried over: the announced totals must describe the
+        // plan that will actually run, or the progress bar never arrives.
+        bytes: pruned.reduce((n, e) => n + (e.kind === 'file' ? (e.size || 0) : 0), 0),
+        files: pruned.filter((e) => e.kind === 'file').length,
+      };
     }
 
     return { entries, bytes, files };

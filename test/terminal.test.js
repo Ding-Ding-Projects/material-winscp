@@ -1364,11 +1364,106 @@ test('the transfer mask filters what is counted, so the total matches the transf
   assert.strictEqual(res.size, 400, 'the .log file must not be counted');
 });
 
-test('excludeHiddenFiles beats an explicit include mask', () => {
+test('excludeHiddenFiles beats an explicit include mask', async () => {
+  // Awaited because DoAllowRemoteFileTransfer's third conjunct — the
+  // cpNoEmptyDirectories clause, Terminal.cpp:5806 — is a listing. The
+  // assertions themselves are unchanged.
   const { terminal } = makeTerminal();
   const hidden = { name: '.env', type: 'file', hidden: true, size: 1, mtime: 0, directory: '/d', fullFileName: '/d/.env' };
-  assert.strictEqual(terminal.allowRemoteFileTransfer(hidden, { includeFileMask: '*', excludeHiddenFiles: true }, false), false);
-  assert.strictEqual(terminal.allowRemoteFileTransfer(hidden, { includeFileMask: '*' }, false), true);
+  assert.strictEqual(await terminal.allowRemoteFileTransfer(hidden, { includeFileMask: '*', excludeHiddenFiles: true }, false), false);
+  assert.strictEqual(await terminal.allowRemoteFileTransfer(hidden, { includeFileMask: '*' }, false), true);
+});
+
+// ---------------------------------------------------------------------------
+// cpNoEmptyDirectories in the REMOTE size calculation
+//
+// DoAllowRemoteFileTransfer is three conjuncts (Terminal.cpp:5803-5807) and
+// this port only had two: the mask/hidden rules and the .filepart rule. The
+// third — `!File->IsDirectory || !ExcludeEmptyDirectories || !IsEmptyRemoteDirectory(...)`
+// — was missing, so the count reported directories the copy would then refuse.
+// Bytes never diverged (a directory contributes none), which is why it hid:
+// what was wrong was the directory count and the collected file list.
+// ---------------------------------------------------------------------------
+
+function emptyDirFixture(t) {
+  t.adapter.nodes.set('/d', { type: 'dir', mtime: 0 });
+  t.adapter.nodes.set('/d/full', { type: 'dir', mtime: 0 });
+  t.adapter.add('/d/full/a.txt', { size: 100 });
+  t.adapter.nodes.set('/d/empty', { type: 'dir', mtime: 0 });
+  return { name: 'd', type: 'dir', fullFileName: '/d', directory: '/', isSymlink: false };
+}
+
+test('excludeEmptyDirectories leaves the empty directory out of the remote count', async () => {
+  const control = makeTerminal({ cwd: '/' });
+  const dir = emptyDirFixture(control);
+  const off = await control.terminal.calculateFilesSize([dir], { copyParam: {} });
+  assert.strictEqual(off.stats.directories, 3, 'the control: /d, /d/full and /d/empty');
+
+  const t = makeTerminal({ cwd: '/' });
+  emptyDirFixture(t);
+  const res = await t.terminal.calculateFilesSize([dir], {
+    copyParam: { excludeEmptyDirectories: true },
+  });
+  assert.strictEqual(res.stats.directories, 2, '/d/empty is not counted');
+  assert.strictEqual(res.size, 100, 'bytes never disagreed — a directory contributes none');
+});
+
+test('the collected remote file list drops the directories the copy will refuse', async () => {
+  // `collectFiles` is what a transfer is actually driven from
+  // (transfer.js:459 builds from calculateFilesSize({collectFiles:true}).files),
+  // so a stale entry here is a directory the copy is asked to create.
+  const t = makeTerminal({ cwd: '/' });
+  const dir = emptyDirFixture(t);
+  const res = await t.terminal.calculateFilesSize([dir], {
+    copyParam: { excludeEmptyDirectories: true }, collectFiles: true,
+  });
+  assert.deepStrictEqual(res.files.map((f) => f.fileName), ['/d', '/d/full', '/d/full/a.txt']);
+});
+
+test('emptiness is recursive on the remote side too', async () => {
+  // IsEmptyRemoteDirectory is DoCalculateDirectorySize with csStopOnFirstFile
+  // and `Stats.Files == 0`, so a directory holding nothing but empty
+  // directories is empty all the way up. A one-level implementation would
+  // count /d/hollow.
+  const t = makeTerminal({ cwd: '/' });
+  const dir = emptyDirFixture(t);
+  t.adapter.nodes.set('/d/hollow', { type: 'dir', mtime: 0 });
+  t.adapter.nodes.set('/d/hollow/deeper', { type: 'dir', mtime: 0 });
+  const res = await t.terminal.calculateFilesSize([dir], {
+    copyParam: { excludeEmptyDirectories: true },
+  });
+  assert.strictEqual(res.stats.directories, 2);
+});
+
+test('a remote directory holding only masked-out files counts as empty for the size too', async () => {
+  // "Empty" is "empty for THIS transfer": the mask is applied by
+  // calculateFileSize on the way past, so a directory of nothing but .log
+  // files under an *.txt mask is empty exactly as the copy will find it.
+  const t = makeTerminal({ cwd: '/' });
+  const dir = emptyDirFixture(t);
+  t.adapter.nodes.set('/d/logs', { type: 'dir', mtime: 0 });
+  t.adapter.add('/d/logs/x.log', { size: 7 });
+  const res = await t.terminal.calculateFilesSize([dir], {
+    copyParam: { excludeEmptyDirectories: true, includeFileMask: '*.txt' },
+  });
+  assert.strictEqual(res.stats.directories, 2, '/d/logs holds nothing this transfer wants');
+  assert.strictEqual(res.size, 100);
+});
+
+test('a remote directory that cannot be listed is not reported empty', async () => {
+  // Terminal.cpp:6447 returns `Params.Result && (Stats.Files == 0)`, and
+  // Params.Result is untouched by a listing that failed under csIgnoreErrors —
+  // so the original answers "empty" and drops the directory and everything
+  // under it. We also require the listing to have succeeded, which is the
+  // value DoCalculateDirectorySize returns and the original discards
+  // (Terminal.cpp:4785/4810). It matches what transfer.js isEmptyDirectory
+  // already answers, and agreeing with the copy is this method's whole job.
+  const t = makeTerminal({ cwd: '/' });
+  emptyDirFixture(t);
+  t.adapter.failNext = { op: 'list', error: Object.assign(new Error('denied'), { code: 'EACCES' }), times: 1 };
+  const empty = await t.terminal.isEmptyRemoteDirectory(
+    { name: 'empty', type: 'dir', fullFileName: '/d/empty', directory: '/d' }, {}, false);
+  assert.strictEqual(empty, false);
 });
 
 test('allowDirs=false marks the result untrusted rather than guessing a size', async () => {

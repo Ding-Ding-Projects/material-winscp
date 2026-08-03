@@ -507,6 +507,89 @@ test('a Windows-separated download tree is unaffected when the option is off', a
   assert.ok(local.files.has('\\l\\tree\\empty'), 'without the option the empty directory is created');
 });
 
+test('an upload prunes a local directory holding only .filepart leftovers', async () => {
+  // IsEmptyLocalDirectory hard-codes DisallowTemporaryTransferFiles=true for
+  // its child predicate (Terminal.cpp:6199), so a half-finished download of
+  // ours is not content. transfer.js's engine has honoured that since
+  // isEmptyDirectory landed; _buildPlan pruned purely structurally, so the
+  // same tree kept the directory here and dropped it there — one option, two
+  // collectors, and whichever engine happened to run decided the answer.
+  const { local, remote } = makePair();
+  local.put('/l/tree/full/a.txt', 'a');
+  local.put('/l/tree/leftovers/report.filepart', 'partial');
+  local.put('/l/tree/numbered/report.filepart.2', 'partial');
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'upload',
+    source: '/l/tree',
+    target: '/r/tree',
+    sourceAdapter: local,
+    targetAdapter: remote,
+    copyParam: { excludeEmptyDirectories: true },
+  });
+  await q.idle();
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+
+  const dirs = item._plan.entries.filter((e) => e.kind === 'dir').map((e) => e.dstPath).sort();
+  assert.deepStrictEqual(dirs, ['/r/tree', '/r/tree/full']);
+  assert.ok(!remote.files.has('/r/tree/leftovers'));
+  assert.ok(!remote.files.has('/r/tree/numbered'),
+    'GetPartialFileExtLen, so the disambiguated ".filepart.2" form counts too');
+  // The leftovers go with the directory that was dropped: _run only mkdirs
+  // from kind:'dir' entries, so an orphaned file entry would be an ENOENT.
+  assert.ok(!remote.files.has('/r/tree/leftovers/report.filepart'));
+  assert.strictEqual(item.progress.filesDone, 1);
+  assert.strictEqual(item._plan.files, 1, 'the announced totals describe the plan that ran');
+  assert.strictEqual(item._plan.bytes, 1);
+});
+
+test('a .filepart beside a real file is still uploaded', async () => {
+  // Only the emptiness question ignores temporaries. DoAllowLocalFileTransfer
+  // disallows them solely when the caller asks, and the copy path never does,
+  // so a leftover in a directory that survives goes up like anything else.
+  const { local, remote } = makePair();
+  local.put('/l/tree/full/a.txt', 'a');
+  local.put('/l/tree/full/report.filepart', 'partial');
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'upload',
+    source: '/l/tree',
+    target: '/r/tree',
+    sourceAdapter: local,
+    targetAdapter: remote,
+    copyParam: { excludeEmptyDirectories: true },
+  });
+  await q.idle();
+
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.strictEqual(remote.read('/r/tree/full/report.filepart').toString(), 'partial');
+});
+
+test('a download does NOT treat a remote directory of .filepart leftovers as empty', async () => {
+  // The asymmetry is the original's, not an oversight: IsEmptyRemoteDirectory
+  // passes the caller's flag through (Terminal.cpp:6441) and the copy path
+  // never sets it. Hardening the remote side would make this port skip a
+  // directory WinSCP downloads.
+  const { local, remote } = makePair();
+  remote.put('/r/tree/leftovers/report.filepart', 'partial');
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'download',
+    source: '/r/tree',
+    target: '/l/tree',
+    sourceAdapter: remote,
+    targetAdapter: local,
+    copyParam: { excludeEmptyDirectories: true },
+  });
+  await q.idle();
+
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.strictEqual(local.read('/l/tree/leftovers/report.filepart').toString(), 'partial');
+});
+
 test('pause and resume of a single item', async () => {
   const { local, remote } = makePair({ chunkSize: 1024, readDelayMs: 10 });
   const payload = bigBuffer(20480);          // 20 chunks * 10ms

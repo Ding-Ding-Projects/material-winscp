@@ -1793,6 +1793,98 @@ test('a directory that cannot be listed is not assumed to be empty', async () =>
     false);
 });
 
+test('a symlinked directory we will not follow does not make its parent non-empty', async () => {
+  // CanRecurseToDirectory, Terminal.cpp:9018. CalculateFileSize counts a
+  // symlinked directory it will not follow in Stats->Directories and never
+  // opens it (Terminal.cpp:4727-4755), so IsEmptyRemoteDirectory's
+  // `Stats.Files == 0` stays true and the parent is empty.
+  //
+  // Without the guard the walk went through the link, found b.txt and called
+  // the parent non-empty — and then `sink` refused the very same link
+  // (transfer.js, the CanRecurseToDirectory check in the directory branch),
+  // so the copy created "/l/d/linky" and put nothing in it. That is precisely
+  // the empty directory the option exists to prevent.
+  const { engine, local, remote } = makeEngine();
+  remote.put('/r/d/real/a.txt', 'A');
+  remote.putDir('/r/d/linky');
+  // protocols/sftp.js:1311 resolves an S_IFLNK to type:'dir' while keeping
+  // isSymlink, and listing the link path then shows the target's contents.
+  remote.putDir('/r/d/linky/link');
+  Object.assign(remote.nodes.get('/r/d/linky/link'), { isSymlink: true });
+  remote.put('/r/d/linky/link/b.txt', 'B');
+  local.putDir('/l');
+
+  await engine.copyToLocal(['/r/d'], '/l',
+    cp({ preserveTime: false, excludeEmptyDirectories: true }), 0, null);
+
+  assert.deepStrictEqual(local.calls.mkdir, ['/l/d', '/l/d/real']);
+  assert.strictEqual(local.has('/l/d/linky'), false,
+    'the directory whose only content is an unfollowable symlink is never created');
+  assert.strictEqual(local.text('/l/d/real/a.txt'), 'A');
+});
+
+test('followDirectorySymlinks puts the same symlinked directory back in scope', async () => {
+  // The other half of CanRecurseToDirectory: `|| FSessionData->FollowDirectorySymlinks`.
+  // This one passes with or without the guard — it proves the fixture above is
+  // a real symlink case and not a directory that was empty anyway.
+  const { engine, local, remote } = makeEngine({ data: { followDirectorySymlinks: true } });
+  remote.putDir('/r/d/linky/link');
+  Object.assign(remote.nodes.get('/r/d/linky/link'), { isSymlink: true });
+  remote.put('/r/d/linky/link/b.txt', 'B');
+  local.putDir('/l');
+
+  await engine.copyToLocal(['/r/d'], '/l',
+    cp({ preserveTime: false, excludeEmptyDirectories: true }), 0, null);
+
+  assert.strictEqual(local.text('/l/d/linky/link/b.txt'), 'B');
+});
+
+test('an upload still descends into a LOCAL directory symlink, so emptiness agrees with the copy', async () => {
+  // Regression guard, not a proof: it passes before and after the guard above.
+  // The point is the asymmetry. DirectorySource (Terminal.cpp:7852) recurses on
+  // SearchRec.IsDirectory() alone and `directorySource` here does the same, so
+  // the local half of the predicate must NOT gain CanRecurseToDirectory — it
+  // would report "empty", the copy would then walk in and fill the directory,
+  // and the option would have skipped a directory WinSCP uploads.
+  const { engine, local, remote } = makeEngine();
+  local.putDir('/l/d/linky');
+  Object.assign(local.nodes.get('/l/d/linky'), { isSymlink: true });
+  local.put('/l/d/linky/b.txt', 'B');
+  remote.putDir('/r');
+
+  await engine.copyToRemote(['/l/d'], '/r/',
+    cp({ preserveTime: false, excludeEmptyDirectories: true }), 0, null);
+
+  assert.strictEqual(remote.text('/r/d/linky/b.txt'), 'B');
+});
+
+test('the emptiness walk gives up rather than following a self-referential listing', async () => {
+  // The remote guard closes the realistic cycle (a symlink to an ancestor),
+  // but the LOCAL side is deliberately unguarded and a POSIX `/a/link -> /a`
+  // yields /a/link/link/link/… forever. A server that lists a directory as its
+  // own child does the same on either side. MAX_EMPTY_DIRECTORY_DEPTH is the
+  // stop, and the answer at the stop is the conservative one an unreadable
+  // directory already gets: not empty.
+  const { engine, remote } = makeEngine();
+  remote.putDir('/r/d');
+  let lists = 0;
+  // Bounded far past the cap so the pre-fix walk terminates and FAILS the
+  // assertions instead of hanging the suite.
+  remote.list = async (dir) => {
+    lists += 1;
+    return dir.split('/').length > 1000
+      ? []
+      : [entry({ name: 'loop', type: 'dir', size: 0, mtime: 0, rights: 'rwxr-xr-x' })];
+  };
+
+  const empty = await engine.isEmptyDirectory(SIDES.remote, '/r/d',
+    cp({ excludeEmptyDirectories: true }), false);
+
+  assert.strictEqual(empty, false, 'a walk that had to give up must not answer "empty"');
+  assert.ok(lists <= X.MAX_EMPTY_DIRECTORY_DEPTH + 1,
+    `bounded at ${X.MAX_EMPTY_DIRECTORY_DEPTH} levels, took ${lists} listings`);
+});
+
 test('excludeEmptyDirectories keeps the size calculation agreeing with the copy', async () => {
   // CalculateLocalFileSize goes through DoAllowLocalFileTransfer too
   // (Terminal.cpp:5892). A total that counts a directory the copy then refuses
