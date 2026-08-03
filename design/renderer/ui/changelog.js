@@ -187,6 +187,34 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "c68948c", kind: 'commit', ref: "c68948c", oid: "c68948c970400321de07c140af91d7249455c7aa", date: "2026-08-03",
+    title: "Harden CLI, editor, queue, and protocol edges",
+    changes: [
+      { category: "changed", text: "English: Nested CLI help, BOM-less decoding, filtered editor ordering, CustomCommand prompts, queue event containment, S3 abort idempotence, and IPC capability gates now behave like grown-up boundary code; the sharp edges have been given tiny helmets." },
+      { category: "changed", text: "粵語：CLI help、editor 編碼、filtered 排序、CustomCommand、queue、S3 cleanup 同 IPC capability gate 而家識得好好守邊界；啲尖角終於戴咗細細個安全帽。" },
+    ],
+  },
+  {
+    id: "18e7d9a", kind: 'commit', ref: "18e7d9a", oid: "18e7d9adb5423b33ad2174ea0cd6d63c4c5b79a9", date: "2026-08-03",
+    title: "Record the pushed protocol hardening handoff",
+    changes: [
+      { category: "changed", text: "English: The handoff now names the real remote tip, the 3,400-test evidence, and the remaining roadmap work; the paperwork has finally stopped chasing the code around the room." },
+    ],
+    changesYue: [
+      { category: "changed", text: "粵語：handoff 而家跟足真正 remote、測試數字同未完 roadmap；啲文件終於唔使追住份 code 周圍跑。" },
+    ],
+  },
+  {
+    id: "c32c930", kind: 'commit', ref: "c32c930", oid: "c32c930d56ba624e1c7b1bf06621ed8d12964e12", date: "2026-08-03",
+    title: "Refresh the generated changelog",
+    changes: [
+      { category: "changed", text: "English: The release history now records the protocol and smoke-hardening commit with verified full-SHA links, so the timeline stops wearing yesterday's hat." },
+    ],
+    changesYue: [
+      { category: "changed", text: "粵語：更新咗 changelog，今次連新 commit 都有齊全 SHA；條時間線唔使再戴住尋日頂帽扮最新。" },
+    ],
+  },
+  {
     id: "c38476f", kind: 'commit', ref: "c38476f", oid: "c38476f35d1ea101a5a7137cbeeebb146aac1914", date: "2026-08-03",
     title: "Harden protocol edge cases and Docker smoke cleanup",
     changes: [
@@ -636,30 +664,6 @@ export const DEVELOPMENT = [
     changes: [
       { category: "added", text: "English: Wire saved transfer options, preserve special SFTP types, append retries behind waiting work, harden keep-up-to-date UI transitions, gate property tags truthfully, and show secret-free known-host algorithms. Add focused tests and documentation. The queue now respects the line, and the dialogs stop pretending every shiny control has a backend." },
       { category: "changed", text: "廣東話：補返 saved transfer options、保留 SFTP special types、retry 排隊唔插隊、keep-up-to-date UI transition、Properties tag capability，同 known-host algorithm 安全預覽。加 tests 同 docs，啲 dialog 終於唔再扮每粒閃閃掣都有 backend，queue 亦識排隊守規矩。" },
-    ],
-  },
-  {
-    id: "d5f0b8d", kind: 'commit', ref: "d5f0b8d", oid: "d5f0b8dc6bf1beaa993127636c84a4f280ee7962", date: "2026-08-03",
-    title: "Refresh protocol-hardening handoff metadata",
-    changes: [
-      { category: "changed", text: "English: Record the verified 3,293/3,294 test result, unchanged 59.0% logic coverage, 114 remaining units, and the current protocol/surface checkpoint. The handoff reports the treasure map, not a treasure-shaped sticker." },
-      { category: "changed", text: "廣東話：記低已驗證嘅 3,293/3,294 測試、仍然 59.0% logic coverage、剩低 114 個 units 同今次 protocol/surface checkpoint。交更紙畫地圖，唔貼張金色貼紙扮掘到寶。" },
-    ],
-  },
-  {
-    id: "e3bec36", kind: 'commit', ref: "e3bec36", oid: "e3bec36f8b04ced8fa1e9e4894d8133f069cb1ed", date: "2026-08-03",
-    title: "Refresh in-app changelog for protocol and surface hardening",
-    changes: [
-      { category: "changed", text: "English: Record the configuration, console, SCP, progress, custom-command, and directory-view hardening wave in the in-app release history. The diary now has fewer mysterious footnotes." },
-      { category: "changed", text: "廣東話：將 configuration、console、SCP、progress、custom-command 同 dirview hardening 寫入 app changelog，日記少咗啲神秘腳註，唔使靠估。" },
-    ],
-  },
-  {
-    id: "7592b4c", kind: 'commit', ref: "7592b4c", oid: "7592b4ca950d1cebf62a8f680d9fd6f74cded36b", date: "2026-08-03",
-    title: "Harden configuration, console, SCP, and progress surfaces",
-    changes: [
-      { category: "added", text: "English: Roll back failed configuration imports, drain SCP startup output, scope console events by session, validate optional custom-command prompts, announce terminal progress states, and expose directory execution decisions. Add focused tests and documentation. The boundaries now check their passports before crossing, which is excellent news for the tiny state machines." },
-      { category: "changed", text: "廣東話：設定匯入失敗會 rollback、SCP 會食走 startup banner、console event 按 session 分流、custom command optional prompt 會驗、progress terminal state 會講清楚，同 dirview 有 ExecuteFile decision。加 tests 同 docs，啲 boundaries 終於識查 passport，細細粒 state machines 安心晒。" },
     ],
   },
 ];
