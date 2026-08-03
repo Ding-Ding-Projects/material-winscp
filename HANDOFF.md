@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `d443d90`** — Refresh in-app changelog for interaction fixes
+**At commit `2a2d946`** — Refresh in-app changelog for CLI boundary work
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3221 run, **3220 pass, 0 fail**, 1 skipped |
-| Hand-written code | 214,095 lines across 376 files |
-| Commits | 89 on `main` |
+| Tests | 3228 run, **3227 pass, 0 fail**, 1 skipped |
+| Hand-written code | 214,242 lines across 376 files |
+| Commits | 92 on `main` |
 | Working tree | clean |
-| Remote | `origin/main` at `f8d2a55` — **differs from HEAD** |
+| Remote | `origin/main` at `6942a18` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `2a2d946` | 2026-08-03 | Refresh in-app changelog for CLI boundary work |
+| `1e1c543` | 2026-08-03 | Expand headless CLI and harden lifecycle boundaries |
+| `6942a18` | 2026-08-03 | Refresh interaction wave handoff metadata |
 | `d443d90` | 2026-08-03 | Refresh in-app changelog for interaction fixes |
 | `9412e5b` | 2026-08-03 | Fix palette, shortcuts, queue, checklist, and WebDAV |
 | `f8d2a55` | 2026-08-03 | Refresh hardening handoff metadata |
 | `92a9211` | 2026-08-03 | Refresh in-app changelog for hardening wave |
 | `7d90403` | 2026-08-03 | Harden config, masks, crypto, storage, and WinAPI |
-| `2eb26e3` | 2026-08-03 | Fix protocol, session, UI, and changelog gaps |
-| `0c43eb7` | 2026-08-03 | Refresh final handoff metadata |
-| `e9d01ca` | 2026-08-03 | Refresh handoff after CLI smoke |
 
 ## Notes from whoever worked on this last
 
