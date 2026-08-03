@@ -187,6 +187,24 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "1c10a04", kind: 'commit', ref: "1c10a04", oid: "1c10a04933ce623c1f520f3b5b55917a918457be", date: "2026-08-03",
+    title: "Harden async console sync and queue lifecycles",
+    changes: [
+      { category: "removed", text: "English: Stop late console failures from notifying released waits, remove externally stopped watchers from the synchronization registry, and await every asynchronous queue cancellation before reporting success. Ghost callbacks and phantom queue wins have been shown the exit." },
+      { category: "changed", text: "粵語：Console 等候放手之後唔再畀幽靈 error 嚇人，sync watcher 停咗會清走自己，queue cancel 亦會等齊 IPC 先報喜；假勝利同殘影 callback 而家一齊收工。" },
+    ],
+  },
+  {
+    id: "1e60445", kind: 'commit', ref: "1e60445", oid: "1e60445b8683634125f38c689088c31e5eb39cdf", date: "2026-08-03",
+    title: "Refresh handoff and changelog evidence",
+    changes: [
+      { category: "fixed", text: "English: Record the verified CLI, transfer-boundary, reconnect, checklist, Squirrel, and panel fixes in the handoff and in-app changelog. The paperwork now follows the code instead of wandering off for dim sum." },
+    ],
+    changesYue: [
+      { category: "changed", text: "粵語：CLI、拖放、重連、清單、Squirrel 同面板修正而家有齊晒證據；handoff 同 changelog 唔再自己去飲茶，會跟實個 code。" },
+    ],
+  },
+  {
     id: "f0b7bc1", kind: 'commit', ref: "f0b7bc1", oid: "f0b7bc1717e513c2d659d761380885c3836d94c2", date: "2026-08-03",
     title: "Harden CLI and session UI boundaries",
     changes: [
@@ -679,20 +697,6 @@ export const DEVELOPMENT = [
     title: "Refresh handoff for transfer and security wave",
     changes: [
       { category: "fixed", text: "Update the factual handoff with 59.0% logic coverage, 114 outstanding units, 3331 total tests with one skip, the 22-issue scan and the newly pushed transfer, console, sync and security fixes. The map now marks another stretch of potholes with little flags.\\n\\n廣東話：handoff 再插多幾支小旗，邊度有坑、邊度已經填好，大家揸車唔使靠手感。" },
-    ],
-  },
-  {
-    id: "e1df1cc", kind: 'commit', ref: "e1df1cc", oid: "e1df1cc72a128ec6da8667560d8105a2ae22d9d8", date: "2026-08-03",
-    title: "Refresh changelog for transfer and security hardening",
-    changes: [
-      { category: "fixed", text: "Record the transfer, console, remote-file, sync, SiteAdvanced and security edge fixes with verified commit links. The changelog now has receipts for the rakes it removed.\\n\\n廣東話：更新日誌留低晒 receipts，邊支 rake 被收起都睇得返，唔使靠估。" },
-    ],
-  },
-  {
-    id: "3ba2f1c", kind: 'commit', ref: "3ba2f1c", oid: "3ba2f1cee10f3e344c8b3311fb56fbe7fa205710", date: "2026-08-03",
-    title: "Harden transfer console security and sync edges",
-    changes: [
-      { category: "added", text: "Close failed console channels, reject malformed AES verifiers, canonicalize relative symlink targets for cycle detection, stop cancelled transfers before byte movement, name SiteAdvanced order options for assistive technology, and explain a no-direction sync row honestly. Add focused tests and documentation. The edge cases now stop tripping over the same rake, which is frankly the rake's fault.\\n\\n廣東話：console channel、AES verifier、symlink、transfer、SiteAdvanced 同 sync 邊角位而家各自有路牌；個 rake 再伸腳都冇咁易中招。" },
     ],
   },
 ];
