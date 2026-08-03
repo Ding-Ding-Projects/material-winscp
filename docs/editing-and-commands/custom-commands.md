@@ -52,7 +52,7 @@ chain a command, even by accident.
 
 | Situation | What the user sees | Recoverable |
 | --- | --- | --- |
-| Command needs a remote shell on a protocol without one | The command is greyed out. `caps.shell` decides, so SFTP, FTP, WebDAV and S3 never offer remote commands. | n/a |
+| Command needs a remote shell on a protocol without one | The command is greyed out. `caps.exec` decides; SCP always supports it, SFTP depends on the connected server/account, and FTP, WebDAV and S3 do not expose it. | n/a |
 | Non-zero exit | The exit code and captured output are shown. Success is not assumed from the command having run. | Yes |
 | Command produces a great deal of output | Captured up to a bound and marked as truncated, rather than consuming memory. | Yes |
 | Command waits for input | Detected by a timeout; the command is terminated and reported as needing input. Interactive commands belong in the [console](console.md). | Yes |
@@ -95,7 +95,7 @@ into a root-relative path.
   non-ASCII — asserting the shell receives exactly one argument each time.
 - `!&` batching is tested against the command-line length limit.
 - Capability gating is tested to assert remote commands are unavailable on
-  protocols without `caps.shell`.
+  protocols without `caps.exec`.
 - Output capture bounds and the input-wait timeout have direct tests.
 
 ## Suggested articles

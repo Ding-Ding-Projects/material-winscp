@@ -248,7 +248,7 @@ async function compare(localAdapter, localPath, remoteAdapter, remotePath, optio
           }
         } else if (dir === 'remote' && !timestamp) {
           items.push(makeItem('deleteRemote', remote.isDirectory,
-            o.deleteFiles && (!remote.isDirectory || o.recursive),
+            !o.existingOnly && o.deleteFiles && (!remote.isDirectory || o.recursive),
             'not-on-local', missing(localAdapter, lPath, remote.name), remote, timestamp));
         }
         continue;

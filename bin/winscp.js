@@ -13,6 +13,7 @@ const path = require('path');
 const packageInfo = require('../package.json');
 const { runConsoleFrontEnd } = require('../design/main/console');
 const shell = require('../design/main/shellintegration');
+const { resolveDropTarget } = require('../design/main/explorershell');
 
 const HELP = `WinSCP Material ${packageInfo.version} — headless command line
 
@@ -25,6 +26,7 @@ Console-compatible commands:
 Headless drag/drop simulation:
   winscp drag plan [options]          Calculate a drag/drop operation as JSON
   winscp drop classify PATH...        Classify paths and check upload support
+  winscp drop target [options]        Resolve the Explorer/queue drop target
   winscp drag stage PATH...           Stage local fixtures like a remote drag
   winscp drag extension-status        Report the native-extension mode
 
@@ -55,11 +57,13 @@ const EFFECTS = Object.freeze({ none: shell.DROPEFFECT.NONE, copy: shell.DROPEFF
   move: shell.DROPEFFECT.MOVE, link: shell.DROPEFFECT.LINK });
 const VALUE_OPTIONS = new Set([
   'source', 'destination', 'result', 'last-effect', 'effect', 'target', 'windows-build',
-  'parameter', 'command', 'session', 'file', 'temp-root',
+  'parameter', 'command', 'session', 'file', 'temp-root', 'log', 'loglevel', 'xmllog',
+  'stdout', 'stdin', 'default-download-target', 'fake-file-target', 'external-drop-directory',
 ]);
 const BOOLEAN_OPTIONS = new Set([
   'onto-session-tab', 'same-session', 'target-available', 'allow-move', 'read-only',
   'no-upload', 'no-mkdir', 'has-directories', 'queue', 'move', 'json', 'pretty',
+  'nointeractiveinput', 'unsafe', 'xmllogrequired', 'xmlgroups',
 ]);
 
 function parseOptions(argv) {
@@ -268,6 +272,23 @@ function classifyDrop(argv) {
   };
 }
 
+function dropTarget(argv) {
+  const { positional, options } = parseOptions(argv);
+  assertKnownOptions(options, new Set([
+    'queue', 'default-download-target', 'fake-file-target', 'external-drop-directory', 'json', 'pretty',
+  ]), 'drop target');
+  if (positional.length) throw new Error('drop target does not accept positional arguments');
+  return {
+    command: 'drop target',
+    ...resolveDropTarget({
+      ontoQueueView: booleanOption(options, 'queue', false),
+      defaultDownloadTarget: optionValue(options, 'default-download-target', ''),
+      fakeFileDropTarget: optionValue(options, 'fake-file-target', ''),
+      externalDropDirectory: optionValue(options, 'external-drop-directory', ''),
+    }),
+  };
+}
+
 async function stageDrag(argv) {
   const { positional, options } = parseOptions(argv);
   assertKnownOptions(options, new Set(['file', 'move', 'temp-root', 'json', 'pretty']), 'drag stage');
@@ -336,7 +357,10 @@ async function stageDrag(argv) {
 
 function buildConsoleArgs(argv, kind) {
   const { positional, options } = parseOptions(argv);
-  assertKnownOptions(options, new Set(['parameter', 'command', 'session']), `${kind} command`);
+  assertKnownOptions(options, new Set([
+    'parameter', 'command', 'session', 'log', 'loglevel', 'xmllog', 'xmllogrequired',
+    'xmlgroups', 'stdout', 'stdin', 'nointeractiveinput', 'unsafe',
+  ]), `${kind} command`);
   const consoleArgs = ['/console'];
   if (kind === 'script') {
     const file = positional.shift();
@@ -349,6 +373,17 @@ function buildConsoleArgs(argv, kind) {
     for (const value of positional.splice(0)) commands.push(value);
   }
   for (const value of commands) consoleArgs.push('/command', String(value));
+  for (const name of ['log', 'loglevel', 'xmllog', 'stdout', 'stdin']) {
+    for (const value of optionValues(options, name)) consoleArgs.push(`/${name}=${String(value)}`);
+  }
+  for (const name of ['xmllogrequired', 'nointeractiveinput', 'unsafe']) {
+    if (Object.prototype.hasOwnProperty.call(options, name) && booleanOption(options, name)) {
+      consoleArgs.push(`/${name}`);
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(options, 'xmlgroups')) {
+    consoleArgs.push(`/xmlgroups=${booleanOption(options, 'xmlgroups') ? 'on' : 'off'}`);
+  }
   const session = optionValue(options, 'session', kind === 'script' ? positional.shift() : undefined);
   if (session) consoleArgs.push(String(session));
   if (positional.length) throw new Error(`unexpected argument ${JSON.stringify(positional[0])}`);
@@ -379,6 +414,7 @@ async function runCli(argv = process.argv.slice(2), io = {}) {
       const { options } = parseOptions(subcommandArgs);
       if (subcommand === 'plan') printJson(streams, dragPlan(subcommandArgs), outputIsPretty(options));
       else if (subcommand === 'classify') printJson(streams, classifyDrop(subcommandArgs), outputIsPretty(options));
+      else if (subcommand === 'target') printJson(streams, dropTarget(subcommandArgs), outputIsPretty(options));
       else if (subcommand === 'stage') printJson(streams, await stageDrag(subcommandArgs), outputIsPretty(options));
       else if (subcommand === 'extension-status') {
         assertKnownOptions(options, new Set(['windows-build', 'json', 'pretty']), 'drag extension-status');
@@ -418,5 +454,5 @@ if (require.main === module) {
 }
 
 module.exports = {
-  HELP, EFFECTS, parseOptions, dragPlan, classifyDrop, stageDrag, buildConsoleArgs, runCli,
+  HELP, EFFECTS, parseOptions, dragPlan, classifyDrop, dropTarget, stageDrag, buildConsoleArgs, runCli,
 };

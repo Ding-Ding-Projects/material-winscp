@@ -6,9 +6,11 @@ Opens a terminal against the remote host on the session that is already
 connected — no second login, no second password. It is a tab like any other, so
 it participates in the tab strip, searches, grouping and appearance editing.
 
-The console requires `caps.shell`, which only [SCP](../protocols/scp.md)
-provides. On SFTP, FTP, WebDAV and S3 the command is greyed out with a tooltip
-naming the reason.
+The console requires `caps.exec`. [SCP](../protocols/scp.md) always provides
+it, and SFTP provides it when the connected server/account exposes the required
+SSH command execution path. On FTP, WebDAV and S3, and on an SFTP session
+without execution support, the command is greyed out with a tooltip naming the
+reason.
 
 ## Configuration
 
@@ -35,7 +37,7 @@ publishes events for both sessions.
 | Situation | What the user sees | Recoverable |
 | --- | --- | --- |
 | Protocol has no shell | The command is disabled with a tooltip explaining why. It never opens an empty console. | n/a |
-| Command produces unbounded output (`yes`, `tail -f`) | Scrollback is bounded; the interrupt control terminates it. | Yes |
+| Command produces unbounded output (`yes`, `tail -f`) | The renderer keeps the newest 2,000 lines and marks the output as truncated. There is no interrupt channel; stopping the wait does not stop the remote command, whose later output can still arrive. | Yes — stop it from another remote session or use a command with its own timeout |
 | Full-screen program (`vim`, `top`) | Terminal emulation is line-oriented. Such programs are detected and reported as unsupported rather than rendering as escape-sequence soup. | Yes — use a terminal |
 | A command changes the working directory | Reflected in the panel when `autoReadDirectoryAfterOp` is on. Otherwise the panel says it may be stale. | Yes |
 | Non-POSIX login shell | The console opens and everything behaves oddly. The `shell` option is the fix, and the error names the shell the server reported. | Yes |
@@ -66,11 +68,11 @@ publishes events for both sessions.
 ## Verification
 
 - Capability gating is tested to assert the console is unavailable without
-  `caps.shell`.
+  `caps.exec`.
 - Session identity filtering is tested for matching, mismatched and malformed
   live console events.
-- Output bounding and interrupt are tested against a synthetic never-ending
-  command.
+- Output bounding is tested against a synthetic never-ending command. The
+  current port has no remote interrupt channel.
 - Full-screen program detection is tested with recorded escape sequences.
 - Non-persistence of command history is tested by asserting nothing reaches the
   configuration file.
@@ -85,7 +87,8 @@ publishes events for both sessions.
 
 ## Suggested articles
 
-- [SCP](../protocols/scp.md) — the only protocol that can open a console.
+- [SCP](../protocols/scp.md) and [SFTP](../protocols/sftp.md) — protocols that
+  can expose remote command execution to the console.
 - [Custom commands](custom-commands.md) — for non-interactive commands with quoting.
 - [Session logging](../security-and-credentials/logging.md) — what console output ends up in.
 - [Tabs and navigation](../tabs-and-navigation/) — the console is a tab, with all that implies.

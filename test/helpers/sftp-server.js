@@ -587,7 +587,13 @@ function serveSftp(sftp, vfs, stats) {
     const v = vfs.normalize(filename);
     const flags = utils.sftp.flagsToString(pflags) || 'r';
     const fd = await fsp.open(vfs.real(v), flags);
-    if (attrs && attrs.mode !== undefined) vfs.setMode(v, attrs.mode);
+    // The OPEN mode is a creation mode, not a chmod request.  Servers must
+    // ignore it when an existing file is reopened (for example with r+ for a
+    // resumed upload), otherwise a harmless continuation changes permissions.
+    if ((pflags & utils.sftp.OPEN_MODE.CREAT)
+        && attrs && attrs.mode !== undefined) {
+      vfs.setMode(v, attrs.mode);
+    }
     return sftp.handle(reqid, makeHandle({ type: 'file', fd, path: v }));
   }));
 

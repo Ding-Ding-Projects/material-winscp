@@ -45,6 +45,7 @@ Under **Site → Advanced → FTP** and **→ TLS/SSL**.
 | `LIST` output in an unrecognized format | The parser reports which lines it could not read and how many, rather than dropping them silently. Enabling `MLSD` is the real fix. | Usually |
 | Non-UTF-8 filenames without `UTF8` in `FEAT` | Names decoded through the site's `codePage`. Mis-set, they appear as mojibake but remain openable. | Yes |
 | Resume on a server without `REST` | `caps.resume` stays false; the queue restarts the file rather than offering a broken resume. | n/a |
+| Resume offset is negative, fractional or non-finite | The transfer is rejected before `REST` is sent; offsets must be non-negative integer byte positions. | Yes — retry from a valid byte offset |
 | Idle disconnect | Detected on the next command; auto-reconnect follows `security.sessionReopen*`. | Yes |
 | Username, password or ACCT contains a line break | Login is rejected before any credential command is sent. FTP has no escaping for command record separators, so accepting one could send an unintended command. | Yes — correct the saved site value |
 

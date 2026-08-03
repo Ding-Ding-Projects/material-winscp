@@ -789,6 +789,16 @@ test('save transfer options is a wired, persisted and accessible preference', as
     'the generic renderer must associate the preference label with its control');
 });
 
+test('drag move preference is read by the panel drop consumer', async () => {
+  const { schema } = await load();
+  assert.equal(schema.PENDING_KEYS.has('dDAllowMove'), false);
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const panels = fs.readFileSync(path.join(repoRoot, 'design', 'renderer', 'ui', 'panels.js'), 'utf8');
+  assert.match(panels, /readPref\('dDAllowMove', false\)/);
+  assert.match(panels, /effectAllowed = readPref\('dDAllowMove', false\) === true \? 'copyMove' : 'copy'/);
+});
+
 test('the control renderer mirrors disabled state onto native and composite controls', async () => {
   const fs = require('node:fs');
   const path = require('node:path');

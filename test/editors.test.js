@@ -96,6 +96,11 @@ test('the preload bridge exposes the direct file-changed IPC seam', async () => 
   assert.match(ipcSource, /this\.handle\('editor:fileChanged', \(id\) => this\.editors\.executedFileChanged/);
 });
 
+test('the renderer upload IPC route reaches EditedFileUploaded', async () => {
+  const ipcSource = await fs.readFile(path.join(__dirname, '..', 'design/main/ipc.js'), 'utf8');
+  assert.match(ipcSource, /this\.handle\('editor:upload',[\s\S]*?this\.editors\.editedFileUploaded/);
+});
+
 test('ExecutedFileChanged uses the same conflict guard as an internal save', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-'));
   P.setRoot(root);

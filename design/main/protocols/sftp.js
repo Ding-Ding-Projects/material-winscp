@@ -1298,6 +1298,8 @@ class PipelinedWriteStream extends Writable {
     this._active = 0;
     this._finalCb = null;
     this._position = Number(options.start) > 0 ? Number(options.start) : 0;
+    this._resuming = this._position > 0 && options.start !== undefined;
+    this._modeExplicit = options.mode !== undefined;
     this.bytesWritten = 0;
     this._concurrency = streamQueueDepth(options.concurrency);
     const serverMax = Number(sftp._maxWriteLen);
@@ -1321,6 +1323,11 @@ class PipelinedWriteStream extends Writable {
         this.emit('ready');
       };
       const setMode = () => {
+        // A resumed upload reopens an existing file. Applying the stream's
+        // default mode (0666) here changes its permissions as a side effect
+        // of continuing the transfer; preserve the remote mode unless the
+        // caller explicitly supplied one.
+        if (this._resuming && !this._modeExplicit) return ready();
         if (typeof this.sftp.fchmod !== 'function') return ready();
         this.sftp.fchmod(handle, this.mode, (modeErr) => {
           if (!modeErr) return ready();

@@ -506,6 +506,9 @@ export function createEditorWindow(record, initial, opts = {}) {
     matchCase: !!opts.findMatchCase,
     wholeWord: !!opts.findWholeWord,
   };
+  const history = { undo: [], redo: [] };
+  let undoBtn = null;
+  let redoBtn = null;
 
   /* ---------------- text area + gutter ---------------- */
 
@@ -786,16 +789,45 @@ export function createEditorWindow(record, initial, opts = {}) {
     tabModeEl.textContent = state.tabInserts ? s('edTabInserts') : s('edTabMoves');
     tabModeEl.title = s('edTabToggleHint');
     win.setSubtitle(`${record.remotePath || record.localPath}${isDirty() ? ' •' : ''}`);
+    if (undoBtn) {
+      undoBtn.disabled = state.readOnly || history.undo.length === 0;
+      redoBtn.disabled = state.readOnly || history.redo.length === 0;
+      undoBtn.title = undoBtn.disabled && state.readOnly ? s('edReadOnly') : `${s('edUndo')} (Ctrl+Z)`;
+      redoBtn.title = redoBtn.disabled && state.readOnly ? s('edReadOnly') : `${s('edRedo')} (Ctrl+Y)`;
+    }
   }
 
   function isDirty() { return state.text !== state.saved; }
 
-  function setText(next, caret) {
+  function setText(next, caret, trackHistory = true) {
+    if (next === state.text) return;
+    if (trackHistory) {
+      history.undo.push({ text: state.text, caret: textarea.selectionStart });
+      history.redo.length = 0;
+    }
     state.text = next;
     textarea.value = next;
     if (caret != null) textarea.setSelectionRange(caret, caret);
     paintGutter();
     updateStatus();
+  }
+
+  function undo() {
+    if (state.readOnly || !history.undo.length) return false;
+    history.redo.push({ text: state.text, caret: textarea.selectionStart });
+    const previous = history.undo.pop();
+    setText(previous.text, previous.caret, false);
+    refreshHits();
+    return true;
+  }
+
+  function redo() {
+    if (state.readOnly || !history.redo.length) return false;
+    history.undo.push({ text: state.text, caret: textarea.selectionStart });
+    const next = history.redo.pop();
+    setText(next.text, next.caret, false);
+    refreshHits();
+    return true;
   }
 
   function selectedText() { return state.text.slice(textarea.selectionStart, textarea.selectionEnd); }
@@ -830,7 +862,14 @@ export function createEditorWindow(record, initial, opts = {}) {
   }
 
   const onEdit = debounce(() => { paintGutter(); updateStatus(); refreshHits(); }, 40);
-  textarea.addEventListener('input', () => { state.text = textarea.value; onEdit(); });
+  textarea.addEventListener('input', () => {
+    if (textarea.value !== state.text) {
+      history.undo.push({ text: state.text, caret: textarea.selectionStart });
+      history.redo.length = 0;
+      state.text = textarea.value;
+    }
+    onEdit();
+  });
   for (const evt of ['click', 'keyup', 'select']) {
     textarea.addEventListener(evt, () => { updateStatus(); refreshHits(); });
   }
@@ -840,6 +879,16 @@ export function createEditorWindow(record, initial, opts = {}) {
     if ((e.ctrlKey || e.metaKey) && key === 's') {
       e.preventDefault();
       save(false);
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && key === 'z') {
+      e.preventDefault();
+      e.shiftKey ? redo() : undo();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && key === 'y') {
+      e.preventDefault();
+      redo();
       return;
     }
     if ((e.ctrlKey || e.metaKey) && key === 'g') {
@@ -974,7 +1023,9 @@ export function createEditorWindow(record, initial, opts = {}) {
       state.encodingDetected = res.encodingDetected;
       state.saved = res.text;
       encodingSel.value = state.encoding;
-      setText(res.text, 0);
+      history.undo.length = 0;
+      history.redo.length = 0;
+      setText(res.text, 0, false);
       notify.info(s('edEncoding'), s('edEncodingChanged', (ENCODINGS.find((e) => e.id === state.encoding) || { label: state.encoding }).label));
     } catch (err) {
       encodingSel.value = state.encoding;
@@ -998,7 +1049,9 @@ export function createEditorWindow(record, initial, opts = {}) {
               state.saved = res.text;
               state.encoding = res.encoding;
               encodingSel.value = state.encoding;
-              setText(res.text, 0);
+              history.undo.length = 0;
+              history.redo.length = 0;
+              setText(res.text, 0, false);
             } catch (err) { notify.error(t('editorTitle'), err.message); }
           },
         },
@@ -1018,6 +1071,14 @@ export function createEditorWindow(record, initial, opts = {}) {
 
   const toolbar = h('div', { class: 'ed-bar' },
     saveBtn,
+    undoBtn = h('button', {
+      type: 'button', class: 'icon-btn', 'aria-label': s('edUndo'),
+      onclick: () => { textarea.focus(); undo(); },
+    }, icon('undo', 17)),
+    redoBtn = h('button', {
+      type: 'button', class: 'icon-btn', 'aria-label': s('edRedo'),
+      onclick: () => { textarea.focus(); redo(); },
+    }, icon('redo', 17)),
     h('button', {
       type: 'button', class: 'icon-btn', title: s('edReload'), 'aria-label': s('edReload'),
       onclick: () => reload(),
@@ -1086,8 +1147,8 @@ export function createEditorWindow(record, initial, opts = {}) {
     { label: s('edDeleteSelection'), icon: 'backspace', disabled: state.readOnly, onSelect: () => deleteSelection() },
     SEPARATOR,
     { label: s('edSelectAll'), icon: 'select_all', onSelect: () => { textarea.focus(); textarea.select(); updateStatus(); refreshHits(); } },
-    { label: s('edUndo'), icon: 'undo', onSelect: () => { textarea.focus(); document.execCommand('undo'); } },
-    { label: s('edRedo'), icon: 'redo', onSelect: () => { textarea.focus(); document.execCommand('redo'); } },
+    { label: s('edUndo'), icon: 'undo', shortcut: 'Ctrl+Z', disabled: state.readOnly || !history.undo.length, onSelect: () => { textarea.focus(); undo(); } },
+    { label: s('edRedo'), icon: 'redo', shortcut: 'Ctrl+Y', disabled: state.readOnly || !history.redo.length, onSelect: () => { textarea.focus(); redo(); } },
   ]);
 
   function confirmClose() {

@@ -90,7 +90,7 @@ two-line change — set the flag, implement the method.
 | Protocol | Highlights |
 | --- | --- |
 | **SFTP** | Versions 3–6, request pipelining, resume, server bug workarounds, agent support |
-| **SCP** | Shell-driven, the only backend with `caps.shell` — which is what powers the console |
+| **SCP** | Shell-driven, with `caps.exec` — which powers the console (SFTP can also expose it when the server supports execution) |
 | **FTP / FTPS** | Explicit and implicit TLS, MLSD with LIST fallback, `REST` resume, session reuse |
 | **WebDAV** | `PROPFIND` listings, server-side `COPY`, liberal escaping for awkward servers |
 | **S3** | Prefix-synthesized folders, multipart upload, storage classes, both URL styles |

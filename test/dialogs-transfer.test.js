@@ -570,6 +570,21 @@ test('setChecked leaves the action alone', () => {
   assert.equal(it.checked, true);
 });
 
+test('checkAll ticks actionable rows and keeps no-op rows unticked', () => {
+  const rows = [item({ checked: false }), item({ action: 'nothing', checked: true })];
+  const checked = CL.checkAll(rows);
+  assert.deepEqual(checked.map((r) => r.checked), [true, false]);
+  assert.deepEqual(checked.map((r) => r.action), ['upload', 'nothing']);
+  assert.deepEqual(rows.map((r) => r.checked), [false, true]);
+});
+
+test('uncheckAll clears every row without changing actions', () => {
+  const rows = [item(), item({ action: 'deleteLocal' })];
+  const cleared = CL.uncheckAll(rows);
+  assert.deepEqual(cleared.map((r) => r.checked), [false, false]);
+  assert.deepEqual(cleared.map((r) => r.action), ['upload', 'deleteLocal']);
+});
+
 test('invertChecked flips actionable rows but never ticks do-nothing rows', () => {
   const rows = [
     item({ checked: true }),
@@ -586,6 +601,8 @@ test('checklist toolbar controls expose explicit accessible names', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'design/renderer/ui/dialogs/checklist.js'), 'utf8');
   assert.match(source, /bindText\(btn, labelKey, \{ attr: 'aria-label' \}\)/);
   assert.match(source, /bindText\(btn, 'txClGroup', \{ attr: 'aria-label' \}\)/);
+  assert.match(source, /registerContextMenu\(toolbar, \(\) => \[/);
+  assert.match(source, /event\.key\.toLowerCase\(\) === 'a'/);
 });
 
 test('directory-scoped check and uncheck preserve other directories and actions', () => {

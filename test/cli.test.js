@@ -79,6 +79,18 @@ test('convenience commands translate to the existing console runner switches', (
   ]);
 });
 
+test('convenience commands forward the console runner control switches', () => {
+  assert.deepEqual(cli.buildConsoleArgs([
+    'deploy.txt', '--log', 'run.log', '--loglevel', '2', '--xmllog', 'actions.xml',
+    '--xmllogrequired', '--xmlgroups=false', '--stdout', 'chunked', '--stdin', 'binary',
+    '--nointeractiveinput', '--unsafe', '--command', 'exit',
+  ], 'script'), [
+    '/console', '/script=deploy.txt', '/command', 'exit',
+    '/log=run.log', '/loglevel=2', '/xmllog=actions.xml', '/stdout=chunked', '/stdin=binary',
+    '/xmllogrequired', '/nointeractiveinput', '/unsafe', '/xmlgroups=off',
+  ]);
+});
+
 test('drag plan uses the safe ambiguous-result rule and capability checks', () => {
   const remoteToLocal = cli.dragPlan([
     '--source', 'remote', '--result', 'invalid', '--last-effect', 'move', '--queue',
@@ -152,4 +164,18 @@ test('drop classify refuses empty and missing-only drops', () => {
   assert.equal(result.classification.items.length, 0);
   assert.equal(result.accepted.ok, false);
   assert.match(result.accepted.reason, /No existing files or directories/);
+});
+
+test('drop target exercises the same Explorer target policy as IPC', async () => {
+  const queue = output();
+  assert.equal(await cli.runCli(['drop', 'target', '--queue', '--default-download-target', 'C:\\Downloads'], {
+    stdout: queue.stream, stderr: queue.stream,
+  }), 0);
+  assert.deepEqual(JSON.parse(queue.text()), {
+    command: 'drop target', ok: true, directory: 'C:\\Downloads', forceQueue: true,
+    counterName: 'DownloadsDragDropQueue',
+  });
+  assert.equal(cli.dropTarget([]).ok, false);
+  assert.equal(cli.dropTarget(['--queue', '--default-download-target', '   ']).ok, false);
+  assert.equal(cli.dropTarget(['--fake-file-target', 'C:\\Temp\\scp12345\\report.txt']).directory, 'C:\\Temp\\scp12345');
 });

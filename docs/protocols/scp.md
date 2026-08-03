@@ -4,7 +4,7 @@
 
 SCP transfers files by driving a remote **shell** — it runs `scp -f` / `scp -t`
 on the far side and parses the output of `ls -la` to build directory listings.
-That makes it the only adapter with `caps.shell = true`: the same session can run
+That makes it an adapter with `caps.exec = true`: the same session can run
 arbitrary commands, which is what powers the Console and custom commands on
 remote files.
 
@@ -111,5 +111,6 @@ confirm the reported shell matches the `shell` option in effect.
 
 - [SFTP](sftp.md) — same transport, a real file protocol; prefer it.
 - [The adapter contract](adapter-contract.md) — why `caps.resume = false` greys out Resume.
-- [Custom commands](../editing-and-commands/custom-commands.md) — what `caps.shell` unlocks, and how arguments are quoted.
+- [Custom commands](../editing-and-commands/custom-commands.md) — what
+  `caps.exec` unlocks, and how arguments are quoted.
 - [Security and credentials](../security-and-credentials/) — the SSH trust store shared with SFTP.

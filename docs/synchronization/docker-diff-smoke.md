@@ -8,6 +8,10 @@ IPC bridge. It creates divergent local and remote trees containing unchanged,
 local-only, remote-only, size-different, equal-size-but-different, nested,
 Unicode, whitespace, empty and case-folded names. It compares and applies the
 checklist in both directions, including the non-recursive boundary.
+It then runs independent policy probes for include masks, `deleteFiles: false`
+(deletions may be listed for review but must be unticked), `existingOnly: true`, and checksum comparison when the real server exposes a
+checksum capability. The output records checksum support explicitly instead of
+pretending a size comparison tested it.
 
 The containers use explicit CPU, memory and process limits, loopback-only
 published ports and generated credentials. The password enters Docker through
@@ -59,8 +63,10 @@ npm run smoke:docker
 ```
 
 The command reports one sanitized result line per protocol and a final cleanup
-line. `npm test` remains the required deterministic gate; this smoke adds real
-container-network evidence for SFTP and FTP diff, checklist and transfer paths.
+line. Each result includes the main checklist counts, mask-policy count,
+existing-only count and checksum support/result. `npm test` remains the required
+deterministic gate; this smoke adds real container-network evidence for SFTP and
+FTP diff, checklist, transfer, policy and (when available) checksum paths.
 
 ## Suggested articles
 

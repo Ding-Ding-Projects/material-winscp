@@ -165,6 +165,92 @@ function resolveExecuteFile(item, options) {
 }
 
 /**
+ * Build the side-effect-free part of TUnixDirView::ChangeDirectory.
+ *
+ * The terminal owns performing the request; this result records the special
+ * WinSCP targets and the focus to restore if the request fails.  Keeping the
+ * decision here makes Enter, the parent command and address-bar navigation
+ * agree without making this model perform I/O.
+ */
+function changeDirectoryPlan(path, options) {
+  const o = options || {};
+  const target = String(path == null ? '' : path);
+  const current = String(o.currentPath == null ? '' : o.currentPath);
+  const item = o.focusedItem || null;
+  return {
+    path: target,
+    target: target === '..' ? 'parent' : target === '~' ? 'home' : target === '/' ? 'root' : 'path',
+    clearItems: true,
+    preserveFocus: item ? itemFileName(item) : String(o.focusedName || ''),
+    preserveOffset: o.preserveOffset !== false,
+    reloadOnFailure: true,
+    changed: target !== current,
+  };
+}
+
+/** TUnixDirView::ReloadDirectory: refresh while retaining panel position. */
+function reloadDirectoryPlan(options) {
+  const o = options || {};
+  return {
+    path: String(o.currentPath == null ? '' : o.currentPath),
+    clearLastPath: true,
+    preserveFocus: o.focusedItem ? itemFileName(o.focusedItem) : String(o.focusedName || ''),
+    preserveOffset: o.preserveOffset !== false,
+    reload: true,
+  };
+}
+
+/** TUnixDirView::GetDragSourceEffects / DDChooseEffect. */
+function dragSourceEffects(options) {
+  const out = ['copy'];
+  if (options && options.allowMove) out.push('move');
+  return out;
+}
+
+function chooseDragEffect(options) {
+  const o = options || {};
+  const modifiers = o.ctrl || o.shift;
+  if (!modifiers) return 'copy';
+  if (o.shift && o.allowMove) return 'move';
+  return 'copy';
+}
+
+function joinDragPath(directory, name, unix) {
+  const sep = unix ? '/' : '\\';
+  const dir = String(directory || '');
+  if (!dir) return name;
+  if (dir.endsWith('/') || dir.endsWith('\\')) return dir + name;
+  return dir + sep + name;
+}
+
+/** Build the absolute file list captured when a panel drag starts. */
+function dragFileList(items, currentPath, options) {
+  const o = options || {};
+  return (Array.isArray(items) ? items : [])
+    .filter((item) => item && itemIsFile(item) && !itemIsParentDirectory(item))
+    .map((item) => joinDragPath(currentPath, itemFileName(item), o.unix !== false));
+}
+
+/** Resolve an internal/external drop into the operation callback's arguments. */
+function dropOperation(files, options) {
+  const o = options || {};
+  const list = (Array.isArray(files) ? files : []).map(String).filter(Boolean);
+  if (!list.length) return { accepted: false, reason: 'empty' };
+  const target = o.item && itemIsDirectory(o.item) ? itemFileName(o.item) : o.targetPath;
+  if (!target) return { accepted: false, reason: 'no-target' };
+  const first = list[0];
+  const slash = Math.max(first.lastIndexOf('/'), first.lastIndexOf('\\'));
+  return {
+    accepted: true,
+    files: list,
+    effect: o.effect || 'copy',
+    paste: !!o.paste,
+    sourceDirectory: slash < 0 ? '' : first.slice(0, slash + 1),
+    targetDirectory: String(target),
+  };
+}
+
+/**
  * GetItemFileSize — a directory has no size until one is calculated, and a
  * calculated size wins over the reported one. The remote view returns -1 for an
  * uncalculated directory; the local view returns 0. Both are reproduced: the
@@ -2362,7 +2448,8 @@ module.exports = {
   // item accessors
   PARENT_DIRECTORY, OVERLAY,
   itemFileName, itemIsParentDirectory, itemIsDirectory, itemIsFile,
-  resolveExecuteFile,
+  resolveExecuteFile, changeDirectoryPlan, reloadDirectoryPlan,
+  dragSourceEffects, chooseDragEffect, dragFileList, dropOperation,
   itemFileSize, itemFileTime, itemExtension, itemAttr, itemTypeName, itemIsHidden,
   itemOwner, itemGroup, itemRights, itemLinkTarget, itemOverlayIndexes,
 

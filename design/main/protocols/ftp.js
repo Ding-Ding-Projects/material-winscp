@@ -29,6 +29,16 @@ const { PassThrough } = require('stream');
 const { Client, FTPError } = require('basic-ftp');
 const { Adapter, entry } = require('./base');
 
+/** REST offsets are byte positions, never arbitrary JavaScript numbers. */
+function resumeOffset(value) {
+  if (value === undefined || value === null || value === '') return 0;
+  const offset = Number(value);
+  if (!Number.isSafeInteger(offset) || offset < 0) {
+    throw new Error('FTP resume offset must be a non-negative integer');
+  }
+  return offset;
+}
+
 // ---------------------------------------------------------------------------
 // Listing parsers
 // ---------------------------------------------------------------------------
@@ -1153,7 +1163,7 @@ class FtpAdapter extends Adapter {
 
   async createReadStream(p, opts = {}) {
     const path = this.normalize(p);
-    const start = Number(opts.start || 0);
+    const start = resumeOffset(opts.start);
     if (start > 0 && !this.caps.resume) throw new Error('Server does not support REST; cannot resume');
     const out = new PassThrough();
 
@@ -1175,7 +1185,7 @@ class FtpAdapter extends Adapter {
 
   async createWriteStream(p, opts = {}) {
     const path = this.normalize(p);
-    const start = Number(opts.start || 0);
+    const start = resumeOffset(opts.start);
     if (start > 0 && !this.caps.resume) throw new Error('Server does not support REST; cannot resume');
     const src = new FtpUploadStream();
 

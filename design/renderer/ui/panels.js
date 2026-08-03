@@ -1000,14 +1000,14 @@ export function createFilePanel(opts = {}) {
       e.dataTransfer.setData('text/plain', paths.join('\n'));
       if (isLocal) e.dataTransfer.setData('text/uri-list', paths.map((p) => `file:///${String(p).replace(/\\/g, '/')}`).join('\r\n'));
     } catch { /* some hosts refuse extra types */ }
-    e.dataTransfer.effectAllowed = 'copyMove';
+    e.dataTransfer.effectAllowed = readPref('dDAllowMove', false) === true ? 'copyMove' : 'copy';
   }
 
   root.addEventListener('dragover', (e) => {
     const types = Array.from(e.dataTransfer.types || []);
     if (!types.includes('application/x-winscp-files') && !types.includes('Files')) return;
     e.preventDefault();
-    e.dataTransfer.dropEffect = e.shiftKey ? 'move' : 'copy';
+    e.dataTransfer.dropEffect = e.shiftKey && readPref('dDAllowMove', false) === true ? 'move' : 'copy';
     root.classList.add('is-dropping');
   });
   root.addEventListener('dragleave', (e) => { if (e.target === root) root.classList.remove('is-dropping'); });
@@ -1019,7 +1019,7 @@ export function createFilePanel(opts = {}) {
       let data;
       try { data = JSON.parse(raw); } catch { return; }
       if (data.panelId === panelId) return;                 // dropped on itself
-      await acceptPanelDrop(data, e.shiftKey);
+      await acceptPanelDrop(data, e.shiftKey && readPref('dDAllowMove', false) === true);
       return;
     }
     if (e.dataTransfer.files && e.dataTransfer.files.length) {

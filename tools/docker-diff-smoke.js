@@ -447,11 +447,73 @@ async function compareAndApply(app, kind, sessionId, localPath, remotePath) {
   assert.ok(!reverse.items.some((item) => /nested[\\/]/.test(item.local?.path || '')),
     `${kind} crossed a non-recursive comparison boundary`);
 
+  // Exercise the policy switches independently of the main mirror. A single
+  // happy-path comparison can pass while the UI silently ignores a mask or
+  // turns a non-destructive preview into a deletion plan.
+  await writeRemote(app, sessionId, remoteJoin(remotePath, 'mask.txt'), 'remote mask');
+  await writeRemote(app, sessionId, remoteJoin(remotePath, 'mask.bin'), 'remote binary');
+  await fsp.writeFile(path.join(localPath, 'mask.txt'), 'local mask');
+  await fsp.writeFile(path.join(localPath, 'mask.bin'), 'local binary');
+  const masked = await app.ok('sync.compare', {
+    sessionId, localPath, remotePath, direction: 'remote', mode: 'synchronize',
+    criteria: 'size', recursive: true, deleteFiles: false, existingOnly: false,
+    caseSensitive: false, fileMask: '*.txt', transferMode: 'binary',
+    copyParam: { transferMode: 'binary' }, preview: true,
+  });
+  assert.equal(masked.items.some((item) => itemName(item) === 'mask.txt'), true,
+    `${kind} ignored an include mask for a matching file`);
+  assert.equal(masked.items.some((item) => itemName(item) === 'mask.bin'), false,
+    `${kind} let a non-matching file through an include mask`);
+  assert.equal(masked.items.some((item) => item.action === 'deleteRemote' && item.checked), false,
+    `${kind} checked a deletion when deleteFiles was disabled`);
+
+  await writeRemote(app, sessionId, remoteJoin(remotePath, 'existing-only-remote.txt'), 'remote only');
+  await fsp.writeFile(path.join(localPath, 'existing-only-local.txt'), 'local only');
+  const existingOnly = await app.ok('sync.compare', {
+    sessionId, localPath, remotePath, direction: 'remote', mode: 'synchronize',
+    criteria: 'size', recursive: false, deleteFiles: true, existingOnly: true,
+    caseSensitive: false, transferMode: 'binary', copyParam: { transferMode: 'binary' },
+    preview: true,
+  });
+  assert.equal(existingOnly.items.some((item) => itemName(item) === 'existing-only-local.txt' && item.checked), false,
+    `${kind} existingOnly checked a new upload`);
+  assert.equal(existingOnly.items.some((item) => itemName(item) === 'existing-only-remote.txt' && item.checked), false,
+    `${kind} existingOnly checked a new deletion`);
+
+  // Checksum support is protocol/server dependent. When the real server
+  // advertises it, require the comparison engine to use it; when it does not,
+  // keep the smoke honest by recording an explicit unsupported result rather
+  // than silently pretending a size comparison was a checksum comparison.
+  let checksum = { supported: false };
+  let remoteChecksum = null;
+  try {
+    await writeRemote(app, sessionId, remoteJoin(remotePath, 'checksum-probe.txt'), 'BBBB');
+    await fsp.writeFile(path.join(localPath, 'checksum-probe.txt'), 'AAAA');
+    remoteChecksum = await app.ok('fs.checksum', sessionId,
+      remoteJoin(remotePath, 'checksum-probe.txt'), 'sha256');
+  } catch (error) {
+    checksum = { supported: false, reason: String(error.message || error).slice(0, 160) };
+  }
+  if (remoteChecksum !== null) {
+    const checked = await app.ok('sync.compare', {
+      sessionId, localPath, remotePath, direction: 'remote', mode: 'synchronize',
+      criteria: 'checksum', recursive: false, deleteFiles: false, existingOnly: false,
+      caseSensitive: false, fileMask: 'checksum-probe.txt', transferMode: 'binary',
+      copyParam: { transferMode: 'binary' }, preview: true,
+    });
+    assert.equal(checked.items.find((item) => itemName(item) === 'checksum-probe.txt')?.action,
+      'upload', `${kind} checksum comparison missed an equal-size content change`);
+    checksum = { supported: true, items: checked.items.length };
+  }
+
   return {
     checklistItems: result.items.length,
     upload: result.counts.upload,
     deleteRemote: result.counts.deleteRemote,
     reverseItems: reverse.items.length,
+    maskedItems: masked.items.length,
+    existingOnlyItems: existingOnly.items.length,
+    checksum,
   };
 }
 

@@ -1700,7 +1700,12 @@ class Ipc {
       const o = optObj(options, 'options');
       return this.editors.save(str(id, 'id', 64), str(text, 'text', LIMITS.text), { force: o.force === true });
     });
-    this.handle('editor:upload', (id, options) => this.editors.upload(str(id, 'id', 64), { force: optObj(options, 'options').force === true }));
+    // Keep the public upload route on the WinSCP EditedFileUploaded seam. This
+    // matters for renderer-triggered saves/uploads: conflict checks, stamp
+    // refresh and the uploaded event must be identical to editor.save().
+    this.handle('editor:upload', (id, options) => this.editors.editedFileUploaded(
+      str(id, 'id', 64), { force: optObj(options, 'options').force === true },
+    ));
     // Native/editor integrations report saves through the same conflict-checked
     // path as fs.watch without receiving the EditorManager itself.
     this.handle('editor:fileChanged', (id) => this.editors.executedFileChanged(str(id, 'id', 64)));

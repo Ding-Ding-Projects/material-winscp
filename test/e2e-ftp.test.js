@@ -647,6 +647,16 @@ test('resume is refused outright when the server never advertised REST', async (
   }
 });
 
+test('resume refuses offsets that cannot be represented as FTP byte positions', async () => {
+  await assert.rejects(() => ftp.createReadStream('/download.bin', { start: -1 }),
+    /non-negative integer/);
+  await assert.rejects(() => ftp.createWriteStream('/bad-offset.bin', { start: 1.5 }),
+    /non-negative integer/);
+  await assert.rejects(() => ftp.createReadStream('/download.bin', { start: Infinity }),
+    /non-negative integer/);
+  assert.ok(!directives(srv).includes('REST -1'), 'invalid offsets never reach the server');
+});
+
 test('passive mode is what the default session negotiates', () => {
   const seen = directives(srv);
   assert.ok(seen.includes('EPSV') || seen.includes('PASV'),

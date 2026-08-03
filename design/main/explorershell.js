@@ -695,6 +695,25 @@ function defaultAsk(request) {
  *   editors      { canAddFile(...) } — the open-editor registry
  *   clipboard    { text(), files() }
  */
+/** Pure target policy shared by IPC and the headless drag/drop simulator. */
+function resolveDropTarget(spec) {
+  const s = spec || {};
+  if (s.ontoQueueView) {
+    const directory = String(s.defaultDownloadTarget || '').trim();
+    if (!directory) return { ok: false, forceQueue: false, counterName: 'DownloadsDragDropQueueTargetUnknown' };
+    return { ok: true, directory, forceQueue: true, counterName: 'DownloadsDragDropQueue' };
+  }
+  if (s.fakeFileDropTarget) return {
+    ok: true, directory: excludeTrailingBackslash(nodePath.win32.dirname(String(s.fakeFileDropTarget))),
+    forceQueue: false, counterName: 'DownloadsDragDropFakeFile',
+  };
+  if (s.externalDropDirectory) return {
+    ok: true, directory: excludeTrailingBackslash(String(s.externalDropDirectory)),
+    forceQueue: false, counterName: 'DownloadsDragDropExternalExt',
+  };
+  return { ok: false, forceQueue: false, counterName: 'DownloadsDragDropExternalExtTargetUnknown' };
+}
+
 class ExplorerShell {
   constructor(deps) {
     const d = deps || {};
@@ -2033,41 +2052,7 @@ class ExplorerShell {
    * user dropped it on the queue, so the queue is where it goes.
    */
   ddGetTarget(spec) {
-    const s = spec || {};
-    if (s.ontoQueueView) {
-      const directory = String(s.defaultDownloadTarget || '').trim();
-      // An empty queue target must not become the process working directory.
-      // A queue drop is a real download, so accepting it without an explicit
-      // destination would make the target depend on how the app was launched.
-      if (!directory) {
-        return { ok: false, forceQueue: false, counterName: 'DownloadsDragDropQueueTargetUnknown' };
-      }
-      return {
-        ok: true,
-        directory,
-        forceQueue: true,
-        counterName: 'DownloadsDragDropQueue',
-      };
-    }
-    if (s.fakeFileDropTarget) {
-      return {
-        ok: true,
-        directory: excludeTrailingBackslash(nodePath.win32.dirname(String(s.fakeFileDropTarget))),
-        forceQueue: false,
-        counterName: 'DownloadsDragDropFakeFile',
-      };
-    }
-    if (s.externalDropDirectory) {
-      return {
-        ok: true,
-        directory: excludeTrailingBackslash(String(s.externalDropDirectory)),
-        forceQueue: false,
-        counterName: 'DownloadsDragDropExternalExt',
-      };
-    }
-    // The shell extension's shared-memory handshake has no counterpart here;
-    // shellintegration.js reports the same "target unknown" state honestly.
-    return { ok: false, forceQueue: false, counterName: 'DownloadsDragDropExternalExtTargetUnknown' };
+    return resolveDropTarget(spec);
   }
 
   /**
@@ -3074,6 +3059,7 @@ class ExplorerShell {
 module.exports = {
   ExplorerShell,
   PanelState,
+  resolveDropTarget,
 
   // errors
   AbortError,

@@ -63,7 +63,7 @@ behaviour, and only then apply it.
 | Key file needs a passphrase | A modal prompt. If the master password is set, an accepted passphrase can be saved encrypted. | Yes |
 | Server negotiates a version below `sftpMaxVersion` | Silent and normal; the capability set narrows accordingly and affected commands grey out. | n/a |
 | Server ignores `chmod` | The operation is reported as failed rather than assumed to have worked. `ignorePermErrors` in the transfer settings can downgrade it to a warning for bulk transfers. | Yes |
-| Transfer interrupted | The queue item records the byte offset and moves to `failed`. Resume restarts from that offset if `resumeSupport` permits. | Yes |
+| Transfer interrupted | The queue item records the byte offset and moves to `failed`. Resume restarts from that offset if `resumeSupport` permits and preserves existing remote permissions unless an explicit mode is supplied. | Yes |
 | SSH handshake, host-key or authentication failure | Any partially opened SSH socket, channel, or tunnel listener is closed before the classified error is returned. The transport remains retryable unless the classification says otherwise. | Yes, when the classification is retriable |
 | Server rejects `SSH_FXP_LSTAT` | A read-only `stat()` probe retries with `STAT` only when the detected workaround applies. Symlink identity is not guessed, and the followed result keeps its `file`, `dir`, or `special` type; mutating operations continue to require `LSTAT`. | Yes for ordinary files/directories |
 | Rekey during a large transfer | Handled by the transport; the transfer pauses for a few hundred milliseconds. No user action. | n/a |
@@ -111,6 +111,10 @@ behaviour, and only then apply it.
   attributes. This preserves directory removal while treating symlinked
   directories as links, so a cleanup cannot follow a link outside its target
   tree.
+- Resumed uploads are verified against the in-process SFTP server for both the
+  wire offset and permission preservation. Reopening an existing file does not
+  apply the default upload mode; an explicit `mode` remains available when
+  metadata should change.
 
 To check a real connection by hand: connect, run **Commands → Server/protocol
 information**, and confirm the negotiated SFTP version and extension list match

@@ -9,6 +9,7 @@ files any of it applies to.
 | Article | Covers |
 | --- | --- |
 | [editors.md](editors.md) | The internal editor, external editors, and the download-edit-upload cycle. |
+| [remote-edit-round-trip.md](remote-edit-round-trip.md) | The renderer-to-IPC-to-main upload seam and its conflict/error behaviour. |
 | [custom-commands.md](custom-commands.md) | Command patterns, argument expansion, quoting and extensions. |
 | [file-masks.md](file-masks.md) | The WinSCP mask language — wildcards, exclusion, size and time filters. |
 | [console.md](console.md) | The remote terminal, and which protocols can offer one. |
@@ -27,6 +28,7 @@ Not applicable — this project exposes no HTTP API. See the
 
 ## Suggested articles
 
-- [Protocols](../protocols/) — `caps.shell` decides what this category can offer.
+- [Protocols](../protocols/) — `caps.exec` decides whether remote command
+  execution is available; the console uses the same capability.
 - [Transfers and the queue](../transfers-and-queue/) — masks are shared with transfer settings.
 - [Search and regex](../search-and-regex/) — masks convert to regex for the builder.

@@ -188,6 +188,14 @@ export function overrideAction(item, action) {
 /** Tick or untick without changing the action. */
 export function setChecked(item, checked) { return { ...item, checked: !!checked }; }
 
+export function checkAll(items) {
+  return (items || []).map((item) => item.action === 'nothing' ? setChecked(item, false) : setChecked(item, true));
+}
+
+export function uncheckAll(items) {
+  return (items || []).map((item) => setChecked(item, false));
+}
+
 /** Invert selection without making a row that does nothing actionable. */
 export function invertChecked(items) {
   return (items || []).map((item) => item.action === 'nothing'
@@ -410,6 +418,9 @@ export function openChecklistDialog(result = {}) {
     render();
   }
 
+  function checkEverything() { rows = checkAll(rows); render(); }
+  function uncheckEverything() { rows = uncheckAll(rows); render(); }
+
   function applyToDirectory(directory, checked) {
     rows = setCheckedInDirectory(rows, directory, checked);
     render();
@@ -555,14 +566,32 @@ export function openChecklistDialog(result = {}) {
   }
 
   const toolbar = h('div', { class: 'tx-cl-toolbar' },
-    toolButton('select_all', 'txClCheckAll', () => applyToAll((r) => (r.action === 'nothing' ? r : setChecked(r, true)))),
-    toolButton('remove', 'txClUncheckAll', () => applyToAll((r) => setChecked(r, false))),
+    toolButton('select_all', 'txClCheckAll', checkEverything),
+    toolButton('remove', 'txClUncheckAll', uncheckEverything),
     toolButton('flip', 'txClInvert', invertSelection),
     toolButton('swap_horiz', 'txClReverse', () => applyToAll((r) => { const x = reverseAction(r); return x.ok ? x.item : r; })),
     groupToggle(),
     toolButton('content_copy', 'txClCopyList', copyChecklist),
     h('span', { class: 'spacer' }),
     h('div', { class: 'tx-q-searchwrap' }, search.element));
+
+  registerContextMenu(toolbar, () => [
+    { labelKey: 'txClCheckAll', icon: 'select_all', onSelect: checkEverything },
+    { labelKey: 'txClUncheckAll', icon: 'remove', onSelect: uncheckEverything },
+  ]);
+
+  function onChecklistKeydown(event) {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+    if (event.target?.matches?.('input, textarea, select, [contenteditable="true"]')) return;
+    if (event.key.toLowerCase() === 'a' && event.shiftKey) {
+      event.preventDefault();
+      uncheckEverything();
+    } else if (event.key.toLowerCase() === 'a') {
+      event.preventDefault();
+      checkEverything();
+    }
+  }
+  toolbar.addEventListener('keydown', onChecklistKeydown);
 
   function groupToggle() {
     const btn = h('button', {
@@ -597,7 +626,10 @@ export function openChecklistDialog(result = {}) {
     width: 900,
     dismissOnScrim: false,
     content: body,
-    onClose: () => search.destroy(),
+    onClose: () => {
+      toolbar.removeEventListener('keydown', onChecklistKeydown);
+      search.destroy();
+    },
     actions: [
       { label: t('cancel'), kind: 'text' },
       {

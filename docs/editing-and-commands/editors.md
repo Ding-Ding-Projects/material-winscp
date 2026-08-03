@@ -49,6 +49,12 @@ handlers prevent the browser's document actions and call the same functions as
 the visible controls, so a read-only viewer still refuses Save visibly and
 without changing the text.
 
+Undo and redo are available from the editor toolbar and context menu. `Ctrl+Z`/
+`Cmd+Z` undoes the latest text change, `Ctrl+Y`/`Cmd+Y` redoes it, and
+`Ctrl+Shift+Z`/`Cmd+Shift+Z` is an alternate redo shortcut. Each action is
+disabled when its local history stack is empty or when the window is read-only;
+reload and encoding changes start a fresh history for the newly loaded text.
+
 ## Behaviour worth knowing
 
 ### Ordering associations

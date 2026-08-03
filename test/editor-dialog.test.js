@@ -32,8 +32,10 @@ test('editor exposes selection-aware clipboard editing with read-only guards', a
   assert.match(source, /if \(state\.readOnly\) return false;/);
   assert.match(source, /app\.clipboardRead/);
   assert.match(source, /Ctrl\+S/);
-  assert.match(source, /document\.execCommand\('undo'\)/);
-  assert.match(source, /document\.execCommand\('redo'\)/);
+  assert.match(source, /function undo\(\)/);
+  assert.match(source, /function redo\(\)/);
+  assert.match(source, /disabled: state\.readOnly \|\| !history\.undo\.length/);
+  assert.match(source, /disabled: state\.readOnly \|\| !history\.redo\.length/);
 });
 
 test('editor keyboard commands reach the same save, find, and navigation actions as its menus', async () => {
@@ -42,5 +44,7 @@ test('editor keyboard commands reach the same save, find, and navigation actions
   assert.match(keyboard, /key === 's'[\s\S]*?save\(false\)/);
   assert.match(keyboard, /key === 'g'[\s\S]*?goToInput\.focus\(\)/);
   assert.match(keyboard, /key === 'f'[\s\S]*?find\.focus\(\)/);
+  assert.match(keyboard, /key === 'z'[\s\S]*?e\.shiftKey \? redo\(\) : undo\(\)/);
+  assert.match(keyboard, /key === 'y'[\s\S]*?redo\(\)/);
   assert.match(keyboard, /e\.key === 'F3'[\s\S]*?findNext\(e\.shiftKey \? -1 : 1\)/);
 });

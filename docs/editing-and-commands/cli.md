@@ -13,9 +13,19 @@ winscp script deploy.txt --parameter production --command "exit"
 winscp command "open sftp://host/" "put report.txt" "exit"
 winscp drag plan --source remote --result invalid --last-effect move
 winscp drop classify report.txt folder --allow-move=false
+winscp drop target --queue --default-download-target C:\\Downloads
 winscp drag stage report.txt --temp-root C:\\Temp
 winscp drag extension-status
 ```
+
+The `script` and `command` forms forward the console runner's practical
+headless switches as well as commands and parameters:
+`--log FILE`, `--loglevel N`, `--xmllog FILE`, `--xmllogrequired`,
+`--xmlgroups[=on|off]`, `--stdout[=binary|chunked]`, `--stdin=binary`,
+`--nointeractiveinput`, and `--unsafe`. They are translated to their WinSCP
+slash-switch equivalents before the existing console engine runs. For exact
+WinSCP command-line compatibility, pass those slash switches directly to
+`winscp run` or invoke `winscp-com`.
 
 The simulation commands print JSON. `drag plan` applies the same safe
 copy-versus-move rules as the application. `drop classify` uses the real local
@@ -26,6 +36,12 @@ cleanup. `--move` records the requested move but preserves the fixture because
 this command only stages bytes; it never performs the destructive source
 deletion. It does not pretend to deliver a GUI drop; use a console script or
 the app for a real transfer.
+
+`drop target` exercises the same Explorer target-resolution policy used by the
+`explorer:dropTarget` IPC handler. Supply `--queue --default-download-target
+PATH`, `--fake-file-target PATH`, or `--external-drop-directory PATH`. It
+returns the target, queue-forcing decision, and refusal counter as JSON without
+starting Electron, Explorer, or a network connection.
 
 Explorer drag payloads fail closed when a preserved remote name contains `/`,
 `\\`, `.` or `..`. Those names are not allowed to escape the private staging
@@ -40,7 +56,8 @@ method directly.
 
 The direct `winscp run` form accepts every switch understood by the existing
 console runner, including `/script`, `/command`, `/parameter`, `/log`,
-`/xmllog`, `/stdout`, `/stdin`, `/nointeractiveinput` and `/unsafe`.
+`/loglevel`, `/xmllog`, `/xmllogrequired`, `/xmlgroups`, `/stdout`, `/stdin`,
+`/nointeractiveinput` and `/unsafe`.
 `winscp-com` remains available for scripts that explicitly require that
 legacy executable name. It also supports `winscp-com --help` and
 `winscp-com --version` without starting the console runner.

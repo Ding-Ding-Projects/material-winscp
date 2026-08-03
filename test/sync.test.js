@@ -390,8 +390,10 @@ test('checked reflects deleteFiles and existingOnly', async () => {
     const c = await sync.compare(local, '/l', remote, '/r',
       { direction: 'remote', criteria: 'time', existingOnly: true });
     const brandNew = c.items.find((i) => i.reason === 'new-on-local');
+    const remoteOnly = c.items.find((i) => i.reason === 'not-on-local');
     const update = c.items.find((i) => i.reason === 'local-newer');
     assert.strictEqual(brandNew.checked, false, 'existingOnly excludes brand new files');
+    assert.strictEqual(remoteOnly.checked, false, 'existingOnly excludes new remote deletions');
     assert.strictEqual(update.checked, true, 'updates are still ticked');
   }
 });

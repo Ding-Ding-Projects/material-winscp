@@ -591,6 +591,23 @@ describe('SFTP: file operations against a real server', () => {
     assert.deepEqual(await fsp.readFile(nodePath.join(srv.root, 'resume-up.bin')), payload);
   });
 
+  it('preserves remote permissions when resuming an upload without a mode override', async () => {
+    const target = '/resume-mode.bin';
+    await fsp.writeFile(nodePath.join(srv.root, 'resume-mode.bin'), Buffer.alloc(4, 1));
+    await a.setRights(target, 'rwx------');
+
+    const stream = await a.createWriteStream(target, { start: 4 });
+    await new Promise((resolve, reject) => {
+      stream.on('error', reject); stream.on('close', resolve);
+      stream.end(Buffer.from([2, 2]));
+    });
+
+    assert.equal((await a.stat(target)).rights, 'rwx------',
+      'resuming must not apply the default upload mode to the existing file');
+    assert.deepEqual(await fsp.readFile(nodePath.join(srv.root, 'resume-mode.bin')),
+      Buffer.from([1, 1, 1, 1, 2, 2]));
+  });
+
   it('runs a remote command and reports stdout, stderr and the exit code', async () => {
     const ok = await a.exec('echo hello-from-the-server');
     assert.equal(ok.code, 0);

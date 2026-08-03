@@ -1667,3 +1667,36 @@ test('the local combo entries put the special folders first and report how many 
   assert.deepStrictEqual(built.entries.map((e) => e.kind), ['folder', 'folder', 'drive']);
   assert.strictEqual(built.entries[2].label, 'C: Local Disk');
 });
+
+test('directory change plans retain focus and classify WinSCP special targets', () => {
+  assert.deepStrictEqual(dv.changeDirectoryPlan('..', {
+    currentPath: '/srv/inbox', focusedName: 'draft.txt',
+  }), {
+    path: '..', target: 'parent', clearItems: true, preserveFocus: 'draft.txt',
+    preserveOffset: true, reloadOnFailure: true, changed: true,
+  });
+  assert.equal(dv.changeDirectoryPlan('/', { currentPath: '/' }).target, 'root');
+  assert.equal(dv.changeDirectoryPlan('~').target, 'home');
+});
+
+test('reload plans preserve the focused row while invalidating the old path', () => {
+  assert.deepStrictEqual(dv.reloadDirectoryPlan({ currentPath: '/var/log', focusedName: 'syslog' }), {
+    path: '/var/log', clearLastPath: true, preserveFocus: 'syslog',
+    preserveOffset: true, reload: true,
+  });
+});
+
+test('UnixDirView drag captures files, excludes the parent row, and resolves a drop', () => {
+  const items = [{ name: 'a.txt', type: 'file' }, { name: '..', type: 'dir' }, { name: 'sub', type: 'dir' }];
+  assert.deepStrictEqual(dv.dragFileList(items, '/tmp', { unix: true }), ['/tmp/a.txt', '/tmp/sub']);
+  assert.deepStrictEqual(dv.dragSourceEffects({ allowMove: true }), ['copy', 'move']);
+  assert.equal(dv.chooseDragEffect({ ctrl: false, shift: false, allowMove: true }), 'copy');
+  assert.equal(dv.chooseDragEffect({ shift: true, allowMove: true }), 'move');
+  assert.deepStrictEqual(dv.dropOperation(['/tmp/a.txt', '/tmp/b.txt'], {
+    targetPath: '/srv/inbox', effect: 'copy', paste: false,
+  }), {
+    accepted: true, files: ['/tmp/a.txt', '/tmp/b.txt'], effect: 'copy', paste: false,
+    sourceDirectory: '/tmp/', targetDirectory: '/srv/inbox',
+  });
+  assert.deepStrictEqual(dv.dropOperation([], { targetPath: '/srv/inbox' }), { accepted: false, reason: 'empty' });
+});

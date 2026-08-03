@@ -31,6 +31,7 @@ row context menu without scrolling through unrelated directories.
 | Per-row action override | Change one file's fate without re-running the comparison. |
 | Delete files / existing files only | These policies travel with the comparison request, so deletion rows are present when requested and new-file rows are excluded by the engine before the checklist opens. |
 | Select/deselect all in group | Drop an entire class of change. The row context menu checks or unticks every actionable row in the selected directory and its descendants; similarly named sibling directories are excluded. Rows whose action is `Do nothing` remain unticked. |
+| Check/uncheck all | The toolbar and its context menu tick every actionable row or clear every row. `Do nothing` rows remain unticked. Keyboard users can use <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>A</kbd> to check all and <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> to uncheck all. Shortcuts do not intercept typing in controls. |
 | Invert selection | Flip checked/unticked state for every actionable row. Rows whose action is `Do nothing` remain unticked, so inversion cannot create a ticked no-op. |
 | Search | Filter rows by name or reason. Wired to the [regex builder](../search-and-regex/regex-builder.md) like every search bar here. |
 | Sort | By any column; sorting never changes actions. |

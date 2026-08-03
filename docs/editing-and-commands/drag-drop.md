@@ -60,3 +60,7 @@ start. Run `npm test` to execute the complete test suite.
 - [Headless CLI](cli.md)
 - [Windows shell integration](shell-integration.md)
 - [Transfers and the queue](../transfers-and-queue/queue.md)
+
+## Deterministic target simulation
+
+winscp drop target uses the same `resolveDropTarget` policy as `explorer:dropTarget`. Supply `--queue --default-download-target PATH`, `--fake-file-target PATH`, or `--external-drop-directory PATH`; omitted or blank targets exercise refusal without starting Electron or Explorer.
