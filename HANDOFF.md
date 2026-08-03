@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `5d7648a`** — Validate damaged scrambled password headers
+**At commit `cbfeeb1`** — Refresh handoff after security fix
 
 ## Where the work stands
 
@@ -15,9 +15,9 @@
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
 | Tests | 3190 run, **3189 pass, 0 fail**, 1 skipped |
 | Hand-written code | 212,210 lines across 369 files |
-| Commits | 78 on `main` |
-| Working tree | clean |
-| Remote | `origin/main` at `9cf2684` — **differs from HEAD** |
+| Commits | 79 on `main` |
+| Working tree | **1 uncommitted change(s)** |
+| Remote | `origin/main` at `cbfeeb1` — in sync |
 
 ### Coverage by area
 
@@ -127,6 +127,7 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `cbfeeb1` | 2026-08-03 | Refresh handoff after security fix |
 | `5d7648a` | 2026-08-03 | Validate damaged scrambled password headers |
 | `9cf2684` | 2026-08-03 | Refresh final handoff and smoke evidence |
 | `cfc9631` | 2026-08-03 | Refresh handoff after smoke evidence |
@@ -134,7 +135,6 @@ bite a successor who assumes otherwise:
 | `e1909fd` | 2026-08-03 | Normalize Windows coverage checks and target panel fixtures |
 | `4b86bb2` | 2026-08-03 | Refresh handoff after CI stabilization |
 | `4378808` | 2026-08-03 | Fix CI coverage checkout and anchored smoke races |
-| `50233a0` | 2026-08-03 | Refresh real Electron smoke capture |
 
 ## Notes from whoever worked on this last
 
