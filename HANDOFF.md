@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `ef2580a`** — Refresh handoff for Pages fix
+**At commit `fbb9bae`** — Ignore expected handoff test artefact
 
 ## Where the work stands
 
@@ -14,10 +14,10 @@
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
 | Tests | 3486 run, **3485 pass, 0 fail**, 1 skipped |
-| Hand-written code | 221,564 lines across 440 files |
-| Commits | 218 on `main` |
+| Hand-written code | 221,591 lines across 440 files |
+| Commits | 221 on `main` |
 | Working tree | clean |
-| Remote | `origin/main` at `ef2580a` — in sync |
+| Remote | `origin/main` at `fbb9bae` — in sync |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `fbb9bae` | 2026-08-03 | Ignore expected handoff test artefact |
+| `68f8952` | 2026-08-03 | Make handoff freshness self-checking |
+| `dbb195b` | 2026-08-03 | Refresh final handoff evidence |
 | `ef2580a` | 2026-08-03 | Refresh handoff for Pages fix |
 | `aae7ad2` | 2026-08-03 | Fix Pages artifact selection |
 | `023b8b6` | 2026-08-03 | Refresh handoff after site and reconnect hardening |
 | `dca4464` | 2026-08-03 | Harden reconnect, Explorer selection, and site builds |
 | `8f29541` | 2026-08-03 | Refresh handoff after S3 and SFTP hardening |
-| `b59d321` | 2026-08-03 | Harden S3, SFTP, editor, and login flows |
-| `d2e0885` | 2026-08-03 | Make create-directory test line-ending safe |
-| `637ce7b` | 2026-08-03 | Refresh handoff after transfer hardening |
 
 ## Notes from whoever worked on this last
 
