@@ -404,12 +404,12 @@ test('checked reflects deleteFiles and existingOnly', async () => {
   {
     const { local, remote } = fixture();
     const c = await sync.compare(local, '/l', remote, '/r',
-      { direction: 'remote', criteria: 'time', existingOnly: true });
+      { direction: 'remote', criteria: 'time', existingOnly: true, deleteFiles: true });
     const brandNew = c.items.find((i) => i.reason === 'new-on-local');
     const remoteOnly = c.items.find((i) => i.reason === 'not-on-local');
     const update = c.items.find((i) => i.reason === 'local-newer');
     assert.strictEqual(brandNew.checked, false, 'existingOnly excludes brand new files');
-    assert.strictEqual(remoteOnly.checked, false, 'existingOnly excludes new remote deletions');
+    assert.strictEqual(remoteOnly.checked, true, 'existingOnly still permits deleting an extra target file');
     assert.strictEqual(update.checked, true, 'updates are still ticked');
   }
 });
@@ -756,6 +756,38 @@ test('a file mask does not prune directories before filtering their children', a
     direction: 'remote', criteria: 'time', recursive: true, fileMask: '*.txt',
   });
   assert.deepStrictEqual(summarize(c), [U('keep.txt')]);
+});
+
+test('relative path masks are evaluated from each comparison root', async () => {
+  const local = new MemoryAdapter('local');
+  const remote = new MemoryAdapter('remote');
+  local.putDir('/l'); remote.putDir('/r');
+  local.put('/l/src/keep.txt', 'new', T + MIN);
+  remote.put('/r/src/keep.txt', 'old', T);
+  local.put('/l/src/drop.log', 'new', T + MIN);
+  remote.put('/r/src/drop.log', 'old', T);
+
+  const c = await sync.compare(local, '/l', remote, '/r', {
+    direction: 'remote', criteria: 'time', recursive: true, fileMask: 'src/*.txt',
+  });
+  assert.deepStrictEqual(summarize(c), [U('keep.txt')]);
+});
+
+test('case-insensitive updates preserve the existing target spelling', async () => {
+  const local = new MemoryAdapter('local');
+  const remote = new MemoryAdapter('remote');
+  local.putDir('/l'); remote.putDir('/r');
+  local.put('/l/README.txt', 'new', T + MIN);
+  remote.put('/r/readme.txt', 'old', T);
+
+  const q = makeQueue();
+  const checklist = await sync.compare(local, '/l', remote, '/r', {
+    direction: 'remote', criteria: 'time', caseSensitive: false,
+  });
+  await sync.apply(checklist, q);
+  await waitFor(() => remote.read('/r/readme.txt')?.toString() === 'new', 4000,
+    'the case-preserving upload');
+  assert.strictEqual(remote.has('/r/README.txt'), false, 'the update must not create a case-variant duplicate');
 });
 
 test('an invalid native change source stops the watcher before reporting the error', async () => {

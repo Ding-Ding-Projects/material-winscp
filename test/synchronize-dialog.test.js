@@ -45,3 +45,21 @@ test('keep-up-to-date tolerates queue errors without an item', async () => {
   watcher.stop();
   assert.deepEqual(errors, []);
 });
+
+test('watcher reports an initial connection error after the caller subscribes', async () => {
+  const { Watcher } = require('../design/main/sync');
+  const { EventEmitter } = require('node:events');
+  const queue = new EventEmitter();
+  const adapter = {
+    normalize: (p) => p,
+    join: (a, b) => `${a}/${b}`,
+    list: async () => { throw new Error('connection lost'); },
+  };
+  const watcher = new Watcher(adapter, '/local', adapter, '/remote', queue, { intervalMs: 1000 });
+  const errors = [];
+  watcher.start();
+  watcher.on('error', (error) => errors.push(error.message));
+  await new Promise((resolve) => setImmediate(resolve));
+  watcher.stop();
+  assert.deepEqual(errors, ['connection lost']);
+});

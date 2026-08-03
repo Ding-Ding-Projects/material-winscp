@@ -121,6 +121,12 @@ The failed row is moved to the end of the queue before it is requeued, matching
 WinSCP's `TTerminalQueue::RetryItem`: transfers that were already waiting keep
 their place and run first.
 
+An automatic reconnect retry is scoped to the entry that failed. It carries the
+overwrite decision already answered before the connection dropped, so the same
+file does not prompt again; the marker is cleared before the next planned entry.
+An equal-sized `.filepart` is treated as complete and finalized by rename, while
+a part larger than the source is discarded and copied again from byte zero.
+
 ## Failure modes
 
 | Situation | What the user sees | Recoverable |

@@ -2845,6 +2845,7 @@ class AdapterFileSystem {
     let destPartialFullName = '';
     let existing = null;
     let resumeOffset = 0;
+    let resumeRefused = false;
 
     const fileParams = new OverwriteFileParams({
       sourceSize: progress.localSize,
@@ -2871,6 +2872,7 @@ class AdapterFileSystem {
           const refusal = resumeRefusalReason(existing, engine.terminal.userName);
           if (refusal) {
             resumeAllowed = false;
+            resumeRefused = true;
             engine.logEvent(refusal);
           }
         }
@@ -2941,6 +2943,24 @@ class AdapterFileSystem {
           existing = await statOrNull(dst, destFullName);
           destFileExists = !!existing;
         }
+      }
+    }
+
+    // A resumable route can be refused for a safety reason (a symlink or a
+    // named foreign owner) while the target still exists. That refusal only
+    // changes HOW we write; it must not bypass ConfirmFileOverwrite. The old
+    // branch fell through to a straight write without asking, so a user who
+    // answered "No" to the overwrite question lost the old target anyway.
+    if (resumeRefused && destFileExists) {
+      const confirmed = await engine.confirmOverwrite(
+        handle.fileName, destFileName, copyParam, params, progress, fileParams,
+        { canAppend: canAppendTo(engine, dst, progress) });
+      overwriteMode = confirmed.mode;
+      if (confirmed.targetFileName !== destFileName) {
+        destFileName = confirmed.targetFileName;
+        destFullName = dst.join(targetDir, destFileName);
+        existing = await statOrNull(dst, destFullName);
+        destFileExists = !!existing;
       }
     }
 

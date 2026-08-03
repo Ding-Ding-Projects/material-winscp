@@ -684,9 +684,46 @@ class FtpAdapter extends Adapter {
     }
   }
 
+  /**
+   * The control certificate is the trust decision for the whole FTPS session.
+   * Data sockets are created with `rejectUnauthorized: false` so an injected
+   * verifier can accept a self-signed control certificate; they must therefore
+   * be checked explicitly rather than silently accepting a different peer.
+   */
+  _verifyDataPeer(socket) {
+    if (!socket || typeof socket.getPeerCertificate !== 'function') return;
+    const cert = socket.getPeerCertificate(true);
+    const expected = this.serverInfo.certificate && this.serverInfo.certificate.fingerprint256;
+    const actual = cert && cert.fingerprint256;
+    if (expected && actual !== expected) {
+      throw new Error(`TLS data certificate does not match the control certificate for ${this.session.hostName}`);
+    }
+    if (!expected && socket.authorized !== true) {
+      throw new Error(`TLS data certificate rejected for ${this.session.hostName}`);
+    }
+  }
+
   // -- lifecycle -----------------------------------------------------------
 
   async connect() {
+    if (this.client) {
+      try { this.client.close(); } catch { /* a failed handshake may already be closed */ }
+      this.client = null;
+    }
+    this.connected = false;
+    try {
+      return await this._connect();
+    } catch (error) {
+      this.connected = false;
+      if (this.client) {
+        try { this.client.close(); } catch { /* preserve the original connection error */ }
+        this.client = null;
+      }
+      throw error;
+    }
+  }
+
+  async _connect() {
     const s = this.session;
     const timeoutMs = Math.max(0, Number(s.timeout || 15)) * 1000;
 
@@ -917,6 +954,61 @@ class FtpAdapter extends Adapter {
 
   // -- active mode ---------------------------------------------------------
 
+  _upgradeActiveTlsDataSocket(raw, control, timeout) {
+    return new Promise((resolve, reject) => {
+      let socket = null;
+      let timer = null;
+      let settled = false;
+      const cleanup = () => {
+        if (timer) clearTimeout(timer);
+        raw.removeListener('error', fail);
+        raw.removeListener('close', onRawClose);
+        if (socket) {
+          socket.removeListener('error', fail);
+          socket.removeListener('close', onSocketClose);
+        }
+      };
+      const fail = (error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        try { raw.destroy(); } catch { /* already closed */ }
+        if (socket && socket !== raw) {
+          try { socket.destroy(); } catch { /* already closed */ }
+        }
+        reject(error);
+      };
+      const onRawClose = () => fail(new Error('Active TLS data connection closed during handshake'));
+      const onSocketClose = () => fail(new Error('Active TLS data connection closed during handshake'));
+      const ready = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        if (timeout > 0) socket.setTimeout(0);
+        resolve(socket);
+      };
+
+      raw.once('error', fail);
+      raw.once('close', onRawClose);
+      try {
+        socket = tls.connect({
+          ...this.client.ftp.tlsOptions,
+          socket: raw,
+          session: this.session.sslSessionReuse === false ? undefined : control.getSession(),
+        });
+      } catch (error) {
+        fail(error);
+        return;
+      }
+      socket.once('error', fail);
+      socket.once('close', onSocketClose);
+      socket.once('secureConnect', ready);
+      if (timeout > 0) {
+        timer = setTimeout(() => fail(new Error('Timeout when negotiating active TLS data connection')), timeout);
+      }
+    });
+  }
+
   /**
    * Drive one active-mode (PORT/EPRT) transfer.
    *
@@ -934,6 +1026,7 @@ class FtpAdapter extends Adapter {
     const control = ftp.socket;
     const host = control.localAddress;
     const useV6 = control.localFamily === 'IPv6' || String(host).includes(':');
+    const timeout = Number(ftp.timeout) || 0;
 
     return new Promise((resolve, reject) => {
       const server = net.createServer();
@@ -941,16 +1034,28 @@ class FtpAdapter extends Adapter {
       let dataDone = false;
       let controlDone = false;
       let controlRes = null;
+      let accepted = null;
+      let dataSocket = null;
+      let dataWaitTimer = null;
 
-      const fail = (err) => {
+      const closeData = () => {
+        if (dataWaitTimer) { clearTimeout(dataWaitTimer); dataWaitTimer = null; }
+        if (ftp.dataSocket === dataSocket) ftp.dataSocket = undefined;
+        if (dataSocket && !dataSocket.destroyed) dataSocket.destroy();
+        if (accepted && accepted !== dataSocket && !accepted.destroyed) accepted.destroy();
+      };
+      const fail = (err, closeControl = false) => {
         if (settled) return;
         settled = true;
+        closeData();
         try { server.close(); } catch { /* already closing */ }
+        if (closeControl && !ftp.closed) ftp.closeWithError(err);
         reject(err);
       };
       const maybeDone = (task) => {
         if (settled || !dataDone || !controlDone) return;
         settled = true;
+        closeData();
         try { server.close(); } catch { /* already closing */ }
         task.resolve(controlRes);
         resolve(controlRes);
@@ -965,8 +1070,20 @@ class FtpAdapter extends Adapter {
           ? `EPRT |2|${host}|${addr.port}|`
           : `PORT ${host.split('.').join(',')},${addr.port >> 8},${addr.port & 255}`;
 
-        let accepted = null;
-        const waitForData = new Promise((res) => server.once('connection', (sock) => { accepted = sock; res(sock); }));
+        const waitForData = new Promise((res, rej) => {
+          const onConnection = (sock) => {
+            accepted = sock;
+            if (dataWaitTimer) { clearTimeout(dataWaitTimer); dataWaitTimer = null; }
+            res(sock);
+          };
+          server.once('connection', onConnection);
+          if (timeout > 0) {
+            dataWaitTimer = setTimeout(() => {
+              server.removeListener('connection', onConnection);
+              rej(new Error('Timeout waiting for the FTP server to open the active data connection'));
+            }, timeout);
+          }
+        });
 
         try {
           const portRes = await ftp.request(portCmd);
@@ -981,26 +1098,39 @@ class FtpAdapter extends Adapter {
           // passive file-transfer path below; waiting here would only add an
           // arbitrary delay to every normal active-mode transfer.
           await ftp.handle(command, (res, task) => {
-            if (res instanceof Error) { fail(res); task.reject(res); return; }
+            if (settled) return;
+            if (res instanceof Error) {
+              task.reject(res);
+              fail(res, !(res instanceof FTPError));
+              return;
+            }
             if (res.code === 150 || res.code === 125) {
               waitForData.then(async (raw) => {
                 let sock = raw;
-                if (control instanceof tls.TLSSocket) {
-                  // RFC 4217: the FTP client stays the TLS client on the data
-                  // connection even though the server opened the TCP session.
-                  sock = tls.connect({
-                    ...this.client.ftp.tlsOptions,
-                    socket: raw,
-                    session: this.session.sslSessionReuse === false ? undefined : control.getSession(),
-                  });
-                  await new Promise((r, j) => { sock.once('secureConnect', r); sock.once('error', j); });
-                }
                 try {
+                  if (control instanceof tls.TLSSocket) {
+                    // RFC 4217: the FTP client stays the TLS client on the data
+                    // connection even though the server opened the TCP session.
+                    sock = await this._upgradeActiveTlsDataSocket(raw, control, timeout);
+                    this._verifyDataPeer(sock);
+                  }
+                  dataSocket = sock;
+                  ftp.dataSocket = sock;
+                  if (timeout > 0) sock.setTimeout(timeout);
                   await wire(sock);
                   dataDone = true;
                   maybeDone(task);
-                } catch (e) { fail(e); task.reject(e); }
-              }, (e) => { fail(e); task.reject(e); });
+                } catch (e) {
+                  task.reject(e);
+                  fail(e, true);
+                }
+              }, (e) => {
+                task.reject(e);
+                fail(e, true);
+              }).catch((e) => {
+                task.reject(e);
+                fail(e, true);
+              });
               return;
             }
             if (res.code >= 200 && res.code < 300) {
@@ -1009,9 +1139,9 @@ class FtpAdapter extends Adapter {
               return;
             }
             if (res.code >= 400) {
-              if (accepted) accepted.destroy();
-              fail(new FTPError(res));
-              task.reject(new FTPError(res));
+              const error = new FTPError(res);
+              task.reject(error);
+              fail(error);
             }
           });
         } catch (e) { fail(e); }
@@ -1320,7 +1450,14 @@ class FtpAdapter extends Adapter {
         socket.setTimeout(timeout);
         socket.once('error', fail);
         socket.once('timeout', onTimeout);
-        socket.once('secureConnect', ready);
+        socket.once('secureConnect', () => {
+          try {
+            this._verifyDataPeer(socket);
+            ready();
+          } catch (error) {
+            fail(error);
+          }
+        });
       });
     });
   }
@@ -1342,18 +1479,24 @@ class FtpAdapter extends Adapter {
     let dataStarted = false;
     let failed = false;
     let earlyError = null;
+    let earlyCloseControl = false;
     let controlResponse = null;
 
     const closeData = () => {
       if (socket && !socket.destroyed) socket.destroy();
       if (ftp.dataSocket === socket) ftp.dataSocket = undefined;
     };
-    const fail = (error) => {
+    const fail = (error, closeControl = false) => {
       if (failed) return;
       failed = true;
       closeData();
-      if (taskRef) taskRef.reject(error);
-      else earlyError = error;
+      if (taskRef) {
+        taskRef.reject(error);
+        if (closeControl && !ftp.closed) ftp.closeWithError(error);
+      } else {
+        earlyError = error;
+        earlyCloseControl = closeControl;
+      }
     };
     const finish = () => {
       if (!failed && taskRef && controlDone && dataDone) {
@@ -1366,12 +1509,16 @@ class FtpAdapter extends Adapter {
       dataStarted = true;
       ftp.dataSocket = socket;
       const done = (error) => {
-        if (error) { fail(error); return; }
+        if (error) { fail(error, true); return; }
         dataDone = true;
         finish();
       };
-      if (direction === 'download') pipeline(socket, destination, done);
-      else pipeline(source, socket, done);
+      try {
+        if (direction === 'download') pipeline(socket, destination, done);
+        else pipeline(source, socket, done);
+      } catch (error) {
+        done(error);
+      }
     };
 
     // `handle()` writes the command synchronously before it returns. Starting
@@ -1379,8 +1526,18 @@ class FtpAdapter extends Adapter {
     // wait for the TLS handshake before sending 150 a chance to proceed.
     const transfer = ftp.handle(command, (response, task) => {
       taskRef = task;
-      if (earlyError) { fail(earlyError); return; }
-      if (response instanceof Error) { fail(response); return; }
+      if (earlyError) {
+        const error = earlyError;
+        const closeControl = earlyCloseControl;
+        earlyError = null;
+        task.reject(error);
+        if (closeControl && !ftp.closed) ftp.closeWithError(error);
+        return;
+      }
+      if (response instanceof Error) {
+        fail(response, !(response instanceof FTPError));
+        return;
+      }
       if (response.code === 150 || response.code === 125) {
         preliminary = true;
         startData();
@@ -1396,7 +1553,7 @@ class FtpAdapter extends Adapter {
       if (failed) { opened.destroy(); return; }
       socket = opened;
       startData();
-    }).catch(fail);
+    }).catch((error) => fail(error, true));
     return transfer;
   }
 

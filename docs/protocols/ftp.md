@@ -52,6 +52,9 @@ Under **Site → Advanced → FTP** and **→ TLS/SSL**.
 | A listing reports an unsafe or overflowing size | The entry is retained with size `0` (unknown) rather than propagating an inaccurate `Infinity` or rounded byte count into transfers and comparisons. | Yes — enable MLSD or fix the server listing |
 | A `SIZE` reply is unsafe or overflowing | `stat()` retains the file with size `0` (unknown) rather than trusting an unsafe JavaScript number returned by the FTP library. | Yes — enable MLST or fix the server response |
 | Server expects a different passive command/data ordering | `on` sends the transfer command before opening the data socket; `off` uses basic-ftp's normal pre-opened socket; `auto` detects Idea FTP Server from its welcome banner. Active mode always sends the command before accepting the server connection. | Yes — choose the ordering required by the server |
+| Consumer or data-pipeline failure during a delayed passive transfer | The transfer fails closed: the data socket and control session are closed before another queued FTP command can race a late `226` response. | Yes — reconnect and retry |
+| Active data connection or FTPS data handshake stalls | The active accept/TLS handshake is bounded by the site timeout; a timeout or handshake error rejects the transfer and closes the control session. | Yes — fix the firewall/server or retry |
+| FTPS data certificate differs from the accepted control certificate | The data transfer is rejected with a certificate-mismatch error. Data sockets inherit the control connection's accepted SHA-256 fingerprint. | Yes — inspect the server certificate configuration |
 
 The passive-host choice is applied when the FTP client is constructed, before
 the first `PASV`/`EPSV` negotiation. In particular, `on` is not merely a UI
@@ -88,7 +91,11 @@ control connection is public.
   against vsftpd and FileZilla Server.
 - Passive-host policy plumbing is covered by
   `test/ftp-adapter-options.test.js`; the end-to-end suite exercises passive
-  and active listing/download/upload/resume paths over real sockets.
+  and active listing/download/upload/resume paths over real sockets, including
+  delayed passive pipeline cancellation, active FTPS handshake failure, and
+  control-session cleanup after a failed login.
+- The focused FTPS unit test proves that a data certificate must match the
+  control certificate fingerprint before a data socket is accepted.
 
 Manual check: connect, open the session log at debug level 1, and confirm the
 `FEAT` response matches the capabilities the UI has enabled.

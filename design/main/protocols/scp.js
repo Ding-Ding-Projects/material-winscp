@@ -194,12 +194,14 @@ function parseListingLine(line, opts = {}) {
     if (arrow >= 0) { linkTarget = name.slice(arrow + 4); name = name.slice(0, arrow); }
   }
   if (!name) return null;
+  const timeDifferenceSeconds = Number(opts.timeDifferenceSeconds);
 
   return {
     name,
     type,
     size,
-    mtime: parseLsDate(dateText, opts.now) + (Number(opts.timeDifferenceHours) || 0) * 3600000,
+    mtime: parseLsDate(dateText, opts.now)
+      + (Number.isFinite(timeDifferenceSeconds) ? timeDifferenceSeconds * 1000 : 0),
     rights,
     acl,
     links,
@@ -360,6 +362,15 @@ function parseControl(line) {
     throw scpRemoteError(line.slice(1).trim() || 'The remote scp reported an error');
   }
   throw scpProtocolError(`Unexpected SCP record: ${line}`);
+}
+
+/** SCP recursive records contain one basename, never a path. */
+function safeRecordName(name) {
+  const text = String(name);
+  if (!text || text === '.' || text === '..' || /[\\/\0]/.test(text)) {
+    throw scpProtocolError(`The remote SCP record contains an unsafe local name: ${text}`, 'download');
+  }
+  return text;
 }
 
 function modeString(mode) {
@@ -613,7 +624,7 @@ class ScpAdapter extends Adapter {
 
     const { entries, skipped } = parseListing(res.stdout, {
       ignoreWarnings: this.session.ignoreLsWarnings !== false,
-      timeDifferenceHours: this.session.timeDifference,
+      timeDifferenceSeconds: this.session.timeDifference,
     });
     if (skipped.length) this._log('debug', `Ignored ${skipped.length} unparsable listing line(s)`);
 
@@ -644,7 +655,7 @@ class ScpAdapter extends Adapter {
     });
     const { entries } = parseListing(res.stdout, {
       ignoreWarnings: true,
-      timeDifferenceHours: this.session.timeDifference,
+      timeDifferenceSeconds: this.session.timeDifference,
     });
     if (!entries.length) throw new Error(`Could not stat ${target}: the listing was not understood`);
     const row = entries[0];
@@ -897,7 +908,7 @@ class ScpAdapter extends Adapter {
         }
 
         const parent = stack[stack.length - 1].path;
-        const child = nodePath.join(parent, nodePath.basename(rec.name));
+        const child = nodePath.join(parent, safeRecordName(rec.name));
         if (rec.kind === 'D') {
           if (stack.length === 1) rootDirectory = true;
           await fsp.mkdir(child, { recursive: true });

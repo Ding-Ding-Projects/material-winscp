@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  calculateChecklist, partitionForApply, reverseAction, sortChecklistItems,
+  calculateChecklist, isInDirectory, partitionForApply, reverseAction, sortChecklistItems,
 } from '../design/renderer/ui/dialogs/checklist.js';
 
 test('reversing a Do nothing row is gated with a direction-specific reason', () => {
@@ -15,6 +15,19 @@ test('reversing a Do nothing row is gated with a direction-specific reason', () 
   });
 });
 
+test('Reverse swaps a legal paired transfer and keeps it actionable', () => {
+  const item = {
+    action: 'upload', checked: false,
+    local: { exists: true, name: 'a.txt' },
+    remote: { exists: true, name: 'a.txt' },
+  };
+  assert.deepEqual(reverseAction(item), {
+    ok: true,
+    reasonKey: '',
+    item: { ...item, action: 'download', checked: true },
+  });
+});
+
 test('sorting is stable and does not mutate checklist rows', () => {
   const rows = [
     { action: 'upload', local: { name: 'beta' }, remote: { directory: '/x' } },
@@ -25,6 +38,21 @@ test('sorting is stable and does not mutate checklist rows', () => {
   assert.deepEqual(sorted, [rows[1], rows[2], rows[0]]);
   assert.deepEqual(rows, [rows[0], rows[1], rows[2]]);
   assert.deepEqual(sortChecklistItems(rows, 'action', 'desc').map((r) => r.action), ['upload', 'nothing', 'download']);
+});
+
+test('descending sort keeps equal keys in their original order', () => {
+  const rows = [
+    { action: 'upload', local: { name: 'same' } },
+    { action: 'download', local: { name: 'same' } },
+    { action: 'nothing', local: { name: 'same' } },
+  ];
+  assert.deepEqual(sortChecklistItems(rows, 'name', 'desc'), rows);
+});
+
+test('directory scope includes descendants below the filesystem root', () => {
+  assert.strictEqual(isInDirectory('/', '/child/file.txt'), true);
+  assert.strictEqual(isInDirectory('/', '/other'), true);
+  assert.strictEqual(isInDirectory('/one', '/one-two/file.txt'), false);
 });
 
 test('Calculate summarizes only checked rows without mutating the checklist', () => {

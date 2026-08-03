@@ -39,6 +39,9 @@ In **Transfer settings**, stored in `COPY_PARAM_DEFAULTS`.
 - **A `.filepart` is a promise, not a file.** It is deliberately not renamed
   until the transfer completes, so a crashed transfer leaves an obviously
   incomplete artefact rather than a plausible-looking broken one.
+- **A complete `.filepart` is finalized, not recopied.** When its size exactly
+  matches the source, a retry adopts it and performs only the final rename. A
+  part larger than the source is treated as foreign and restarted from zero.
 - **Timestamps are applied after the rename**, so a resumed file gets the
   source's timestamp, not the time of the last chunk.
 - **Cancelling keeps the partial** when resume is possible and removes it when it
@@ -55,7 +58,7 @@ In **Transfer settings**, stored in `COPY_PARAM_DEFAULTS`.
 | `append` used on a non-log file | The file is silently valid and semantically wrong — nothing can detect this. The mode is documented as intentional-use-only and is not offered by default. | Only by re-transferring |
 | Disk fills while writing a `.filepart` | Partial kept, item failed with `ENOSPC`, resume available once space is freed. | Yes |
 | Two transfers target the same file | The second is refused while the first holds the `.filepart`, naming the conflicting item. | Yes |
-| `partialFileExt` matches a real file pattern on the server | A user file called `x.filepart` could be mistaken for a partial. Only partials this app created in this session are adopted; a stranger's `.filepart` is treated as an ordinary file. | n/a |
+| `partialFileExt` matches a real file pattern on the server | A user file called `x.filepart` can be mistaken for a partial because provenance is not persisted in the transfer record. Foreground transfers ask before adopting it; queued transfers follow their no-confirmation setting. | Yes, by restarting or choosing a distinct extension |
 
 ## Security considerations
 
@@ -77,8 +80,9 @@ In **Transfer settings**, stored in `COPY_PARAM_DEFAULTS`.
   tested against the local adapter with deliberately interrupted streams.
 - Size-mismatch detection after a dishonest `REST` is tested with a synthetic
   server that ignores the offset.
-- Partial adoption is tested to confirm a `.filepart` not created by the current
-  session is treated as an ordinary file.
+- Partial adoption is tested at the matching-name boundary; provenance is not
+  persisted, so the foreground confirmation and queue no-confirmation setting
+  are the safeguards before a matching `.filepart` is adopted.
 - Rename-on-success atomicity is tested by killing the write mid-stream and
   asserting the target does not exist.
 

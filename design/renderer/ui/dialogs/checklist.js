@@ -207,10 +207,16 @@ export function invertChecked(items) {
 
 /** Match a directory and its descendants, like WinSCP's directory action. */
 export function isInDirectory(directory, candidate) {
-  const scope = String(directory || '').replace(/[\\/]+$/, '');
-  const path = String(candidate || '').replace(/[\\/]+$/, '');
+  const boundary = (value) => {
+    const raw = String(value || '');
+    const trimmed = raw.replace(/[\\/]+$/, '');
+    return trimmed || (/^[\\/]+$/.test(raw) ? raw[0] : '');
+  };
+  const scope = boundary(directory);
+  const path = boundary(candidate);
   if (!scope || !path) return scope === path;
   if (scope === path) return true;
+  if (scope === '/' || scope === '\\') return path.startsWith(scope);
   return path.startsWith(`${scope}/`) || path.startsWith(`${scope}\\`);
 }
 
@@ -374,7 +380,7 @@ export function sortChecklistItems(items, field = 'name', direction = 'asc') {
     return item?.local?.name || item?.remote?.name || item?.local?.path || item?.remote?.path || '';
   };
   return (items || []).map((item, index) => ({ item, index, value: String(value(item)).toLocaleLowerCase() }))
-    .sort((a, b) => (a.value.localeCompare(b.value) || a.index - b.index) * sign)
+    .sort((a, b) => (a.value.localeCompare(b.value) * sign || a.index - b.index))
     .map(({ item }) => item);
 }
 

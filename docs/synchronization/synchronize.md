@@ -42,7 +42,7 @@ The synchronize dialog carries these choices. They are remembered per site.
 | --- | --- | --- |
 | Preview changes | on | Show the checklist. Turning it off is possible and warned about. |
 | Delete files | off | Enables the destructive half of Mirror. |
-| Existing files only | off | Never create anything new; only update what both sides have. |
+| Existing files only | off | Never create anything new; update files present on both sides, while an explicitly enabled delete policy may still remove an extra target file. |
 | Selected files only | off | Restrict to the current panel selection. |
 | Recurse subdirectories | on | |
 | Use same options next time | off | |
@@ -64,7 +64,7 @@ all files appear newer, older, or unchanged.
 | Filesystem timestamp granularity (FAT's 2 seconds, some servers' 1 minute) | Spurious differences. A tolerance is applied per protocol; below it, times are considered equal. | Yes |
 | DST transition | A one-hour shift on the whole tree. `dSTMode` (`unix`, `keep`, `win`) selects the interpretation. | Yes |
 | Mirror with delete, wrong direction | The checklist shows deletions in a distinct destructive style with a count, and the confirmation states the count again. Both are shown before anything happens. | **Only from a backup** |
-| Case-insensitive local vs case-sensitive remote | `File.txt` and `file.txt` cannot coexist locally. The pair is reported as a conflict and skipped, never silently merged. | Yes |
+| Case-insensitive comparison with different spelling | Names such as `File.txt` and `file.txt` are one pair by default; an update preserves the existing target spelling. Enable case-sensitive comparison to treat them as separate files. | Yes |
 | Symlinks | Compared as links unless `followDirectorySymlinks` is on. A link and a real file with the same name are a conflict, not a match. | Yes |
 | Connection lost mid-run | Completed items stand; the rest return to the checklist marked pending. No partial state is hidden. | Yes |
 | Queue reports an error before an item exists | The watcher keeps running and surfaces the original connection/transport error; cleanup does not replace it with a secondary missing-item error. The visible error row is an assertive alert so assistive technology announces it immediately, while ordinary activity remains a polite status update. | Yes |
@@ -83,8 +83,9 @@ all files appear newer, older, or unchanged.
 - **A file mask restricts what is *transferred*, and also what is *considered*.**
   A mask that excludes a file also excludes it from deletion — a safety property
   worth relying on deliberately. During recursive comparison, ordinary file
-  masks do not prune directories before their children are checked; explicit
-  directory-only rules such as `node_modules/` still exclude that subtree.
+  masks are evaluated relative to each comparison root and do not prune
+  directories before their children are checked; explicit directory-only rules
+  such as `node_modules/` still exclude that subtree.
 - **Timestamp-only mode writes metadata to both sides.** It is not read-only,
   despite feeling like it.
 - **Comparison reads names and metadata, never content**, unless a checksum
@@ -100,8 +101,13 @@ all files appear newer, older, or unchanged.
   Mirror mode and the delete option are set.
 - Interruption is tested by failing the adapter mid-run and asserting that
   completed and pending items are reported accurately.
+- Case-insensitive updates are tested to preserve the existing target spelling,
+  rather than creating a second case-variant path.
 - Keep-up-to-date queue cleanup is tested with an item-less queue error, proving
   a transport failure cannot crash the watcher while it removes in-flight state.
+- A startup comparison that loses its connection is tested to report through the
+  watcher error event after the caller subscribes, rather than crashing before
+  the bridge can forward it.
 - Watcher activity rows use polite live updates, while watcher errors use an
   assertive alert role so a failure is announced even when focus is elsewhere.
 

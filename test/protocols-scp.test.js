@@ -6,7 +6,7 @@ const fs = require('fs');
 const fsp = fs.promises;
 const os = require('os');
 const path = require('path');
-const { PassThrough } = require('stream');
+const { Duplex, PassThrough } = require('stream');
 
 const {
   ScpAdapter,
@@ -23,6 +23,20 @@ function ackReader() {
   return {
     readBytes: async () => Buffer.from([0]),
     readLine: async () => '',
+  };
+}
+
+function serverChannel() {
+  const channel = new Duplex({
+    read() {},
+    write(chunk, encoding, callback) { callback(); },
+  });
+  return {
+    channel,
+    send(data) {
+      channel.push(Buffer.from(data));
+      channel.push(null);
+    },
   };
 }
 
@@ -171,6 +185,25 @@ test.describe('SCP adapter contract', () => {
     assert.equal(row.size, 0);
   });
 
+  test('applies the stored SCP time difference in seconds', async () => {
+    const adapter = new ScpAdapter({
+      sCPLsFullTime: 'off',
+      timeDifference: 3600,
+      ignoreLsWarnings: true,
+    }, {
+      transport: {
+        exec: async () => ({
+          code: 0,
+          stdout: '-rw-r--r-- 1 user group 1 2024-01-01 00:00:00 +0000 file\n',
+          stderr: '',
+        }),
+      },
+    });
+
+    const [row] = await adapter.list('/tmp');
+    assert.equal(row.mtime, Date.parse('2024-01-01T00:00:00Z') + 3600000);
+  });
+
   test('preserves special POSIX mode bits in SCP transfer headers', () => {
     assert.equal(modeString(0o4755), '4755', 'setuid must remain in the four-digit mode field');
     assert.equal(modeString(0o2644), '2644', 'setgid must remain in the four-digit mode field');
@@ -207,6 +240,23 @@ test.describe('SCP adapter contract', () => {
       const transfer = adapter.downloadDirectory('/remote', root);
       channel.end(Buffer.from('D0755 0 remote\nC0644 2 file\nab\0'));
       await assert.rejects(transfer, (error) => error.category === 'protocol' && error.code === 'EPROTO');
+    } finally {
+      await fsp.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('rejects recursive records that escape the local destination', async () => {
+    const wire = serverChannel();
+    const adapter = new ScpAdapter({}, { transport: { execRaw: async () => wire.channel } });
+    const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'material-scp-path-'));
+    const localDir = path.join(root, 'download');
+    const escaped = path.join(root, 'escape-marker');
+    try {
+      const transfer = adapter.downloadDirectory('/remote', localDir);
+      wire.send('D0755 0 ..\nC0644 13 escape-marker\nnot-safe-here\0');
+      await assert.rejects(transfer, (error) => error.category === 'protocol'
+        && error.code === 'EPROTO' && /unsafe local name/.test(error.message));
+      assert.equal(fs.existsSync(escaped), false, 'a remote .. record must not write above localDir');
     } finally {
       await fsp.rm(root, { recursive: true, force: true });
     }

@@ -26,7 +26,7 @@ Under **Site → Advanced → SCP/Shell**.
 | `unsetNationalVars` | `true` | Clear `LANG`/`LC_*` so month names and separators stay parseable. |
 | `ignoreLsWarnings` | `true` | Tolerate `ls` writing warnings to stderr. |
 | `scp1Compatibility` | `false` | Use the older SCP1 wire behaviour. |
-| `timeDifference` / `timeDifferenceAuto` | `0` / `true` | Correct for a server clock in another zone. |
+| `timeDifference` / `timeDifferenceAuto` | `0` / `true` | Apply the explicit clock correction in seconds; automatic SCP measurement is not currently wired. |
 | `sCPLsFullTime` | `auto` | Use `ls --full-time` for unambiguous timestamps when available. |
 | `notUtf` | `auto` | Treat filenames as non-UTF-8. |
 | `postLoginCommands` | `[]` | Commands run once after the shell opens. |
@@ -57,6 +57,11 @@ are unavailable. MD5 falls back directly to `openssl dgst -md5`. These retries
 are limited to shell exit codes 126/127, so real checksum failures remain
 visible.
 
+Listing and stat timestamps apply the stored `timeDifference` in seconds,
+matching the session store and synchronizer. Recursive downloads reject `.`,
+`..`, and path separators in remote record names before constructing a local
+path, so a malformed peer cannot escape the selected destination.
+
 ## Failure modes
 
 | Situation | What the user sees | Recoverable |
@@ -66,11 +71,12 @@ visible.
 | `ls` is aliased with colour | Escape sequences corrupt listing parsing. `clearAliases` prevents this and is on by default. | Yes |
 | Locale gives non-English month names | Dates parse wrongly or not at all. `unsetNationalVars` prevents this. | Yes |
 | Filenames containing newlines | Cannot be represented in `ls` output. Such entries are reported as unparseable rather than silently mangled or merged. | No — use SFTP |
-| Server clock is in another timezone | Timestamps look shifted; `timeDifferenceAuto` measures and corrects it. | Yes |
+| Server clock is in another timezone | An explicit `timeDifference` is applied in seconds; automatic SCP measurement is not currently wired. | Yes, with an explicit correction |
 | A remote `ls` line reports an unsafe or overflowing byte count | The entry remains visible with size `0` (unknown) rather than carrying a rounded number into comparisons and transfers. | Yes — enable SFTP or fix the server output |
 | Server sends an epoch timestamp whose millisecond conversion exceeds JavaScript's safe-integer range | The SCP record is rejected with a protocol error rather than producing a rounded timestamp. | No — retry with a supported server timestamp |
 | Transfer interrupted | SCP has no resume. The queue item fails with the whole file to redo — `caps.resume` is `false`, so the UI never offers Resume. | Partially |
 | A malformed or truncated SCP stream | The operation fails with a protocol error; a recursive download is never reported complete merely because its SSH channel closed. | No — retry the transfer |
+| A recursive record contains `.`/`..` or a path separator | The operation fails before creating a local path from that record. | No — retry with a trustworthy server |
 | The declared upload size is wrong | The upload fails validation before it can send an overlong payload, or after an incomplete payload, and the queue receives a bounded error. | Yes, retry with the real size |
 
 ## Security considerations
@@ -107,7 +113,8 @@ visible.
 - Upload headers, byte counts, progress, malformed records, control-line limits,
   recursive truncation, permissions and error categories are covered by
   focused contract tests and the real SSH/SCP suite in `test/e2e-sftp.test.js`.
-- Timezone correction is tested with synthetic clock offsets.
+- The stored `timeDifference` is tested as a seconds-to-milliseconds correction,
+  and recursive record names are tested for local path traversal.
 - Listing-size validation is tested so an oversized remote `ls` value becomes an
   honest unknown size instead of a rounded byte count.
 - Commander remote-copy command construction is tested for explicit overwrite

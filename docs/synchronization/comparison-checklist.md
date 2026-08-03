@@ -29,12 +29,12 @@ row context menu without scrolling through unrelated directories.
 | Control | Effect |
 | --- | --- |
 | Per-row action override | Change one file's fate without re-running the comparison. |
-| Delete files / existing files only | These policies travel with the comparison request, so deletion rows are present when requested and new-file rows are excluded by the engine before the checklist opens. |
+| Delete files / existing files only | These policies travel with the comparison request. Deletion rows are present when requested; `Existing files only` suppresses new transfers but does not suppress deleting an extra target file. |
 | Select/deselect all in group | Drop an entire class of change. The row context menu checks or unticks every actionable row in the selected directory and its descendants; similarly named sibling directories are excluded. Rows whose action is `Do nothing` remain unticked. |
 | Check/uncheck all | The toolbar and its context menu tick every actionable row or clear every row. `Do nothing` rows remain unticked. Keyboard users can use <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>A</kbd> to check all and <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> to uncheck all. Shortcuts do not intercept typing in controls. |
 | Invert selection | Flip checked/unticked state for every actionable row. Rows whose action is `Do nothing` remain unticked, so inversion cannot create a ticked no-op. |
 | Search | Filter rows by name or reason. Wired to the [regex builder](../search-and-regex/regex-builder.md) like every search bar here. |
-| Sort | By any column; sorting is presentation-only, so selection and action overrides stay attached to the same file. |
+| Sort | By any column; sorting is presentation-only and stable, so selection and action overrides stay attached to the same file and equal-key rows keep their order. |
 | Calculate | Recompute the checked outcome on demand and announce the resulting transfers and deletions; it does not execute anything. |
 | Save checklist | Export the list as text for review before committing. |
 
@@ -85,7 +85,7 @@ as an explicit opt-in, with the builder anchored beside the field.
   action and deletion confirmation.
 - Sorting before changing a selection or per-row action is tested to preserve
   row identity when the checklist sends its decisions back to the comparison
-  engine.
+  engine, including stable descending ties and a root-directory scope.
 - Directory-scoped check and uncheck is tested for changing only the displayed
   directory subtree, preserving each row's action, excluding similarly named
   siblings, and never ticking `Do nothing`. The context-menu availability check

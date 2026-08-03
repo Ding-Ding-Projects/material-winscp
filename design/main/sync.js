@@ -184,6 +184,21 @@ function missing(adapter, dir, name) {
   };
 }
 
+/** File masks without an absolute path are relative to the compared root. */
+function relativeMaskPath(adapter, root, full, caseSensitive) {
+  const unix = (value) => String(adapter.normalize(value) || '').replace(/\\/g, '/');
+  const normalizedRoot = unix(root);
+  const normalizedFull = unix(full);
+  const rootPath = normalizedRoot === '/' ? '/' : normalizedRoot.replace(/\/+$/, '');
+  const prefix = rootPath === '/' ? '/' : `${rootPath}/`;
+  const fold = (value) => (caseSensitive ? value : value.toLocaleLowerCase());
+
+  if (fold(normalizedFull) === fold(rootPath)) return '';
+  if (fold(normalizedFull).startsWith(fold(prefix))) return normalizedFull.slice(prefix.length);
+  // A path outside the comparison root should not be made to look relative.
+  return normalizedFull;
+}
+
 /**
  * Compare two trees and return the checklist.
  *
@@ -227,10 +242,14 @@ async function compare(localAdapter, localPath, remoteAdapter, remotePath, optio
       const isDir = e.type === 'dir';
       const full = adapter.join(path, e.name);
       if (!isDir && !mask.matches(e.name, {
-        isDir, size: e.size, mtime: e.mtime, path: full, root: isRemote ? remotePath : localPath,
+        isDir, size: e.size, mtime: e.mtime,
+        path: relativeMaskPath(adapter, isRemote ? remotePath : localPath, full, o.caseSensitive),
+        root: isRemote ? remotePath : localPath,
       })) continue;
       if (isDir && hasDirectoryRules && !mask.matches(e.name, {
-        isDir, size: e.size, mtime: e.mtime, path: full, root: isRemote ? remotePath : localPath,
+        isDir, size: e.size, mtime: e.mtime,
+        path: relativeMaskPath(adapter, isRemote ? remotePath : localPath, full, o.caseSensitive),
+        root: isRemote ? remotePath : localPath,
       })) continue;
       const mtime = isRemote
         ? adjustRemoteTime(e.mtime || 0, o.dSTMode, o.timeDifference)
@@ -270,7 +289,7 @@ async function compare(localAdapter, localPath, remoteAdapter, remotePath, optio
           }
         } else if (dir === 'remote' && !timestamp) {
           items.push(makeItem('deleteRemote', remote.isDirectory,
-            !o.existingOnly && o.deleteFiles && (!remote.isDirectory || o.recursive),
+            o.deleteFiles && (!remote.isDirectory || o.recursive),
             'not-on-local', missing(localAdapter, lPath, remote.name), remote, timestamp));
         }
         continue;
@@ -451,12 +470,15 @@ async function apply(checklist, queue, options = {}) {
       }
 
       const upload = item.action === 'upload';
+      const targetName = upload
+        ? (item.remote.exists ? item.remote.name : item.local.name)
+        : (item.local.exists ? item.local.name : item.remote.name);
       created.push(queue.add({
         side: upload ? 'upload' : 'download',
         source: upload ? item.local.path : item.remote.path,
         target: upload
-          ? ctx.remoteAdapter.join(item.remote.directory, item.local.name)
-          : ctx.localAdapter.join(item.local.directory, item.remote.name),
+          ? ctx.remoteAdapter.join(item.remote.directory, targetName)
+          : ctx.localAdapter.join(item.local.directory, targetName),
         sourceAdapter: upload ? ctx.localAdapter : ctx.remoteAdapter,
         targetAdapter: upload ? ctx.remoteAdapter : ctx.localAdapter,
         copyParam,
@@ -515,6 +537,7 @@ class Watcher extends EventEmitter {
     // watcher is stopped, so a late result cannot enqueue new work.
     this._generation = 0;
     this._native = null;
+    this.lastError = null;
     // Paths already handed to the queue and not yet finished, so a slow upload
     // is not queued again on the next tick.
     this._inFlight = new Set();
@@ -554,14 +577,14 @@ class Watcher extends EventEmitter {
           // Stop first so a late callback cannot start another comparison.
           if (event instanceof Error) {
             this.stop();
-            this.emit('error', event);
+            this._reportError(event);
             return;
           }
           this.tick();
         });
       } catch (err) {
-        this.emit('error', err);
         this._native = null;
+        this._reportError(err);
       }
     }
     if (!this._native) {
@@ -569,9 +592,17 @@ class Watcher extends EventEmitter {
       if (this._timer.unref) this._timer.unref();
     }
     this.emit('started', { native: !!this._native });
-    // One immediate pass so an already-diverged tree is fixed at once.
-    this.tick();
+    // Let the caller attach its event listeners before the first adapter I/O.
+    // IPC starts the watcher and subscribes in two separate synchronous steps;
+    // running here made a connection error become an unhandled EventEmitter
+    // error before the bridge could forward it.
+    queueMicrotask(() => { if (this.running) this.tick(); });
     return this;
+  }
+
+  _reportError(error) {
+    this.lastError = error;
+    if (this.listenerCount('error')) this.emit('error', error);
   }
 
   stop() {
@@ -631,7 +662,7 @@ class Watcher extends EventEmitter {
       this.emit('tick', { checked: checklist.items.length, enqueued: applied.items.length });
       return applied;
     } catch (err) {
-      this.emit('error', err);
+      this._reportError(err);
       return null;
     }
   }

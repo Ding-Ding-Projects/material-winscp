@@ -265,19 +265,14 @@ function validLocalFileName(name, replacement) {
   return out === '' ? rep : out;
 }
 
-/** ChangeFileName: case conversion, then invalid-character replacement. */
-function changeFileName(name, copyParam, toLocal) {
-  let out = name;
-  switch (copyParam.fileNameCase) {
-    case 'upper': out = out.toUpperCase(); break;
-    case 'lower': out = out.toLowerCase(); break;
-    case 'firstUpper': out = out.slice(0, 1).toUpperCase() + out.slice(1).toLowerCase(); break;
-    default: break;
-  }
-  if (toLocal && copyParam.replaceInvalidChars) {
-    out = validLocalFileName(out, copyParam.invalidCharsReplacement);
-  }
-  return out;
+/**
+ * ChangeFileName: use the full transfer-side naming rules for queued plans.
+ * The old queue-only copy handled ordinary invalid characters but missed
+ * reserved Windows device names, VMS trimming and the first-level rename mask.
+ */
+function changeFileName(name, copyParam, toLocal, firstLevel = false, sessionData) {
+  return T.changeFileName(copyParam || {}, name,
+    toLocal ? 'remote' : 'local', firstLevel, sessionData);
 }
 
 /** AllowResume: 'on' always, 'off' never, 'smart' above the threshold. */
@@ -411,6 +406,11 @@ class TransferQueue extends EventEmitter {
       _plan: null,
       _entryIndex: 0,
       _reconnects: 0,
+      // A reconnect retry is the same transfer attempt, not a fresh
+      // overwrite decision. The foreground robust loop carries
+      // cpNoConfirmation/tfAutoResume for this exact reason; keep the queue's
+      // current entry on that same path after the session comes back.
+      _autoResume: false,
       // TRobustOperationLoop's FStart and its `bool * FAnyTransfer`
       // (Terminal.cpp:498-512). `_reopenStart` is stamped when the item first
       // starts running; `_transferAny` is the holder object — null for a
@@ -675,6 +675,7 @@ class TransferQueue extends EventEmitter {
     item._reconnects = 0;
     item._reopenStart = null;
     item._transferAny = null;
+    item._autoResume = false;
     item._pendingQuery = null;
     item._pendingPrompt = null;
     item._pendingRename = '';
@@ -921,6 +922,7 @@ class TransferQueue extends EventEmitter {
         if (item._cancelled) return;
         if (isConnectionError(err) && this._mayReopen(item)) {
           item._reconnects += 1;
+          item._autoResume = true;
           this._setState(item, 'queued');
           const ok = await this._askReconnect(item, err);
           if (ok) continue;          // partial file + entry index are intact
@@ -1050,6 +1052,10 @@ class TransferQueue extends EventEmitter {
           item._bytesDone += entry.size;
           item.progress.bytes = item._bytesDone;
         }
+        // The foreground robust loop scopes its retry flags to one file. A
+        // queue item can contain many entries, so clear the equivalent marker
+        // only after this entry is committed and before the cursor advances.
+        item._autoResume = false;
         item._entryIndex += 1;
       }
     } finally {
@@ -1098,8 +1104,9 @@ class TransferQueue extends EventEmitter {
 
     const rootStat = await src.stat(item.source);
     const rootIsDir = rootStat.type === 'dir';
+    const sessionData = (item.session && item.session.data) || {};
     const targetPath = item.targetIsDir
-      ? dst.join(item.target, changeFileName(src.basename(item.source), cp, toLocal))
+      ? dst.join(item.target, changeFileName(src.basename(item.source), cp, toLocal, true, sessionData))
       : item.target;
 
     const walk = async (srcPath, dstPath, info) => {
@@ -1130,7 +1137,7 @@ class TransferQueue extends EventEmitter {
           if (!mask.matches(e.name, {
             isDir, size: e.size, mtime: e.mtime, path: childSrc, root: item.source,
           })) continue;
-          const childDst = dst.join(dstPath, changeFileName(e.name, cp, toLocal));
+          const childDst = dst.join(dstPath, changeFileName(e.name, cp, toLocal, false, sessionData));
           await walk(childSrc, childDst, {
             isDir, size: e.size, mtime: e.mtime, rights: e.rights, readOnly: e.readOnly,
           });
@@ -1413,7 +1420,7 @@ class TransferQueue extends EventEmitter {
     // cpNoConfirmation is how "confirmations are off for this queue" reaches
     // the decision; the global preference is read by the engine itself.
     let params = 0;
-    if (this.queuePrefs.noConfirmations) params |= T.COPY_FLAGS.noConfirmation;
+    if (this.queuePrefs.noConfirmations || item._autoResume) params |= T.COPY_FLAGS.noConfirmation;
     if (cp.overwriteMode === 'append') params |= T.COPY_FLAGS.append;
     if (cp.overwriteMode === 'resume') params |= T.COPY_FLAGS.resume;
 
@@ -1592,9 +1599,16 @@ class TransferQueue extends EventEmitter {
         if (part && part.size > 0 && part.size < entry.size) {
           startAt = part.size;
           readFrom = part.size;
-        } else if (part && part.size >= entry.size) {
+        } else if (part && part.size > entry.size) {
           startAt = 0;
-          readFrom = 0;                          // stale part, start over
+          readFrom = 0;                          // foreign part, start over
+        } else if (part && part.size === entry.size) {
+          // The foreground sink adopts an equal-sized part as a completed
+          // transfer and only performs the final rename. Re-reading from zero
+          // here wastes the transfer and can destroy the exact bytes that
+          // made the part complete after a reconnect.
+          startAt = part.size;
+          readFrom = part.size;
         }
       }
     }

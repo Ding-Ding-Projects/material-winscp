@@ -203,6 +203,7 @@ test('a wrong password is refused, and the refusal names no credential', async (
     assert.ok(!err.message.includes('not-the-password'), 'the error quoted no credential');
     return true;
   });
+  assert.equal(a.client, null, 'a failed login closes the half-open FTP client');
   await a.disconnect().catch(() => {});
 });
 
@@ -687,6 +688,32 @@ test('resolves ftpTransferActiveImmediately from explicit mode or the Idea welco
   }
 });
 
+test('a delayed passive stream error closes control before another command can race it', async () => {
+  const a = new FtpAdapter(siteFor(srv, { ftpTransferActiveImmediately: 'on' }), {
+    password: PASSWORD,
+  });
+  await a.connect();
+  try {
+    await fsp.writeFile(path.join(srv.root, 'cancel-passive.bin'), bytes(32 * 1024, 27));
+    const stream = await a.createReadStream('/cancel-passive.bin');
+    stream.on('error', () => {});
+    stream.destroy(new Error('consumer abandoned the download'));
+
+    await new Promise((resolve, reject) => {
+      const deadline = Date.now() + 1000;
+      const check = () => {
+        if (a.client && a.client.ftp.closed) { resolve(); return; }
+        if (Date.now() >= deadline) { reject(new Error('FTP control session stayed open after a data error')); return; }
+        setTimeout(check, 5);
+      };
+      check();
+    });
+    await assert.rejects(() => a.list('/'), /closed|pipe|abandoned|consumer/i);
+  } finally {
+    await a.disconnect().catch(() => {});
+  }
+});
+
 // ---------------------------------------------------------------------------
 // active mode — the hand-written PORT/EPRT path
 // ---------------------------------------------------------------------------
@@ -897,6 +924,30 @@ test('active mode over FTPS keeps us the TLS client on the server-opened socket'
       await a.disconnect().catch(() => {});
     }
     assert.ok(directives(sec).includes('PORT') || directives(sec).includes('EPRT'));
+  } finally {
+    await sec.close();
+  }
+});
+
+test('active FTPS data-handshake rejection is caught and closes control', async () => {
+  const tls = generateSelfSigned();
+  const sec = await startFtpServer({ users: { [USER]: PASSWORD }, tls });
+  try {
+    await fsp.writeFile(path.join(sec.root, 'active-handshake-failure.bin'), bytes(4096, 46));
+    const a = new FtpAdapter(
+      siteFor(sec, { hostName: 'localhost', ftps: 'explicitTls', ftpPasvMode: false }),
+      { password: PASSWORD, certVerifier: () => true });
+    await a.connect();
+    try {
+      a._upgradeActiveTlsDataSocket = async () => {
+        throw new Error('synthetic active data TLS handshake failure');
+      };
+      await assert.rejects(async () => drain(await a.createReadStream('/active-handshake-failure.bin')),
+        /synthetic active data TLS handshake failure/);
+      assert.equal(a.client.ftp.closed, true, 'a failed active data handshake closes control');
+    } finally {
+      await a.disconnect().catch(() => {});
+    }
   } finally {
     await sec.close();
   }

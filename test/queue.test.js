@@ -388,6 +388,21 @@ test('download applies invalid-character replacement and the case rule', async (
   assert.ok(local.read('/l/weird_name_.txt'), `got ${[...local.files.keys()].join(', ')}`);
 });
 
+test('queued downloads use reserved-name-safe local naming', async () => {
+  const { local, remote } = makeWindowsPair();
+  remote.put('/r/CON', 'device-safe');
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'download', source: '/r/CON', target: '\\l\\', targetIsDir: true,
+    sourceAdapter: remote, targetAdapter: local,
+  });
+  await q.idle();
+
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.strictEqual(local.read('\\l\\CON%00').toString(), 'device-safe');
+});
+
 test('recursive directory upload, correct ordering and mask filtering', async () => {
   const { local, remote } = makePair();
   local.put('/l/tree/a.txt', 'a');
@@ -822,6 +837,28 @@ test('resume continues from the partial file instead of restarting', async () =>
   assert.strictEqual(item.progress.bytes, payload.length);
 });
 
+test('an equal-sized partial is adopted without rereading the source', async () => {
+  const { local, remote } = makePair({ chunkSize: 4096 });
+  const payload = bigBuffer(40960, 7);
+  local.put('/l/big.bin', payload);
+  remote.put('/r/big.bin.filepart', payload);
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  local.reads.length = 0;
+  const item = q.add({
+    side: 'upload', source: '/l/big.bin', target: '/r/big.bin',
+    sourceAdapter: local, targetAdapter: remote,
+    copyParam: { resumeSupport: 'on' },
+  });
+  await q.idle();
+
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.ok(remote.read('/r/big.bin').equals(payload));
+  assert.strictEqual(remote.read('/r/big.bin.filepart'), null);
+  assert.deepStrictEqual(local.reads.map((r) => r.start), [payload.length],
+    'a complete part is finalized, not copied again from byte zero');
+});
+
 test('smart resume respects the threshold', () => {
   const cp = { resumeSupport: 'smart', resumeThreshold: 102400, partialFileExt: '.filepart' };
   assert.strictEqual(allowResume(cp, 200000, 'a.bin'), true);
@@ -862,6 +899,32 @@ test('a dropped connection resumes the item rather than restarting it', async ()
   assert.strictEqual(starts[0], 0);
   assert.ok(starts[1] > 0, `second attempt restarted from ${starts[1]} instead of resuming`);
   assert.strictEqual(starts.length, 2, 'exactly one retry');
+});
+
+test('a reconnect retry does not re-ask an overwrite already answered', async () => {
+  const { local, remote } = makePair({ chunkSize: 4096 });
+  const payload = bigBuffer(40960, 11);
+  local.put('/l/big.bin', payload);
+  remote.put('/r/big.bin', 'old target');
+  local.failRead = { path: '/l/big.bin', afterBytes: 12288 };
+
+  const q = new TransferQueue({
+    prefs: prefs({ queue: { noConfirmations: false } }), progressMs: 0,
+  });
+  let queries = 0;
+  q.on('query', (e) => { queries += 1; e.respond('overwrite'); });
+  q.on('reconnect', (e) => e.retry());
+  const item = q.add({
+    side: 'upload', source: '/l/big.bin', target: '/r/big.bin',
+    sourceAdapter: local, targetAdapter: remote,
+    copyParam: { resumeSupport: 'on' },
+  });
+  await q.idle();
+
+  assert.strictEqual(item.state, 'done', item.error && item.error.message);
+  assert.strictEqual(queries, 1,
+    'the reconnect must carry the original overwrite decision into the retry');
+  assert.ok(remote.read('/r/big.bin').equals(payload));
 });
 
 // ---------------------------------------------------------------------------

@@ -1458,6 +1458,20 @@ test('a resumable upload refuses a target that is a symbolic link', async () => 
     `expected the refusal in the log, got ${JSON.stringify(session.lines)}`);
 });
 
+test('a resume refusal still honours the overwrite answer', async () => {
+  const ctx = makeEngine({ data: { userName: 'alice' }, answers: [ANSWERS.no] });
+  ctx.local.put('/l/a.bin', 'NEW');
+  ctx.remote.putDir('/r').put('/r/a.bin', 'OLD', 0, { isSymlink: true });
+
+  await ctx.engine.copyToRemote(['/l/a.bin'], '/r/',
+    cp({ preserveTime: false, resumeSupport: 'on' }), 0, null);
+
+  assert.strictEqual(ctx.queries.length, 1,
+    'refusing resumable replacement must still ask about overwriting');
+  assert.strictEqual(ctx.remote.text('/r/a.bin'), 'OLD',
+    'declining the overwrite must leave the protected target untouched');
+});
+
 test('a resumable upload refuses a target owned by another user', async () => {
   // The resume path does not overwrite the target in place: it writes a
   // '.filepart', removes the target and renames onto the name, so the file that

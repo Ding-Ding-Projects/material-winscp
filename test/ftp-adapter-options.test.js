@@ -3,7 +3,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { passiveClientOptions, assertSafeFtpArgument } = require('../design/main/protocols/ftp');
+const { FtpAdapter, passiveClientOptions, assertSafeFtpArgument } = require('../design/main/protocols/ftp');
 
 test('passive host policy forces the control host only when explicitly on', () => {
   assert.deepEqual(passiveClientOptions('on'), { allowSeparateTransferHost: false });
@@ -28,4 +28,17 @@ test('FTP post-login commands reject command record separators', () => {
   assert.doesNotThrow(() => assertSafeFtpArgument('SITE HELP', 'post-login command'));
   assert.throws(() => assertSafeFtpArgument('SITE HELP\r\nDELE important.txt', 'post-login command'),
     /post-login command contains a line break/);
+});
+
+test('FTPS data sockets must match the already accepted control certificate', () => {
+  const adapter = new FtpAdapter({ hostName: 'ftp.example.test' });
+  adapter.serverInfo.certificate = { fingerprint256: 'AA:AA' };
+  const socket = (fingerprint256, authorized = false) => ({
+    getPeerCertificate: () => ({ fingerprint256 }),
+    authorized,
+  });
+
+  assert.throws(() => adapter._verifyDataPeer(socket('BB:BB')),
+    /data certificate does not match the control certificate/);
+  assert.doesNotThrow(() => adapter._verifyDataPeer(socket('AA:AA')));
 });

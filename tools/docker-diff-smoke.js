@@ -492,8 +492,8 @@ async function compareAndApply(app, kind, sessionId, localPath, remotePath) {
   });
   assert.equal(existingOnly.items.some((item) => itemName(item) === 'existing-only-local.txt' && item.checked), false,
     `${kind} existingOnly checked a new upload`);
-  assert.equal(existingOnly.items.some((item) => itemName(item) === 'existing-only-remote.txt' && item.checked), false,
-    `${kind} existingOnly checked a new deletion`);
+  assert.equal(existingOnly.items.some((item) => itemName(item) === 'existing-only-remote.txt' && item.checked), true,
+    `${kind} existingOnly suppressed an eligible extra-target deletion`);
 
   // Checksum support is protocol/server dependent. When the real server
   // advertises it, require the comparison engine to use it; when it does not,
