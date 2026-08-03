@@ -83,10 +83,14 @@ function lines() {
 }
 
 function git() {
-  const dirtyFiles = sh('git', ['status', '--porcelain']).trim().split('\n')
-    .filter(Boolean)
-    .map((line) => line.slice(3).split(' -> ')[0].trimEnd())
-    .filter((file) => file !== 'HANDOFF.md' && file !== 'ROADMAP.md');
+  const names = (args) => sh('git', args).split(/\r?\n/).filter(Boolean);
+  const dirtyFiles = new Set([
+    ...names(['diff', '--name-only']),
+    ...names(['diff', '--cached', '--name-only']),
+    ...names(['ls-files', '--others', '--exclude-standard']),
+  ]);
+  dirtyFiles.delete('HANDOFF.md');
+  dirtyFiles.delete('ROADMAP.md');
   return {
     head: sh('git', ['rev-parse', '--short', 'HEAD']).trim(),
     headFull: sh('git', ['rev-parse', 'HEAD']).trim(),
