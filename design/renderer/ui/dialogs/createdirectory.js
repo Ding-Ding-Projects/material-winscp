@@ -46,6 +46,16 @@ const STRINGS = {
 
 const tx = makeTranslator(STRINGS);
 
+/** Validate one directory-name field without allowing path traversal. */
+export function validateDirectoryName(value) {
+  const name = String(value ?? '').trim();
+  if (!name) return 'required';
+  if (name === '.' || name === '..') return 'dot-segment';
+  if (/[\\/]/.test(name)) return 'separator';
+  if (/[\u0000-\u001f]/.test(name)) return 'control';
+  return '';
+}
+
 const PREF_PATH = 'newDirectory';
 
 /**
@@ -126,8 +136,7 @@ registerDialog('createdirectory', ({ props, close }) => {
 
   function targetPath() {
     const name = nameInput.value.trim();
-    if (!name) return '';
-    if (/^([A-Za-z]:[\\/]|\/|\\\\)/.test(name)) return name;    // already absolute
+    if (validateDirectoryName(name)) return '';
     return joinPath(directory, name, sep);
   }
 

@@ -220,9 +220,15 @@ jobs:
           releases=$(find out/make/squirrel.windows -name 'RELEASES' -print -quit || true)
           zip=$(find out/make/zip -name '*.zip' -print -quit || true)
 
-          # A release without a real installer is not a release.
-          if [ -z "$setup" ] || [ ! -s "$setup" ]; then
-            echo "::error::No Setup.exe was produced by npm run make."
+          # A release without the complete Squirrel update set is not a
+          # release. Setup.exe installs the app; the nupkg and RELEASES
+          # manifest are what let an installed copy update itself.
+          missing=()
+          if [ -z "$setup" ] || [ ! -s "$setup" ]; then missing+=("Setup.exe"); fi
+          if [ -z "$nupkg" ] || [ ! -s "$nupkg" ]; then missing+=(".nupkg"); fi
+          if [ -z "$releases" ] || [ ! -s "$releases" ]; then missing+=("RELEASES"); fi
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::npm run make did not produce the required Squirrel artefacts: ${missing[*]}"
             exit 1
           fi
 

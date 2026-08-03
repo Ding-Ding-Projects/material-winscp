@@ -258,6 +258,12 @@ test('commandState is stable for an unknown name', () => {
   assert.match(st.reason, /not a WinSCP action/);
 });
 
+test('ShowHiddenFilesAction is unavailable without a workspace to update', () => {
+  const state = C.commandState('ShowHiddenFilesAction');
+  assert.equal(state.enabled, false);
+  assert.equal(state.reason, null);
+});
+
 test('QueueShowAction reopens the existing queue surface after saving', async () => {
   let opened = 0;
   const off = BUS.on('queue:open', () => { opened += 1; });

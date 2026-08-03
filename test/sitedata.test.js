@@ -1116,6 +1116,14 @@ test('WebDAV legacy authentication persists its real key and exposes the enabled
   assert.equal(adv.describeValue(control, site), 'on');
 });
 
+test('SiteAdvanced does not advertise the inert SCP fallback setting', async () => {
+  const { adv } = await modules;
+  assert.equal(
+    adv.allAdvancedControls().some(({ control }) => control.key === 'allowScpFallback'),
+    false,
+  );
+});
+
 test('mergeAlgorithmOrder keeps the stored order and restores what is missing', async () => {
   const { adv } = await modules;
   const merged = adv.mergeAlgorithmOrder(['aes', 'WARN', 'des'], adv.CIPHERS);

@@ -2882,6 +2882,9 @@ defEach(['LocalTreeAction', 'RemoteTreeAction'], (name) => ({
 
 def('ShowHiddenFilesAction', {
   kind: 'toggle',
+  // Without a workspace there are no panels to repaint, so changing the
+  // preference would be a successful-looking no-op in previews/headless UI.
+  enabled: () => !!services.workspace,
   checked: () => readPref('showHiddenFiles', false) === true,
   run: async () => {
     const next = await togglePref('showHiddenFiles', 'Changed hidden-file visibility');

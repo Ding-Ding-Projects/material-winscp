@@ -461,6 +461,26 @@ test('the first matching preset wins, in list order', async () => {
   assert.equal(copy.selectPreset(list, { hostName: 'other.net' }), null);
 });
 
+test('numeric controls reject invalid ranges and out-of-range defaults', async () => {
+  const { schema } = await load();
+  const result = schema.validateSchema({ pages: [{
+    id: 'bad-range', title: { en: 'Bad range', yue: '錯嘅範圍' }, sections: [{
+      id: 's', title: { en: 'Section', yue: '區段' }, controls: [
+        { key: 'queue.transfersLimit', def: 2, type: 'number', min: 10, max: 2,
+          label: { en: 'Limit', yue: '上限' } },
+        { key: 'queue.parallelTransfers', def: 2, type: 'number', min: 0, max: 1,
+          label: { en: 'Parallel', yue: '並行' } },
+      ],
+    }],
+  }], stores: await stores() });
+  assert.deepEqual(result.errors, [
+    'bad-range/s/queue.transfersLimit: invalid numeric range',
+    'bad-range/s/queue.transfersLimit: default 2 is outside its numeric range',
+    'bad-range/s/queue.parallelTransfers: default 2 is outside its numeric range',
+    'bad-range/s/queue.parallelTransfers: declared default 2 but the prefs defaults say 1',
+  ]);
+});
+
 test('the active preset helper follows the persisted name and rejects missing names', async () => {
   const { copy } = await load();
   const list = [{ name: 'Text' }, { name: 'Binary' }];

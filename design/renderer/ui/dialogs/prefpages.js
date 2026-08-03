@@ -1631,6 +1631,16 @@ export function validateSchema({ pages = PAGES, stores = {} } = {}) {
         if (!control.key) { errors.push(`${where}: a control has no key`); continue; }
         if (!CONTROL_TYPES.has(control.type)) errors.push(`${where}: unknown control type "${control.type}"`);
         if (!control.label || !control.label.en || !control.label.yue) errors.push(`${where}: needs a bilingual label`);
+        if ((control.type === 'number' || control.type === 'slider')
+          && control.min != null && control.max != null) {
+          if (!Number.isFinite(control.min) || !Number.isFinite(control.max) || control.min > control.max) {
+            errors.push(`${where}: invalid numeric range`);
+          }
+          const uiDefault = typeof control.def === 'number' ? toUiValue(control, control.def) : control.def;
+          if (typeof uiDefault === 'number' && (uiDefault < control.min || uiDefault > control.max)) {
+            errors.push(`${where}: default ${control.def} is outside its numeric range`);
+          }
+        }
 
         const storeName = control.store || 'prefs';
         const defaults = stores[storeName];

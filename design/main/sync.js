@@ -220,7 +220,14 @@ async function compare(localAdapter, localPath, remoteAdapter, remotePath, optio
       const mtime = isRemote
         ? adjustRemoteTime(e.mtime || 0, o.dSTMode, o.timeDifference)
         : (e.mtime || 0);
-      out.set(key(e.name), fileInfo(adapter, path, e, mtime));
+      const normalized = key(e.name);
+      if (out.has(normalized)) {
+        const prior = out.get(normalized);
+        throw new SyncOptionError(
+          `Case-insensitive name collision in ${path}: "${prior.name}" and "${e.name}". `
+          + 'Enable case-sensitive comparison or rename one entry before synchronizing.');
+      }
+      out.set(normalized, fileInfo(adapter, path, e, mtime));
     }
     return out;
   };

@@ -293,8 +293,6 @@ export const SITE_ADVANCED_PAGES = [
           combo('SftpServerEdit', 'sftpServer', 'SFTP server:',
             ['', '/bin/sftp-server', 'sudo su -c /bin/sftp-server'],
             { placeholder: 'Default', hint: 'The command the server runs for the SFTP subsystem. Leave empty to use the server’s own default.' }),
-          check('AllowScpFallbackCheck', 'allowScpFallback', 'Allow SCP fallback',
-            { enabled: (c) => !c.site.sftpServer }),
           autoswitch('SFTPRealPathCombo', 'sftpRealPath', 'Canonicalize paths on the server'),
           check('UsePosixRenameCheck', 'usePosixRename', 'Use POSIX rename'),
         ],

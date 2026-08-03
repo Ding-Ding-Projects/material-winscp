@@ -357,6 +357,22 @@ test('the checklist carries both sides and the reason', async () => {
   });
 });
 
+test('case-insensitive name collisions fail instead of dropping a checklist item', async () => {
+  const local = new MemoryAdapter('local');
+  const remote = new MemoryAdapter('remote');
+  local.putDir('/l'); remote.putDir('/r');
+  local.put('/l/Readme.txt', 'one', T);
+  local.put('/l/README.txt', 'two', T);
+
+  await assert.rejects(
+    () => sync.compare(local, '/l', remote, '/r', { direction: 'remote', criteria: 'time' }),
+    /Case-insensitive name collision.*Readme\.txt.*README\.txt/);
+  await assert.doesNotReject(
+    () => sync.compare(local, '/l', remote, '/r', {
+      direction: 'remote', criteria: 'time', caseSensitive: true,
+    }));
+});
+
 test('preview includes the unchanged pairs so the whole tree is reviewable', async () => {
   const { local, remote } = fixture();
   const plain = await sync.compare(local, '/l', remote, '/r', { direction: 'both', criteria: 'time' });
