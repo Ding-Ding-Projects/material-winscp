@@ -528,6 +528,21 @@ test('an editor mask honours wildcards, alternatives and case', async () => {
   assert.equal(editors.matchesMask('read?e.txt', 'readme.txt'), true);
 });
 
+test('editor associations can be reordered without losing their persisted shape', async () => {
+  const { editors } = await load();
+  const list = [
+    { mask: '*.txt', type: 'internal' },
+    { mask: '*.png', type: 'external', external: 'mspaint.exe' },
+    { mask: '*.*', type: 'open' },
+  ];
+  const moved = editors.moveEditorEntry(list, 1, 0);
+  assert.deepEqual(moved, [
+    editors.normaliseEditor(list[1]), editors.normaliseEditor(list[0]), editors.normaliseEditor(list[2]),
+  ]);
+  assert.equal(editors.editorFor('photo.png', moved).external, 'mspaint.exe');
+  assert.deepEqual(editors.moveEditorEntry(list, 9, 0), list.map(editors.normaliseEditor));
+});
+
 test('CopyParams validates inherited defaults and rejects unsafe edits', async () => {
   const { copy } = await load();
   assert.deepEqual(copy.validateCopyParam({}), []);
@@ -535,6 +550,14 @@ test('CopyParams validates inherited defaults and rejects unsafe edits', async (
   assert.deepEqual(copy.validateCopyParam({ replaceInvalidChars: true, invalidCharsReplacement: '' }), ['invalidCharsReplacement']);
   assert.deepEqual(copy.validateCopyParam({ cpsLimit: -1, transferMode: 'wat' }), ['transferMode', 'cpsLimit']);
   assert.deepEqual(copy.validateCopyParam({ preserveRights: true, rights: 'rw-r--r--' }), []);
+});
+
+test('remembering transfer options saves the settings but consumes the one-shot instruction', async () => {
+  const { copy } = await load();
+  const remembered = copy.rememberedCopyParam({ transferMode: 'text', saveTransferOptions: true });
+  assert.equal(remembered.transferMode, 'text');
+  assert.equal(remembered.saveTransferOptions, false);
+  assert.equal(copy.rememberedCopyParam({ saveTransferOptions: false }).saveTransferOptions, false);
 });
 
 test('editor masks keep WinSCP catch-all and exclusion semantics in the live probe', async () => {
@@ -748,7 +771,7 @@ test('save transfer options is a wired, persisted and accessible preference', as
 
   assert.match(copyparams, /if \(copyParam\.saveTransferOptions\) \{/,
     'the transfer dialog must gate persistence on the preference');
-  assert.match(copyparams, /writePref\('copyParam', copyParam/,
+  assert.match(copyparams, /writePref\('copyParam', rememberedCopyParam\(copyParam\)/,
     'the enabled preference must persist the edited transfer options');
   assert.match(prefpages, /check\('copyParam\.saveTransferOptions', false,/,
     'Preferences must expose the persisted switch');

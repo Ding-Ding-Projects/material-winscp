@@ -35,3 +35,12 @@ test('editor exposes selection-aware clipboard editing with read-only guards', a
   assert.match(source, /document\.execCommand\('undo'\)/);
   assert.match(source, /document\.execCommand\('redo'\)/);
 });
+
+test('editor keyboard commands reach the same save, find, and navigation actions as its menus', async () => {
+  const source = await fs.readFile(sourcePath, 'utf8');
+  const keyboard = source.slice(source.indexOf("textarea.addEventListener('keydown'"), source.indexOf('/* ---------------- saving', source.indexOf("textarea.addEventListener('keydown'")));
+  assert.match(keyboard, /key === 's'[\s\S]*?save\(false\)/);
+  assert.match(keyboard, /key === 'g'[\s\S]*?goToInput\.focus\(\)/);
+  assert.match(keyboard, /key === 'f'[\s\S]*?find\.focus\(\)/);
+  assert.match(keyboard, /e\.key === 'F3'[\s\S]*?findNext\(e\.shiftKey \? -1 : 1\)/);
+});

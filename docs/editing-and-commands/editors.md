@@ -42,7 +42,23 @@ text through the application clipboard bridge, with the browser clipboard as a
 fallback; read-only viewer windows disable mutating actions. Copy requires an
 actual selection, so it never unexpectedly copies an entire file.
 
+The menu commands remain keyboard-reachable while focus is in the document:
+`Ctrl+S`/`Cmd+S` saves, `Ctrl+F`/`Cmd+F` focuses the find bar, `Ctrl+G`/`Cmd+G`
+focuses Go to line, and `F3`/`Shift+F3` finds the next/previous match. These
+handlers prevent the browser's document actions and call the same functions as
+the visible controls, so a read-only viewer still refuses Save visibly and
+without changing the text.
+
 ## Behaviour worth knowing
+
+### Ordering associations
+
+The association list is first-match-wins, so its order is persisted as part of
+`editor.list`. In Preferences → Editors, focus an association and use Up/Down
+(or Left/Right) to move it one position; Home and End move it to the beginning
+or end. The selected row remains selected, the list announces its new position,
+and the change is saved through the normal Preferences save path. This is also
+available through the visible Up and Down buttons for pointer users.
 
 - **Temporary files live under the app's own data tree** (`paths.js`), never in
   the user's folders and never in a location another user can read.

@@ -18,6 +18,12 @@ remote-abort cancellation. The progress snapshot sent over IPC includes both
 and returns false when no operation is running. Background queue cancellation
 remains separate and uses the queue item id.
 
+When Terminal has nested progress scopes, foreground cancellation propagates
+from the inner scope to every still-running enclosing scope. This mirrors
+WinSCP's parent progress chain and prevents an inner transfer helper from
+unwinding while the outer batch continues with later files. The scopes are
+still stopped individually, so each emits its own single completion snapshot.
+
 Prompts are refusal-safe. A dismissed or malformed answer chooses the safest
 available answer; an empty answer set becomes cancellation. Security prompts
 that are refused or cancelled never schedule an automatic reconnect.

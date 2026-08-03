@@ -1253,6 +1253,17 @@ test('extensions are loaded from disk and their state is stored', () => {
   }
 });
 
+test('replacing presets clears a deleted current preset atomically', () => {
+  const { config, cleanup } = freshConfig();
+  try {
+    const win = new W.WinConfiguration(config, { appVersion: '6.3.4' }).load();
+    win.copyParamCurrent = 'Text';
+    win.copyParamList = new W.CopyParamList([{ name: 'Binary', copyParam: { transferMode: 'binary' } }]);
+    assert.equal(config.prefs.copyParamCurrent, '', 'the selection cannot dangle');
+    assert.equal(win.currentCopyParam.transferMode, COPY_PARAM_DEFAULTS.transferMode);
+  } finally { cleanup(); }
+});
+
 test('extension roots resolve portable relative and environment paths consistently', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wc-roots-'));
   const previous = process.env.WC_WINCONFIG_ROOT;

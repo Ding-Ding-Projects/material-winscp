@@ -65,15 +65,17 @@ queued.
 | `onceDoneOperation` | `none` | `disconnect`, `suspend`, `shutdown` when this transfer finishes. |
 | `resumeSupport`, `resumeThreshold`, `partialFileExt`, `overwriteMode` | see [resume](resume.md) | |
 | `encryptNewFiles` | `true` | Apply the site's at-rest encryption to newly uploaded files. |
-| `saveTransferOptions` | `false` | Make the current settings the new default after this transfer. |
+| `saveTransferOptions` | `false` | Make the current settings the new default after this transfer. This is a one-shot command instruction: after saving, the checkbox is cleared in the stored defaults so later transfers do not keep rewriting their settings. |
 
 ## Presets
 
 `copyParamList` holds named presets; `copyParamCurrent` names the active one.
 A click or keyboard selection in the Preferences preset list writes that name
 to `copyParamCurrent`, so the next transfer starts from the same preset after a
-restart. If the active preset is deleted, the setting is cleared (or moved to
-the remaining selected row) rather than referring to a missing record.
+restart. If the active preset is deleted or renamed, the list and selection are
+saved as one atomic preference update. The setting is cleared rather than
+referring to a missing record; a failed store update also restores the
+in-memory list cache.
 A preset can carry an **auto-select rule** — a file mask plus a direction — so
 choosing "Text files, upload" happens automatically for `*.php` uploads.
 `copyParamAutoSelectNotice` (default `true`) makes the app say when a preset was

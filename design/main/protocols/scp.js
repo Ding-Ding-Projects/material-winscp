@@ -992,7 +992,16 @@ class ScpAdapter extends Adapter {
     const alg = String(algorithm).toLowerCase().replace(/-/g, '');
     const tool = { md5: 'md5sum', sha1: 'sha1sum', sha256: 'sha256sum', sha512: 'sha512sum' }[alg];
     if (!tool) throw scpValidationError(`SCP does not support the checksum algorithm "${algorithm}".`, 'checksum');
-    const res = await this._run(`${tool} -- ${shellQuote(this.normalize(p))}`);
+    const target = shellQuote(this.normalize(p));
+    let res = await this._run(`${tool} -- ${target}`);
+    // BSD/macOS commonly has `shasum` but not the GNU `*sum` commands.
+    // Retry only when the preferred command is unavailable, never on a real
+    // checksum failure.
+    if ((res.code === 126 || res.code === 127) && alg !== 'md5') {
+      const bits = { sha1: 1, sha256: 256, sha512: 512 }[alg];
+      const candidate = await this._run(`shasum -a ${bits} -- ${target}`);
+      if (candidate.code === 0) res = candidate;
+    }
     if (res.code !== 0) throw scpError(new Error(`${tool} failed: ${(res.stderr || res.stdout || '').trim() || `exit code ${res.code}`}`), {
       category: 'protocol', code: 'EPROTO', operation: 'checksum',
     });

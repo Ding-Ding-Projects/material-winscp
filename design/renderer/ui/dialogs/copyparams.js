@@ -68,6 +68,15 @@ export function validateCopyParam(value = {}) {
   return errors;
 }
 
+/**
+ * The checkbox is an instruction for this copy dialog, not part of the
+ * transfer defaults. Remembering it would otherwise make every later copy
+ * silently rewrite the defaults again.
+ */
+export function rememberedCopyParam(value = {}) {
+  return { ...value, saveTransferOptions: false };
+}
+
 /** Short field name from a dotted schema key. */
 const fieldOf = (key) => key.slice(key.indexOf('.') + 1);
 
@@ -677,7 +686,7 @@ export function openCopyDialog(props = {}) {
             await writePref('confirmTransferring', false, 'Turned off the transfer confirmation from the copy dialog');
           }
           if (copyParam.saveTransferOptions) {
-            await writePref('copyParam', copyParam, 'Remembered the transfer options from the copy dialog');
+            await writePref('copyParam', rememberedCopyParam(copyParam), 'Remembered the transfer options from the copy dialog');
           }
           props.onConfirm?.({ target, copyParam, queue: queueCheck.checked, direction, files });
         },

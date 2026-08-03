@@ -836,7 +836,29 @@ export function createEditorWindow(record, initial, opts = {}) {
   }
 
   textarea.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') {
+    const key = e.key.toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && key === 's') {
+      e.preventDefault();
+      save(false);
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && key === 'g') {
+      e.preventDefault();
+      goToInput.focus();
+      goToInput.select();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && key === 'f') {
+      e.preventDefault();
+      find.focus();
+      return;
+    }
+    if (e.key === 'F3' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      findNext(e.shiftKey ? -1 : 1);
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && key === 'm') {
       e.preventDefault();
       state.tabInserts = !state.tabInserts;
       updateStatus();

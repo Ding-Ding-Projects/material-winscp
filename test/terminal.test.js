@@ -492,6 +492,21 @@ test('the terminal cancellation seam reaches the active foreground progress', ()
   assert.strictEqual(terminal.cancelOperation(), false, 'a finished operation cannot be cancelled');
 });
 
+test('cancelling a nested operation also cancels its enclosing operation', () => {
+  const { terminal } = makeTerminal();
+  const outer = new OperationProgress();
+  const inner = new OperationProgress();
+  terminal.operationStart(outer, OPERATIONS.copy, SIDES.remote, 2);
+  terminal.operationStart(inner, OPERATIONS.calculateSize, SIDES.remote, 1);
+
+  assert.strictEqual(terminal.cancelOperation(), true);
+  assert.strictEqual(inner.cancel, CANCEL.cancel);
+  assert.strictEqual(outer.cancel, CANCEL.cancel);
+
+  terminal.operationStop(inner);
+  terminal.operationStop(outer);
+});
+
 test('suspending shifts the start time so a modal question does not wreck the rate', () => {
   const p = new OperationProgress();
   p.start(OPERATIONS.copy, SIDES.remote, 1, { now: 1000 });

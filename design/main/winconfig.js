@@ -2762,9 +2762,23 @@ class WinConfiguration {
   set copyParamList(list) {
     const next = list instanceof CopyParamList ? list : new CopyParamList(list);
     if (this.copyParamList.equals(next)) return;
+    // Keep the active name meaningful when the list editor renames or removes
+    // that preset. Write both fields in one patch so a debounced save cannot
+    // persist a list with a dangling selection.
+    const current = this.copyParamCurrent;
+    const selected = current && next.indexOfName(current) >= 0 ? current : '';
+    const previousList = this._copyParamList;
     this._copyParamList = next;
-    this.config.setPref('copyParamList', next.toJSON(), 'Changed the transfer presets');
-    next.reset();
+    try {
+      this.config.setPrefs({
+        copyParamList: next.toJSON(),
+        ...(selected === current ? {} : { copyParamCurrent: selected }),
+      }, 'Changed the transfer presets');
+      next.reset();
+    } catch (error) {
+      this._copyParamList = previousList;
+      throw error;
+    }
   }
 
   get copyParamCurrent() { return this.prefs.copyParamCurrent || ''; }

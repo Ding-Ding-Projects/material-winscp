@@ -45,6 +45,11 @@ This keeps the action's target exact even when the destination already names a
 directory. The path is always shell-quoted, and the removal is never performed
 for a non-overwrite duplicate.
 
+Checksum requests use the matching `md5sum`, `sha1sum`, `sha256sum`, or
+`sha512sum` command. On systems without a GNU-style SHA utility, SHA-1,
+SHA-256, and SHA-512 retry with `shasum -a N`; this is limited to shell exit
+codes 126/127, so real checksum failures remain visible.
+
 ## Failure modes
 
 | Situation | What the user sees | Recoverable |
@@ -96,6 +101,8 @@ for a non-overwrite duplicate.
 - Timezone correction is tested with synthetic clock offsets.
 - Commander remote-copy command construction is tested for explicit overwrite
   and default no-overwrite behavior in `test/scp-commander-parity.test.js`.
+- SHA checksum fallback to `shasum -a N` is tested with an in-process shell
+  stub.
 
 Manual check: connect over SCP, open **Commands → Console**, run `echo $0`, and
 confirm the reported shell matches the `shell` option in effect.

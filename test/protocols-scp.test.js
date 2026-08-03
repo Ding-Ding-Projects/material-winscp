@@ -76,6 +76,22 @@ test.describe('SCP adapter contract', () => {
     );
   });
 
+  test('falls back to shasum when the GNU checksum utility is unavailable', async () => {
+    const commands = [];
+    const adapter = new ScpAdapter({}, {
+      transport: {
+        exec: async (command) => {
+          commands.push(command);
+          if (command.startsWith('sha256sum ')) return { code: 127, stdout: '', stderr: 'not found' };
+          return { code: 0, stdout: 'ABCDEF  /tmp/file', stderr: '' };
+        },
+      },
+    });
+
+    assert.equal(await adapter.checksum('/tmp/file', 'sha-256'), 'abcdef');
+    assert.deepEqual(commands, ["sha256sum -- '/tmp/file'", "shasum -a 256 -- '/tmp/file'"]);
+  });
+
   test('drains login-shell startup output before probing the working directory', async () => {
     const commands = [];
     const logs = [];

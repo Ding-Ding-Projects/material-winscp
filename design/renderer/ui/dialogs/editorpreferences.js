@@ -120,6 +120,16 @@ export function matchesMask(mask, name) {
   return positive.some(matchOne) && !excludes.some((m) => m && matchOne(m));
 }
 
+/** Move one editor association while preserving the list's first-match order. */
+export function moveEditorEntry(list, index, destination) {
+  const rows = (list || []).map(normaliseEditor);
+  if (!Number.isInteger(index) || !Number.isInteger(destination)
+    || index < 0 || index >= rows.length || destination < 0 || destination >= rows.length) return rows;
+  const [row] = rows.splice(index, 1);
+  rows.splice(destination, 0, row);
+  return rows;
+}
+
 /* ================================================================== */
 /* the entry editor (EditorPreferences.dfm)                            */
 /* ================================================================== */
@@ -372,6 +382,20 @@ export function createEditorList({ value = [], onChange } = {}) {
         type: 'button', role: 'option', 'aria-selected': String(i === selected),
         class: `pref-list-row${i === selected ? ' is-selected' : ''}`,
         onclick: () => { selected = i; paint(); },
+        onkeydown: (event) => {
+          let destination = -1;
+          if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') destination = i - 1;
+          if (event.key === 'ArrowDown' || event.key === 'ArrowRight') destination = i + 1;
+          if (event.key === 'Home') destination = 0;
+          if (event.key === 'End') destination = rows.length - 1;
+          if (destination < 0 || destination >= rows.length || destination === i) return;
+          event.preventDefault();
+          rows.splice(0, rows.length, ...moveEditorEntry(rows, i, destination));
+          selected = destination;
+          paint(); emit();
+          listEl.querySelectorAll('[role="option"]')[destination]?.focus();
+          announce(tx(`Moved to position ${destination + 1}.`, `移咗去第 ${destination + 1} 行。`));
+        },
         ondblclick: () => edit(i),
       },
       icon(r.type === 'internal' ? 'description' : r.type === 'open' ? 'open_in_new' : 'terminal', 15),
@@ -404,8 +428,7 @@ export function createEditorList({ value = [], onChange } = {}) {
   function move(delta) {
     const to = selected + delta;
     if (to < 0 || to >= rows.length) return;
-    const [row] = rows.splice(selected, 1);
-    rows.splice(to, 0, row);
+    rows.splice(0, rows.length, ...moveEditorEntry(rows, selected, to));
     selected = to;
     paint(); emit();
     announce(tx(`Moved to position ${to + 1}.`, `移咗去第 ${to + 1} 行。`));

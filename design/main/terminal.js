@@ -2095,9 +2095,12 @@ class Terminal extends EventEmitter {
 
   /** Cancel the active foreground operation, if one exists. */
   cancelOperation() {
-    const progress = this.operationProgress;
-    if (!progress || !progress.inProgress) return false;
-    progress.setCancelAtLeast(CANCEL.cancel);
+    const active = this._progressStack.filter((progress) => progress.inProgress);
+    if (!active.length) return false;
+    // TFileOperationProgressType propagates cancellation to its parent. The
+    // stack is the JavaScript equivalent: an inner operation must not finish
+    // and leave the enclosing batch advancing through later files.
+    for (const progress of active) progress.setCancelAtLeast(CANCEL.cancel);
     return true;
   }
 
