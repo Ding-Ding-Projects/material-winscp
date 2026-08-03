@@ -187,6 +187,30 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "bf1d6de", kind: 'commit', ref: "bf1d6de", oid: "bf1d6deb9c59d4a601dd80928b89b3d7fe8699df", date: "2026-08-03",
+    title: "Harden preferences, SFTP, queue, sync, and import dialogs",
+    changes: [
+      { category: "added", text: "English: Wire saved transfer options, preserve special SFTP types, append retries behind waiting work, harden keep-up-to-date UI transitions, gate property tags truthfully, and show secret-free known-host algorithms. Add focused tests and documentation. The queue now respects the line, and the dialogs stop pretending every shiny control has a backend." },
+      { category: "changed", text: "廣東話：補返 saved transfer options、保留 SFTP special types、retry 排隊唔插隊、keep-up-to-date UI transition、Properties tag capability，同 known-host algorithm 安全預覽。加 tests 同 docs，啲 dialog 終於唔再扮每粒閃閃掣都有 backend，queue 亦識排隊守規矩。" },
+    ],
+  },
+  {
+    id: "d5f0b8d", kind: 'commit', ref: "d5f0b8d", oid: "d5f0b8dc6bf1beaa993127636c84a4f280ee7962", date: "2026-08-03",
+    title: "Refresh protocol-hardening handoff metadata",
+    changes: [
+      { category: "changed", text: "English: Record the verified 3,293/3,294 test result, unchanged 59.0% logic coverage, 114 remaining units, and the current protocol/surface checkpoint. The handoff reports the treasure map, not a treasure-shaped sticker." },
+      { category: "changed", text: "廣東話：記低已驗證嘅 3,293/3,294 測試、仍然 59.0% logic coverage、剩低 114 個 units 同今次 protocol/surface checkpoint。交更紙畫地圖，唔貼張金色貼紙扮掘到寶。" },
+    ],
+  },
+  {
+    id: "e3bec36", kind: 'commit', ref: "e3bec36", oid: "e3bec36f8b04ced8fa1e9e4894d8133f069cb1ed", date: "2026-08-03",
+    title: "Refresh in-app changelog for protocol and surface hardening",
+    changes: [
+      { category: "changed", text: "English: Record the configuration, console, SCP, progress, custom-command, and directory-view hardening wave in the in-app release history. The diary now has fewer mysterious footnotes." },
+      { category: "changed", text: "廣東話：將 configuration、console、SCP、progress、custom-command 同 dirview hardening 寫入 app changelog，日記少咗啲神秘腳註，唔使靠估。" },
+    ],
+  },
+  {
     id: "7592b4c", kind: 'commit', ref: "7592b4c", oid: "7592b4ca950d1cebf62a8f680d9fd6f74cded36b", date: "2026-08-03",
     title: "Harden configuration, console, SCP, and progress surfaces",
     changes: [
@@ -648,56 +672,6 @@ export const DEVELOPMENT = [
     title: "Merge branch 'worktree-wf_1e396398-c91-3'",
     changes: [
       { category: "changed", text: "# Conflicts: # design/main/ipc.js # docs/protocol-gaps.md # docs/transfers-and-queue/queue.md" },
-    ],
-  },
-  {
-    id: "b675271", kind: 'commit', ref: "b675271", oid: "b67527187de45e0f31c983d57bfc358e1cdcfb74", date: "2026-08-02",
-    title: "Merge branch 'worktree-wf_1e396398-c91-2'",
-    changes: [
-    ],
-  },
-  {
-    id: "56e44da", kind: 'commit', ref: "56e44da", oid: "56e44daec7677862ca6df3bd53be4b1be746a035", date: "2026-08-02",
-    title: "Stop the pending-options guard proving its own subject matter consumed",
-    changes: [
-      { category: "changed", text: "The guard in test/preferences.test.js holds PENDING_KEYS — the options whose rows tell the user \"nothing in this build acts on it yet\" — to exactly the set of options nothing reads. It passed, and it passed for the wrong reason: the scan walked test/ as well as design/, and test/preferences.test.js is the file that asserts every one of those keys by name. The guard was reading its own homework back as proof, so eight options were stored, rendered like working settings, read by absolutely nothing, and warned nobody: beepOnFinish, beepOnFinishAfter, refreshRemotePanelInterval, queue.keepDoneItemsFor, window.minimizeToTray, dDFakeFile, dDDrives, integration.dragExtEnabled." },
-      { category: "fixed", text: "Dropping test/ from the walk is the obvious fix and only half of one. Stripping comments too turned up three more: editors.js:589 names editor.warnOrphans in the doc comment above findOrphans() and then never asks it anything, and session.js:532-537 documents four sessionReopen* settings above _scheduleReconnect, which reads two of them. A comment is a promise, not a read." },
-      { category: "fixed", text: "The scan now lives in test/helpers/consumer-scan.js and means what it says: a consumer is production code under design/, outside the preferences surface, that READS the key — comments discounted, prose inside a string discounted, tests never. It is a scanner rather than a parser, and it has to handle regular expressions: an earlier draft read the lone quote in /['\"]/ as the start of a string, swallowed every line up to the next quote, and was about to report editor.singleEditor, editor.maxEditors, logging.logFileAppend and integration.externalSessionInExistingInstance as dead. That direction is the expensive one — a consumer the scan cannot see gets called an orphan, and the honest-looking fix is to declare a working option pending, which is precisely the lie the guard exists to stop." },
-      { category: "changed", text: "Three of the eleven are now implemented rather than declared:" },
-      { category: "changed", text: "queue.keepDoneItemsFor — TTerminalQueue::ProcessEvent's sweep (core/Queue.cpp:1018-1035). 0 drops a completed item at once, <0 keeps it forever, N keeps it N seconds; read live from queuePrefs so a preference change lands on the queue that is already running, with a per-item timer so the last row of a batch expires on time instead of waiting for the next transfer. An item that ERRORED is never swept." },
-      { category: "changed", text: "beepOnFinish / beepOnFinishAfter — OperationComplete (CustomScpExplorer.cpp:1695), which for the queue is called on qeEmpty with QueueOperationStart (:8201), so the batch is timed end to end from the moment work arrived at an empty queue. queue.js emits 'beep' because it owns no I/O; ipc.js calls shell.beep()." },
-      { category: "changed", text: "The other eight are declared in PENDING_KEYS with a note saying why, which stops the app lying today. defaults.js also claimed beepOnFinishAfter was \"0 = never\"; it is a minimum duration and 0 means no minimum. Nothing read the value, so nothing had ever contradicted the comment." },
-      { category: "added", text: "Tests: test/preferences.test.js 54 pass / 0 fail, up from 46 — eight new, for the guard's own failure mode, the two lies it used to swallow and the scan's rules. test/queue.test.js 51 pass / 0 fail, up from 44. With queue.js reverted, queue.test.js is 44 pass / 7 fail and preferences.test.js 52 pass / 2 fail. With PENDING_KEYS reverted, the new guard fails naming exactly the eight undeclared dead options. test/winconfig.test.js 118 pass, unchanged." },
-    ],
-    changesYue: [
-      { category: "changed", text: "--- 粵語 ---" },
-      { category: "changed", text: "個守衛自己考自己，仲畀自己滿分" },
-      { category: "changed", text: "test/preferences.test.js 個守衛本來要捉「儲得到但冇人理」嘅設定，點知佢連 test/ 都掃埋 —— 而 test/preferences.test.js 正正就係逐個 key 叫晒名嗰份卷。即係攞自己份 答案當證據，於是八個設定：beepOnFinish、beepOnFinishAfter、 refreshRemotePanelInterval、queue.keepDoneItemsFor、window.minimizeToTray、 dDFakeFile、dDDrives、integration.dragExtEnabled，畫到似模似樣，撳落去乜都冇， 仲一句都冇提醒用家。" },
-      { category: "changed", text: "淨係唔掃 test/ 都仲未夠。連註解都撇甩之後，再捉多三個：editors.js:589 喺 findOrphans() 上面寫住 editor.warnOrphans，寫完就冇再問過佢；session.js:532-537 列咗四個 sessionReopen*，_scheduleReconnect 只讀兩個。註解係承諾，唔係讀取。" },
-      { category: "changed", text: "而家個掃描搬咗去 test/helpers/consumer-scan.js，講到明：consumer 即係 design/ 入面、喺偏好設定介面以外、真係讀嗰個 key 嘅正式碼 —— 註解唔算，字串入面嘅描述唔算， 測試永遠唔算。佢仲要識睇 regex：舊版本見到 /['\"]/ 嗰個單引號就當開字串，一啖吞埋 後面成堆碼，差啲就話 editor.singleEditor、editor.maxEditors、logging.logFileAppend 同 integration.externalSessionInExistingInstance 四個「冇人理」。呢個方向先至最惡： 掃唔到就當死症，跟住順手落 PENDING_KEYS，正正就係個守衛本來要阻止嗰個謊。" },
-      { category: "changed", text: "十一個入面有三個真係接好咗線：queue.keepDoneItemsFor 照 core/Queue.cpp:1018-1035 掃走做完嘅項目（0 即刻走、-1 永遠留、N 秒後走；改設定即刻生效，做壞咗嗰啲永遠唔掃）； beepOnFinish 同 beepOnFinishAfter 照 CustomScpExplorer.cpp:1695／:8201，由「空佇列 收到工作」計到「佇列做完」先響一聲，queue.js 出 'beep'，ipc.js 叫 shell.beep()。" },
-      { category: "changed", text: "其餘八個老老實實入咗 PENDING_KEYS，每個都寫低點解，至少今日唔會再呃人。順手改返 defaults.js 一句寫錯咗嘅註解：beepOnFinishAfter 唔係「0 = 永遠唔響」，係「最短時間， 0 即係冇下限」—— 之前冇人讀過個值，所以都冇人拆穿佢。" },
-    ],
-  },
-  {
-    id: "148b6cc", kind: 'commit', ref: "148b6cc", oid: "148b6cccb0b79e51736f46b083654cbb4f2157fb", date: "2026-08-02",
-    title: "Let the queue read \"Keep reconnecting for\", instead of counting to five",
-    changes: [
-      { category: "added", text: "The queue capped reconnects at a hard-coded 5 (queue.js:319) and never once read security.sessionReopenTimeout, so setting \"Keep reconnecting for\" to twenty minutes bought a queued transfer five attempts. Fifteen of the sixteen transfer commands go through commands.js:529 `backend.queue('add')`; the sixteenth, `queue: 'off'`, goes to the foreground engine and honoured the preference correctly. The setting therefore worked on the one path almost nobody takes, which is the most expensive kind of working." },
-      { category: "changed", text: "WinSCP has no queue retry policy to disagree with. TUploadQueueItem:: DoTransferExecute calls TTerminal::CopyToRemote (Queue.cpp:2324), so a queued transfer walks into the same TRobustOperationLoop as a foreground one, and Queue.cpp holds no retry counter anywhere. The 5 was invented here." },
-      { category: "changed", text: "So the queue now uses the SAME mechanism rather than a tidier second one: `continueReopen` is lifted out of Terminal into a module function that Terminal.continueReopen also delegates to, and `limitsTransferReconnects` is lifted out of TransferEngine the same way. The queue stamps FStart per item, takes a tfUseFileTransferAny holder from that shared test, and raises it from _recordCps exactly where DoProgress raises FFileTransferAny (Terminal.cpp:2277)" },
-      { category: "changed", text: "the queue's only \"a byte actually landed\" seam. maxReconnects survives as an opt-in count for an embedder and defaults to off." },
-      { category: "fixed", text: "THE PART THAT LOOKS LIKE THE FIX DOING NOTHING. sessionReopenTimeout ships as 0 (defaults.js:384) and ContinueReopen returns true unconditionally at zero (Terminal.cpp:2461-2463), so at the shipped default this changes no timing at all - it removes a ceiling rather than adding one. And only FTP and FTPS carry a budget in the first place. Both facts have their own tests, because a fix verified only against a non-zero value on an FTP adapter has been verified nowhere most people live. docs/protocol-gaps.md stated the FTP budget without the zero qualifier and now states it." },
-      { category: "removed", text: "Reachability came along, because without it none of the above ever runs. ipc.js:343 forwarded `reconnect` through the blanket event loop, which put the live retry/fail callbacks into a structured clone - webContents.send throws on a function and emit swallows that as an undeliverable push - while listenerCount('reconnect') being non-zero switched off queue.js's own unsupervised backoff. The two together meant the blanket forwarder took the decision and then failed to make it: the FIRST dropped connection parked a queued transfer for the life of the process, holding a transfersLimit slot with it. There is now a real supervisor that waits sessionReopenBackground - a preference the docs have promised since they were written and nothing read - then retries, or fails when the session has been closed out from under the item. Five reconnects was never the ceiling users were hitting; zero was." },
-    ],
-    changesYue: [
-      { category: "changed", text: "一句話：個 queue 死牛一邊頸，斷線就數到五，然後收工。你喺設定入面寫「重連二十分鐘」， 佢由頭到尾冇 read 過嗰個 preference。十六個傳送指令有十五個行呢條路，剩返嗰個唔經 queue 嘅反而做得啱晒，堪稱最貴嘅一種「正常」。" },
-      { category: "changed", text: "原裝 WinSCP 其實冇呢舊嘢：queue item 一樣係叫 TTerminal::CopyToRemote，行返同一個 loop，Queue.cpp 由頭揾到尾都冇一個重試計數器。嗰個 5 係我哋自己諗出嚟嘅。" },
-      { category: "changed", text: "所以今次唔另起爐灶：ContinueReopen 同 limitsTransferReconnects 都抽咗做共用 function， 前台引擎同 queue 一齊叫同一個，唔會再出現「呢邊聽你講，嗰邊當你冇講過」。" },
-      { category: "changed", text: "最搞笑嗰橛：sessionReopenTimeout 出廠係 0，而 0 即係「試到天荒地老」。所以喺預設設定 之下，呢個修改一秒都冇改到 —— 佢係拆咗個上限，唔係加咗個上限。零同非零兩邊都寫咗 測試，因為淨係試非零嗰邊，等於試咗一個冇乜人用嘅設定。" },
-      { category: "changed", text: "順手救返個更大鑊嘅：ipc.js 之前將 reconnect 同其他 event 一齊掟去 renderer，個 payload 入面有 function，webContents.send 一 clone 就仆街，而 queue 一見到有人聽就唔行自己嗰個 backoff —— 即係有人舉手答問題，舉完手唔出聲。結果第一次斷線，件嘢就企喺度企一世，仲 佔住個傳送位。而家真係有人答佢喇。用家撞到嘅從來唔係「試咗五次」，係「一次都未試完」。" },
-      { category: "changed", text: "Tests: test/queue.test.js 44 -> 52 (all 8 new cases fail against the unmodified source: 44 pass / 8 fail), test/terminal.test.js 100 -> 101 (the new case fails without the change). Also green and unchanged: test/transfer.test.js 88, test/sync.test.js 20, test/script.test.js 194, test/dialogs-transfer.test.js 83, on Node 26.5.1 and on CI's Node 22.23.2. The two ipc cases fail by HANGING for two seconds against the old wiring, which is the production symptom exactly. No test asserts the `_reopenStart === null` guard in _run; it is defensive against a zero-based injected clock and against a _pump re-entry, and neither is reachable from a test today." },
-      { category: "changed", text: "Not done here: the in-app changelog. It is generated from git log by tools/changelog.js and cannot contain the commit that has not been made yet; it was already stale at a700402 before this change. HANDOFF.md likewise needs the full `npm test` run this worktree deliberately does not do." },
     ],
   },
 ];

@@ -372,8 +372,12 @@ test('an empty filtered view exports honestly instead of exporting everything', 
 });
 
 test('a version with no recorded changes says so rather than being omitted', () => {
-  const entry = C.CHANGELOG.development.find((e) => !(e.changes || []).length);
-  assert.ok(entry, 'the recorded history contains a commit with no itemised changes');
+  // A body-less commit may fall outside the rolling development window. The
+  // current unreleased build is always an honest empty version, so it keeps
+  // this renderer contract test stable as the repository history grows.
+  const entry = C.CHANGELOG.development.find((e) => !(e.changes || []).length)
+    || C.CHANGELOG.currentBuild;
+  assert.ok(entry, 'the changelog exposes an honest version with no itemised changes');
   const md = C.entriesToMarkdown([entry], 'x', 'Changelog');
   assert.ok(md.includes('_No recorded changes._'));
 });
