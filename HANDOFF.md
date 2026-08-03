@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `a3d6bc5`** — Record Windows CI newline fix
+**At commit `b80efd9`** — Refresh changelog for queue and platform fixes
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3337 run, **3336 pass, 0 fail**, 1 skipped |
-| Hand-written code | 217,103 lines across 399 files |
-| Commits | 141 on `main` |
+| Tests | 3342 run, **3341 pass, 0 fail**, 1 skipped |
+| Hand-written code | 217,241 lines across 401 files |
+| Commits | 144 on `main` |
 | Working tree | **1 uncommitted change(s)** |
-| Remote | `origin/main` at `2fabb27` — **differs from HEAD** |
+| Remote | `origin/main` at `a9b9fb3` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `b80efd9` | 2026-08-03 | Refresh changelog for queue and platform fixes |
+| `aa5ee78` | 2026-08-03 | Harden queue sessions search panels and setup |
+| `a9b9fb3` | 2026-08-03 | Refresh handoff for Windows CI correction |
 | `a3d6bc5` | 2026-08-03 | Record Windows CI newline fix |
 | `0e0969b` | 2026-08-03 | Fix Windows line-ending test extraction |
 | `2fabb27` | 2026-08-03 | Refresh handoff for CLI parity wave |
 | `128d764` | 2026-08-03 | Refresh changelog for CLI parity hardening |
 | `7e93933` | 2026-08-03 | Complete CLI parity and harden platform edges |
-| `4355fa1` | 2026-08-03 | Refresh handoff for transfer and security wave |
-| `e1df1cc` | 2026-08-03 | Refresh changelog for transfer and security hardening |
-| `3ba2f1c` | 2026-08-03 | Harden transfer console security and sync edges |
 
 ## Notes from whoever worked on this last
 
