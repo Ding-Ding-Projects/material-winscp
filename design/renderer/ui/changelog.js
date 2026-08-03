@@ -187,6 +187,27 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "71db2c6", kind: 'commit', ref: "71db2c6", oid: "71db2c6a28e762c6519f134b572160abc9818d88", date: "2026-08-03",
+    title: "Harden dialogs, overlays, and site navigation",
+    changes: [
+      { category: "changed", text: "Dialogs now keep failed host-key answers open for retry, editor saves serialize immutable snapshots, CopyParams rejects unsafe values, rights validation refuses malformed modes, SiteTree persists only safe navigation state, and narrow modals scroll without hiding actions. Focused tests and docs follow each boundary, so the UI can stop playing hide-and-seek with the buttons.\\n\\nDialog 而家遇到 host-key delivery fail 會留低畀人 retry，editor save 用 immutable snapshot 排隊，CopyParams 唔收危險值，rights 唔收古怪 mode，SiteTree 只記安全 navigation state，窄 modal 會 scroll 但唔會藏起 actions。測試文件跟齊，等 UI 唔好再同啲 button 玩捉迷藏。" },
+    ],
+  },
+  {
+    id: "461e050", kind: 'commit', ref: "461e050", oid: "461e050e2b93d9052dd77c7c33042d7212012dcc", date: "2026-08-03",
+    title: "Refresh geometry wave handoff metadata",
+    changes: [
+      { category: "fixed", text: "The handoff now records the 3,235-pass regression run, Docker smoke, the c274856 and 5652951 milestones, and the honest 59.0% coverage with 114 units outstanding. It reports the project, not a fairy tale about the project.\\n\\nHandoff 而家記低 3,235 pass regression、Docker smoke、c274856 同 5652951 milestone，仲有老實嘅 59.0% coverage 同 114 個未完成 unit。佢報告緊個 project，唔係 project 嘅童話故事。" },
+    ],
+  },
+  {
+    id: "5652951", kind: 'commit', ref: "5652951", oid: "56529510cafa7fa1d605d1b9970785e1db8ec8e4", date: "2026-08-03",
+    title: "Refresh in-app changelog for CLI geometry fixes",
+    changes: [
+      { category: "changed", text: "The in-app history now includes the verified c274856 CLI output, configuration-root, geometry, queue, reconnect, and SCP changes with complete links and bilingual copy. The changelog now has enough breadcrumbs to find the window edge.\\n\\nApp 入面嘅歷史而家收錄已驗證嘅 c274856 CLI output、configuration root、geometry、queue、reconnect 同 SCP 修正，連埋完整 link 同雙語 copy；changelog 而家有足夠麵包屑搵返個 window edge。" },
+    ],
+  },
+  {
     id: "c274856", kind: 'commit', ref: "c274856", oid: "c274856d2332c201b2f48b4fe4bb2f535747da9f", date: "2026-08-03",
     title: "Harden CLI output, geometry, queue, and SCP",
     changes: [
@@ -837,61 +858,6 @@ export const DEVELOPMENT = [
       { category: "changed", text: "份 handoff 一連四個 commit 都寫住「今次冇跑測試」，因為佢自己跑測試但冇 timeout, 唯一跑得完嘅方法就係 --skip-tests —— 一份成篇強調自己「唔識講大話」嘅文件，最緊要 嗰行係空白嘅。" },
       { category: "changed", text: "而家有真數：2903 跑，2902 過，0 衰。而且係修好 ssh2 嗰個唔穩定嘅 key 之後，連跑 四次 Node 26 加一次 Node 22 都一樣，唔係撞彩。" },
       { category: "changed", text: "Roadmap 記低嘅唔係數字，係教訓：**能唔能夠行到先係標準**。個 transfer engine 有 channel、有 byte mover、測試全過，但 renderer 由頭到尾冇叫過 —— 除咗用戶之外，喺 邊個角度睇都似做完咗。" },
-    ],
-  },
-  {
-    id: "6050d27", kind: 'commit', ref: "6050d27", oid: "6050d278e30c49b916e605ffa8cbcc671a4f650e", date: "2026-08-02",
-    title: "Stop ssh2 handing us a key its own parser rejects, roughly once in 350",
-    changes: [
-      { category: "changed", text: "The SFTP end-to-end file failed intermittently with" },
-      { category: "changed", text: "TypeError: parsedHostKey.getPublicSSH is not a function" },
-      { category: "fixed", text: "taking 9 tests down and cancelling 43 more. It passed 3/3 when run alone, which is the worst possible shape for a flake: every red full run looked like a real regression in whatever had just changed." },
-      { category: "changed", text: "It is neither. ssh2's own generator and its own parser disagree — utils.parseKey(utils.generateKeyPairSync('ed25519').private) returns `Error: Malformed OpenSSH private key` instead of a key. Measured on ssh2 1.17.0:" },
-      { category: "changed", text: "3 / 1000 pairs (0.3%)" },
-      { category: "fixed", text: "Small enough to look like nothing, except the suite generates six ed25519 pairs per run, so about one full run in fifty died — and `getPublicSSH is not a function` reads like a broken helper rather than a bad key, which is where the time goes." },
-      { category: "fixed", text: "Every generation now goes through one validating helper that regenerates until the key round-trips. Bounded at 8 attempts: an unbounded retry against a genuinely broken generator is a hang rather than a failure, and this suite has already lost an afternoon to one of those. A passphrase-protected pair checks its public half, since the private one cannot be parsed without the passphrase." },
-      { category: "changed", text: "before: 3 / 1000 unparsable after: 0 / 2000" },
-      { category: "changed", text: "Correcting the previous commit's evidence while I am here: \"2903 pass, 0 fail on both runtimes\" was true of the runs quoted and did not mention that a repeat run went red. The suite was flaky then and is not now; the number was right and the confidence was not." },
-    ],
-    changesYue: [
-      { category: "changed", text: "ssh2 自己生嘅 key，自己個 parser 唔認得 —— 大約 350 次一次。一次得 0.3%，睇落當 冇嘢，但成套跑會生六條，即係大約五十次全跑就有一次爆。最陰功係佢單獨跑三次都 乜事都冇：即係每次紅都好似你啱啱改壞咗嘢咁，其實同你完全冇關。" },
-      { category: "changed", text: "而家全部經一個會驗返轉頭嘅產生器，唔啱就重生，最多試八次 —— 唔封頂嘅重試遇著真 係壞咗嘅產生器就唔係「衰咗」，係「吊死」，而呢套嘢今日已經俾人吊過一次。" },
-      { category: "changed", text: "順便更正上一個 commit：嗰句「兩個 runtime 都 2902 過 0 衰」係真嘅，但冇講跟住再 跑一次就紅咗。個數字冇錯，個信心錯咗。" },
-    ],
-  },
-  {
-    id: "90759dc", kind: 'commit', ref: "90759dc", oid: "90759dc54376f8c97569b4f9f7ed07e24bb28971", date: "2026-08-02",
-    title: "Stop winscp.com exiting mid-prompt, and stop the preferences guard lying in reverse",
-    changes: [
-      { category: "changed", text: "Two defects the wave's completeness critic found in what the wave itself had just landed. Both were verified by reproduction, not by reading." },
-      { category: "added", text: "THE SHIPPED CONSOLE HOST STILL EXITED SILENTLY. Fixing the unref'd prompt timer in design/main/console.js left the identical shape one file over, in consolerunner.js — which IS the process winscp.com runs (console.js:1668 spawns runConsole from here). So the version a user actually meets still had it. Worse than its sibling: that one only misbehaved on the Node CI pins, while this reproduced on EVERY runtime, because StdConsole.input's timer is the last ref'd handle rather than merely a fragile one." },
-      { category: "changed", text: "before: EXIT settled=false after 0 ms, code 0 (both Node 22 and 26) after: RESOLVED null after 305 ms" },
-      { category: "changed", text: "A script host that vanishes at code 0 with a prompt unanswered is worse than one that crashes: the caller sees success. keepuptodate had the same unref on the only tick keeping it alive between filesystem events, so it ended the command whenever nothing happened to be changing — the state it exists to sit in." },
-      { category: "changed", text: "THE PENDING-OPTIONS GUARD WAS LYING IN THE OTHER DIRECTION. Its scan required the leaf NOT be preceded by a dot, and a consumer almost never writes the dotted path — it holds the sub-object and reads cp.excludeEmptyDirectories, p.showOnStartup, this.prefs().maxEditors. All three were invisible to it, so the dialog told users that \"Exclude empty directories\", \"Show update information on startup\" and \"Maximum editors\" do nothing, while all three were honoured. A guard built to stop the app lying about its own settings had been producing that exact lie, inverted, and its test passed the whole time." },
-      { category: "fixed", text: "Removing the option's key from PENDING_KEYS was also required by this wave: the empty-directories fix gave it a second consumer, which turned the guard red — the one thing that would have stopped the merge from going green." },
-      { category: "fixed", text: "2903 tests, 2902 pass, 0 fail, 1 skipped — on Node 26 AND on the Node 22 CI pins. Both new console tests fail without the fix; e2e-sftp verified stable 3/3 alone." },
-    ],
-    changesYue: [
-      { category: "changed", text: "兩個都係「查漏」agent 喺呢一浪自己啱啱落嘅嘢入面執返出嚟嘅，而且係試出嚟唔係睇出嚟。" },
-      { category: "changed", text: "**個真正會出街嘅 console host 仲係會靜靜雞死。** console.js 修好咗，隔籬 consolerunner.js 一模一樣嘅寫法冇人郁 —— 而嗰個先係 winscp.com 真正行嘅程序。仲 衰過隔籬嗰個：隔籬淨係喺 CI 嗰個 Node 版本先中，呢個**每個版本都中**。一個 code 0 就消失、提示都未答嘅腳本主機，衰過直接 crash —— 起碼 crash 會話你知。" },
-      { category: "changed", text: "**個「未接線設定」守門員反方向講大話。** 佢要求個名前面唔可以有點，但實際讀嘅人 邊會寫成條路徑，梗係 `cp.xxx`、`p.xxx` 咁攞。結果三個真係有人用嘅設定被當成冇人 理，個對話框就同用戶講「呢個掣暫時冇用」—— 一個專登用嚟防止 app 講大話嘅機制， 自己反過來講咗同一個大話，而且個測試一路都係綠嘅。" },
-      { category: "changed", text: "2903 個測試，2902 過，0 衰 —— Node 26 同 CI 用嗰個 Node 22 都一樣。" },
-    ],
-  },
-  {
-    id: "3b3b14c", kind: 'commit', ref: "3b3b14c", oid: "3b3b14c7a03907ffd9f6eef165c45666acfc3531", date: "2026-08-02",
-    title: "Prune empty directories with the target adapter's separator, and teach the engine the rule at all",
-    changes: [
-      { category: "changed", text: "`excludeEmptyDirectories` had two independent defects, one of which destroyed whole downloads on Windows." },
-      { category: "changed", text: "**The queue destroyed the download it was pruning.** queue.js `_buildPlan` kept a directory entry only if some file's `dstPath` started with `dir + '/'`. Every `dstPath` in a plan is built by the TARGET adapter's `join`, and the target of a download is `protocols/local.js`, whose separator is `\\` on Windows. So the test was false for every directory in the plan — not just the empty ones, the ones packed with files too — and every `kind:'dir'` entry was pruned. `_run` only `mkdir`s from `kind:'dir'` entries and no adapter's `createWriteStream` creates parents, so the first file then died with `ENOENT` and the whole item failed. Uploads never noticed, because a remote adapter genuinely is '/'-separated. The prefix now comes from `dst.sep`, which every adapter already publishes (base.js:74, local.js:239), with the trailing separator kept so `/a/b` still does not swallow `/a/bc` and a path already ending in one does not grow a second." },
-      { category: "added", text: "**The engine ignored the option entirely.** transfer.js mentioned `excludeEmptyDirectories` in exactly one place — `allowAnyTransfer`, the \"is any filtering switched on at all?\" gate — so turning it on made the engine take the slow filtered path and then apply no filter. `doAllowFileTransfer` now ends with the `IsEmptyDirectory` clause the original has (Terminal.cpp:5791/5806), backed by a new `isEmptyDirectory()`: recursive, so a directory of empty directories is empty; filter-aware, so a directory of masked-out or hidden files is empty; `csStopOnFirstFile`, so a directory whose first entry is a file costs one listing; and answering \"not empty\" when the listing fails, because dropping a directory nobody could read is worse than creating one nobody wanted. The predicate is async now, so `allowLocalFileTransfer`, `sink` and `calculateLocalFilesSize` await it — which is also what keeps the local size total agreeing with what the copy will actually do." },
-      { category: "changed", text: "The `.filepart` asymmetry between the two sides is WinSCP's, not a slip: IsEmptyLocalDirectory hard-codes the temporary-file rule on (6199) and IsEmptyRemoteDirectory passes the caller's flag through (6441). Copied as is, with the line numbers, rather than quietly tidied into something that would skip a directory the original uploads." },
-      { category: "fixed", text: "Tests: the download case is the one that matters, because an upload-only test would have passed against the queue bug all day. queue.test.js grows a backslash-separated in-memory adapter so that case stays alive on a POSIX dev box, where a real LocalAdapter reports '/' and the bug cannot appear at all. docs/protocol-gaps.md said the option \"does nothing\", which stopped being true when the queue implemented it and never mentioned that the implementation ate Windows downloads; it now records what is actually true, including the one part still missing (the remote size calculation)." },
-    ],
-    changesYue: [
-      { category: "changed", text: "一個 `/` 引發嘅血案。個 queue 淨低空目錄嘅時候，硬係用 `/` 去比對路徑 —— 但 下載嘅目的地係 Windows 本機，人哋分隔符係 `\\`，於是「呢個目錄有冇檔案？」永遠 答「冇」，連塞爆檔案嗰啲都照斬。斬晒之後冇人開資料夾，第一個檔案即刻 ENOENT 仆街，成單嘢玩完。而家改成問目的地 adapter 自己個 `sep`，佢一路都識答，只係 之前冇人問過佢。" },
-      { category: "changed", text: "引擎嗰邊更加離譜：`excludeEmptyDirectories` 全個 transfer.js 只出現喺 `allowAnyTransfer` 入面 —— 即係「有冇開過濾器呀？」嗰道閘。你一開佢，引擎就 好勤力咁行慢路，然後乜都唔篩。而家補返 WinSCP 原本嗰個 IsEmptyDirectory： 會遞歸（空目錄裝住空目錄，一樣係空）、識睇 mask 同隱藏檔、見到第一個檔案就 收手、開唔到就當「唔空」—— 寧願多開個冇人要嘅資料夾，都好過靜靜雞漏低成個 目錄。" },
-      { category: "changed", text: "測試特登由下載入手：淨測上載嘅話，個 bug 可以繼續瞓大覺。" },
     ],
   },
 ];
