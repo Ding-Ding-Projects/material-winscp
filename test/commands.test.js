@@ -279,6 +279,21 @@ test('Explorer mode keeps remote downloads reachable without a second panel', ()
   }
 });
 
+test('panel transfer actions stay disabled when a tab retains a disconnected session descriptor', () => {
+  const panel = {
+    path: () => '/remote', pathOf: (entry) => `/remote/${entry.name}`,
+    sessionInfo: () => ({ id: 'session-1', connected: false, caps: { move: true, copyRemote: true } }),
+    focusedEntry: () => ({ name: 'report.txt', type: 'file' }),
+  };
+  const over = {
+    side: 'remote', panel, other: { path: () => 'C:\\downloads' },
+    selection: [{ name: 'report.txt', type: 'file' }],
+  };
+  for (const name of ['RemoteCopyAction', 'RemoteMoveAction', 'RemoteCopyToAction', 'RemoteMoveToAction']) {
+    assert.equal(C.commandState(name, over).enabled, false, `${name} must not run on a disconnected tab`);
+  }
+});
+
 test('ShowHiddenFilesAction is unavailable without a workspace to update', () => {
   const state = C.commandState('ShowHiddenFilesAction');
   assert.equal(state.enabled, false);

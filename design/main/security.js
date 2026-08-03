@@ -238,6 +238,10 @@ function getExternalEncryptedPassword(encrypted) {
   const ok = (simpleDecryptNextChar(state) === PWALG_SIMPLE_FLAG) &&
     (simpleDecryptNextChar(state) === PWALG_SIMPLE_EXTERNAL);
   if (!ok) return null;
+  // An empty payload is valid, but a non-hex payload is a damaged external
+  // reference. Do not turn corruption into an empty credential and let the
+  // caller skip its normal password prompt.
+  if (state.s.length % 2 !== 0 || !/^[0-9A-F]*$/i.test(state.s)) return null;
   return hexToBytes(state.s);
 }
 

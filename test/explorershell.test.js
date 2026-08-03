@@ -18,6 +18,7 @@ const path = require('node:path');
 const repoRoot = path.join(__dirname, '..');
 
 const E = require('../design/main/explorershell');
+const SI = require('../design/main/shellintegration');
 const { CopyParamList } = require('../design/main/winconfig');
 
 // ---------------------------------------------------------------------------
@@ -443,6 +444,7 @@ function copyShell(over) {
     },
     queue: o.queue,
     session: o.session,
+    ops: o.ops,
     copyDialog: o.copyDialog || (async () => ({ ok: true })),
     answers: o.answers,
   });
@@ -1071,6 +1073,18 @@ test('a protocol that cannot move falls back to copy rather than doing nothing',
   assert.strictEqual(effect, 1);
 });
 
+test('a direct remote MOVE effect is downgraded when the session cannot move', () => {
+  const shell = makeShell({ session: fakeSession({ caps: { move: false } }) });
+  assert.strictEqual(shell.chooseDropEffect({ effect: SI.DROPEFFECT.MOVE, fromRemotePanel: true }), SI.DROPEFFECT.COPY);
+});
+
+test('a disconnected remote panel refuses effect negotiation', () => {
+  const shell = makeShell({ session: fakeSession({ connected: false }) });
+  assert.strictEqual(shell.chooseDropEffect({
+    effect: SI.DROPEFFECT.COPY, fromRemotePanel: true, ontoDirView: true, dropTarget: '/target',
+  }), SI.DROPEFFECT.NONE);
+});
+
 test('dragging all files requires the panel to report an all-file selection', () => {
   const shell = makeShell({
     panels: {
@@ -1185,6 +1199,29 @@ test('a refused or unknown drop effect never becomes an upload', async () => {
     assert.deepStrictEqual(result, { ok: false, reason: 'invalidDropEffect' });
   }
   assert.strictEqual(calls.length, 0);
+});
+
+test('an incoming drop validates its target, session and advertised capabilities', async () => {
+  const base = { effect: SI.DROPEFFECT.COPY, files: [{ name: 'alpha.txt', path: 'C:\\work\\alpha.txt' }] };
+  assert.deepStrictEqual(await copyShell().dragDropFileOperation(base), { ok: false, reason: 'missingTarget' });
+  assert.deepStrictEqual(await copyShell({ session: fakeSession({ connected: false }) }).dragDropFileOperation({
+    ...base, targetPath: '/home/joe',
+  }), { ok: false, reason: 'notConnected' });
+  assert.deepStrictEqual(await copyShell({ session: fakeSession({ caps: { upload: false } }) }).dragDropFileOperation({
+    ...base, targetPath: '/home/joe',
+  }), {
+    ok: false, reason: 'capability', message: 'This protocol cannot upload files.',
+  });
+  const calls = [];
+  const downgraded = copyShell({
+    ops: { copyToRemote: (...args) => { calls.push(args); return true; } },
+  });
+  const result = await downgraded.dragDropFileOperation({
+    ...base, targetPath: '/home/joe', allowMove: false, effect: SI.DROPEFFECT.MOVE,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(calls.length, 1);
+  assert.notEqual(calls[0][3].delete, true, 'disabled move must not delete the local source');
 });
 
 // ===========================================================================

@@ -458,8 +458,10 @@ node build/make-icon.js   # regenerate build/icon.ico from the tracked catalog i
 
 The installed package also exposes a headless `winscp` command. Use
 `winscp run /script=FILE` for the full console-compatible scripting surface, or
-`winscp drag plan`, `winscp drop classify` and `winscp drag stage` to exercise
-drag/drop decisions and staging as JSON without launching a GUI. See
+`winscp drag plan`, `winscp drop classify`, `winscp drop simulate` and
+`winscp drag stage` to exercise drag/drop decisions and staging as JSON without
+launching a GUI. `winscp capabilities` exposes the machine-readable command
+surface for automation. See
 [`docs/editing-and-commands/cli.md`](docs/editing-and-commands/cli.md).
 
 ### Node version

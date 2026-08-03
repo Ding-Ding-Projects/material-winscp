@@ -1392,7 +1392,11 @@ export function transferQueueMode(name) {
 for (const [name, side, direction, move, background, queue] of TRANSFERS) {
   def(name, {
     side,
-    enabled: (c) => haveSel(c) && transferPanels(c) && !!c.sessionId,
+    // A tab can retain its session descriptor while its terminal is already
+    // disconnected. Keep the transfer actions disabled in that stale window;
+    // otherwise the drag/panel command reaches the queue only to fail after
+    // the user has confirmed its options.
+    enabled: (c) => haveSel(c) && transferPanels(c) && !!c.sessionId && online(c),
     run: (c) => transferWithOptions(c, { direction, move, background, queue }),
   });
 }
@@ -1498,7 +1502,8 @@ const SAMESIDE = [
 for (const [name, side, mode] of SAMESIDE) {
   def(name, {
     side,
-    enabled: (c) => haveSel(c) && (mode === 'move' ? capOrLocal(c, 'move') : capOrLocal(c, 'copyRemote')),
+    enabled: (c) => haveSel(c) && online(c)
+      && (mode === 'move' ? capOrLocal(c, 'move') : capOrLocal(c, 'copyRemote')),
     run: (c) => sameSideOperation(c, mode),
   });
 }

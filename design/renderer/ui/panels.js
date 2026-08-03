@@ -165,6 +165,36 @@ export function entriesForDragPaths(entries, paths, pathOf, isLocal = false) {
   });
 }
 
+/**
+ * Validate the private payload used by an in-app panel drag.
+ *
+ * The payload crosses a browser-owned DataTransfer boundary, so it is not a
+ * trusted object just because this application wrote it. Keeping this check
+ * pure makes the drop handler and headless tests use the same refusal policy.
+ */
+export function normalizePanelDragPayload(value) {
+  if (!value || typeof value !== 'object') return { ok: false, reason: 'invalidPayload' };
+  if (value.side !== 'local' && value.side !== 'remote') return { ok: false, reason: 'invalidSourceSide' };
+  if (!Array.isArray(value.paths)) return { ok: false, reason: 'invalidPaths' };
+  const paths = value.paths.map((p) => String(p || '')).filter(Boolean);
+  if (!paths.length || paths.length !== value.paths.length) return { ok: false, reason: 'invalidPaths' };
+  return {
+    ok: true,
+    data: {
+      side: value.side,
+      sessionId: value.sessionId == null ? null : String(value.sessionId),
+      paths,
+      panelId: value.panelId == null ? null : String(value.panelId),
+      preferredEffect: value.preferredEffect === 'move' ? 'move' : 'copy',
+    },
+  };
+}
+
+/** The move gesture used by both OS drops and in-app panel drops. */
+export function panelDropMoveRequested({ shiftKey = false, ctrlKey = false, allowMove = false, startAsMove = false } = {}) {
+  return allowMove === true && !ctrlKey && (shiftKey || startAsMove);
+}
+
 /** Only the most recently requested directory may update panel state. */
 export function isCurrentPanelLoad(requestId, currentRequestId) {
   return requestId === currentRequestId;
@@ -1001,7 +1031,14 @@ export function createFilePanel(opts = {}) {
   function onDragStart(e, entry, index) {
     if (!selected.has(entry.name)) { setFocus(index); selected = new Set([entry.name]); render(); }
     const paths = selectionPaths();
-    const payload = JSON.stringify({ side, sessionId: sessionId(), paths, panelId });
+    const allowMove = readPref('dDAllowMove', false) === true;
+    const payload = JSON.stringify({
+      side, sessionId: sessionId(), paths, panelId,
+      preferredEffect: panelDropMoveRequested({
+        allowMove,
+        startAsMove: readPref('dDAllowMoveInit', false) === true,
+      }) ? 'move' : 'copy',
+    });
     try {
       e.dataTransfer.setData('application/x-winscp-files', payload);
       // Plain text and a URI list are what a foreign application will accept.
@@ -1018,7 +1055,12 @@ export function createFilePanel(opts = {}) {
     const types = Array.from(e.dataTransfer.types || []);
     if (!types.includes('application/x-winscp-files') && !types.includes('Files')) return;
     e.preventDefault();
-    e.dataTransfer.dropEffect = e.shiftKey && readPref('dDAllowMove', false) === true ? 'move' : 'copy';
+    e.dataTransfer.dropEffect = panelDropMoveRequested({
+      shiftKey: e.shiftKey,
+      ctrlKey: e.ctrlKey || e.metaKey,
+      allowMove: readPref('dDAllowMove', false) === true,
+      startAsMove: readPref('dDAllowMoveInit', false) === true,
+    }) ? 'move' : 'copy';
     root.classList.add('is-dropping');
   });
   root.addEventListener('dragleave', (e) => { if (e.target === root) root.classList.remove('is-dropping'); });
@@ -1028,19 +1070,40 @@ export function createFilePanel(opts = {}) {
     if (raw) {
       e.preventDefault();
       let data;
-      try { data = JSON.parse(raw); } catch { return; }
-      if (data.panelId === panelId) return;                 // dropped on itself
-      await acceptPanelDrop(data, e.shiftKey && readPref('dDAllowMove', false) === true);
+      try { data = JSON.parse(raw); } catch {
+        notify.warning(t('transferSettingsShort'), 'The panel drag payload was not valid. Refresh the panel and try again.');
+        return;
+      }
+      const normalized = normalizePanelDragPayload(data);
+      if (!normalized.ok) {
+        notify.warning(t('transferSettingsShort'), 'The panel drag payload was incomplete. Refresh the panel and try again.');
+        return;
+      }
+      data = normalized.data;
+      if (data.panelId === panelId) {
+        notify.info(t('transferSettingsShort'), 'The dragged items came from this panel, so the drop was not started.');
+        return;
+      }
+      await acceptPanelDrop(data, panelDropMoveRequested({
+        shiftKey: e.shiftKey,
+        ctrlKey: e.ctrlKey || e.metaKey,
+        allowMove: readPref('dDAllowMove', false) === true,
+        startAsMove: data.preferredEffect === 'move' || readPref('dDAllowMoveInit', false) === true,
+      }));
       return;
     }
     if (e.dataTransfer.files && e.dataTransfer.files.length) {
       e.preventDefault();
-      await acceptOsDrop(Array.from(e.dataTransfer.files));
+      await acceptOsDrop(Array.from(e.dataTransfer.files), panelDropMoveRequested({
+        shiftKey: e.shiftKey,
+        ctrlKey: e.ctrlKey || e.metaKey,
+        allowMove: readPref('dDAllowMove', false) === true,
+        startAsMove: readPref('dDAllowMoveInit', false) === true,
+      }));
     }
   });
 
   async function acceptPanelDrop(data, move) {
-    const ctx = { side, panel: handle, other: workspace ? workspace.other(side) : null };
     if (data.side === side) {
       notify.info(t('transferSettingsShort'), 'Both panels are on the same side, so there is nothing to transfer.');
       return;
@@ -1052,7 +1115,10 @@ export function createFilePanel(opts = {}) {
     // The drop targets THIS panel's directory, so the command runs against the
     // source panel with an explicit target.
     const sourcePanel = workspace ? workspace.panel(data.side) : null;
-    if (!sourcePanel) return;
+    if (!sourcePanel) {
+      notify.warning(t('transferSettingsShort'), 'The source panel is no longer available. Refresh the tab and try again.');
+      return;
+    }
     if (readPref('dDTransferConfirmation', true) !== false) {
       const ok = await confirm({
         title: move ? t('moveDots') : (direction === 'download' ? t('downloadTitle') : t('uploadTitle')),
@@ -1072,11 +1138,10 @@ export function createFilePanel(opts = {}) {
       notify.warning(t('transferSettingsShort'), 'The dragged items are no longer available in the source panel. Refresh it and try again.');
       return;
     }
-    runAction(action, { side: data.side, panel: sourcePanel, other: handle, selection });
-    void ctx;
+    return runAction(action, { side: data.side, panel: sourcePanel, other: handle, selection });
   }
 
-  async function acceptOsDrop(files) {
+  async function acceptOsDrop(files, move) {
     const paths = files.map((f) => f.path).filter(Boolean);
     if (!paths.length) {
       // Electron 32 removed File.path, so a drop from the desktop carries no
@@ -1089,17 +1154,17 @@ export function createFilePanel(opts = {}) {
             try {
               const picked = await backend.app('pickPath', { multiple: true, title: t('uploadTitle') });
               const list = Array.isArray(picked) ? picked : (picked ? [picked] : []);
-              if (list.length) await queueDroppedFiles(list);
+              if (list.length) await queueDroppedFiles(list, move);
             } catch (err) { notify.error(t('uploadTitle'), err.message); }
           },
         }],
       });
       return;
     }
-    await queueDroppedFiles(paths);
+    await queueDroppedFiles(paths, move);
   }
 
-  async function queueDroppedFiles(paths) {
+  async function queueDroppedFiles(paths, move) {
     const id = sessionId();
     if (isLocal) {
       notify.info(t('uploadTitle'), 'Drop files on the remote panel to upload them.');
@@ -1107,7 +1172,17 @@ export function createFilePanel(opts = {}) {
     }
     if (!id) { notify.warning(t('notConnected'), ''); return; }
     try {
-      await backend.queue('add', { sessionId: id, direction: 'upload', files: paths, target: path });
+      const result = await backend.explorer('dragDrop', {
+        effect: move ? 2 : 1,
+        allowMove: move === true,
+        files: paths,
+        targetPath: path,
+        dragDrop: true,
+      });
+      if (result && result.ok === false) {
+        notify.warning(t('uploadTitle'), result.message || result.reason || 'The drop was refused before transfer started.');
+        return;
+      }
       notify.success(t('uploadTitle'), `${paths.length} ${paths.length === 1 ? 'item' : 'items'} → ${oneLine(path, 50)}`);
       refresh(true);
     } catch (err) { notify.error(t('uploadTitle'), err.message); }

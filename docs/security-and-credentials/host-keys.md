@@ -30,8 +30,10 @@ Both dialogs are **modal**, and correctly so: this is a decision the user must
 make before anything else can happen. Everything else in this application that
 merely informs is a corner notification; this is not that.
 
-Neither dialog defaults to Accept, and neither has a "don't ask again" that
-covers future *changes*.
+Neither dialog defaults to Accept: Reject is the focused action until the user
+deliberately chooses a trust action. A certificate or host-key result without a
+SHA-256 fingerprint is incomplete and cannot be accepted. Neither dialog has a
+"don't ask again" that covers future *changes*.
 
 ## Configuration
 
@@ -112,7 +114,8 @@ implicit acceptance and no secret or fingerprint is logged while retrying.
 - Pinned-mismatch is tested to assert no prompt is shown at all.
 - Host-key and certificate dialogs keep their decision open when answer
   delivery fails, then close only after a successful retry; cancellation still
-  rejects the prompt.
+  rejects the prompt. A prompt-cancelled event does not send a second refusal,
+  and credential fields are wiped when the prompt closes.
 
 ## Suggested articles
 

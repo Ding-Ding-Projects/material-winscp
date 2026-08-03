@@ -175,10 +175,11 @@ function remoteDropOperation(lastDropEffect, opts) {
   const effect = Number(lastDropEffect);
   if (o.ontoSessionTab) {
     if (!o.targetAvailable) return null;
-    return (effect === DROPEFFECT.MOVE && o.sameSession) ? 'remoteMove' : 'remoteCopy';
+    return ((effect & DROPEFFECT.MOVE) && o.sameSession) ? 'remoteMove' :
+      ((effect & (DROPEFFECT.COPY | DROPEFFECT.MOVE)) ? 'remoteCopy' : null);
   }
-  if (effect === DROPEFFECT.MOVE) return 'remoteMove';
-  if (effect === DROPEFFECT.COPY) return 'remoteCopy';
+  if (effect & DROPEFFECT.MOVE) return 'remoteMove';
+  if (effect & DROPEFFECT.COPY) return 'remoteCopy';
   return null;
 }
 
@@ -438,13 +439,21 @@ class DragOut {
         'temporary files in Preferences.', 'CREATE_TEMP_DIR', e.message);
     }
 
-    await this.download({
+    const result = await this.download({
       items: this.items.slice(),
       targetDir: this.dir,
       move: !!o.move,
       temporary: true,
       copyParam: o.copyParam || this.copyParam,
     });
+    // A transfer facade may report cancellation or an unrecovered failure as
+    // a result instead of throwing. Do not expose a partially staged payload
+    // to Explorer in that case; a drag that looks successful but contains a
+    // truncated file is worse than a visible refusal.
+    if (result === false || (result && (result.ok === false || result.completed === false))) {
+      throw new DragError('The drag transfer did not complete, so no files were offered to Windows Explorer.',
+        'DRAG_TRANSFER_INCOMPLETE');
+    }
     this.staged = true;
     return this.items.map((i) => i.localPath);
   }
@@ -527,7 +536,7 @@ function classifyIncomingDrop(paths, opts) {
   let totalSize = 0;
   let anyDirectory = false;
 
-  for (const raw of paths || []) {
+  for (const raw of Array.isArray(paths) ? paths : []) {
     const p = String(raw || '');
     if (!p) continue;
     let st;
@@ -568,9 +577,9 @@ function classifyIncomingDrop(paths, opts) {
 function incomingDropOperation(lastDropEffect, opts) {
   const o = opts || {};
   const effect = Number(lastDropEffect);
-  if (effect === DROPEFFECT.NONE) return null;
-  if ((effect & DROPEFFECT.MOVE) && o.allowMove !== false) return 'move';
-  return 'copy';
+  if (effect === DROPEFFECT.MOVE) return o.allowMove === false ? 'copy' : 'move';
+  if (effect === DROPEFFECT.COPY) return 'copy';
+  return null;
 }
 
 /**

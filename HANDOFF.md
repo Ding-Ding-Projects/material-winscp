@@ -13,10 +13,10 @@
 |---|---|
 | **Port coverage (logic)** | **60.5%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 71.5% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3542 run, **3541 pass, 0 fail**, 1 skipped |
-| Hand-written code | 223,629 lines across 444 files |
+| Tests | 3558 run, **3557 pass, 0 fail**, 1 skipped |
+| Hand-written code | 224,314 lines across 444 files |
 | Commits | 239 on `main` |
-| Working tree | clean |
+| Working tree | **33 uncommitted change(s)** |
 | Remote | `origin/main` at `1bd52d3` — in sync |
 
 ### Coverage by area

@@ -1068,6 +1068,7 @@ test('a move onto another session is downgraded to a copy', () => {
 test('a drop on a remote panel follows the drop effect exactly', () => {
   assert.equal(SI.remoteDropOperation(SI.DROPEFFECT.MOVE, {}), 'remoteMove');
   assert.equal(SI.remoteDropOperation(SI.DROPEFFECT.COPY, {}), 'remoteCopy');
+  assert.equal(SI.remoteDropOperation(SI.DROPEFFECT.COPY | SI.DROPEFFECT.MOVE, {}), 'remoteMove');
   assert.equal(SI.remoteDropOperation(SI.DROPEFFECT.NONE, {}), null);
   assert.equal(SI.remoteDropOperation(SI.DROPEFFECT.LINK, {}), null);
 });
@@ -1267,6 +1268,15 @@ test('a drag refuses to run out of order', async () => {
   drag.abort();
 });
 
+test('a drag does not expose a transfer that explicitly reports incomplete', async () => {
+  const drag = new SI.DragOut({ tempRoot: os.tmpdir(), download: async () => ({ completed: false }) });
+  drag.begin();
+  drag.add({ name: 'one.txt', size: 1 });
+  await assert.rejects(() => drag.stage({}), (error) => error.code === 'DRAG_TRANSFER_INCOMPLETE');
+  assert.equal(drag.staged, false);
+  drag.abort();
+});
+
 test('a drag needs an icon and a drag source, and says so', async () => {
   const root = tempRoot();
   const drag = new SI.DragOut({
@@ -1352,6 +1362,8 @@ test('an incoming move is downgraded to a copy while move is disabled', () => {
   assert.equal(SI.incomingDropOperation(SI.DROPEFFECT.MOVE, { allowMove: true }), 'move');
   assert.equal(SI.incomingDropOperation(SI.DROPEFFECT.MOVE, { allowMove: false }), 'copy');
   assert.equal(SI.incomingDropOperation(SI.DROPEFFECT.COPY, { allowMove: true }), 'copy');
+  assert.equal(SI.incomingDropOperation(SI.DROPEFFECT.LINK, { allowMove: true }), null);
+  assert.equal(SI.incomingDropOperation(SI.DROPEFFECT.COPY | SI.DROPEFFECT.MOVE, { allowMove: true }), null);
   assert.equal(SI.incomingDropOperation(SI.DROPEFFECT.NONE, { allowMove: true }), null);
   // DDDisableMove defaults to false, so an unstated preference means "allowed".
   assert.equal(SI.incomingDropOperation(SI.DROPEFFECT.MOVE, {}), 'move');

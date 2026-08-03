@@ -27,6 +27,7 @@ Console-compatible commands:
 Headless drag/drop simulation:
   winscp drag plan [options]          Calculate a drag/drop operation as JSON
   winscp drop classify PATH...        Classify paths and check upload support
+  winscp drop simulate PATH...        Combine path, target, and effect checks
   winscp drop target [options]        Resolve the Explorer/queue drop target
   winscp drag stage PATH...           Stage local fixtures like a remote drag
   winscp drag extension-status        Report the native-extension mode
@@ -34,6 +35,9 @@ Headless drag/drop simulation:
 Session URL utilities:
   winscp url parse URL [options]    Parse a session URL as redacted JSON
   winscp url generate [options]     Generate a credential-free session URL
+
+Discovery:
+  winscp capabilities                List script, URL, and simulation surfaces as JSON
 
 Drag plan options:
   --source remote|local              Where the dragged items originate
@@ -423,6 +427,91 @@ function dropTarget(argv) {
   };
 }
 
+function dropSimulate(argv) {
+  const { positional, options } = parseOptions(argv);
+  assertKnownOptions(options, new Set([
+    'last-effect', 'effect', 'allow-move', 'read-only', 'no-upload', 'no-mkdir',
+    'file', 'queue', 'default-download-target', 'fake-file-target',
+    'external-drop-directory', 'json', 'pretty',
+  ]), 'drop simulate');
+  const paths = [...positional, ...optionValues(options, 'file').map(String)];
+  if (paths.length === 0) throw new Error('drop simulate needs at least one PATH');
+  paths.forEach((value) => {
+    if (process.platform !== 'win32' && looksLikeWindowsPath(value)) localPath(value);
+  });
+
+  const classification = shell.classifyIncomingDrop(paths);
+  const target = resolveDropTarget({
+    ontoQueueView: booleanOption(options, 'queue', false),
+    defaultDownloadTarget: optionValue(options, 'default-download-target', ''),
+    fakeFileDropTarget: optionValue(options, 'fake-file-target', ''),
+    externalDropDirectory: optionValue(options, 'external-drop-directory', ''),
+  });
+  const operation = shell.incomingDropOperation(
+    effectValue(optionValue(options, 'last-effect', optionValue(options, 'effect', 'copy')), 'last-effect'),
+    { allowMove: booleanOption(options, 'allow-move', true) },
+  );
+  const accepted = shell.canAcceptDrop({
+    upload: !booleanOption(options, 'no-upload', false),
+    mkdir: !booleanOption(options, 'no-mkdir', false),
+  }, {
+    readOnly: booleanOption(options, 'read-only', false),
+    hasDirectories: classification.directories.length > 0,
+  });
+  if (!target.ok && accepted.ok) {
+    accepted.ok = false;
+    accepted.reason = 'No Explorer, queue, or extension drop target is available.';
+  }
+  if (classification.items.length === 0 && accepted.ok) {
+    accepted.ok = false;
+    accepted.reason = 'No existing files or directories were found in the drop.';
+  }
+  if (!operation && accepted.ok) {
+    accepted.ok = false;
+    accepted.reason = 'The shell reported no actionable copy or move effect.';
+  }
+  return {
+    command: 'drop simulate',
+    operation,
+    effectiveOperation: accepted.ok ? operation : null,
+    accepted,
+    target,
+    classification,
+    extension: shell.dragExtensionStatus(),
+  };
+}
+
+function capabilities(argv) {
+  const { positional, options } = parseOptions(argv);
+  assertKnownOptions(options, new Set(['json', 'pretty']), 'capabilities');
+  if (positional.length) throw new Error('capabilities does not accept positional arguments');
+  return {
+    command: 'capabilities',
+    version: packageInfo.version,
+    transport: 'headless-node',
+    gui: false,
+    supportsNetworkSessions: true,
+    simulationNetwork: false,
+    console: {
+      executables: ['winscp', 'winscp-com'],
+      forms: ['run', 'script', 'command', 'legacy-switches'],
+      switches: [
+        '/console', '/script', '/command', '/parameter', '/log', '/loglevel',
+        '/xmllog', '/xmllogrequired', '/xmlgroups', '/ini', '/rawsettings',
+        '/stdout', '/stdin', '/nointeractiveinput', '/unsafe',
+      ],
+      convenienceOptions: ['--parameter', '--command', '--session', '--log', '--loglevel',
+        '--xmllog', '--ini', '--rawsettings', '--stdout', '--stdin', '--nointeractiveinput',
+        '--unsafe'],
+    },
+    simulations: {
+      drag: ['plan', 'stage', 'extension-status'],
+      drop: ['classify', 'simulate', 'target'],
+    },
+    urls: ['parse', 'generate'],
+  };
+}
+
 async function stageDrag(argv) {
   const { positional, options } = parseOptions(argv);
   assertKnownOptions(options, new Set(['file', 'move', 'temp-root', 'json', 'pretty']), 'drag stage');
@@ -583,6 +672,7 @@ async function runCli(argv = process.argv.slice(2), io = {}) {
       const { options } = parseOptions(subcommandArgs);
       if (subcommand === 'plan') printJson(streams, dragPlan(subcommandArgs), outputIsPretty(options));
       else if (subcommand === 'classify') printJson(streams, classifyDrop(subcommandArgs), outputIsPretty(options));
+      else if (subcommand === 'simulate') printJson(streams, dropSimulate(subcommandArgs), outputIsPretty(options));
       else if (subcommand === 'target') printJson(streams, dropTarget(subcommandArgs), outputIsPretty(options));
       else if (subcommand === 'stage') printJson(streams, await stageDrag(subcommandArgs), outputIsPretty(options));
       else if (subcommand === 'extension-status') {
@@ -592,6 +682,16 @@ async function runCli(argv = process.argv.slice(2), io = {}) {
         }), outputIsPretty(options));
       }
       else throw new Error(`unknown ${first} subcommand ${JSON.stringify(subcommand)}`);
+      return 0;
+    }
+    if (first === 'capabilities') {
+      const capabilityArgs = args.slice(1);
+      if (hasHelpFlag(capabilityArgs)) {
+        streams.stdout.write(HELP);
+        return 0;
+      }
+      const { options } = parseOptions(capabilityArgs);
+      printJson(streams, capabilities(capabilityArgs), outputIsPretty(options));
       return 0;
     }
 
@@ -648,6 +748,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  HELP, EFFECTS, parseOptions, dragPlan, classifyDrop, dropTarget, stageDrag,
+  HELP, EFFECTS, parseOptions, dragPlan, classifyDrop, dropTarget, dropSimulate, capabilities, stageDrag,
   parseSessionUrl, generateSessionUrl, buildConsoleArgs, runCli,
 };

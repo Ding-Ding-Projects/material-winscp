@@ -49,7 +49,8 @@ pending list; a control without one must appear there.
 | --- | --- | --- |
 | `beepOnFinish` | `design/main/queue.js` → `beep`; `design/main/ipc.js` → `shell.beep()` | Queue completion decides whether to emit the beep event. |
 | `beepOnFinishAfter` | `design/main/queue.js` → `_beepIfDue()` | The configured minimum duration is compared with the whole queue batch. |
-| `dDAllowMove` | `design/renderer/ui/panels.js` → panel drag/drop | Shift-drag is offered as move only when this persisted preference is enabled; otherwise the drop remains a copy. |
+| `dDAllowMove` | `design/renderer/ui/panels.js` → panel drag/drop | Move effects are offered only when this persisted preference is enabled; otherwise the drop remains a copy. |
+| `dDAllowMoveInit` | `design/renderer/ui/panels.js` → panel drag/drop | Starts an allowed drag as move by default; Ctrl still requests a copy. |
 | `queue.keepDoneItemsFor` | `design/main/queue.js` → `pruneDoneItems()` | Completed rows are swept according to `0`, positive seconds, or `-1`. |
 | `tabs.truncateTitles` | `design/renderer/ui/tabs.js` → tab strip class and `components.css` | Tab labels use ellipsis by default and retain their full text when truncation is disabled; changes apply live. |
 | `showInaccessibleDirectories` | `design/main/dirview.js`, `design/main/guitools.js`, `design/main/ipc.js` | The file lists and traversal code now read the correctly spelled key, so inaccessible directories obey the toggle. |
@@ -72,7 +73,6 @@ successful settings.
 | Preference | Consumer |
 | --- | --- |
 | `copyParam.saveTransferOptions` | None |
-| `dDAllowMoveInit` | None |
 | `dDDrives` | None |
 | `dDFakeFile` | None |
 | `editor.autoFont` | None |

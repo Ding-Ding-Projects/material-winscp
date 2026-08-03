@@ -92,6 +92,10 @@ believe something false.
   traffic and still does not print the stored credential.
 - **The app never displays a stored secret back to the user**, and there is no
   "show saved passwords" surface. Password managers exist for that.
+- **Malformed protected envelopes are refused.** OS-keychain ciphertext must
+  use canonical base64, and malformed external-password payloads are not
+  converted into an empty credential. The connection falls back to an explicit
+  prompt instead of silently trying damaged state.
 - **In-memory (`rememberPassword`) and on-disk (`savePassword`) are different
   settings** with different consequences, and the UI does not blur them.
 - **Exported configuration may contain protected secrets.** The export dialog

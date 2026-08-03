@@ -43,6 +43,16 @@ long English/Cantonese or bilingual labels cannot push the shortcut off-screen.
 Submenu arrows, disabled state, checked/radio state, and the menu roles remain
 owned by the existing renderer; shortcut normalization only adds metadata.
 
+### Nested-menu keyboard focus
+
+`ArrowRight` or `Enter` opens a submenu and moves focus into its first enabled
+item. `ArrowLeft` and `Escape` dismiss that child, set the parent item's
+`aria-expanded` state back to `false`, and return focus to the exact parent
+item. The parent also drops its disposed child handle, so opening the same
+submenu again remains possible without a mouse. This is important for screen
+reader users: the focused row and the announced expanded state must describe
+the same menu tree after every dismissal path.
+
 ## Verification
 
 Run the focused regression suite:
@@ -54,5 +64,7 @@ node --test test/contextmenu.test.js
 It audits the real file/panel context providers, both declarative menu trees,
 all direct shortcut literals in registered provider modules, action fallback,
 special keys, accessibility metadata, and the narrow-layout contract.
+It also runs a DOM-light lifecycle regression covering child-menu dismissal,
+focus return, `aria-expanded`, and reopening the same submenu.
 
 This repository has no HTTP API, so no API collection applies to this feature.

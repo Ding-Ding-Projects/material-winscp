@@ -25,6 +25,17 @@ test('SiteAdvanced sendBuf reaches ssh2 highWaterMark and rejects invalid import
   assert.deepEqual(applySshSendBuffer({}, 'not-a-number'), {});
 });
 
+test('SFTP custom server commands fail closed instead of opening the default subsystem', async () => {
+  const adapter = new SftpAdapter({ sftpServer: '/opt/custom/sftp-server' });
+
+  await assert.rejects(() => adapter.connect(), (error) => {
+    assert.equal(error.code, 'ERR_SFTP_SUBSYSTEM_COMMAND_UNSUPPORTED');
+    assert.match(error.message, /default "sftp" subsystem/i);
+    return true;
+  });
+  assert.equal(adapter.transport, null, 'the refusal happens before an SSH transport is opened');
+});
+
 const P = ext.SFTP_PACKET;
 
 test('SFTP EOF ends a pipelined read cleanly, including an empty file', async () => {

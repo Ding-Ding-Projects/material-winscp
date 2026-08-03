@@ -1510,6 +1510,17 @@ class SftpAdapter extends Adapter {
 
   // ---- lifecycle -------------------------------------------------------
   async connect() {
+    // ssh2's public SFTP entry point always requests the literal `sftp`
+    // subsystem. It has no safe hook for WinSCP's custom SFTP server command,
+    // so silently proceeding here would run the wrong remote program while
+    // making the site appear connected. Refuse before opening SSH instead.
+    if (String(this.session.sftpServer == null ? '' : this.session.sftpServer).trim()) {
+      const error = new Error(
+        'A custom SFTP server command is configured, but this adapter can only open the default "sftp" subsystem; clear the SFTP server command.'
+      );
+      error.code = 'ERR_SFTP_SUBSYSTEM_COMMAND_UNSUPPORTED';
+      throw error;
+    }
     if (!this.transport) {
       this.transport = new SshTransport(this.session, this.options);
       this._ownsTransport = true;

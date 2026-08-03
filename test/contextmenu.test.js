@@ -19,6 +19,124 @@ test.before(async () => {
   ({ ACTIONS } = await import(R('actions.js')));
 });
 
+class MenuTestNode {
+  constructor(tagName = 'div', text = '') {
+    this.tagName = String(tagName).toUpperCase();
+    this.textContent = text;
+    this.children = [];
+    this.parentNode = null;
+    this.attributes = new Map();
+    this.dataset = {};
+    this.style = {};
+    this.listeners = new Map();
+    this.classList = {
+      toggle: (name, force) => {
+        const on = force === undefined ? !this.classList[name] : !!force;
+        this.classList[name] = on;
+        return on;
+      },
+    };
+    this.isConnected = false;
+  }
+
+  setAttribute(name, value) {
+    const key = String(name);
+    const text = String(value);
+    this.attributes.set(key, text);
+    if (key === 'id') this.id = text;
+    if (key.startsWith('data-')) this.dataset[key.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = text;
+  }
+
+  getAttribute(name) { return this.attributes.get(String(name)) ?? null; }
+  removeAttribute(name) { this.attributes.delete(String(name)); }
+
+  appendChild(child) {
+    child.parentNode = this;
+    this.children.push(child);
+    child.isConnected = this.isConnected;
+    for (const descendant of child.children) descendant.isConnected = child.isConnected;
+    return child;
+  }
+
+  removeChild(child) {
+    const index = this.children.indexOf(child);
+    if (index >= 0) this.children.splice(index, 1);
+    child.parentNode = null;
+    child.isConnected = false;
+    return child;
+  }
+
+  remove() { this.parentNode?.removeChild(this); }
+  addEventListener(type, fn) {
+    const handlers = this.listeners.get(type) || [];
+    handlers.push(fn);
+    this.listeners.set(type, handlers);
+  }
+  removeEventListener(type, fn) {
+    this.listeners.set(type, (this.listeners.get(type) || []).filter((handler) => handler !== fn));
+  }
+  dispatchEvent(event) {
+    if (!event.target) event.target = this;
+    event.preventDefault ||= (() => { event.defaultPrevented = true; });
+    event.stopPropagation ||= (() => { event.cancelBubble = true; });
+    for (const handler of this.listeners.get(event.type) || []) handler(event);
+    if (!event.cancelBubble) this.parentNode?.dispatchEvent(event);
+    return !event.defaultPrevented;
+  }
+  focus() { if (this.isConnected) global.document.activeElement = this; }
+  contains(node) { return node === this || this.children.some((child) => child.contains(node)); }
+  getBoundingClientRect() { return { left: 10, right: 110, top: 10, bottom: 30, width: 100, height: 20 }; }
+}
+
+function installMenuDom() {
+  const previous = {
+    document: global.document,
+    window: global.window,
+    Node: global.Node,
+    requestAnimationFrame: global.requestAnimationFrame,
+    setTimeout: global.setTimeout,
+    clearTimeout: global.clearTimeout,
+  };
+  const body = new MenuTestNode('body');
+  body.isConnected = true;
+  const document = {
+    body,
+    activeElement: body,
+    documentElement: { clientWidth: 1200, clientHeight: 800 },
+    createElement: (tag) => new MenuTestNode(tag),
+    createElementNS: (_namespace, tag) => new MenuTestNode(tag),
+    createTextNode: (text) => new MenuTestNode('#text', text),
+    getElementById(id) {
+      const visit = (node) => {
+        if (node.id === id) return node;
+        for (const child of node.children) {
+          const found = visit(child);
+          if (found) return found;
+        }
+        return null;
+      };
+      return visit(body);
+    },
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  global.document = document;
+  global.window = { innerWidth: 1200, innerHeight: 800, addEventListener() {}, removeEventListener() {} };
+  global.Node = MenuTestNode;
+  global.requestAnimationFrame = (fn) => { fn(); return 1; };
+  global.setTimeout = (fn) => { fn(); return 1; };
+  global.clearTimeout = () => {};
+  return () => {
+    C.closeAllMenus();
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete global[key];
+      else global[key] = value;
+    }
+  };
+}
+
+function keyEvent(key) { return { type: 'keydown', key, target: null }; }
+
 test('action descriptors resolve through the shared registry and use platform notation', () => {
   assert.equal(C.shortcutForAction({ action: 'LocalBackAction' }), 'Alt+Left');
   assert.equal(C.shortcutForMenu({ action: 'LocalBackAction' }, { platform: 'win32' }), 'Alt+←');
@@ -185,4 +303,37 @@ test('anchored menus cap height before positioning so long dropdowns scroll', ()
   assert.match(source, /const viewportHeight = document\.documentElement\.clientHeight \|\| window\.innerHeight \|\| 0;/);
   assert.match(source, /root\.style\.maxHeight = `\$\{Math\.max\(1, viewportHeight - 12\)\}px`;/);
   assert.match(source, /if \(opts\.anchor\) \{/);
+});
+
+test('submenu dismissal returns focus and clears the parent expanded state', () => {
+  const restore = installMenuDom();
+  try {
+    const parent = C.openMenu({
+      items: [{ id: 'more', label: 'More', submenu: [{ id: 'child', label: 'Child' }] }],
+      x: 10, y: 10,
+    });
+    const parentRow = parent.element.children[0];
+    parent.focusFirst();
+    parent.element.dispatchEvent(keyEvent('ArrowRight'));
+
+    const menuLayer = document.getElementById('layer-menu');
+    assert.equal(menuLayer.children.length, 2, 'the child menu opened');
+    const child = menuLayer.children.find((menu) => menu !== parent.element);
+    child.dispatchEvent(keyEvent('ArrowLeft'));
+
+    assert.equal(document.activeElement, parentRow, 'focus returns to the submenu owner');
+    assert.equal(parentRow.getAttribute('aria-expanded'), 'false', 'the owner is no longer expanded');
+    assert.equal(menuLayer.children.length, 1, 'the disposed child is removed');
+
+    // The parent handle must not retain the disposed child: reopening with the
+    // same row is the keyboard path used after ArrowLeft/Escape.
+    parent.element.dispatchEvent(keyEvent('ArrowRight'));
+    assert.equal(menuLayer.children.length, 2, 'the submenu can be reopened');
+    const reopened = menuLayer.children.find((menu) => menu !== parent.element);
+    reopened.dispatchEvent(keyEvent('Escape'));
+    assert.equal(document.activeElement, parentRow, 'Escape also returns focus to the owner');
+    assert.equal(parentRow.getAttribute('aria-expanded'), 'false');
+  } finally {
+    restore();
+  }
 });

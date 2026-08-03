@@ -253,31 +253,50 @@ function openCredentialDialog(request) {
     log.element);
 
   let answered = false;
+  let submitting = false;
+
+  async function submit(close) {
+    if (answered || submitting) return;
+    submitting = true;
+    const ok = await deliver(request, { results: inputs.map((i) => i.value), remember });
+    if (!ok) {
+      // Keep the prompt open and the user's typed answer available for a retry
+      // when the bridge is temporarily unavailable. It is not an answer until
+      // the session manager confirms delivery.
+      submitting = false;
+      return;
+    }
+    answered = true;
+    for (const input of inputs) input.value = '';
+    close?.('action');
+    announce(t('authenticating'));
+  }
 
   const handle = openModal({
     title: t(CREDENTIAL_TITLES[kind] || 'txAuTitle'),
     width: 520,
     dismissOnScrim: false,
     content: body,
-    onClose: () => {
+    onClose: (reason) => {
       log.destroy();
       openPrompts.delete(promptId);
-      if (answered) return;
+      for (const input of inputs) input.value = '';
+      if (answered || reason === 'prompt-cancelled') return;
+      answered = true;
       // Closing without answering is a refusal, and it is reported as one.
       deliver(request, null).then(() => notify.warning(t('txAuTitle'), t('txAuRefused')));
     },
     actions: [
-      { label: t('cancel'), kind: 'text' },
+      { label: t('cancel'), kind: 'text', onSelect: () => submitting ? true : undefined },
       {
         label: t('ok'),
         kind: 'filled',
         autofocus: false,
-        onSelect: () => {
-          answered = true;
+        onSelect: (close) => {
           // The values go straight across the bridge; they are never stored in
           // a variable that outlives this call, logged, or announced.
-          deliver(request, { results: inputs.map((i) => i.value), remember })
-            .then((ok) => { if (ok) announce(t('authenticating')); });
+          void submit(close);
+          return true;
         },
       },
     ],
@@ -288,9 +307,7 @@ function openCredentialDialog(request) {
     input.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
       e.preventDefault();
-      answered = true;
-      deliver(request, { results: inputs.map((i) => i.value), remember });
-      handle.close();
+      void submit((reason) => handle.close(reason));
     });
   }
   requestAnimationFrame(() => inputs[0]?.focus());
@@ -320,6 +337,7 @@ function openHostKeyDialog(request) {
   const hostPort = payload?.hostPort || '—';
   const presentedFingerprint = String(payload?.fingerprintSHA256 || '').trim();
   let answered = false;
+  let submitting = false;
 
   const facts = h('div', { class: 'tx-au-kv' },
     h('span', {}, t('hostName')), h('span', { class: 'mono' }, hostPort),
@@ -348,15 +366,17 @@ function openHostKeyDialog(request) {
     log.element);
 
   function accept(remember, close) {
+    if (answered || submitting) return;
     // A missing fingerprint is an incomplete verification result, never a
     // reason to let the user approve a key that the dialog cannot identify.
     if (!presentedFingerprint) {
       notify.error(t('hostKeyTitle'), t('txHkRejected', hostPort));
       return;
     }
+    submitting = true;
     deliver(request, { accept: true, remember })
       .then((ok) => {
-        if (!ok) return;
+        if (!ok) { submitting = false; return; }
         answered = true;
         close?.('action');
         notify.success(t('hostKeyTitle'),
@@ -369,22 +389,23 @@ function openHostKeyDialog(request) {
     width: 640,
     dismissOnScrim: false,
     content: body,
-    onClose: () => {
+    onClose: (reason) => {
       log.destroy();
       openPrompts.delete(promptId);
-      if (answered) return;
+      if (answered || reason === 'prompt-cancelled') return;
+      answered = true;
       deliver(request, { accept: false })
         .then(() => notify.warning(t('hostKeyTitle'), t('txHkRejected', hostPort)));
     },
     actions: [
-      // Reject is first AND focused for a changed key: the safe answer must be
-      // the one a reflexive Enter or Escape produces.
-      { label: t('txHkReject'), kind: changed ? 'danger' : 'text', autofocus: changed },
+      // Reject is first AND focused for every untrusted key: the safe answer
+      // must be the one a reflexive Enter or Escape produces.
+      { label: t('txHkReject'), kind: changed ? 'danger' : 'text', autofocus: true },
       { label: t('txHkAcceptOnce'), kind: 'text', onSelect: (close) => { accept(false, close); return true; } },
       {
         label: t('txHkAcceptStore'),
         kind: 'filled',
-        autofocus: !changed,
+        autofocus: false,
         onSelect: (close) => {
           if (!changed) { accept(true, close); return true; }
           // Storing a CHANGED key overwrites the evidence that it changed, so
@@ -414,7 +435,9 @@ function openHostKeyDialog(request) {
 function openCertificateDialog(request) {
   const { promptId, payload } = request;
   const hostPort = payload?.hostPort || '—';
+  const presentedFingerprint = String(payload?.fingerprintSHA256 || '').trim();
   let answered = false;
+  let submitting = false;
   const errors = Array.isArray(payload?.errors) ? payload.errors : [];
 
   const log = authenticationLog(request.sessionId);
@@ -432,7 +455,7 @@ function openCertificateDialog(request) {
       h('span', {}, t('txCertIssuer')), h('span', { class: 'mono' }, payload?.issuer || '—'),
       h('span', {}, t('txCertValidFrom')), h('span', { class: 'mono' }, payload?.validFrom || '—'),
       h('span', {}, t('txCertValidTo')), h('span', { class: 'mono' }, payload?.validTo || '—')),
-    fingerprintBlock('txCertSha256', payload?.fingerprintSHA256),
+    fingerprintBlock('txCertSha256', presentedFingerprint),
     h('div', { class: 'tx-au-kv' },
       h('span', {}, t('txCertSha1')), h('span', { class: 'mono' }, payload?.fingerprintSHA1 || '—')),
     payload?.pem
@@ -443,9 +466,15 @@ function openCertificateDialog(request) {
     log.element);
 
   function accept(remember, close) {
+    if (answered || submitting) return;
+    if (!presentedFingerprint) {
+      notify.error(t('txCertTitle'), t('txCertRejected', hostPort));
+      return;
+    }
+    submitting = true;
     deliver(request, { accept: true, remember })
       .then((ok) => {
-        if (!ok) return;
+        if (!ok) { submitting = false; return; }
         answered = true;
         close?.('action');
         notify.success(t('txCertTitle'), hostPort);
@@ -457,10 +486,11 @@ function openCertificateDialog(request) {
     width: 660,
     dismissOnScrim: false,
     content: body,
-    onClose: () => {
+    onClose: (reason) => {
       log.destroy();
       openPrompts.delete(promptId);
-      if (answered) return;
+      if (answered || reason === 'prompt-cancelled') return;
+      answered = true;
       deliver(request, { accept: false })
         .then(() => notify.warning(t('txCertTitle'), t('txCertRejected', hostPort)));
     },
@@ -564,7 +594,9 @@ onMainEvent('event:prompt-cancelled', (payload) => {
   const handle = openPrompts.get(payload?.promptId);
   if (!handle) return;
   openPrompts.delete(payload.promptId);
-  handle.close();
+  // The session already resolved this prompt. Tag the close so the modal's
+  // normal unanswered-close handler does not send a second refusal.
+  handle.close('prompt-cancelled');
   notify.info(t('txAuTitle'), t('txAuCancelled'));
 });
 

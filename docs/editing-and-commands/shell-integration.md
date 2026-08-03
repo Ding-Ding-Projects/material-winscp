@@ -18,17 +18,19 @@ disabled: preserving a remote name must not turn a shell payload into a device
 path or an unreliable Windows file operation.
 
 The drag source requires real staged files and a non-empty drag icon. If a file
-is missing, staging fails, or the platform cannot provide the shell surface,
-the operation reports an error instead of offering a guessed path.
+is missing, staging fails, the transfer explicitly reports cancellation or
+incompletion, or the platform cannot provide the shell surface, the operation
+reports an error instead of offering a guessed or partial path.
 
 Internal remote drops back onto the directory currently shown in the panel are
 also refused as self-drops. A child directory remains a valid target.
 
 ## Failure modes
 
-Traversal-like names, device names, missing files, failed staging, self-drops
-and an unavailable shell surface are refused before an unsafe payload is
-offered.
+Traversal-like names, device names, missing files, incomplete staging,
+self-drops and an unavailable shell surface are refused before an unsafe or
+partial payload is offered. Incoming `LINK` and other unknown effects are
+refused; a `MOVE` is downgraded to a safe `copy` only when move is disabled.
 The caller can retry with a valid name or use the in-app transfer commands.
 
 ## Security considerations

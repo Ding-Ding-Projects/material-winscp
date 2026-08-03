@@ -162,6 +162,13 @@ test('external passwords are tagged and hex-encoded, not obfuscated', () => {
   assert.deepStrictEqual(S.getExternalEncryptedPassword(blob), payload);
 });
 
+test('a malformed external password payload is refused instead of becoming empty', () => {
+  const blob = S.setExternalEncryptedPassword(Buffer.from('AB'));
+  assert.strictEqual(S.getExternalEncryptedPassword(`${blob}!`), null);
+  assert.strictEqual(S.getExternalEncryptedPassword(blob.slice(0, -1)), null);
+  assert.deepStrictEqual(S.getExternalEncryptedPassword(S.setExternalEncryptedPassword(Buffer.alloc(0))), Buffer.alloc(0));
+});
+
 test('getExternalEncryptedPassword declines an ordinary obfuscated password', () => {
   const blob = S.encryptPassword('secret', 'key');
   assert.strictEqual(S.getExternalEncryptedPassword(blob), null);
@@ -218,6 +225,15 @@ test('AES-GCM rejects permissively decoded envelope text', () => {
   assert.throws(() => C.decryptWithKey(key, `${blob}!`), /valid base64/);
   assert.throws(() => C.decryptWithKey(key, blob.replace(/=+$/u, '')), /valid base64/);
   assert.strictEqual(C.decryptWithKey(key, blob), 'secret');
+});
+
+test('protected OS envelopes require canonical base64 before keychain access', () => {
+  const key = crypto.randomBytes(32);
+  const blob = C.encryptWithKey(key, 'secret');
+  assert.equal(C.isCanonicalBase64(blob), true);
+  assert.equal(C.isCanonicalBase64(` ${blob}`), false);
+  assert.equal(C.isCanonicalBase64(`${blob}!`), false);
+  assert.equal(C.isCanonicalBase64(blob.replace(/=+$/u, '')), false);
 });
 
 test('AES-GCM rejects authenticated ciphertext that is not UTF-8 text', () => {

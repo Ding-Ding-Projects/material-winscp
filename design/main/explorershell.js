@@ -843,7 +843,7 @@ class ExplorerShell {
   /** HasAvailableTerminal — a session object exists AND it is usable. */
   hasAvailableTerminal() {
     const s = this.session();
-    return !!s && s.active !== false && !s.localBrowser;
+    return !!s && s.active !== false && s.connected !== false && !s.localBrowser;
   }
 
   requireSession() {
@@ -2035,6 +2035,7 @@ class ExplorerShell {
     let effect = Number(s.effect) || DROPEFFECT.NONE;
     if (effect === DROPEFFECT.NONE) return effect;
     if (!s.fromRemotePanel) return effect;
+    if (!this.hasAvailableTerminal()) return DROPEFFECT.NONE;
 
     if (s.ontoDirView && s.fromDirView && !s.dropTarget) return DROPEFFECT.NONE;
     // A drop back onto the directory being displayed is a self-drop, not a
@@ -2045,14 +2046,18 @@ class ExplorerShell {
       return DROPEFFECT.NONE;
     }
 
-    if (effect !== DROPEFFECT.COPY) return effect;
-
     const moveCapable = this.capable('remoteMove');
     // WinSCP's comment: "currently we support copying always (at least via
     // temporary directory)". The temporary-directory route is implemented in
     // remoteTransferFiles, so this stays true here too.
     const copyCapable = true;
     if (!moveCapable && !copyCapable) return DROPEFFECT.NONE;
+
+    // The shell can report MOVE directly, without first passing through the
+    // COPY negotiation branch below. Never let that effect bypass the session
+    // capability check and turn into a delete-on-success.
+    if (effect === DROPEFFECT.MOVE) return moveCapable ? DROPEFFECT.MOVE : DROPEFFECT.COPY;
+    if (effect !== DROPEFFECT.COPY) return DROPEFFECT.NONE;
 
     if (!s.ctrl) return moveCapable ? DROPEFFECT.MOVE : DROPEFFECT.COPY;
     return copyCapable ? DROPEFFECT.COPY : DROPEFFECT.NONE;
@@ -2122,12 +2127,24 @@ class ExplorerShell {
     if (effect !== DROPEFFECT.COPY && effect !== DROPEFFECT.MOVE) {
       return { ok: false, reason: 'invalidDropEffect' };
     }
-    const operation = effect === DROPEFFECT.MOVE ? OPERATIONS.move : OPERATIONS.copy;
-    const files = s.files || [];
-    if (!files.length) return { ok: false };
+    const files = Array.isArray(s.files) ? s.files : [];
+    if (!files.length) return { ok: false, reason: 'missingFiles' };
+    const targetDirectory = String(s.targetPath || '');
+    if (!targetDirectory.trim()) return { ok: false, reason: 'missingTarget' };
+    if (!this.hasAvailableTerminal()) return { ok: false, reason: 'notConnected' };
+
+    const acceptance = shellintegration.canAcceptDrop(this.session()?.caps, {
+      readOnly: s.readOnly === true,
+      hasDirectories: files.some((file) => file && (file.isDirectory === true || file.type === 'dir')),
+    });
+    if (!acceptance.ok) return { ok: false, reason: 'capability', message: acceptance.reason };
+
+    const operationName = shellintegration.incomingDropOperation(effect, { allowMove: s.allowMove !== false });
+    if (!operationName) return { ok: false, reason: 'invalidDropEffect' };
+    const operation = operationName === 'move' ? OPERATIONS.move : OPERATIONS.copy;
 
     const param = {
-      targetDirectory: s.targetPath,
+      targetDirectory,
       temp: false,
       dragDrop: s.dragDrop !== false,
       options: {},

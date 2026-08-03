@@ -19,6 +19,12 @@ legacy string form. Both retain the server or transport message when one is
 present; malformed or empty errors fall back to `The session could not be
 opened.` rather than displaying `[object Object]` or an empty notification.
 
+Authentication prompts use the same delivery boundary: a credential answer is
+not considered submitted until the session manager confirms it. A failed bridge
+call leaves the prompt open for retry, while a prompt-cancelled event closes it
+without sending a duplicate refusal; typed credential fields are cleared when
+the prompt closes.
+
 ## Verification
 
 `test/login-validation.test.js` covers missing hosts, trimmed valid hosts,

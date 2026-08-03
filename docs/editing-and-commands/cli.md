@@ -13,11 +13,13 @@ winscp script deploy.txt --parameter production --command "exit"
 winscp command "open sftp://host/" "put report.txt" "exit"
 winscp drag plan --source remote --result invalid --last-effect move
 winscp drop classify report.txt folder --allow-move=false
+winscp drop simulate report.txt --queue --default-download-target C:\\Downloads
 winscp drop target --queue --default-download-target C:\\Downloads
 winscp drag stage report.txt --temp-root C:\\Temp
 winscp drag extension-status
 winscp url parse sftp://alice:secret@example.com:2222/home/report.txt --want-file
 winscp url generate --protocol sftp --host example.com --username alice --specific
+winscp capabilities --pretty
 ```
 
 The `script` and `command` forms forward the console runner's practical
@@ -57,6 +59,21 @@ the app for a real transfer.
 PATH`, `--fake-file-target PATH`, or `--external-drop-directory PATH`. It
 returns the target, queue-forcing decision, and refusal counter as JSON without
 starting Electron, Explorer, or a network connection.
+
+`drop simulate` composes the real path classifier, shell-effect policy, remote
+capability checks, and Explorer/queue target resolver into one read-only JSON
+decision. It never copies, deletes, uploads, or creates a target directory;
+the command is intended for CI and adapter tests that need to exercise the
+whole local-drop boundary in one call. A `MOVE` with `--allow-move=false` is
+reported as a safe `COPY`; `NONE`, `LINK`, and other non-transfer effects are
+refused.
+
+`capabilities` is a machine-readable discovery endpoint. It lists the two
+console executables, every console switch accepted by the headless wrapper,
+the drag/drop simulation commands, and the URL utilities. This lets scripts
+feature-detect the installed CLI without opening the app or scraping help.
+The capability record distinguishes the real console's network-capable session
+runner from the simulation commands, which are deliberately local-only.
 
 Help is available at every level: `winscp drag --help`, `winscp drop --help`,
 `winscp drag plan --help`, and `winscp url --help` all return the same command
@@ -101,6 +118,7 @@ There is no stored preference. The command line is the configuration boundary:
 | `--read-only`, `--no-upload`, `--no-mkdir` | Model remote capability refusals. |
 | `--queue` | Mark the planned operation as background work. |
 | `--file PATH` | Repeatable path input for `drop classify` or `drag stage`. |
+| `--queue --default-download-target PATH` | For `drop simulate`, model a queue drop with its required destination. |
 | `--windows-build N` | Override the Windows build used by extension-status output. |
 | `--protocol SCHEME` | URL scheme for `url generate`: `scp`, `sftp`, `ftp`, `ftps`, `ftpes`, `dav`, `davs`, `s3`, or `s3plain`. |
 | `--host HOST`, `--port N`, `--username USER` | Connection fields for `url generate`; no password option is provided. |
@@ -132,6 +150,7 @@ accepted as an explicit synonym for the default machine-readable format.
 | An empty stage path is supplied | The command fails with an input error; it never resolves the empty value to the current directory. | Yes — provide a file or directory path |
 | A console script fails | The existing console engine returns its normal non-zero script result. | Yes — inspect its log/XML output |
 | A URL is malformed or has no host | `url parse` returns exit code `2` without opening a session. | Yes — provide a supported session URL |
+| A simulated drop has no target or actionable effect | `drop simulate` returns `accepted.ok: false` and `effectiveOperation: null`; no filesystem mutation occurs. | Yes — provide a target and COPY/MOVE effect |
 
 ## Security considerations
 
@@ -162,6 +181,9 @@ accepted as an explicit synonym for the default machine-readable format.
   `secret`.
 - `node bin/winscp.js url generate --protocol sftp --host example.com --username alice`
   is a smoke check for credential-free URL generation.
+- `node bin/winscp.js drop simulate FILE --queue --default-download-target C:\\Downloads`
+  is a smoke check for the complete read-only local-drop decision.
+- `node bin/winscp.js capabilities` is a smoke check for CLI feature discovery.
 - `npm run smoke:docker` exercises the real SFTP and FTP transfer engine with
   throwaway local Docker servers; it is separate from this local-only CLI
   simulation.

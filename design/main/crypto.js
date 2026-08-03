@@ -93,6 +93,15 @@ function unlockMaster(password, verifier) {
   return true;
 }
 
+function decodeCanonicalBase64(value) {
+  if (typeof value !== 'string' || value.length === 0 || value.length % 4 !== 0 ||
+      !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value)) {
+    return null;
+  }
+  const bytes = Buffer.from(value, 'base64');
+  return bytes.toString('base64') === value ? bytes : null;
+}
+
 function encryptWithKey(key, plain) {
   if (!Buffer.isBuffer(key) || key.length !== 32) {
     throw new Error('AES-GCM requires a 32-byte key.');
@@ -115,12 +124,10 @@ function decryptWithKey(key, blob) {
   // Buffer.from(value, 'base64') silently ignores non-base64 characters and
   // accepts impossible padding. Reject those inputs before authentication so
   // damaged config cannot be normalized into a different ciphertext.
-  if (typeof blob !== 'string' || blob.length === 0 || blob.length % 4 !== 0 ||
-      !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(blob)) {
+  const buf = decodeCanonicalBase64(blob);
+  if (!buf) {
     throw new Error('AES-GCM envelope is not valid base64.');
   }
-  const buf = Buffer.from(blob, 'base64');
-  if (buf.toString('base64') !== blob) throw new Error('AES-GCM envelope is not canonical base64.');
   if (buf.length < AES_GCM_OVERHEAD) throw new Error('AES-GCM envelope is truncated.');
   const d = crypto.createDecipheriv('aes-256-gcm', key, buf.subarray(0, AES_GCM_IV_LENGTH));
   d.setAuthTag(buf.subarray(AES_GCM_IV_LENGTH, AES_GCM_OVERHEAD));
@@ -159,7 +166,9 @@ function unprotect(stored) {
     }
     if (stored.startsWith('os:')) {
       if (!safeStorage || !safeStorage.isEncryptionAvailable()) return '';
-      return safeStorage.decryptString(Buffer.from(stored.slice(3), 'base64'));
+      const blob = decodeCanonicalBase64(stored.slice(3));
+      if (!blob) return '';
+      return safeStorage.decryptString(blob);
     }
   } catch { return ''; }
   return '';
@@ -186,5 +195,6 @@ module.exports = {
   protect, unprotect, needsMaster,
   hasMaster, lockMaster, unlockMaster, makeVerifier,
   encryptWithKey, decryptWithKey, deriveKey, fileKeyFromPassphrase,
+  isCanonicalBase64: (value) => decodeCanonicalBase64(value) !== null,
   isOsEncryptionAvailable: () => !!(safeStorage && safeStorage.isEncryptionAvailable()),
 };

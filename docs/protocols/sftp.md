@@ -49,15 +49,16 @@ under **Site → Advanced → SSH** and **→ SFTP**.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `sftpMaxVersion` | `6` | Highest protocol version to negotiate. Lower it for servers that misreport. |
-| `sftpMinPacketSize` / `sftpMaxPacketSize` | `0` (auto) | Override negotiated packet sizing. |
+| `sftpMaxVersion` | `6` | Stored for session compatibility, but not effective in this build: `ssh2` sends and parses SFTP version 3 only. Versions 4–6 are a documented gap. |
+| `sftpMinPacketSize` | `0` | Stored for compatibility, but not consumed by the reachable adapter. It does not change transfer requests. |
+| `sftpMaxPacketSize` | `0` (auto) | Sets the stream read/write chunk high-water mark; zero uses the server/engine ceiling when one is known. |
 | `sftpDownloadQueue` / `sftpUploadQueue` | `32` | Outstanding READ/WRITE requests in flight. Raising this helps on high-latency links; lowering it helps on servers with small buffers. The adapter clamps each direction to 256 requests. |
 | `sftpListingQueue` | `2` | Parallel listing requests. |
 | `sftpRealPath` | `auto` | Whether to canonicalize paths with `SSH_FXP_REALPATH`. |
 | `usePosixRename` | `false` | Use the `posix-rename@openssh.com` extension so rename can overwrite atomically. |
 | `sftpBugs.symlink` | `auto` | Work around servers that reverse `SSH_FXP_SYMLINK`'s arguments. |
 | `sftpBugs.signedTS` | `auto` | Work around servers sending signed timestamps. |
-| `sftpServer` | `''` | Run a non-default subsystem command instead of `sftp`. |
+| `sftpServer` | `''` | Not available in this build. A non-empty custom subsystem command is rejected before SSH opens; the adapter cannot safely replace `ssh2`'s literal `sftp` request. |
 
 Stream `start` and `end` offsets are validated before opening a remote handle.
 They must be non-negative safe integers; negative, fractional, and infinite
@@ -74,7 +75,8 @@ behaviour, and only then apply it.
 | Authentication fails | A persistent error toast naming the method that failed (password, key, keyboard-interactive) and, when the server said so, why. Passwords are never echoed. | Yes |
 | An explicit cipher, KEX or host-key list has no usable algorithm in this build | The connection stops before the SSH handshake with a non-retriable policy error; the adapter never falls back to `ssh2` defaults. | No, until the site policy is changed |
 | Key file needs a passphrase | A modal prompt. If the master password is set, an accepted passphrase can be saved encrypted. | Yes |
-| Server negotiates a version below `sftpMaxVersion` | Silent and normal; the capability set narrows accordingly and affected commands grey out. | n/a |
+| A custom `sftpServer` command is configured | The connection is refused before the SSH transport opens, because this build cannot request that command and must not silently run the default `sftp` subsystem instead. | Yes, by clearing the custom command |
+| `sftpMaxVersion` is lowered | No SFTP version negotiation change occurs in this build: `ssh2` still sends and parses version 3. Versions 4–6 remain unavailable and the stored value does not narrow the live capability set. | No, until a version-capable SFTP engine is integrated |
 | Server ignores `chmod` | The operation is reported as failed rather than assumed to have worked. `ignorePermErrors` in the transfer settings can downgrade it to a warning for bulk transfers. | Yes |
 | Transfer interrupted | The queue item records the byte offset and moves to `failed`. Resume restarts from that offset if `resumeSupport` permits and preserves existing remote permissions unless an explicit mode is supplied. | Yes |
 | SSH handshake, host-key or authentication failure | Any partially opened SSH socket, channel, or tunnel listener is closed before the classified error is returned. The transport remains retryable unless the classification says otherwise. | Yes, when the classification is retriable |
@@ -136,6 +138,11 @@ behaviour, and only then apply it.
   wire offset and permission preservation. Reopening an existing file does not
   apply the default upload mode; an explicit `mode` remains available when
   metadata should change.
+- A configured custom `sftpServer` command is verified to fail before an SSH
+  transport is created, rather than silently opening the default subsystem.
+- The session-setting audit records the current limitations: `ssh2` hard-codes
+  SFTP version 3, and the adapter consumes `sftpMaxPacketSize` but not
+  `sftpMinPacketSize`.
 
 To check a real connection by hand: connect, run **Commands → Server/protocol
 information**, and confirm the negotiated SFTP version and extension list match

@@ -1347,7 +1347,6 @@ export function pageById(id, pages = PAGES) { return pages.find((p) => p.id === 
  * and read by nothing; a real runtime read must remove the key from this set.
  */
 export const PENDING_KEYS = new Set([
-  'dDAllowMoveInit',
   // Drag & drop out of the application is Explorer's IDataObject and the
   // DragExt shell extension, neither of which this port has: the panel drags
   // through the browser's own drag events. Until that lands, "drag a fake file

@@ -352,3 +352,40 @@ test('drop target exercises the same Explorer target policy as IPC', async () =>
   assert.equal(cli.dropTarget(['--queue', '--default-download-target', '   ']).ok, false);
   assert.equal(cli.dropTarget(['--fake-file-target', 'C:\\Temp\\scp12345\\report.txt']).directory, 'C:\\Temp\\scp12345');
 });
+
+test('drop simulate combines real path classification with target and effect policy', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'winscp-cli-simulate-'));
+  const file = path.join(root, 'report.txt');
+  fs.writeFileSync(file, 'report');
+  try {
+    const result = cli.dropSimulate([
+      file, '--last-effect', 'move', '--allow-move=false', '--queue',
+      '--default-download-target', 'C:\\Downloads', '--pretty',
+    ]);
+    assert.equal(result.command, 'drop simulate');
+    assert.equal(result.operation, 'copy');
+    assert.equal(result.effectiveOperation, 'copy');
+    assert.equal(result.accepted.ok, true);
+    assert.equal(result.target.forceQueue, true);
+    assert.deepEqual(result.classification.files.map((item) => item.name), ['report.txt']);
+
+    const refused = cli.dropSimulate([file, '--last-effect', 'link', '--queue',
+      '--default-download-target', 'C:\\Downloads']);
+    assert.equal(refused.operation, null);
+    assert.equal(refused.effectiveOperation, null);
+    assert.equal(refused.accepted.ok, false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('capabilities exposes the complete headless command surface as JSON', async () => {
+  const result = output();
+  assert.equal(await cli.runCli(['capabilities'], { stdout: result.stream, stderr: result.stream }), 0);
+  const value = JSON.parse(result.text());
+  assert.equal(value.supportsNetworkSessions, true);
+  assert.equal(value.simulationNetwork, false);
+  assert.deepEqual(value.simulations.drop, ['classify', 'simulate', 'target']);
+  assert.ok(value.console.switches.includes('/rawsettings'));
+  assert.deepEqual(value.urls, ['parse', 'generate']);
+});

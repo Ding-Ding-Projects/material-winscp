@@ -67,6 +67,15 @@ active filter is stated in the panel status bar with its text, because a
 forgotten filter looks exactly like missing files — the single most common
 support question this feature generates.
 
+### Drag and drop
+
+Commander and Explorer panel drops preserve the source paths captured when the
+gesture starts, validate the private payload before using it, and route desktop
+drops through the main Explorer policy. A disconnected session, missing target,
+unavailable upload capability or self-drop is announced instead of disappearing
+as a no-op. See [Drag and drop](../editing-and-commands/drag-drop.md) for the
+move/copy preference and keyboard alternatives.
+
 ## Failure modes
 
 | Situation | What the user sees | Recoverable |

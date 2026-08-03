@@ -874,10 +874,12 @@ test('save transfer options is a wired, persisted and accessible preference', as
 test('drag move preference is read by the panel drop consumer', async () => {
   const { schema } = await load();
   assert.equal(schema.PENDING_KEYS.has('dDAllowMove'), false);
+  assert.equal(schema.PENDING_KEYS.has('dDAllowMoveInit'), false);
   const fs = require('node:fs');
   const path = require('node:path');
   const panels = fs.readFileSync(path.join(repoRoot, 'design', 'renderer', 'ui', 'panels.js'), 'utf8');
   assert.match(panels, /readPref\('dDAllowMove', false\)/);
+  assert.match(panels, /readPref\('dDAllowMoveInit', false\)/);
   assert.match(panels, /effectAllowed = readPref\('dDAllowMove', false\) === true \? 'copyMove' : 'copy'/);
 });
 

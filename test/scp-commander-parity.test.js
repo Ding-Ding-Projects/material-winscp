@@ -3,7 +3,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { ScpAdapter } = require('../design/main/protocols/scp');
-const { entriesForDragPaths } = require('../design/renderer/ui/panels.js');
+const {
+  entriesForDragPaths,
+  normalizePanelDragPayload,
+  panelDropMoveRequested,
+} = require('../design/renderer/ui/panels.js');
 
 function adapter(commands) {
   const result = new ScpAdapter({});
@@ -40,4 +44,23 @@ test('Commander drag/drop uses the paths captured at drag start', () => {
   );
 
   assert.deepEqual(selectedAtDrop.map((entry) => entry.name), ['first.txt']);
+});
+
+test('Commander drag/drop refuses malformed private payloads instead of swallowing them', () => {
+  assert.deepEqual(normalizePanelDragPayload({ side: 'remote', paths: [] }), {
+    ok: false, reason: 'invalidPaths',
+  });
+  assert.deepEqual(normalizePanelDragPayload({ side: 'other', paths: ['/a'] }), {
+    ok: false, reason: 'invalidSourceSide',
+  });
+  assert.deepEqual(normalizePanelDragPayload({ side: 'local', paths: ['/a', ''], panelId: 3 }), {
+    ok: false, reason: 'invalidPaths',
+  });
+});
+
+test('Commander drag/drop move preference honours default move and Ctrl copy', () => {
+  assert.equal(panelDropMoveRequested({ allowMove: true, startAsMove: true }), true);
+  assert.equal(panelDropMoveRequested({ allowMove: true, startAsMove: true, ctrlKey: true }), false);
+  assert.equal(panelDropMoveRequested({ allowMove: true, shiftKey: true }), true);
+  assert.equal(panelDropMoveRequested({ allowMove: false, startAsMove: true }), false);
 });

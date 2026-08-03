@@ -312,7 +312,12 @@ export function openMenu(opts = {}) {
   }
 
   function closeSubmenu() {
-    if (subHandle) { subHandle.dispose(true); subHandle = null; }
+    const child = subHandle;
+    // Clear our reference before disposing the child.  Child disposal reports
+    // back to this handle, so clearing first prevents that callback from
+    // re-entering the close path while the child is being torn down.
+    subHandle = null;
+    child?.dispose(true);
     rows.forEach((r) => { if (r.it.submenu) r.row.setAttribute('aria-expanded', 'false'); });
   }
 
@@ -322,9 +327,10 @@ export function openMenu(opts = {}) {
     row.setAttribute('aria-expanded', 'true');
     subHandle = openMenu({
       items: it.submenu, anchor: row, placement: 'right-start',
-      label: it.label, parent: handle, platform: opts.platform,
+      label: it.label, parent: handle, parentRowId: it.id, platform: opts.platform,
     });
     if (subHandle) subHandle.ownerId = it.id;
+    else row.setAttribute('aria-expanded', 'false');
   }
 
   function activate(it, row) {
@@ -343,13 +349,13 @@ export function openMenu(opts = {}) {
     else if (e.key === 'End') { e.preventDefault(); const l = enabledRows(); if (l.length) focusRow(l[l.length - 1].row); }
     else if (e.key === 'Escape') {
       e.preventDefault(); e.stopPropagation();
-      if (isSub) { opts.parent.focusOwner(opts.parentRowId); dispose(); }
+      if (isSub) { dispose(); opts.parent.focusOwner(opts.parentRowId); }
       else closeAllMenus();
     } else if (e.key === 'ArrowRight') {
       const entry = rows.find((r) => r.row === document.activeElement);
       if (entry?.it.submenu) { e.preventDefault(); openSubmenu(entry.it, entry.row); subHandle?.focusFirst(); }
     } else if (e.key === 'ArrowLeft') {
-      if (isSub) { e.preventDefault(); dispose(); opts.parent.focusOwner(); }
+      if (isSub) { e.preventDefault(); dispose(); opts.parent.focusOwner(opts.parentRowId); }
     } else if (e.key === 'Enter' || e.key === ' ') {
       const entry = rows.find((r) => r.row === document.activeElement);
       if (entry) { e.preventDefault(); activate(entry.it, entry.row); }
@@ -386,6 +392,7 @@ export function openMenu(opts = {}) {
     root.remove();
     const idx = openStack.indexOf(handle);
     if (idx >= 0) openStack.splice(idx, 1);
+    if (isSub) opts.parent.submenuClosed?.(handle);
     if (!silent) opts.onClose?.();
     if (!isSub && !silent) restoreFocus?.();
     else if (!isSub) restoreFocus?.();
@@ -395,7 +402,17 @@ export function openMenu(opts = {}) {
     element: root,
     dispose,
     focusFirst() { const l = enabledRows(); if (l.length) focusRow(l[0].row); },
-    focusOwner() { root.focus(); },
+    focusOwner(rowId) {
+      const owner = rowId && rows.find((r) => r.it.id === rowId);
+      if (owner) focusRow(owner.row);
+      else root.focus();
+    },
+    submenuClosed(child) {
+      if (subHandle !== child) return;
+      subHandle = null;
+      const owner = rows.find((r) => r.it.id === child.ownerId);
+      owner?.row.setAttribute('aria-expanded', 'false');
+    },
     get items() { return items; },
   };
   openStack.push(handle);

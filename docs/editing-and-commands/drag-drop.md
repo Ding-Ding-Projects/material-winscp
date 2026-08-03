@@ -13,6 +13,12 @@ The queue drop uses the configured default download directory. Other targets
 come from the active Explorer, fake-file, or external-extension handshake;
 there is no hidden fallback directory.
 
+Desktop drops onto the remote panel go through the same main-process drag/drop
+operation as panel-to-panel drops. That keeps transfer confirmation, queue
+selection, move semantics and protocol capability checks in one place; the
+renderer does not silently turn a requested move into an unconditional queue
+copy.
+
 ## Targets and safety
 
 - A drop onto the queue is forced into the background and uses the configured
@@ -27,9 +33,15 @@ there is no hidden fallback directory.
 - A remote-panel drop onto free space is refused; a target directory is
   required. Ctrl requests copy, while a move is used only when the session
   advertises remote move support.
+- `dDAllowMove` enables move effects, and `dDAllowMoveInit` starts an allowed
+  drag as move by default; Ctrl requests a copy. With move disabled, a MOVE
+  effect is safely downgraded to copy.
 - Refused, cancelled, and unknown effects never become uploads. Ambiguous
   drag-out results prefer copy unless the Windows effect explicitly contains
   move, protecting the remote source from accidental deletion.
+- Malformed in-app payloads, missing source panels, missing targets,
+  disconnected sessions and explicit protocol refusals are reported before any
+  transfer begins.
 
 ## Accessibility and feedback
 
@@ -40,9 +52,10 @@ drag/drop is never the only route to a transfer.
 
 ## Failure modes
 
-Missing targets, empty queue destinations, unavailable capabilities and
-ambiguous effects are refused before a transfer begins. The refusal reason is
-recoverable by choosing a valid target or using the equivalent command.
+Missing targets, empty queue destinations, unavailable capabilities, malformed
+payloads and ambiguous effects are refused before a transfer begins. The
+refusal reason is recoverable by choosing a valid target, reconnecting, or
+using the equivalent command.
 
 ## Security considerations
 
@@ -55,10 +68,11 @@ the whole drag instead of letting one file overwrite the other.
 
 ## Verification
 
-The focused regression coverage is in `test/explorershell.test.js`. It verifies
-that a valid queue target is accepted and forced into the queue, while empty,
-whitespace-only, missing, and null targets are refused before any transfer can
-start. Run `npm test` to execute the complete test suite.
+The focused regression coverage is in `test/scp-commander-parity.test.js`,
+`test/explorershell.test.js`, `test/shellintegration.test.js` and
+`test/commands.test.js`. It verifies payload validation, move/copy effects,
+disconnected-session and capability refusals, and the shared target policy.
+Run `npm test` to execute the complete test suite.
 
 ## Suggested articles
 
