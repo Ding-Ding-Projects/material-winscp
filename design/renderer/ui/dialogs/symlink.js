@@ -53,9 +53,20 @@ const STRINGS = {
   slFailed: ['The link was not created: {0}', '整唔到連結：{0}'],
   slReplaceFailed: ['The old link was not removed, so nothing was changed: {0}', '刪唔到舊連結，所以乜都冇改：{0}'],
   slBothRequired: ['Both the link name and its target are needed.', '連結名同目標兩樣都要有。'],
+  slInvalidName: ['The link name must be one safe file name, not a path.', '連結名要係一個安全檔名，唔可以係條路徑。'],
 };
 
 const tx = makeTranslator(STRINGS);
+
+/** Return a stable validation code for the user-editable link name. */
+export function validateSymlinkName(value) {
+  const name = String(value ?? '').trim();
+  if (!name) return 'required';
+  if (name === '.' || name === '..') return 'dot-segment';
+  if (/[\\/]/.test(name)) return 'separator';
+  if ([...name].some((ch) => ch.charCodeAt(0) < 32)) return 'control';
+  return '';
+}
 
 /**
  * props:
@@ -132,7 +143,7 @@ registerDialog('symlink', ({ props, close }) => {
 
   function updateOk() {
     if (okButton) {
-      okButton.disabled = !canLink || !nameInput.value.trim() || !targetInput.value.trim();
+      okButton.disabled = !canLink || !!validateSymlinkName(nameInput.value) || !targetInput.value.trim();
     }
   }
   nameInput.addEventListener('input', updateOk);
@@ -142,6 +153,7 @@ registerDialog('symlink', ({ props, close }) => {
     const name = nameInput.value.trim();
     const target = targetInput.value.trim();
     if (!name || !target) { notify.warning(t('symlinkTitle'), tx('slBothRequired')); return; }
+    if (validateSymlinkName(name)) { notify.warning(t('symlinkTitle'), tx('slInvalidName')); return; }
     const linkPath = /^([A-Za-z]:[\\/]|\/|\\\\)/.test(name) ? name : joinPath(directory, name, sep);
 
     try {

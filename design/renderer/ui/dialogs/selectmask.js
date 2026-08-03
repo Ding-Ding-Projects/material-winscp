@@ -35,6 +35,7 @@ const STRINGS = {
   smColor: ['Colour', '顏色'],
   smPreview: ['{0} of {1} name(s) match', '{1} 個名入面有 {0} 個符合'],
   smPreviewSearch: ['Search the preview', '搵預覽入面嘅嘢'],
+  smPreviewEmpty: ['No panel names are available to preview.', '而家冇面板檔名可以預覽。'],
   smEmptyMask: ['An empty mask matches everything.', '空遮罩即係乜都符合。'],
   smMaskRequired: ['A colour rule needs a mask.', '顏色規則要有個遮罩先得。'],
   smInvalid: ['Problem at character {0}: {1}', '第 {0} 個字元有問題：{1}'],
@@ -187,7 +188,10 @@ registerDialog('selectmask', ({ props, close }) => {
     const visible = previewSearch.isActive
       ? filterBy(entries, previewSearch.predicate, (e) => e.name)
       : entries;
-    if (!visible.length) {
+    if (selectMaskPreviewEmptyState(entries) === 'empty') {
+      previewList.appendChild(h('span', { class: 'muted', role: 'status', style: { fontSize: 'var(--type-label-sm)' } },
+        tx('smPreviewEmpty')));
+    } else if (!visible.length) {
       previewList.appendChild(h('span', { class: 'muted', style: { fontSize: 'var(--type-label-sm)' } },
         previewSearch.isActive ? noMatchMessage(previewSearch.predicate, tx('smPreview', 0, entries.length)) : ''));
     } else {
@@ -326,4 +330,8 @@ registerDialog('selectmask', ({ props, close }) => {
 });
 
 /** Open the select/deselect/filter/file-colour mask dialog. */
+export function selectMaskPreviewEmptyState(names) {
+  return Array.isArray(names) && names.length === 0 ? 'empty' : 'populated';
+}
+
 export function openSelectMask(props) { return openDialog('selectmask', props); }

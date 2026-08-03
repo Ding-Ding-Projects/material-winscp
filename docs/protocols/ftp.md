@@ -48,6 +48,7 @@ Under **Site → Advanced → FTP** and **→ TLS/SSL**.
 | Resume offset is negative, fractional or non-finite | The transfer is rejected before `REST` is sent; offsets must be non-negative integer byte positions. | Yes — retry from a valid byte offset |
 | Idle disconnect | Detected on the next command; auto-reconnect follows `security.sessionReopen*`. | Yes |
 | Username, password or ACCT contains a line break | Login is rejected before any credential command is sent. FTP has no escaping for command record separators, so accepting one could send an unintended command. | Yes — correct the saved site value |
+| A post-login command contains a line break | The command is rejected before it reaches the control connection. FTP has no escaping for command record separators, so accepting one could append an unintended command. | Yes — correct the saved command |
 
 The passive-host choice is applied when the FTP client is constructed, before
 the first `PASV`/`EPSV` negotiation. In particular, `on` is not merely a UI

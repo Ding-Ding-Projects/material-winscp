@@ -864,9 +864,11 @@ class WebDavAdapter extends Adapter {
     let attempt = 0;
     let redirects = 0;
     let current = target;
+    let currentMethod = method;
+    let currentOpts = opts;
 
     for (;;) {
-      const { res } = await this._send(method, current, opts);
+      const { res } = await this._send(currentMethod, current, currentOpts);
 
       if (res.statusCode === 401 && attempt === 0 && !opts.noRetry) {
         attempt += 1;
@@ -890,22 +892,31 @@ class WebDavAdapter extends Adapter {
           await WebDavAdapter.readBody(res);
           throw new Error(`Refusing redirect to another host (${next.host}); enable cross-host redirects for this site to allow it`);
         }
-        if (opts.stream) {
+        if (currentOpts.stream) {
           await WebDavAdapter.readBody(res);
           throw new Error('Server redirected a streamed upload; the body cannot be replayed');
         }
         await WebDavAdapter.readBody(res);
         redirects += 1;
+        if (res.statusCode === 303) {
+          currentMethod = 'GET';
+          const headers = { ...(currentOpts.headers || {}) };
+          delete headers['Content-Length'];
+          delete headers['content-length'];
+          delete headers['Content-Type'];
+          delete headers['content-type'];
+          currentOpts = { ...currentOpts, headers, body: undefined };
+        }
         current = next.toString();
         continue;
       }
 
-      if (opts.raw) return res;
+      if (currentOpts.raw) return res;
 
       const buf = await WebDavAdapter.readBody(res);
       const text = buf.toString('utf8');
       if (res.statusCode >= 400) {
-        const err = new Error(`${method} ${new URL(current.startsWith('http') ? current : this._url(current)).pathname} failed: ${res.statusCode} ${res.statusMessage}${this._explain(text)}`);
+        const err = new Error(`${currentMethod} ${new URL(current.startsWith('http') ? current : this._url(current)).pathname} failed: ${res.statusCode} ${res.statusMessage}${this._explain(text)}`);
         err.status = res.statusCode;
         throw err;
       }

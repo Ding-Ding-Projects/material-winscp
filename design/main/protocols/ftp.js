@@ -719,7 +719,10 @@ class FtpAdapter extends Adapter {
     }
 
     for (const cmd of s.postLoginCommands || []) {
-      if (cmd) await this.client.sendIgnoringError(cmd);
+      if (cmd) {
+        assertSafeFtpArgument(cmd, 'post-login command');
+        await this.client.sendIgnoringError(cmd);
+      }
     }
 
     this.home = await this.client.pwd();

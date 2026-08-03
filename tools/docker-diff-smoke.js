@@ -173,9 +173,22 @@ async function waitForFtpBanner(port, timeoutMs = 30000) {
 
 function removeContainer(name) {
   try {
-    docker(['rm', '--force', '--volumes', name], { allowFailure: true });
+    // Docker Desktop can occasionally leave a stopped container in a removal
+    // transition. Never let that daemon state turn one failed attempt into a
+    // 100-minute retry loop, and never reuse the name while removal is still
+    // pending.
+    docker(['rm', '--force', '--volumes', name], { allowFailure: true, timeout: 10000 });
+    const remaining = docker([
+      'inspect', '--format', '{{.State.Status}}', name,
+    ], { allowFailure: true, timeout: 3000 });
+    if (remaining) {
+      console.error(`Docker container ${name} is still present after cleanup: ${remaining}`);
+      return false;
+    }
+    return true;
   } catch (error) {
     console.error(`Could not clean up Docker container ${name}: ${error.message}`);
+    return false;
   }
 }
 
@@ -227,7 +240,9 @@ async function startFtp(secretFile) {
       return { port: base, root: '/' };
     } catch (error) {
       lastError = error;
-      removeContainer(NAMES.ftp);
+      if (!removeContainer(NAMES.ftp)) {
+        throw new Error(`Docker FTP startup failed and ${NAMES.ftp} could not be cleaned up: ${error.message}`);
+      }
     }
   }
   throw lastError || new Error('Docker FTP did not find a usable port range.');
@@ -553,7 +568,7 @@ async function main() {
     if (secretRoot) await fsp.rm(secretRoot, { recursive: true, force: true }).catch(() => undefined);
     removeContainer(NAMES.sftp);
     removeContainer(NAMES.ftp);
-    console.log('Throwaway Docker containers and fixture files removed.');
+    console.log('Throwaway Docker cleanup requested; any daemon-side removal failure was reported above.');
   }
 }
 

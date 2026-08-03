@@ -23,3 +23,9 @@ test('FTP authentication arguments reject command record separators', () => {
   assert.throws(() => assertSafeFtpArgument('secret\nPASS injected', 'password'), /password contains a line break/);
   assert.throws(() => assertSafeFtpArgument('acct\rvalue', 'account'), /account contains a line break/);
 });
+
+test('FTP post-login commands reject command record separators', () => {
+  assert.doesNotThrow(() => assertSafeFtpArgument('SITE HELP', 'post-login command'));
+  assert.throws(() => assertSafeFtpArgument('SITE HELP\r\nDELE important.txt', 'post-login command'),
+    /post-login command contains a line break/);
+});

@@ -43,7 +43,11 @@ It does not silently replace a missing container with an in-process mock.
 
 If the process is forcibly terminated before its `finally` block runs, inspect
 only the uniquely named `winscp-docker-diff-*` container shown by Docker and
-remove that named container manually. Do not use a global prune command.
+remove that named container manually. Cleanup commands are bounded so an
+unresponsive Docker Desktop daemon cannot turn one failed startup into a long
+retry loop; if Docker reports removal is already in progress, wait for that
+exact named container to disappear before retrying. Do not use a global prune
+command.
 
 ## Security considerations
 

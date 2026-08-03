@@ -1196,6 +1196,16 @@ describe('SCP: the shell protocol against a real server', () => {
       /needs the file size/i);
   });
 
+  it('does not pretend SCP realpath succeeded when the server cannot resolve it', async () => {
+    const run = scp._run;
+    scp._run = async () => ({ code: 1, stdout: '', stderr: 'readlink: not found' });
+    try {
+      await assert.rejects(() => scp.realpath('/missing'), /Could not resolve \/missing: readlink: not found/);
+    } finally {
+      scp._run = run;
+    }
+  });
+
   it('transfers a whole tree in both directions with scp -r', async () => {
     const tree = nodePath.join(localRoot, 'scp-tree');
     await fsp.mkdir(nodePath.join(tree, 'inner'), { recursive: true });

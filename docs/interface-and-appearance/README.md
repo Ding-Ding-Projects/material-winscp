@@ -26,6 +26,7 @@ rather than decoration.
 | [local-drive-view.md](local-drive-view.md) | Commander local drive roots, UNC share reveal, keyboard navigation and refresh behaviour. |
 | [window-geometry.md](window-geometry.md) | Safe display metrics, minimum sizing and reachable restored window bounds. |
 | [properties-rights.md](properties-rights.md) | Defensive permission metadata parsing, editing failure semantics and accessibility. |
+| [symlink-dialog-validation.md](symlink-dialog-validation.md) | Safe link-name validation and target/path separation. |
 
 ## The two rules that decide everything here
 

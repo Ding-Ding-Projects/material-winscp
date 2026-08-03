@@ -221,6 +221,14 @@ test('buildSessionUrl brackets an IPv6 literal', async () => {
   assert.strictEqual(url.buildSessionUrl(site), 'sftp://u@[2001:db8::1]:2222/');
 });
 
+test('buildSessionUrl percent-encodes an IPv6 zone identifier', async () => {
+  const { url } = await modules;
+  const site = await siteOf({ protocol: 'sftp', hostName: 'fe80::1%12', userName: 'u' });
+  const generated = url.buildSessionUrl(site);
+  assert.strictEqual(generated, 'sftp://u@[fe80::1%2512]/');
+  assert.strictEqual(url.parseSessionUrl(generated).hostName, 'fe80::1%12');
+});
+
 test('buildSessionUrl writes the winscp- prefix, fingerprint, path and save extension', async () => {
   const { url } = await modules;
   const site = await siteOf({

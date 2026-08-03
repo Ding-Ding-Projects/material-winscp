@@ -655,7 +655,10 @@ class ScpAdapter extends Adapter {
     const target = this.normalize(p || '.');
     const res = await this._run(`cd ${shellQuote(target)} >/dev/null 2>&1 && pwd || readlink -f ${shellQuote(target)}`);
     const out = (res.stdout || '').trim();
-    return out ? this.normalize(out) : this.normalize(target);
+    if (res.code !== 0 || !out) {
+      throw new Error(`Could not resolve ${target}: ${(res.stderr || '').trim() || 'the server returned no canonical path'}`);
+    }
+    return this.normalize(out);
   }
 
   async readlink(p) {

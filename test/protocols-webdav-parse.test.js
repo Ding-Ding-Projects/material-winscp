@@ -522,6 +522,35 @@ test('HTTPS redirects cannot downgrade a WebDAV session to HTTP', async () => {
   );
 });
 
+test('303 redirects switch WebDAV requests to a bodyless GET', async () => {
+  const seen = [];
+  const server = http.createServer((req, res) => {
+    seen.push({ method: req.method, length: req.headers['content-length'] });
+    if (seen.length === 1) {
+      res.writeHead(303, { Location: '/result' });
+      res.end();
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('ok');
+  });
+  const port = await listen(server);
+  try {
+    const adapter = new WebDavAdapter({ hostName: '127.0.0.1', portNumber: port, ftps: 'none' });
+    const result = await adapter.request('PUT', '/submit', {
+      body: 'payload',
+      headers: { 'Content-Type': 'text/plain' },
+    });
+    assert.strictEqual(result.text, 'ok');
+    assert.deepStrictEqual(seen, [
+      { method: 'PUT', length: '7' },
+      { method: 'GET', length: undefined },
+    ]);
+  } finally {
+    await close(server);
+  }
+});
+
 test('rebuilding a WebDAV connection destroys the previous agent pool', () => {
   const adapter = new WebDavAdapter({ hostName: 'dav.example.com', ftps: 'none' });
   let destroyed = 0;

@@ -125,7 +125,9 @@ export function buildSessionUrl(site = {}, flags = {}) {
 
   const host = String(site.hostName || '');
   // A bare IPv6 literal has to be bracketed or the colon reads as a port.
-  url += host.includes(':') ? `[${host}]` : encodeUrlPart(host);
+  // RFC 6874 requires the zone separator in a scoped IPv6 URI literal to be
+  // percent-encoded (`%25`) so URL consumers do not treat it as a bad escape.
+  url += host.includes(':') ? `[${host.replace(/%/g, '%25')}]` : encodeUrlPart(host);
   if (!isDefaultPort(site)) url += `:${Number(site.portNumber)}`;
   url += '/';
 
@@ -247,7 +249,7 @@ export function parseSessionUrl(input) {
   if (hostInfo.startsWith('[')) {
     const close = hostInfo.indexOf(']');
     if (close < 0) return { ok: false, error: 'The IPv6 address in the URL is missing its closing bracket.' };
-    out.hostName = hostInfo.slice(1, close);
+    out.hostName = decodeUrlPart(hostInfo.slice(1, close));
     hostInfo = hostInfo.slice(close + 1).replace(/^:/, '');
   } else {
     const colon = hostInfo.indexOf(':');
