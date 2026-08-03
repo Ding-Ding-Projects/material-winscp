@@ -69,6 +69,9 @@ drifted seven commits behind within a day.
 - A commit with no body produces an **empty** change list, not a manufactured
   bullet announcing that it is empty — the viewer already renders that, and two
   components explaining the same absence is how they eventually disagree.
+- Commits that only refresh `HANDOFF.md`, `ROADMAP.md` or the generated
+  changelog block are bookkeeping, so they are intentionally omitted from the
+  in-app history and cannot make `--check` stale after a report refresh.
 
 ## The handoff and roadmap
 

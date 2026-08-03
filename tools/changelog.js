@@ -32,6 +32,17 @@ const TARGET = path.join(ROOT, 'design', 'renderer', 'ui', 'changelog.js');
 const BEGIN = 'export const DEVELOPMENT = [';
 const END = '];';
 
+// Generated report commits are repository bookkeeping, not product changes.
+// Including them makes the generated block stale immediately after the
+// required handoff/changelog refresh commits land.
+const GENERATED_ONLY_FILES = new Set([
+  'HANDOFF.md',
+  'ROADMAP.md',
+  'docs/tooling.md',
+  'tools/changelog.js',
+  'design/renderer/ui/changelog.js',
+]);
+
 /** How many commits the in-app viewer carries. Older history stays in git. */
 const LIMIT = 60;
 
@@ -45,6 +56,12 @@ function git(args) {
 /** True when the object really is a commit in this repository. */
 function commitExists(oid) {
   try { return git(['cat-file', '-t', oid]).trim() === 'commit'; } catch { return false; }
+}
+
+function isGeneratedOnlyCommit(oid) {
+  const files = git(['diff-tree', '--root', '--no-commit-id', '--name-only', '-r', oid])
+    .split(/\r?\n/).filter(Boolean);
+  return files.length > 0 && files.every((file) => GENERATED_ONLY_FILES.has(file));
 }
 
 /**
@@ -117,7 +134,10 @@ function categorize(text) {
 
 function collect() {
   const fmt = ['%H', '%h', '%aI', '%s', '%b'].join(FIELD) + RECORD;
-  const raw = git(['log', `--max-count=${LIMIT}`, `--format=${fmt}`]);
+  // Scan the full history before applying LIMIT: generated report commits are
+  // filtered below, so limiting the git walk first would silently shorten the
+  // in-app history whenever bookkeeping commits occupy the recent window.
+  const raw = git(['log', `--format=${fmt}`]);
   const out = [];
 
   for (const rec of raw.split(RECORD)) {
@@ -128,6 +148,7 @@ function collect() {
       console.error(`  ! skipping an entry whose object could not be verified: ${oid || '(none)'}`);
       continue;
     }
+    if (isGeneratedOnlyCommit(oid)) continue;
     const { en, yue } = splitBilingual(body);
     const enBullets = bullets(en);
     const yueBullets = bullets(yue);
@@ -146,7 +167,7 @@ function collect() {
       changesYue: yueBullets.map((text) => ({ category: 'changed', text })),
     });
   }
-  return out;
+  return out.slice(0, LIMIT);
 }
 
 function render(entries) {
