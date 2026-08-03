@@ -146,4 +146,6 @@ test('drop classify refuses empty and missing-only drops', () => {
   assert.equal(result.operation, null);
   assert.equal(result.effectiveOperation, null);
   assert.equal(result.classification.items.length, 0);
+  assert.equal(result.accepted.ok, false);
+  assert.match(result.accepted.reason, /No existing files or directories/);
 });

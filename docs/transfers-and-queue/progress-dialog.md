@@ -13,8 +13,9 @@ region, then closes only after the queue confirms cancellation. If the request
 fails, the dialog remains open, announces the failure, and also records it as a
 notification so the transfer is not mistaken for a successful cancellation.
 
-Progress bars expose bounded percentage values, the throughput graph has an
-accessible label, and long paths retain their full value in a tooltip while
+Progress bars expose bounded percentage values and are programmatically named
+by their visible “Total progress” or “Current file” labels. The throughput graph
+has an accessible label, and long paths retain their full value in a tooltip while
 remaining ellipsized in narrow layouts. A missing queue item is rendered as a
 stable, actionable-free state rather than throwing or blocking the application.
 

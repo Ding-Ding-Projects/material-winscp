@@ -452,8 +452,9 @@ function progressBar(isFile) {
 }
 
 function labelled(labelKey, node) {
-  const label = h('span', { class: 'tx-pg-stat-label' });
+  const label = h('span', { class: 'tx-pg-stat-label', id: uid('tx-pg-label') });
   bindText(label, labelKey);
+  node.setAttribute('aria-labelledby', label.id);
   return h('div', { class: 'stack', style: { gap: '4px' } }, label, node);
 }
 

@@ -253,6 +253,10 @@ function classifyDrop(argv) {
     readOnly: booleanOption(options, 'read-only', false),
     hasDirectories: classification.directories.length > 0,
   });
+  if (accepted.ok && classification.items.length === 0) {
+    accepted.ok = false;
+    accepted.reason = 'No existing files or directories were found in the drop.';
+  }
   const operation = classification.items.length ? plannedOperation : null;
   return {
     command: 'drop classify',

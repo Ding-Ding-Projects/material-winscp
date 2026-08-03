@@ -34,3 +34,8 @@ test('long paths use an accessible title while the value can shrink in narrow la
   assert.match(source, /class: 'tx-pg-line-value'/);
   assert.match(source, /min-width: 0; flex: 1 1 auto/);
 });
+
+test('progress bars expose their visible labels to assistive technology', () => {
+  assert.match(source, /id: uid\('tx-pg-label'\)/);
+  assert.match(source, /node\.setAttribute\('aria-labelledby', label\.id\)/);
+});
