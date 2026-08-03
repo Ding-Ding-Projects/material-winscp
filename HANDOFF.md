@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `4d78e05`** — Fix CLI edges and protocol transfer races
+**At commit `0f499cf`** — Cover delayed passive FTPS transfers
 
 ## Where the work stands
 
@@ -15,9 +15,9 @@
 | Port coverage (raw) | 71.5% — includes embedded hex resources, **do not quote this one** |
 | Tests | 3516 run, **3515 pass, 0 fail**, 1 skipped |
 | Hand-written code | 222,696 lines across 443 files |
-| Commits | 229 on `main` |
+| Commits | 231 on `main` |
 | Working tree | clean |
-| Remote | `origin/main` at `4d78e05` — in sync |
+| Remote | `origin/main` at `0f499cf` — in sync |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `0f499cf` | 2026-08-03 | Cover delayed passive FTPS transfers |
+| `1230182` | 2026-08-03 | Refresh handoff after CLI checkpoint |
 | `4d78e05` | 2026-08-03 | Fix CLI edges and protocol transfer races |
 | `c0209f5` | 2026-08-03 | Refresh handoff after SFTP checkpoint |
 | `2facf09` | 2026-08-03 | Close SFTP size preference and checklist gaps |
 | `7fa152f` | 2026-08-03 | Refresh handoff after roadmap checkpoint |
 | `a95dc72` | 2026-08-03 | Harden reconnect queue WebDAV and menu parity |
 | `e840449` | 2026-08-03 | Wire editor refresh, preference shortcut, and S3 listing guards |
-| `5d0b038` | 2026-08-03 | Wire protocol edges and roadmap controls |
-| `abe0622` | 2026-08-03 | Refresh handoff after freshness fix |
 
 ## Notes from whoever worked on this last
 
