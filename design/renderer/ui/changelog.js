@@ -187,6 +187,32 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "cd350d3", kind: 'commit', ref: "cd350d3", oid: "cd350d3982e02da391dd7699942c410674d0c8f8", date: "2026-08-03",
+    title: "Harden protocol inputs and transfer settings",
+    changes: [
+      { category: "changed", text: "English: Reject unsafe SCP millisecond timestamps and SFTP stream offsets, normalize WebDAV timeouts, clamp untrusted FTP listing sizes, and refuse malformed CopyParams numerics. Remote servers and imported presets may be weird; the boundary now keeps the weirdness outside the transfer engine." },
+      { category: "changed", text: "粵語：SCP 時間、SFTP offset、WebDAV timeout、FTP listing 同 CopyParams 數值而家先驗身再入場；遠端 server 幾古靈精怪都好，亂數唔可以入嚟搞亂個 transfer engine。" },
+    ],
+  },
+  {
+    id: "f171425", kind: 'commit', ref: "f171425", oid: "f1714257527d93db3967336478d9104b7cdf7427", date: "2026-08-03",
+    title: "Record the latest verification counts",
+    changes: [
+      { category: "changed", text: "English: Update the generated handoff with the full 3448-test result, including the async console, watcher, and queue regressions. The ledger now counts every proof instead of rounding down to yesterday." },
+    ],
+    changesYue: [
+      { category: "changed", text: "粵語：最新 handoff 而家記實 3448 個 tests，連 console、watcher 同 queue 嘅新證據都冇漏；唔再攞尋日嘅數字扮今日食飽。" },
+    ],
+  },
+  {
+    id: "a60bd5c", kind: 'commit', ref: "a60bd5c", oid: "a60bd5cfcf2a61c9cd0539ecfbfaf7d917033358", date: "2026-08-03",
+    title: "Refresh async lifecycle evidence",
+    changes: [
+      { category: "fixed", text: "English: Add the async console, synchronization watcher, and queue cancellation fixes to the generated handoff and in-app changelog. The audit trail now follows the ghosts out the door." },
+      { category: "changed", text: "粵語：Console、sync watcher 同 queue 嘅新修正已經寫入 handoff 同 changelog；今次份 audit trail 跟住啲幽靈 callback 一齊出門口。" },
+    ],
+  },
+  {
     id: "1c10a04", kind: 'commit', ref: "1c10a04", oid: "1c10a04933ce623c1f520f3b5b55917a918457be", date: "2026-08-03",
     title: "Harden async console sync and queue lifecycles",
     changes: [
@@ -676,27 +702,6 @@ export const DEVELOPMENT = [
     title: "Refresh handoff for CLI parity wave",
     changes: [
       { category: "fixed", text: "Update the handoff with 59.0% logic coverage, 114 outstanding units, 3337 total tests with one skip, the 22-issue scan, and the verified third-wave CLI and platform fixes. The road map gains another honest signpost, not a cardboard finish line.\\n\\n廣東話：roadmap 再加一塊真路牌，唔會整張紙牌寫住『終點』就當到站。" },
-    ],
-  },
-  {
-    id: "128d764", kind: 'commit', ref: "128d764", oid: "128d76451b7f5fec254d0c611fa1e83af64b54c6", date: "2026-08-03",
-    title: "Refresh changelog for CLI parity hardening",
-    changes: [
-      { category: "fixed", text: "Record the third-wave CLI, runner, Preferences, remote-transfer, PATH and SFTP fixes with verified commit links. The changelog now knows the command line can carry a tab without dropping its luggage.\\n\\n廣東話：更新日誌記低 CLI 帶住 tab 都唔會甩喼，runner 同 SFTP 嘅新本領都有 receipts。" },
-    ],
-  },
-  {
-    id: "7e93933", kind: 'commit', ref: "7e93933", oid: "7e9393357f94f5f34c7dd288a194c9b6cb219345", date: "2026-08-03",
-    title: "Complete CLI parity and harden platform edges",
-    changes: [
-      { category: "added", text: "Preserve tab-containing command arguments, release runner state through optional log cleanup failures, make PATH lookup host-correct, restore companion preference keys, require explicit remote-copy capability, and make SFTP recursive removal lstat entries without attributes. Add focused tests and documentation. The CLI now keeps its tabs, the runner keeps its marbles, and SFTP stops wandering into symlinked gardens.\\n\\n廣東話：CLI 保住 tab、runner 收好自己啲 marble、SFTP 用 lstat 睇清楚條路，唔會再行入 symlink 花園打卡。" },
-    ],
-  },
-  {
-    id: "4355fa1", kind: 'commit', ref: "4355fa1", oid: "4355fa1dc4ce6453f3acacd67295d0df25362cae", date: "2026-08-03",
-    title: "Refresh handoff for transfer and security wave",
-    changes: [
-      { category: "fixed", text: "Update the factual handoff with 59.0% logic coverage, 114 outstanding units, 3331 total tests with one skip, the 22-issue scan and the newly pushed transfer, console, sync and security fixes. The map now marks another stretch of potholes with little flags.\\n\\n廣東話：handoff 再插多幾支小旗，邊度有坑、邊度已經填好，大家揸車唔使靠手感。" },
     ],
   },
 ];

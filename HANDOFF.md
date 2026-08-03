@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `a60bd5c`** — Refresh async lifecycle evidence
+**At commit `cd350d3`** — Harden protocol inputs and transfer settings
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3448 run, **3447 pass, 0 fail**, 1 skipped |
-| Hand-written code | 220,577 lines across 437 files |
-| Commits | 196 on `main` |
-| Working tree | **1 uncommitted change(s)** |
-| Remote | `origin/main` at `a60bd5c` — in sync |
+| Tests | 3451 run, **3450 pass, 0 fail**, 1 skipped |
+| Hand-written code | 220,666 lines across 437 files |
+| Commits | 198 on `main` |
+| Working tree | **2 uncommitted change(s)** |
+| Remote | `origin/main` at `f171425` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `cd350d3` | 2026-08-03 | Harden protocol inputs and transfer settings |
+| `f171425` | 2026-08-03 | Record the latest verification counts |
 | `a60bd5c` | 2026-08-03 | Refresh async lifecycle evidence |
 | `1c10a04` | 2026-08-03 | Harden async console sync and queue lifecycles |
 | `1e60445` | 2026-08-03 | Refresh handoff and changelog evidence |
 | `f0b7bc1` | 2026-08-03 | Harden CLI and session UI boundaries |
 | `44ab74d` | 2026-08-03 | Fix remote extension extraction |
 | `63ab2fd` | 2026-08-03 | Record the verified handoff |
-| `778b30c` | 2026-08-03 | Refresh the in-app changelog |
-| `a281c72` | 2026-08-03 | Expand headless CLI and harden transfer boundaries |
 
 ## Notes from whoever worked on this last
 
