@@ -32,6 +32,22 @@ const { startApp, stopAll, startSftpServer, siteFor, REPO } = require('./helpers
 
 const SHOTS = path.join(REPO, 'design', 'screenshots');
 
+/**
+ * Poll until `check()` is truthy, or fail saying what never happened.
+ *
+ * Deliberately a poll rather than a fixed sleep: the renderer builds its
+ * dialogs asynchronously, and a sleep long enough to be reliable on a loaded
+ * machine is a sleep wasted on every other run.
+ */
+async function waitFor(check, timeoutMs = 8000, what = 'the condition') {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (await check()) return;
+    if (Date.now() > deadline) throw new Error(`${what} never became true in ${timeoutMs}ms`);
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
 /** A port nothing is listening on — bound, read, and released. */
 async function closedPort() {
   const server = net.createServer();
@@ -135,6 +151,58 @@ test.describe('the application boots and stays usable', () => {
     // And the app is still alive and answering afterwards.
     assert.ok((await app.ok('config.get')).prefs);
     assert.ok(Array.isArray(await app.ok('session.list')));
+  });
+
+  test.it('starting a new site is a labelled button, not just the first row of a list', async () => {
+    // WinSCP puts New Site at the top of the site tree and offers no button.
+    // Faithful, and not findable: once a few sites are saved the list reads as
+    // *saved sites*, so the one row that is really a command looks like an
+    // entry nobody has filled in yet. The row still works; this asserts the
+    // second, labelled way in — and that it genuinely resets the form, because
+    // a button that selects a node without clearing the previous site's host
+    // would look right and quietly start the user from someone else's settings.
+    await app.ok('config.addSite', {
+      name: 'e2e-newsite-probe', protocol: 'sftp',
+      hostName: 'probe.example', userName: 'u', portNumber: 22,
+    });
+    await app.waitForRenderer(40);
+
+    const opened = await app.evaluate(`(() => {
+      const b = [...document.querySelectorAll('button')]
+        .find((x) => (x.getAttribute('aria-label') || '') === 'New connection');
+      if (!b) return false;
+      b.click();
+      return true;
+    })()`);
+    assert.equal(opened, true, 'the shell must offer a New connection button');
+    await waitFor(async () => await app.evaluate(
+      `!![...document.querySelectorAll('[role=treeitem]')].length`), 8000);
+
+    const btn = `[...document.querySelectorAll('button')].find((x) => /^New Site$/i.test((x.textContent || '').trim()))`;
+    assert.equal(await app.evaluate(`!!(${btn})`), true,
+      'the site manager must expose New Site as a button, not only as a tree row');
+
+    // Load a saved site so the form is genuinely dirty, then use the button.
+    const host = `([...document.querySelectorAll('input')].find((x) => /host/i.test(x.getAttribute('aria-label') || x.name || x.id || '')) || {})`;
+    await app.evaluate(`(() => {
+      const row = [...document.querySelectorAll('[role=treeitem]')]
+        .find((x) => /e2e-newsite-probe/.test(x.textContent || ''));
+      if (row) row.click();
+      return !!row;
+    })()`);
+    await waitFor(async () => (await app.evaluate(`${host}.value`)) === 'probe.example', 8000);
+
+    await app.evaluate(`(${btn}).click()`);
+    await waitFor(async () => (await app.evaluate(`${host}.value`)) === '', 8000);
+
+    assert.equal(await app.evaluate(`${host}.value`), '',
+      'the button must clear the previous site, not merely move the selection');
+    const selected = await app.evaluate(`(() => {
+      const t = [...document.querySelectorAll('[role=treeitem]')]
+        .find((x) => x.getAttribute('aria-selected') === 'true');
+      return t ? (t.textContent || '').trim() : '';
+    })()`);
+    assert.match(selected, /New Site/i, 'the tree selection must follow the button');
   });
 });
 

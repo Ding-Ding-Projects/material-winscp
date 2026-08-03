@@ -153,11 +153,34 @@ export function createLoginPanel(opts = {}) {
   attachMenuButton(manageBtn, () => manageMenuItems(tree.selected), { label: t('manage'), placement: 'top-start' });
   appearanceTarget(manageBtn, 'login-manage-button', 'Manage menu button');
 
+  /**
+   * Starting a site had exactly one entry point: the first row of the tree.
+   *
+   * That is faithful to WinSCP, which also puts New Site at the top of the list
+   * and offers no button — but faithful is not the same as findable. The row
+   * carries no affordance saying it is the way to begin, and a user who has
+   * saved a few sites reads the whole list as *saved sites*, so the one row
+   * that is really a command looks like an entry they have not made yet.
+   *
+   * The row is untouched. This is a second, labelled way to reach it, which is
+   * what the tree's own `add` icon has been promising all along.
+   */
+  const newSiteBtn = h('button', { type: 'button', class: 'btn-tonal' },
+    icon('add', 16), h('span', {}, t('newSite')));
+  newSiteBtn.addEventListener('click', () => {
+    // select() re-runs onSelect even when the node is already current, so this
+    // is also "start over" when a half-filled new site is on screen — the same
+    // thing Manage ▸ Reset does, one click closer.
+    tree.select('new-site');
+    tree.focusSelected();
+  });
+  appearanceTarget(newSiteBtn, 'login-new-site-button', 'New Site button');
+
   const left = h('div', { class: 'sd-left' },
     h('div', { class: 'sd-row is-tight' }, filterBar.element),
     modeChip,
     tree.element,
-    h('div', { class: 'sd-btnrow' }, manageBtn, toolsBtn));
+    h('div', { class: 'sd-btnrow' }, newSiteBtn, manageBtn, toolsBtn));
 
   /* ---------------- the session form ---------------- */
 
