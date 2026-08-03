@@ -225,6 +225,13 @@ export function describeSize(bytes, unknown) {
 
 const DEFAULT_ALGORITHMS = ['md5', 'sha-1', 'sha-256', 'sha-512'];
 
+/** Tags are editable only when metadata, capability, and a write seam agree. */
+export function canEditTags(props = {}) {
+  return Array.isArray(props.tags)
+    && props.caps?.tags === true
+    && typeof props.onApplyTags === 'function';
+}
+
 /* ================================================================== */
 /* the dialog                                                          */
 /* ================================================================== */
@@ -510,7 +517,7 @@ registerDialog('properties', ({ props, close }) => {
   // S3 object tags. The sheet exists only when the caller can actually store
   // them; a tab whose OK does nothing would be worse than no tab at all
   // (docs/porting-mandate.md), and no adapter exposes tagging yet.
-  const tags = Array.isArray(props.tags) ? props.tags.map((x) => ({ ...x })) : null;
+  const tags = canEditTags(props) ? props.tags.map((x) => ({ ...x })) : null;
   const tagsList = h('div', {
     style: {
       display: 'flex', flexDirection: 'column', gap: '2px',

@@ -981,6 +981,14 @@ test('parseKnownHosts skips hashed entries and reads a bracketed port', async ()
   assert.ok(found[0].warnings.some((w) => /hashed/i.test(w)), 'the skipped hashed entry is reported');
 });
 
+test('known_hosts preview exposes algorithms without exposing key material', async () => {
+  const { imp } = await modules;
+  const [entry] = imp.parseKnownHosts('[host.example]:2222 ssh-ed25519 AAAA-secret-key');
+  assert.deepStrictEqual(imp.knownHostAlgorithms(entry), ['ssh-ed25519']);
+  assert.ok(!imp.knownHostAlgorithms(entry).some((value) => /AAAA|secret|key/i.test(value)));
+  assert.deepStrictEqual(imp.knownHostAlgorithms({ site: { hostKey: '' } }), []);
+});
+
 test('importSitesFrom dispatches by source id and refuses an unknown one', async () => {
   const { imp } = await modules;
   assert.strictEqual(imp.importSitesFrom('ini', WINSCP_INI).length, 2);

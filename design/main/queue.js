@@ -640,6 +640,14 @@ class TransferQueue extends EventEmitter {
   retry(id) {
     const item = this.get(id);
     if (!item || item.state !== 'error') return false;
+    // Queue.cpp's RetryItem removes the failed item from the pending list and
+    // appends it again. Do the same here: an explicit retry must not leapfrog
+    // transfers that were already waiting when the failure became visible.
+    const index = this.items.indexOf(item);
+    if (index >= 0) {
+      this.items.splice(index, 1);
+      this.items.push(item);
+    }
     item.error = null;
     item.finishedAt = 0;
     item._cancelled = false;

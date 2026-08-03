@@ -847,6 +847,16 @@ export function parseKnownHosts(text, { source = 'knownhosts' } = {}) {
   return out;
 }
 
+/**
+ * Return only the algorithm names from an imported known_hosts key.
+ * The preview may explain what is trusted, but must never expose key material.
+ */
+export function knownHostAlgorithms(entry) {
+  const raw = String(entry?.site?.hostKey || '');
+  return raw.split(/[;\r\n]+/).map((value) => value.trim().split(/\s+/, 1)[0])
+    .filter((algorithm) => /^[A-Za-z0-9][A-Za-z0-9.+_-]*$/.test(algorithm));
+}
+
 /* ================================================================== */
 /* the source registry                                                 */
 /* ================================================================== */
@@ -1002,6 +1012,10 @@ export function createImportPanel(opts = {}) {
     const bits = [entry.site.hostName];
     if (entry.site.userName) bits.push(entry.site.userName);
     if (entry.site.folder) bits.push(`in ${entry.site.folder}`);
+    if (entry.source === 'knownhosts') {
+      const algorithms = knownHostAlgorithms(entry);
+      if (algorithms.length) bits.push(`host key: ${algorithms.join(', ')}`);
+    }
     if (entry.hasPassword) bits.push('password included');
     const sub = bits.join(' · ');
 

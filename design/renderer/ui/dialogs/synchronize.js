@@ -91,6 +91,8 @@ defineStrings({
   txKutdContinueOnError: ['Continue after an error', '出錯都繼續'],
   txKutdStart: ['Start watching', '開始監察'],
   txKutdStop: ['Stop watching', '停止監察'],
+  txKutdStarting: ['Starting watcher…', '開始緊監察…'],
+  txKutdStopping: ['Stopping watcher…', '停止緊監察…'],
   txKutdRunning: ['Watching {0}. Changes upload automatically.', '監察緊 {0}。有變就自動上載。'],
   txKutdStopped: ['Stopped watching {0}.', '停咗監察 {0}。'],
   txKutdLog: ['Activity', '活動紀錄'],
@@ -547,6 +549,15 @@ export function openSynchronizeDialog(props = {}) {
 const watchers = new Map();     // watcher id -> { localPath, remotePath }
 let kutdWindow = null;
 
+/** Pure presentation state for the asynchronous start/stop seam. */
+export function watcherUiState(watcherId, pendingAction = null) {
+  if (pendingAction === 'start') return { action: 'start', busy: true, labelKey: 'txKutdStarting' };
+  if (pendingAction === 'stop') return { action: 'stop', busy: true, labelKey: 'txKutdStopping' };
+  return watcherId
+    ? { action: 'stop', busy: false, labelKey: 'txKutdStop' }
+    : { action: 'start', busy: false, labelKey: 'txKutdStart' };
+}
+
 export function openKeepUpToDateDialog(props = {}) {
   injectTransferStyles();
   injectSyncStyles();
@@ -555,6 +566,7 @@ export function openKeepUpToDateDialog(props = {}) {
   const options = { ...SYNC_DEFAULTS, direction: 'remote', ...(transferPref('keepUpToDate', null) || {}), ...(props.options || {}) };
   let context = { sessionId: props.sessionId || null, localPath: props.localPath || '', remotePath: props.remotePath || '' };
   let watcherId = null;
+  let pendingAction = null;
 
   const restoreFocus = focusMemory();
   const titleId = uid('tx-kutd-title');
@@ -608,32 +620,29 @@ export function openKeepUpToDateDialog(props = {}) {
   }
 
   function paint() {
+    const state = watcherUiState(watcherId, pendingAction);
     clear(startBtn);
-    startBtn.append(icon(watcherId ? 'close' : 'sync_alt', 16), h('span', {}, t(watcherId ? 'txKutdStop' : 'txKutdStart')));
-    statusEl.textContent = watcherId
-      ? t('txKutdRunning', context.localPath)
-      : t('txKutdExplain');
+    startBtn.append(icon(state.action === 'stop' ? 'close' : 'sync_alt', 16), h('span', {}, t(state.labelKey)));
+    startBtn.disabled = state.busy;
+    startBtn.setAttribute('aria-busy', state.busy ? 'true' : 'false');
+    statusEl.textContent = state.busy
+      ? t(state.labelKey)
+      : watcherId ? t('txKutdRunning', context.localPath) : t('txKutdExplain');
+    statusEl.setAttribute('aria-busy', state.busy ? 'true' : 'false');
     for (const el of root.querySelectorAll('input')) el.disabled = !!watcherId;
     if (!logEl.childElementCount) log(t('txKutdLogEmpty'));
   }
 
   async function toggle() {
+    if (pendingAction) return;
     const b = bridge();
+    if (watcherId) { await stopWatcher(); return; }
     if (!b?.sync?.keepUpToDate) { notify.error(t('txKutdTitleFull'), t('txSyNoBridge')); return; }
-    if (watcherId) {
-      try {
-        unwrapSync(await b.sync.stop(watcherId));
-        log(t('txKutdStopped', context.localPath));
-        notify.info(t('txKutdTitleFull'), t('txKutdStopped', context.localPath));
-      } catch (err) { notify.error(t('txKutdTitleFull'), err.message); }
-      watchers.delete(watcherId);
-      watcherId = null;
-      paint();
-      return;
-    }
     if (!context.sessionId) { notify.warning(t('txKutdTitleFull'), t('txSyNoSession')); return; }
     const errorKey = syncCombinationError(options);
     if (errorKey) { notify.warning(t('txSyRefusedTitle'), t(errorKey)); return; }
+    pendingAction = 'start';
+    paint();
     try {
       const res = unwrapSync(await b.sync.keepUpToDate({
         ...compareRequest(options, context),
@@ -644,9 +653,30 @@ export function openKeepUpToDateDialog(props = {}) {
       await setTransferPref('keepUpToDate', { ...options }, 'Saved the keep-up-to-date options');
       log(t('txKutdRunning', context.localPath));
       notify.success(t('txKutdTitleFull'), t('txKutdRunning', context.localPath));
-      paint();
     } catch (err) {
       notify.error(t('txKutdTitleFull'), err.message);
+    } finally {
+      pendingAction = null;
+      paint();
+    }
+  }
+
+  async function stopWatcher() {
+    if (!watcherId || pendingAction) return;
+    const id = watcherId;
+    pendingAction = 'stop';
+    paint();
+    try {
+      unwrapSync(await bridge().sync.stop(id));
+      log(t('txKutdStopped', context.localPath));
+      notify.info(t('txKutdTitleFull'), t('txKutdStopped', context.localPath));
+      if (watcherId === id) watcherId = null;
+      watchers.delete(id);
+    } catch (err) {
+      notify.error(t('txKutdTitleFull'), err.message);
+    } finally {
+      pendingAction = null;
+      paint();
     }
   }
 

@@ -1812,3 +1812,20 @@ test('SFTP stat falls back from unsupported lstat without fabricating link metad
     await assert.rejects(() => other.stat('/private'), /permission denied/);
   });
 });
+
+test('SFTP stat fallback preserves a followed special-file type', async () => {
+  const adapter = new SftpAdapter({});
+  adapter.bugs = { lstatUnsupported: true };
+  adapter._call = async (method) => {
+    if (method === 'lstat') {
+      const error = new Error('unsupported');
+      error.code = 8;
+      throw error;
+    }
+    return { mode: 0o020600, size: 0, mtime: 1700000000, atime: 1700000000, uid: 7, gid: 9 };
+  };
+  const row = await adapter.stat('/device');
+  assert.equal(row.type, 'special');
+  assert.equal(row.isSymlink, false);
+  assert.equal(row.raw.lstatFallback, true);
+});

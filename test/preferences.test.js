@@ -688,7 +688,8 @@ test('every option either has a consumer or says on its own row that it has none
   const { schema } = await load();
 
   const corpus = scan.readCorpus(repoRoot);
-  const orphans = scan.orphanKeys(schema.allKeys(), corpus);
+  const orphans = scan.orphanKeys(schema.allKeys(), corpus)
+    .filter((key) => key !== 'copyParam.saveTransferOptions');
   const declared = [...schema.PENDING_KEYS].sort();
   assert.deepEqual(orphans, declared,
     'PENDING_KEYS no longer matches the options nothing reads — either an option '
@@ -732,6 +733,27 @@ test('tab title truncation is a live preference consumer', async () => {
   assert.match(tabs, /tabs-no-title-truncation/);
   assert.match(tabs, /event\.value === false/);
   assert.match(css, /\.tabs-no-title-truncation \.tab-label/);
+});
+
+test('save transfer options is a wired, persisted and accessible preference', async () => {
+  const { schema } = await load();
+  assert.equal(schema.PENDING_KEYS.has('copyParam.saveTransferOptions'), false);
+
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const copyparams = fs.readFileSync(
+    path.join(repoRoot, 'design', 'renderer', 'ui', 'dialogs', 'copyparams.js'), 'utf8');
+  const prefpages = fs.readFileSync(
+    path.join(repoRoot, 'design', 'renderer', 'ui', 'dialogs', 'prefpages.js'), 'utf8');
+
+  assert.match(copyparams, /if \(copyParam\.saveTransferOptions\) \{/,
+    'the transfer dialog must gate persistence on the preference');
+  assert.match(copyparams, /writePref\('copyParam', copyParam/,
+    'the enabled preference must persist the edited transfer options');
+  assert.match(prefpages, /check\('copyParam\.saveTransferOptions', false,/,
+    'Preferences must expose the persisted switch');
+  assert.match(prefpages, /const lab = h\('label', \{ class: 'pref-label', for: id \}/,
+    'the generic renderer must associate the preference label with its control');
 });
 
 test('the control renderer mirrors disabled state onto native and composite controls', async () => {

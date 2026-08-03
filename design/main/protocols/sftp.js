@@ -1694,9 +1694,12 @@ class SftpAdapter extends Adapter {
       this._log('debug', `lstat(${target}) is unsupported; using stat() fallback`);
       const followed = await this._call('stat', target);
       const mode = followed.mode || 0;
+      const followedType = (mode & S_IFMT) === S_IFDIR
+        ? 'dir'
+        : (mode & S_IFMT) === S_IFREG || (mode & S_IFMT) === 0 ? 'file' : 'special';
       return entry({
         name: this.basename(target),
-        type: (mode & S_IFMT) === S_IFDIR ? 'dir' : 'file',
+        type: followedType,
         size: Number(followed.size) || 0,
         mtime: this._seconds(followed.mtime) * 1000,
         rights: rightsFromMode(mode),

@@ -15,6 +15,12 @@ filesystem bridge. Bridge failures are surfaced as an error notification and
 the dialog does not claim that permissions changed. Unsupported capabilities
 are presented as unavailable rather than invoking an absent adapter method.
 
+The Value (tags) sheet follows the same rule. It is rendered as an editable
+surface only when the caller provides `caps.tags === true`, an array of current
+tags, and an `onApplyTags(tags)` write callback. Tag metadata without that
+complete seam remains hidden rather than exposing an OK action that cannot
+persist the change.
+
 Owner, group, timestamps, and recursive application follow the same rule:
 invalid or unavailable metadata is not invented, and a failed write remains a
 failed write with the backend message retained for the user.

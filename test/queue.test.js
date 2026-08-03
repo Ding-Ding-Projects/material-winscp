@@ -2207,3 +2207,15 @@ test('retry starts a clean attempt while preserving resumable progress', async (
   assert.strictEqual(retries[0].item.progress.currentFile, '');
   assert.strictEqual(remote.read('/r/a.bin').length, 1000);
 });
+
+test('retry appends failed work behind transfers already waiting', () => {
+  const q = new TransferQueue({ prefs: { ...PREF_DEFAULTS, queue: { ...PREF_DEFAULTS.queue, enabledByDefault: false } } });
+  const first = q.add({ id: 'failed', source: '/l/failed', target: '/r/failed' });
+  const waiting = q.add({ id: 'waiting', source: '/l/waiting', target: '/r/waiting' });
+  first.state = 'error';
+  first.error = new Error('temporary failure');
+
+  assert.equal(q.retry(first.id), true);
+  assert.deepEqual(q.list().map((item) => item.id), [waiting.id, first.id]);
+  assert.equal(q.get(first.id).state, 'queued');
+});

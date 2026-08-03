@@ -420,6 +420,16 @@ test('the size cell shows the short form and the exact bytes when they differ', 
   assert.match(big, /^12\.3 MB \(12,884,901 B\)$/);
 });
 
+test('tag editing requires truthful capability and a write seam', async () => {
+  const P = await load('properties');
+  const tags = [{ key: 'env', value: 'test' }];
+  assert.strictEqual(P.canEditTags({ tags }), false);
+  assert.strictEqual(P.canEditTags({ tags, caps: { tags: false }, onApplyTags() {} }), false);
+  assert.strictEqual(P.canEditTags({ tags, caps: { tags: true } }), false);
+  assert.strictEqual(P.canEditTags({ tags, caps: { tags: true }, onApplyTags() {} }), true);
+  assert.strictEqual(P.canEditTags({ tags: null, caps: { tags: true }, onApplyTags() {} }), false);
+});
+
 /* ================================================================== */
 /* 4. the duplicate dialog's target split                              */
 /* ================================================================== */

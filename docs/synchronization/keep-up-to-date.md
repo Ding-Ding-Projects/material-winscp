@@ -96,3 +96,9 @@ never your files.
 - [The comparison checklist](comparison-checklist.md) — what the initial comparison produces.
 - [File masks](../editing-and-commands/file-masks.md) — the exclusion language that keeps secrets out of a watch.
 - [The queue](../transfers-and-queue/queue.md) — where watched changes are executed.
+
+The Keep up to date window exposes the watcher lifecycle as accessible state:
+starting and stopping disable the command and announce the pending operation,
+so a slow IPC reply cannot be started twice or mistaken for a completed watch.
+Once the watcher is active, its `changes` events update the activity log and the
+transfer queue; stopping clears that state only after the stop request succeeds.

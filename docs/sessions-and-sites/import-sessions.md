@@ -16,6 +16,9 @@ preview is confirmed.
   non-ASCII names such as `香港 + Prod 1` intact instead of importing mojibake.
 - FileZilla XML, OpenSSH client configuration, WinSCP INI, and OpenSSH
   `known_hosts` each have their own bounded parser and preview source label.
+- `known_hosts` preview rows identify the imported host-key algorithm (for
+  example, `ssh-ed25519`) without displaying the key material. This mirrors
+  WinSCP's informative row tip while keeping trust data secret-safe.
 - INI/raw-setting names are case-insensitive. If an imported section contains
   case variants of the same key, the last value wins and the shadowed spelling
   is removed before any subsequent export, preventing duplicate ambiguous

@@ -95,6 +95,9 @@ Under **Preferences → Transfer → Background**, stored in `PREF_DEFAULTS.queu
 completed-byte/file counters and any resumable partial, while clearing the
 failed attempt's throughput, ETA and current-file display. Snapshots expose
 `retryCount`, and `item-retry` identifies the attempt for progress consumers.
+The failed row is moved to the end of the queue before it is requeued, matching
+WinSCP's `TTerminalQueue::RetryItem`: transfers that were already waiting keep
+their place and run first.
 
 ## Failure modes
 
@@ -150,3 +153,12 @@ failed attempt's throughput, ETA and current-file display. Snapshots expose
 - [Resume](resume.md) — what happens to a failed item's byte offset.
 - [Speed limits](speed-limits.md) — throttling without pausing.
 - [Notifications](../interface-and-appearance/notifications.md) — why queue results are toasts, not dialogs.
+# Remembering transfer options
+
+The Preferences option `copyParam.saveTransferOptions` is shipped and wired.
+When enabled, the transfer dialog writes the edited `copyParam` object after a
+successful confirmation, so the next transfer can reuse those options. The
+checkbox is persisted through the normal configuration preference path and is
+labelled by the generic Preferences renderer for keyboard and assistive
+technology users. This setting does not claim to persist unrelated dialog
+state or transfer queue choices.

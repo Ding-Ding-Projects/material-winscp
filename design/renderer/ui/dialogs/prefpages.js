@@ -1348,7 +1348,6 @@ export function pageById(id, pages = PAGES) { return pages.find((p) => p.id === 
  * them and three because one doc comment did.
  */
 export const PENDING_KEYS = new Set([
-  'copyParam.saveTransferOptions',
   'dDAllowMove',
   'dDAllowMoveInit',
   // Drag & drop out of the application is Explorer's IDataObject and the
