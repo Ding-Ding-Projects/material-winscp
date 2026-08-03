@@ -65,6 +65,9 @@ function samePath(a, b) {
 
 /** True when `child` is `parent` or lives underneath it. */
 function isChildPath(parent, child) {
+  // An empty path is invalid, not a root alias. Treating it as a prefix would
+  // make a malformed subtree invalidation match every cached directory.
+  if (parent === undefined || parent === null || String(parent) === '') return false;
   const p = includeTrailingSlash(parent);
   return includeTrailingSlash(child).slice(0, p.length) === p;
 }

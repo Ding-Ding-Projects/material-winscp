@@ -376,6 +376,15 @@ test('clearing by source and by target both work, including the symlink hack', (
   assert.strictEqual(c3.getDirectoryChange('/home/me', 'link'), null);
 });
 
+test('an invalid empty subtree path cannot clear every cached directory', () => {
+  const cache = new DirectoryCache();
+  cache.addFileList({ directory: '/a', timestamp: 1, files: [] });
+  cache.addFileList({ directory: '/b', timestamp: 1, files: [] });
+
+  assert.deepStrictEqual(cache.clearFileList('', true), []);
+  assert.deepStrictEqual(cache.paths().sort(), ['/a', '/b']);
+});
+
 test('directory-change invalidation respects path boundaries', () => {
   const bySource = new DirectoryChangesCache(100);
   bySource.addDirectoryChange('/a', 'one', '/target-one');

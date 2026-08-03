@@ -349,11 +349,13 @@ export function openModelessWindow(opts = {}) {
   });
 
   let closed = false;
+  let closing = false;
   async function close(reason) {
-    if (closed) return true;
+    if (closed || closing) return false;
+    closing = true;
     if (typeof opts.canClose === 'function') {
       const okToClose = await opts.canClose(reason);
-      if (okToClose === false) return false;
+      if (okToClose === false) { closing = false; return false; }
     }
     closed = true;
     untrap();

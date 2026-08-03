@@ -11,6 +11,7 @@
 // The plaintext of a secret never reaches disk and is never logged.
 'use strict';
 const crypto = require('crypto');
+const { TextDecoder } = require('util');
 
 let safeStorage = null;
 try { ({ safeStorage } = require('electron')); } catch { /* tests run headless */ }
@@ -123,7 +124,14 @@ function decryptWithKey(key, blob) {
   if (buf.length < AES_GCM_OVERHEAD) throw new Error('AES-GCM envelope is truncated.');
   const d = crypto.createDecipheriv('aes-256-gcm', key, buf.subarray(0, AES_GCM_IV_LENGTH));
   d.setAuthTag(buf.subarray(AES_GCM_IV_LENGTH, AES_GCM_OVERHEAD));
-  return Buffer.concat([d.update(buf.subarray(AES_GCM_OVERHEAD)), d.final()]).toString('utf8');
+  const plaintext = Buffer.concat([d.update(buf.subarray(AES_GCM_OVERHEAD)), d.final()]);
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(plaintext);
+  } catch {
+    throw new Error('AES-GCM envelope contains invalid UTF-8.');
+  } finally {
+    wipe(plaintext);
+  }
 }
 
 /**

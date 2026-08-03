@@ -83,6 +83,8 @@ a new read instead of presenting stale entries.
 
 Directory-change cache keys use a delimiter boundary. Clearing `/a` does not
 clear `/ab`, and clearing target `/var/data` does not clear `/var/database`.
+An empty path is treated as invalid rather than as a subtree prefix, so a
+malformed invalidation cannot clear every cached directory.
 
 After a foreground file operation, `Terminal.reactOnCommand()` schedules a
 current-directory reread when automatic post-operation reads are enabled. Both
@@ -99,6 +101,11 @@ current listing is reread once when the batch closes rather than once per file.
 different session. When the active session closes, ownership is cleared and the
 next surviving session is announced. `closeOnFailure` disconnects and cleans a
 failed session before removing it, including any reconnect timer.
+
+Host-port identity is unambiguous for IPv6 sessions: an IPv6 literal is
+bracketed before it is combined with its port (for example,
+`[2001:db8::1]:2222`). The same key format is used for known host-key lookups,
+so a trusted key cannot be lost behind the colons in the address.
 
 ## Verification
 

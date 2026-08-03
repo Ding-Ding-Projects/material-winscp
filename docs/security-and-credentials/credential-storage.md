@@ -76,7 +76,8 @@ believe something false.
 - **Envelope text is validated before decoding.** Invalid base64, padding, or
   non-text ciphertext is rejected before AES-GCM authentication; the caller
   receives an empty secret and prompts again rather than accepting a decoder's
-  permissive normalization.
+  permissive normalization. UTF-8 decoding is fatal, so authenticated bytes
+  that are not valid text are rejected rather than replaced with `�`.
 - **Verifier records have an exact shape.** A master-password verifier with
   missing or trailing bytes is rejected before password verification; malformed
   security state never gets treated as a valid credential store.

@@ -78,6 +78,12 @@ function adapterClassOf(mod, protocol) {
 let seq = 0;
 function newSessionId() { return `s${Date.now().toString(36)}${(++seq).toString(36)}`; }
 
+function formatHostPort(host, port) {
+  const value = String(host || '');
+  const displayHost = value.includes(':') && !value.startsWith('[') ? `[${value}]` : value;
+  return `${displayHost}:${port}`;
+}
+
 const PROMPT_KINDS = new Set([
   'password', 'newPassword', 'passphrase', 'keyboardInteractive', 'twoFactor',
   'account', 'hostKey', 'certificate', 'custom',
@@ -144,7 +150,7 @@ class Session extends EventEmitter {
   // ------------------------------------------------------------ identity
   get protocol() { return String(this.data.protocol || 'sftp').toLowerCase(); }
   get name() { return this.data.name || this.data.hostName || this.protocol; }
-  get hostPort() { return `${this.data.hostName}:${this.data.portNumber}`; }
+  get hostPort() { return formatHostPort(this.data.hostName, this.data.portNumber); }
   get connected() { return !!(this.adapter && this.adapter.connected); }
 
   info() {
@@ -246,7 +252,7 @@ class Session extends EventEmitter {
    *     answer decides. There is no third path.
    */
   async verifyHostKey(key) {
-    const hostPort = `${key.host || this.data.hostName}:${key.port || this.data.portNumber}`;
+    const hostPort = formatHostPort(key.host || this.data.hostName, key.port || this.data.portNumber);
     const shown = key.fingerprintSHA256 || key.fingerprint || '';
 
     // A fingerprint pinned on the site itself (or supplied with /hostkey).
@@ -297,7 +303,7 @@ class Session extends EventEmitter {
 
   /** TLS/SSL certificate verification. Same rule: the user decides. */
   async verifyCertificate(cert) {
-    const hostPort = `${cert.host || this.data.hostName}:${cert.port || this.data.portNumber}`;
+    const hostPort = formatHostPort(cert.host || this.data.hostName, cert.port || this.data.portNumber);
     const key = `cert:${hostPort}`;
     const known = this.config ? this.config.knownHostKey(key) : null;
     if (known && known.fingerprint && known.fingerprint === (cert.fingerprintSHA256 || cert.fingerprint)) {

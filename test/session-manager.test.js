@@ -198,3 +198,23 @@ test('exec fails closed when a stale capability flag has no implementation', asy
     (error) => error && error.code === 'NOT_SUPPORTED' && /cannot execute remote commands/.test(error.message),
   );
 });
+
+test('IPv6 host keys use an unambiguous bracketed host-port key', async () => {
+  const lookedUp = [];
+  const session = new Session(
+    { protocol: 'sftp', hostName: '2001:db8::1', portNumber: 2222 },
+    {
+      config: {
+        prefs: { logging: {}, security: {} },
+        knownHostKey(key) { lookedUp.push(key); return { fingerprint: 'SHA256:known' }; },
+      },
+      emit() {},
+    },
+  );
+
+  assert.equal(session.hostPort, '[2001:db8::1]:2222');
+  assert.equal(await session.verifyHostKey({
+    host: '2001:db8::1', port: 2222, fingerprintSHA256: 'SHA256:known', algorithm: 'ssh-ed25519',
+  }), true);
+  assert.deepEqual(lookedUp, ['[2001:db8::1]:2222']);
+});

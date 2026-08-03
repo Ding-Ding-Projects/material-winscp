@@ -33,6 +33,18 @@ test('editor save failure still releases the in-flight save guard', async () => 
   assert.match(source.slice(saveStart, conflictStart), /finally \{\s*savePromise = null;/);
 });
 
+test('modeless close serializes an async unsaved-changes decision', async () => {
+  const source = await fs.readFile(sourcePath, 'utf8');
+  const closeStart = source.indexOf('async function close(reason)');
+  const closeEnd = source.indexOf('\n  requestAnimationFrame', closeStart);
+  assert.ok(closeStart >= 0 && closeEnd > closeStart);
+  const close = source.slice(closeStart, closeEnd);
+  assert.match(source.slice(source.lastIndexOf('let closed = false;', closeStart), closeEnd), /let closing = false;/);
+  assert.match(close, /if \(closed \|\| closing\) return false;/);
+  assert.match(close, /closing = true;/);
+  assert.match(close, /if \(okToClose === false\) \{ closing = false; return false; \}/);
+});
+
 test('editor exposes selection-aware clipboard editing with read-only guards', async () => {
   const source = await fs.readFile(sourcePath, 'utf8');
   assert.match(source, /async function cutSelection\(\)/);

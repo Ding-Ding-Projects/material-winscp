@@ -21,6 +21,10 @@ Removing the final catch-all is confirmed and leaves unmatched files using the
 internal editor. When the list is filtered, keyboard reordering stays within
 the visible rows so hidden associations cannot be moved accidentally.
 
+The modeless editor serializes close attempts while an asynchronous unsaved-
+changes decision is open. Repeated Escape presses or close requests cannot
+open duplicate prompts or run cleanup twice.
+
 ## Security considerations
 
 External command lines are configuration data and are passed to the existing
@@ -29,9 +33,9 @@ to the editor launch path and its argument handling.
 
 ## Verification
 
-`node --test test/editor-dialog.test.js` checks that filtered keyboard movement
-uses visible row indices and focuses the moved row. The full `npm test` suite is
-the release gate.
+`node --test test/editor-dialog.test.js` checks filtered keyboard movement,
+serialized modeless closing, and the editor's save guards. The full `npm test`
+suite is the release gate.
 
 Suggested articles: [Editors](editors.md), [File masks](file-masks.md), and
 [Search and regex](../search-and-regex/).

@@ -220,6 +220,12 @@ test('AES-GCM rejects permissively decoded envelope text', () => {
   assert.strictEqual(C.decryptWithKey(key, blob), 'secret');
 });
 
+test('AES-GCM rejects authenticated ciphertext that is not UTF-8 text', () => {
+  const key = crypto.randomBytes(32);
+  const blob = C.encryptWithKey(key, Buffer.from([0xC3, 0x28]));
+  assert.throws(() => C.decryptWithKey(key, blob), /invalid UTF-8/);
+});
+
 test('AES-GCM storage rejects malformed base64 before decoding', () => {
   C.lockMaster();
   const verifier = C.makeVerifier('strict envelope password');
