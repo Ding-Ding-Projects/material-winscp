@@ -187,6 +187,40 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "e91bd48", kind: 'commit', ref: "e91bd48", oid: "e91bd48fa962d535b43b6e5706ab890ffaf007db", date: "2026-08-03",
+    title: "Fix CLI, drag-drop, menu, overlay, and history edges",
+    changes: [
+      { category: "changed", text: "The command line now forwards INI and raw settings, Explorer drops fail closed, menus show platform shortcuts and scroll safely, palette jumps focus their controls, and discard events report whether history recorded them." },
+      { category: "removed", text: "CLI 而家識傳 INI 同 raw settings，Explorer drop 唔再亂跌落 current directory，menu 會顯示平台快捷鍵兼識捲，palette 直達真正 control，discard 就老實講有冇寫入 history；啲 edge case 終於唔使再扮魔術。" },
+    ],
+  },
+  {
+    id: "7c9fe53", kind: 'commit', ref: "7c9fe53", oid: "7c9fe530a33c48df4cc53fd0e619cfe44f0825da", date: "2026-08-03",
+    title: "Record the verified pushed head in handoff",
+    changes: [
+      { category: "changed", text: "HANDOFF.md now records that origin/main is in sync at d85484b instead of carrying a stale pre-push pointer." },
+      { category: "changed", text: "HANDOFF.md 而家記低 origin/main 已經同 d85484b 對齊，唔再揸住推送前嗰條舊 pointer 扮新鮮。" },
+    ],
+  },
+  {
+    id: "d85484b", kind: 'commit', ref: "d85484b", oid: "d85484bdab0ee10acfda9bd5ea996f900624f14a", date: "2026-08-03",
+    title: "Refresh handoff for the second verified wave",
+    changes: [
+      { category: "changed", text: "HANDOFF.md now records the 3,377-test baseline, the changelog commit, and the current honest roadmap state." },
+      { category: "changed", text: "HANDOFF.md 而家記低 3377 個測試、changelog commit，同埋老實嘅 roadmap 現況；唔會扮 100% 收工。" },
+    ],
+  },
+  {
+    id: "88d55a8", kind: 'commit', ref: "88d55a8", oid: "88d55a8aa469f759fe295aa1da38361b9aafd7c1", date: "2026-08-03",
+    title: "Update the in-app changelog",
+    changes: [
+      { category: "fixed", text: "The history now records the verified second wave, with the oldest entries rotated only by the generator's fixed window." },
+    ],
+    changesYue: [
+      { category: "changed", text: "App 入面嘅 changelog 而家記低已驗證嘅第二波；最舊嗰啲係跟 generator 固定窗口自然輪出，唔係 code 偷走咗。" },
+    ],
+  },
+  {
     id: "bcc1fd8", kind: 'commit', ref: "bcc1fd8", oid: "bcc1fd8a50bd2db15aad23b5601cab4cd31bc19a", date: "2026-08-03",
     title: "Fix workspace, search, session, and SFTP edge cases",
     changes: [
@@ -626,34 +660,6 @@ export const DEVELOPMENT = [
     ],
     changesYue: [
       { category: "changed", text: "廣東話：補返本地／遠端屬性分流、編輯器剪貼簿操作、即時 tab 偏好、retry attempt 狀態、安全 SFTP STAT 後備，同 portable 設定根目錄，連埋測試同文件一齊上。啲 code 終於分得清左右邊，唔使再同自己啲設定玩捉迷藏。" },
-    ],
-  },
-  {
-    id: "48b7a5f", kind: 'commit', ref: "48b7a5f", oid: "48b7a5f83daef650ecbfb405fa90792ab28c3f7f", date: "2026-08-03",
-    title: "Refresh dialog protocol handoff metadata",
-    changes: [
-      { category: "fixed", text: "The handoff now records the 3,262-pass regression run, Docker smoke, the 8557de4 and b01e17a milestones, and the honest 59.0% coverage with 114 units outstanding. The project is moving; the coverage number is not wearing a disguise.\\n\\nHandoff 而家記低 3,262 pass regression、Docker smoke、8557de4 同 b01e17a milestone，仲有老實嘅 59.0% coverage 同 114 個未完成 unit。個 project 有郁，coverage number 就冇戴假鬍鬚扮 100%。" },
-    ],
-  },
-  {
-    id: "b01e17a", kind: 'commit', ref: "b01e17a", oid: "b01e17a36f464e9a9e7c19dff7befd80182e896c", date: "2026-08-03",
-    title: "Refresh in-app changelog for dialog protocol fixes",
-    changes: [
-      { category: "fixed", text: "The in-app history now records the verified 8557de4 RemoteTransfer, Progress, CustomCommand, FileFind, Session, and S3 cancellation fixes with full links and bilingual copy. The changelog now has a cancel button for its own memory.\\n\\nApp 入面嘅歷史而家記低已驗證嘅 8557de4 RemoteTransfer、Progress、CustomCommand、FileFind、Session 同 S3 cancellation 修正，連埋完整 link 同雙語 copy；changelog 自己都有粒 cancel button，唔怕失憶。" },
-    ],
-  },
-  {
-    id: "8557de4", kind: 'commit', ref: "8557de4", oid: "8557de45e9b970c304ec15acdec7815d67c7cb77", date: "2026-08-03",
-    title: "Harden dialogs, file search, and S3 cancellation",
-    changes: [
-      { category: "security", text: "RemoteTransfer now validates before queue submission, Progress reports cancellation failures accessibly, CustomCommand protects shortcuts, FileFind ignores stale verification and exposes the regex builder, Session keeps secret-free lifecycle state, and S3 aborts HTTP and multipart work. The tests and docs keep every boundary honest, so cancellation can stop the job without stopping the explanation.\\n\\nRemoteTransfer 會先 validation 先入 queue，Progress 會清楚報 cancel failure，CustomCommand 守住 shortcut，FileFind 唔收 stale verification 又有 regex builder，Session 只留安全 lifecycle state，S3 會 abort HTTP 同 multipart。測試文件講清楚每個 boundary，cancel 可以停 job，但唔會停埋解釋。" },
-    ],
-  },
-  {
-    id: "6881f62", kind: 'commit', ref: "6881f62", oid: "6881f6217366b6f1bcc18b89381a09b6bcb0c902", date: "2026-08-03",
-    title: "Refresh dialog wave handoff metadata",
-    changes: [
-      { category: "fixed", text: "The handoff now records the 3,245-pass regression run, Docker smoke, the 71db2c6 and fa7b4ce milestones, and the honest 59.0% coverage with 114 units outstanding. It is a handoff, not an incantation for pretending the roadmap is finished.\\n\\nHandoff 而家記低 3,245 pass regression、Docker smoke、71db2c6 同 fa7b4ce milestone，仲有老實嘅 59.0% coverage 同 114 個未完成 unit。佢係交接文件，唔係用嚟施法扮 roadmap 已經完工。" },
     ],
   },
 ];
