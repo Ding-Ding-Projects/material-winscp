@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `3361a3f`** — Fix headless protocol, queue, sync, and UI guards
+**At commit `0a1939a`** — Extend headless config and settings surfaces
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **60.5%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 71.5% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3699 run, **3698 pass, 0 fail**, 1 skipped |
-| Hand-written code | 229,100 lines across 450 files |
-| Commits | 265 on `main` |
+| Tests | 3704 run, **3703 pass, 0 fail**, 1 skipped |
+| Hand-written code | 229,329 lines across 450 files |
+| Commits | 267 on `main` |
 | Working tree | **1 uncommitted change(s)** |
-| Remote | `origin/main` at `3361a3f` — in sync |
+| Remote | `origin/main` at `0a1939a` — in sync |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `0a1939a` | 2026-08-03 | Extend headless config and settings surfaces |
+| `4e1193f` | 2026-08-03 | Refresh handoff and changelog after audit wave |
 | `3361a3f` | 2026-08-03 | Fix headless protocol, queue, sync, and UI guards |
 | `cbd2066` | 2026-08-03 | Make dialog contract tests line-ending neutral |
 | `4f0a36c` | 2026-08-03 | Refresh handoff after changelog tooling fix |
 | `ad59ee8` | 2026-08-03 | Keep generated report commits out of the app changelog |
 | `4eea6f6` | 2026-08-03 | Refresh handoff after lifecycle and dialog fixes |
 | `b754414` | 2026-08-03 | Refresh in-app changelog for lifecycle and dialog fixes |
-| `3636cfb` | 2026-08-03 | Harden session, configuration, preferences, and dialogs |
-| `9f07ff2` | 2026-08-03 | Refresh handoff after changelog verification |
 
 ## Notes from whoever worked on this last
 

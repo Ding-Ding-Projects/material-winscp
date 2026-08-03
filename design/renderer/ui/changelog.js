@@ -187,6 +187,13 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "0a1939a", kind: 'commit', ref: "0a1939a", oid: "0a1939a3f75a0b0da966e39b8e8b8b11131ca6c4", date: "2026-08-03",
+    title: "Extend headless config and settings surfaces",
+    changes: [
+      { category: "added", text: "English: Emit the final empty-session state, add credential-safe headless site/workspace listing and JSON/INI import-export, harden Advanced Site Settings ordering and unknown-value display, and verify Preferences narrow layouts with focused tests and docs.\\n\\n粵語：session 關晒都要報返個空狀態，config import/export 唔好順手帶埋 password；Advanced settings 唔好重新排 disabled list，Preferences 窄窗亦唔再逼 controls 玩疊羅漢。" },
+    ],
+  },
+  {
     id: "3361a3f", kind: 'commit', ref: "3361a3f", oid: "3361a3f5abf946982f18bf39422f2cccc5f28eda", date: "2026-08-03",
     title: "Fix headless protocol, queue, sync, and UI guards",
     changes: [
@@ -663,13 +670,6 @@ export const DEVELOPMENT = [
     title: "Complete CLI parity and harden platform edges",
     changes: [
       { category: "added", text: "Preserve tab-containing command arguments, release runner state through optional log cleanup failures, make PATH lookup host-correct, restore companion preference keys, require explicit remote-copy capability, and make SFTP recursive removal lstat entries without attributes. Add focused tests and documentation. The CLI now keeps its tabs, the runner keeps its marbles, and SFTP stops wandering into symlinked gardens.\\n\\n廣東話：CLI 保住 tab、runner 收好自己啲 marble、SFTP 用 lstat 睇清楚條路，唔會再行入 symlink 花園打卡。" },
-    ],
-  },
-  {
-    id: "3ba2f1c", kind: 'commit', ref: "3ba2f1c", oid: "3ba2f1cee10f3e344c8b3311fb56fbe7fa205710", date: "2026-08-03",
-    title: "Harden transfer console security and sync edges",
-    changes: [
-      { category: "added", text: "Close failed console channels, reject malformed AES verifiers, canonicalize relative symlink targets for cycle detection, stop cancelled transfers before byte movement, name SiteAdvanced order options for assistive technology, and explain a no-direction sync row honestly. Add focused tests and documentation. The edge cases now stop tripping over the same rake, which is frankly the rake's fault.\\n\\n廣東話：console channel、AES verifier、symlink、transfer、SiteAdvanced 同 sync 邊角位而家各自有路牌；個 rake 再伸腳都冇咁易中招。" },
     ],
   },
 ];
