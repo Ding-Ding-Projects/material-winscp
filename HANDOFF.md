@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `a5a2c7e`** — Refresh the startup and protocol changelog
+**At commit `2dae39b`** — Record the latest CLI changelog entry
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3417 run, **3416 pass, 0 fail**, 1 skipped |
-| Hand-written code | 219,764 lines across 436 files |
-| Commits | 178 on `main` |
-| Working tree | **1 uncommitted change(s)** |
-| Remote | `origin/main` at `a5a2c7e` — in sync |
+| Tests | 3424 run, **3423 pass, 0 fail**, 1 skipped |
+| Hand-written code | 219,937 lines across 436 files |
+| Commits | 182 on `main` |
+| Working tree | clean |
+| Remote | `origin/main` at `1bf3275` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `2dae39b` | 2026-08-03 | Record the latest CLI changelog entry |
+| `e5ed31b` | 2026-08-03 | Refresh changelog for CLI hardening |
+| `afbe57d` | 2026-08-03 | Fix repeated CLI batches and drag-name collisions |
+| `1bf3275` | 2026-08-03 | Record the latest startup and protocol handoff |
 | `a5a2c7e` | 2026-08-03 | Refresh the startup and protocol changelog |
 | `d008db8` | 2026-08-03 | Harden startup, security, protocol, and preference edges |
 | `df68f60` | 2026-08-03 | Record the latest CLI and protocol handoff |
 | `395984e` | 2026-08-03 | Refresh the CLI and protocol changelog |
-| `c68948c` | 2026-08-03 | Harden CLI, editor, queue, and protocol edges |
-| `18e7d9a` | 2026-08-03 | Record the pushed protocol hardening handoff |
-| `c32c930` | 2026-08-03 | Refresh the generated changelog |
-| `c38476f` | 2026-08-03 | Harden protocol edge cases and Docker smoke cleanup |
 
 ## Notes from whoever worked on this last
 
