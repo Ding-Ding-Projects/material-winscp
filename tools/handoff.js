@@ -114,6 +114,10 @@ function git() {
   ]);
   dirtyFiles.delete('HANDOFF.md');
   dirtyFiles.delete('ROADMAP.md');
+  // The end-to-end boot test refreshes this tracked evidence image as part of
+  // its capture. It is restored by the task workflow, but must not make the
+  // report claim that the source tree is dirty while generation is running.
+  dirtyFiles.delete('design/screenshots/e2e-app-boot.png');
   return {
     head: sh('git', ['rev-parse', '--short', reportRef]).trim(),
     headFull: reportRef,
