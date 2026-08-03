@@ -114,6 +114,12 @@ export function selectPreset(presets, context) {
   return (presets || []).find((p) => presetMatches(p, context)) || null;
 }
 
+/** The persisted active preset's list index, or -1 when it is not available. */
+export function activePresetIndex(presets, name) {
+  if (!name) return -1;
+  return (presets || []).findIndex((preset) => preset && preset.name === name);
+}
+
 /**
  * The one-line summary WinSCP puts on CopyParamLabel. It names only what
  * differs from the defaults, so "Binary, exclude *.tmp" is legible at a glance
@@ -438,7 +444,8 @@ export function openCopyParamPreset({ preset, current, onSave } = {}) {
 export function createPresetList({ value = [], current, onChange } = {}) {
   ensurePreferenceStyles();
   let rows = (value || []).map((p) => ({ ...p }));
-  let selected = rows.length ? 0 : -1;
+  let selected = activePresetIndex(rows, readPref('copyParamCurrent', ''));
+  if (selected < 0 && rows.length) selected = 0;
 
   const listEl = h('div', { class: 'pref-list-rows', role: 'listbox', 'aria-label': 'Transfer settings presets' });
   const tools = h('div', { class: 'pref-list-tools' });
@@ -474,7 +481,11 @@ export function createPresetList({ value = [], current, onChange } = {}) {
       const btn = h('button', {
         type: 'button', role: 'option', 'aria-selected': String(i === selected),
         class: `pref-list-row${i === selected ? ' is-selected' : ''}`,
-        onclick: () => { selected = i; paint(); },
+        onclick: () => {
+          selected = i;
+          writePref('copyParamCurrent', rows[i].name || '', 'Changed the active transfer preset');
+          paint();
+        },
         ondblclick: () => edit(i),
       },
       icon(r.rule && Object.values(r.rule).some(Boolean) ? 'filter' : 'layers', 15),
@@ -537,6 +548,7 @@ export function createPresetList({ value = [], current, onChange } = {}) {
           onSelect: () => {
             rows.splice(selected, 1);
             selected = Math.min(selected, rows.length - 1);
+            writePref('copyParamCurrent', selected >= 0 ? (rows[selected].name || '') : '', 'Changed the active transfer preset');
             paint(); emit();
           },
         },

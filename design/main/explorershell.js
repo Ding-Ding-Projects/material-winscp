@@ -2257,6 +2257,11 @@ class ExplorerShell {
 
   /** CloseTab — refuses while transfers are queued unless the user insists. */
   async closeTab() {
+    // The close-tab IPC action is the production path, so enforce the same
+    // local-browser floor as the command-state predicate. Without this check
+    // the last workspace tab could disappear even though the UI says it is
+    // disabled.
+    if (!this.canCloseSession(this.session())) return false;
     if (!(await this.canCloseQueue())) return false;
     if (this.ops.closeSession) await this.ops.closeSession(this.session());
     return true;

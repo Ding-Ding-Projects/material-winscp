@@ -70,6 +70,10 @@ queued.
 ## Presets
 
 `copyParamList` holds named presets; `copyParamCurrent` names the active one.
+A click or keyboard selection in the Preferences preset list writes that name
+to `copyParamCurrent`, so the next transfer starts from the same preset after a
+restart. If the active preset is deleted, the setting is cleared (or moved to
+the remaining selected row) rather than referring to a missing record.
 A preset can carry an **auto-select rule** — a file mask plus a direction — so
 choosing "Text files, upload" happens automatically for `*.php` uploads.
 `copyParamAutoSelectNotice` (default `true`) makes the app say when a preset was

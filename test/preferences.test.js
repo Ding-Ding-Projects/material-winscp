@@ -451,6 +451,14 @@ test('the first matching preset wins, in list order', async () => {
   assert.equal(copy.selectPreset(list, { hostName: 'other.net' }), null);
 });
 
+test('the active preset helper follows the persisted name and rejects missing names', async () => {
+  const { copy } = await load();
+  const list = [{ name: 'Text' }, { name: 'Binary' }];
+  assert.equal(copy.activePresetIndex(list, 'Binary'), 1);
+  assert.equal(copy.activePresetIndex(list, 'Missing'), -1);
+  assert.equal(copy.activePresetIndex(list, ''), -1);
+});
+
 test('the transfer summary names only what differs from the defaults', async () => {
   const { copy } = await load();
   assert.equal(copy.summariseCopyParam({}, 'en'), 'Default transfer settings');

@@ -698,6 +698,32 @@ test('the watcher uses a native adapter watch when one is offered', async () => 
   assert.strictEqual(closed, true, 'the native watcher is closed on stop');
 });
 
+test('an invalid native change source stops the watcher before reporting the error', async () => {
+  const local = new MemoryAdapter('local');
+  const remote = new MemoryAdapter('remote');
+  local.putDir('/l'); remote.putDir('/r');
+  let fire;
+  let closed = false;
+  local.watch = (path, cb) => { fire = cb; return { close() { closed = true; } }; };
+
+  const q = makeQueue();
+  const watcher = sync.startWatch(local, '/l', remote, '/r', q, {
+    direction: 'remote', criteria: 'time', intervalMs: 5,
+  });
+  const errors = [];
+  watcher.on('error', (error) => errors.push(error));
+  const invalid = new Error('watched directory disappeared');
+
+  fire(invalid);
+  fire();
+  await sleep(30);
+
+  assert.strictEqual(watcher.running, false);
+  assert.strictEqual(closed, true);
+  assert.deepStrictEqual(errors, [invalid]);
+  assert.strictEqual(q.items.length, 0, 'an invalid monitor must enqueue no later change');
+});
+
 test('stopping during an in-flight comparison cannot enqueue its late result', async () => {
   const local = new MemoryAdapter('local');
   const remote = new MemoryAdapter('remote');

@@ -10,3 +10,10 @@ This is a cancellation boundary, not a rollback guarantee: work already
 queued before `stopWatch` remains in the transfer queue and is governed by the
 queue's own pause and cancellation controls. The regression is covered by the
 in-flight comparison test in `test/sync.test.js`.
+
+Native change sources may also report an invalid monitor with an `Error`
+callback. The watcher closes that source and stops before emitting the error,
+so callbacks already queued by the operating system cannot start a new
+comparison after the monitor has failed. This mirrors WinSCP's
+`SynchronizeInvalid` path and is covered by the invalid native change-source
+test in `test/sync.test.js`.

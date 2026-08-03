@@ -275,8 +275,13 @@ class EditorManager extends EventEmitter {
     };
     this.open.set(rec.id, rec);
 
-    if (type === 'external') await this._launchExternal(rec, chosen);
-    else this._watch(rec);   // an internal editor may still be a separate window
+    try {
+      if (type === 'external') await this._launchExternal(rec, chosen);
+      else this._watch(rec);   // an internal editor may still be a separate window
+    } catch (e) {
+      await this._rollbackOpen(rec);
+      throw e;
+    }
 
     this._send('event:editor', { type: 'opened', editor: this.describe(rec) });
     this.emit('opened', rec);
@@ -311,7 +316,12 @@ class EditorManager extends EventEmitter {
       localOnly: true,
     };
     this.open.set(rec.id, rec);
-    if (rec.type === 'external') await this._launchExternal(rec, { external: rec.external, externalParams: true });
+    try {
+      if (rec.type === 'external') await this._launchExternal(rec, { external: rec.external, externalParams: true });
+    } catch (e) {
+      await this._rollbackOpen(rec);
+      throw e;
+    }
     this._send('event:editor', { type: 'opened', editor: this.describe(rec) });
     return this.describe(rec);
   }
@@ -471,6 +481,20 @@ class EditorManager extends EventEmitter {
     }
     rec.child = child;
 
+    // spawn() reports executable failures asynchronously. Do not publish an
+    // editor record until the process has actually started, otherwise a bad
+    // association leaves a watcher and plaintext temporary behind.
+    await new Promise((resolve, reject) => {
+      const onSpawn = () => { child.removeListener('error', onError); resolve(); };
+      const onError = (e) => { child.removeListener('spawn', onSpawn); reject(new Error(`The external editor could not be started: ${e.message}`)); };
+      child.once('spawn', onSpawn);
+      child.once('error', onError);
+    }).catch((e) => {
+      rec.child = null;
+      this._unwatch(rec);
+      throw e;
+    });
+
     child.on('error', (e) => {
       rec.lastError = `The external editor failed: ${e.message}`;
       this._send('event:editor', { type: 'error', id: rec.id, message: rec.lastError });
@@ -527,6 +551,14 @@ class EditorManager extends EventEmitter {
     if (!rec.watcher) return;
     try { rec.watcher.close(); } catch { /* already closed */ }
     rec.watcher = null;
+  }
+
+  async _rollbackOpen(rec) {
+    rec.closed = true;
+    this._unwatch(rec);
+    if (rec.child) { try { rec.child.kill(); } catch { /* already gone */ } rec.child = null; }
+    this.open.delete(rec.id);
+    await this._removeTemp(rec);
   }
 
   async _onFileChanged(rec) {

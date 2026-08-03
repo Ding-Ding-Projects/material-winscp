@@ -36,6 +36,7 @@ covered by [version history](../version-history/).
 | Restoring while sessions are already open | A choice: add to the current window, or replace. Replacing is confirmed and reports how many sessions would close. | Yes |
 | A connection fails during restore | Its tab opens disconnected with a Reconnect action, rather than being dropped. Partial restore is visible, not silent. | Yes |
 | Auto-save on a crash | Nothing is saved — auto-save runs on clean exit. The tab structure itself is persisted separately and does survive. | Partially |
+| Closing the only local-browser tab | The close action is refused, leaving the workspace's usable panel in place. | Yes |
 
 ## Security considerations
 
@@ -56,6 +57,8 @@ covered by [version history](../version-history/).
 
 - Save/restore round trips are tested for directories, panel geometry, tab
   order, pinned state, group membership and collapsed state.
+- The production close-tab path is tested to preserve the last local-browser
+  tab, matching the disabled close command state.
 - Missing-site and missing-directory handling are tested by deleting each
   between save and restore.
 - Password inclusion is tested to confirm that with the option off, no credential

@@ -2144,6 +2144,24 @@ function parseUrl(url, {
       maskedUrl += origHostInfo + aRemoteDirectory;
     }
 
+    // Stored-site URLs keep session parameters after the site/path match.
+    // Parse them here as well as in the ad-hoc branch; otherwise `;save=1`
+    // is treated as part of the remote directory and saveOnly is lost.
+    if (stored !== null) {
+      const dirCut = cutToChar(aRemoteDirectory, URL_PARAM_SEPARATOR, false);
+      aRemoteDirectory = dirCut.head;
+      let sessionParams = dirCut.tail;
+      while (sessionParams !== '') {
+        const cut = cutToChar(sessionParams, URL_PARAM_SEPARATOR, false);
+        sessionParams = cut.tail;
+        const nameCut = cutToChar(cut.head, URL_PARAM_VALUE_SEPARATOR, false);
+        if (nameCut.head.toLowerCase() === URL_SAVE_PARAM_NAME) {
+          const n = tryStrToInt(nameCut.tail);
+          target.saveOnly = (n === null ? 1 : n) !== 0;
+        }
+      }
+    }
+
     if (aRemoteDirectory !== '' && aRemoteDirectory !== '/') {
       if (aRemoteDirectory[aRemoteDirectory.length - 1] !== '/' && wantFileName) {
         const slash = aRemoteDirectory.lastIndexOf('/');

@@ -98,6 +98,12 @@ actual selection, so it never unexpectedly copies an entire file.
   convenient and mildly revealing; `temporaryDirectoryDeterministic` makes the
   names predictable, which is worse and off by default.
 
+If an external editor cannot be started, the launch is rolled back as one
+operation: its watcher and registry entry are removed and the downloaded
+temporary is deleted. This prevents a broken association from leaving a
+plaintext orphan that looks like an active edit. The failure is still returned
+to the caller with the executable error so the association can be corrected.
+
 ## Verification
 
 - Association matching is tested against the mask engine, including ordering and
@@ -110,6 +116,8 @@ actual selection, so it never unexpectedly copies an entire file.
 - Encoding round trips are tested for UTF-8 with and without BOM, and for the
   ANSI fallback path including the warning.
 - Orphan recovery is tested by leaving temporaries behind and restarting.
+- A failed external launch is tested for registry, watcher and temporary-file
+  cleanup.
 - Renderer save lifecycle invariants are tested for serialization, snapshot
   ownership, and release of the in-flight guard after failure.
 - Renderer editor action wiring is tested for clipboard operations, read-only

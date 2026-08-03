@@ -11,6 +11,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const cp = require('node:child_process');
 
 const P = require('../design/main/paths');
 const { EditorManager } = require('../design/main/editors');
@@ -116,6 +117,32 @@ test('ExecutedFileChanged uses the same conflict guard as an internal save', asy
     assert.ok(f.emitted.some((e) => e.type === 'orphan' && e.id === opened.id));
     await fs.rm(opened.localPath, { force: true });
   } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a failed external launch rolls back its watcher, registry record, and temporary copy', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-launch-'));
+  P.setRoot(root);
+  const f = fixture();
+  const originalSpawn = cp.spawn;
+  try {
+    cp.spawn = () => {
+      const child = new (require('node:events').EventEmitter)();
+      child.kill = () => {};
+      process.nextTick(() => child.emit('error', Object.assign(new Error('editor missing'), { code: 'ENOENT' })));
+      return child;
+    };
+
+    await assert.rejects(
+      () => f.manager.openRemote({ sessionId: f.session.id, remotePath: '/notes.txt', mode: 'external', external: 'missing-editor.exe' }),
+      /could not be started: editor missing/,
+    );
+    assert.deepEqual(f.manager.list(), []);
+    const files = await f.manager.findOrphans();
+    assert.deepEqual(files, []);
+  } finally {
+    cp.spawn = originalSpawn;
     await fs.rm(root, { recursive: true, force: true });
   }
 });

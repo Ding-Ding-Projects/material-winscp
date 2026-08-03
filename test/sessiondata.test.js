@@ -918,6 +918,16 @@ test('a stored site can be named in place of a host, with a path after it', () =
   assert.strictEqual(r2.data.requireDirectories, true);
 });
 
+test('a stored site keeps save session parameters out of its remote path', () => {
+  const stored = S.defaultSessionData('work/prod');
+  stored.hostName = 'prod.example.com';
+  const sessions = { sessions: [stored], defaultSettings: S.defaultSessionData() };
+
+  const r = S.parseUrl('work/prod/var/log/;save=1', { storedSessions: sessions });
+  assert.strictEqual(r.data.saveOnly, true);
+  assert.strictEqual(r.data.remoteDirectory, '/var/log/');
+});
+
 test('a stored site is only matched under a protocol when the caller allows it', () => {
   const stored = S.defaultSessionData('example.com');
   stored.hostName = 'real.example.com';

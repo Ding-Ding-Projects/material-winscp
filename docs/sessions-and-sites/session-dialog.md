@@ -11,3 +11,9 @@ failures remain explicit disconnected states and are never silently swallowed.
 
 Verification is in `test/session-dialog.test.js` (four focused tests). The
 module does not log, serialize, or otherwise expose secret values.
+
+Session URLs also preserve the `;save` session parameter when they address a
+stored site. For example, `work/prod/var/log/;save=1` sets `saveOnly` without
+treating the parameter as part of the remote path.
+
+Verification is in `test/sessiondata.test.js` (stored-site `;save=1` handling).

@@ -12,6 +12,12 @@ Logging is the first thing anyone asks for in a bug report and the last thing
 anyone thinks about before pasting one into a public issue, which is why
 redaction is a design property here rather than an option.
 
+While an authentication prompt is open, its read-only **Authentication log**
+shows the current session log and receives new session-log lines live. The
+renderer only displays records returned by the main-process session-log API; it
+does not collect, print, persist, or send credential field values. The main
+process remains responsible for redaction before a line reaches this view.
+
 ## Configuration
 
 Under **Preferences → Logging**, stored in `PREF_DEFAULTS.logging`.

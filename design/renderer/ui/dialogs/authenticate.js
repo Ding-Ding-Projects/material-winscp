@@ -52,6 +52,8 @@ defineStrings({
   txAuCancelled: ['The server withdrew the question before it was answered.', '伺服器喺你答之前就收返條問題。'],
   txAuRefused: ['The prompt was cancelled, so the session did not connect.', '提示取消咗，所以冇連到線。'],
   txAuNoBridge: ['This window cannot reach the session manager, so the answer cannot be delivered.', '呢個視窗連唔到工作階段管理員，所以答案送唔到。'],
+  txAuLogTitle: ['Authentication log', '認證記錄'],
+  txAuLogEmpty: ['No session log lines yet.', '暫時未有工作階段記錄。'],
 
   txHkNewTitle: ['This server has not been seen before', '未見過呢個伺服器'],
   txHkNewBody: ['There is no stored host key for {0}. Check the fingerprint below against one you obtained from the server’s administrator before you continue.', '{0} 冇儲存過主機密鑰。繼續之前，同管理員俾你嘅指紋核對下面呢個。'],
@@ -110,6 +112,34 @@ defineStrings({
 /* ================================================================== */
 
 const openPrompts = new Map();     // promptId -> { close }
+
+/** Read-only view of the main-process log while authentication is pending. */
+function authenticationLog(sessionId) {
+  const list = h('div', { class: 'tx-au-log', role: 'log', 'aria-live': 'polite' });
+  let lastSeq = 0;
+  let destroyed = false;
+  const render = (records) => {
+    if (destroyed) return;
+    for (const record of records || []) {
+      if (!record || typeof record.seq !== 'number' || record.seq <= lastSeq) continue;
+      lastSeq = record.seq;
+      list.appendChild(h('div', { class: 'tx-au-log-line' }, String(record.text || record.message || '')));
+    }
+    if (!list.childNodes.length) list.appendChild(h('span', { class: 'muted' }, t('txAuLogEmpty')));
+    while (list.children.length > 200) list.firstElementChild.remove();
+  };
+  const off = onMainEvent('event:log', (payload) => {
+    if (payload?.sessionId === sessionId) render([payload.line]);
+  });
+  if (sessionId) {
+    const b = bridge();
+    Promise.resolve(b?.session?.log?.(sessionId, 0)).then((res) => {
+      const value = unwrapSync(res);
+      render(value?.lines || []);
+    }).catch(() => { /* the authentication prompt remains usable without a log */ });
+  } else render([]);
+  return { element: h('div', { class: 'stack' }, h('span', { class: 'tx-pg-stat-label' }, t('txAuLogTitle')), list), destroy() { destroyed = true; off(); } };
+}
 
 function unwrapSync(res) {
   if (res == null) return null;
@@ -212,13 +242,15 @@ function openCredentialDialog(request) {
       h('span', {}, kind === 'passphrase' || kind === 'password' ? t('txAuRememberStored') : t('txAuRememberSession')));
   }
 
+  const log = authenticationLog(request.sessionId);
   const body = h('div', { class: 'stack' },
     h('div', { class: 'tx-au-kv' },
       h('span', {}, t('userName')), h('span', {}, payload?.userName || '—'),
       h('span', {}, t('hostName')), h('span', {}, payload?.hostPort || '—')),
     payload?.instructions ? h('pre', { class: 'tx-au-instructions' }, String(payload.instructions)) : null,
     ...rows,
-    rememberRow);
+    rememberRow,
+    log.element);
 
   let answered = false;
 
@@ -228,6 +260,7 @@ function openCredentialDialog(request) {
     dismissOnScrim: false,
     content: body,
     onClose: () => {
+      log.destroy();
       openPrompts.delete(promptId);
       if (answered) return;
       // Closing without answering is a refusal, and it is reported as one.
@@ -301,6 +334,7 @@ function openHostKeyDialog(request) {
       h('h3', {}, icon('shield_lock', 20), h('span', {}, t('txHkNewTitle'))),
       h('p', { class: 'prose' }, t('txHkNewBody', hostPort)));
 
+  const log = authenticationLog(request.sessionId);
   const body = h('div', { class: `stack ${changed ? 'tx-au-changed' : ''}` },
     banner,
     changed
@@ -309,7 +343,8 @@ function openHostKeyDialog(request) {
     fingerprintBlock(changed ? 'txHkPresented' : 'txHkFingerprint', payload?.fingerprintSHA256),
     facts,
     h('p', { class: 'tx-sy-note' }, t('txHkAcceptOnceHint')),
-    h('p', { class: 'tx-sy-note' }, t('txHkAcceptStoreHint')));
+    h('p', { class: 'tx-sy-note' }, t('txHkAcceptStoreHint')),
+    log.element);
 
   function accept(remember, close) {
     deliver(request, { accept: true, remember })
@@ -328,6 +363,7 @@ function openHostKeyDialog(request) {
     dismissOnScrim: false,
     content: body,
     onClose: () => {
+      log.destroy();
       openPrompts.delete(promptId);
       if (answered) return;
       deliver(request, { accept: false })
@@ -374,6 +410,7 @@ function openCertificateDialog(request) {
   let answered = false;
   const errors = Array.isArray(payload?.errors) ? payload.errors : [];
 
+  const log = authenticationLog(request.sessionId);
   const body = h('div', { class: 'stack' },
     h('div', { class: 'tx-au-banner-changed' },
       h('h3', {}, icon('warning', 20), h('span', {}, t('txCertTitle'))),
@@ -395,7 +432,8 @@ function openCertificateDialog(request) {
       ? h('details', { class: 'tx-md-details' },
         h('summary', {}, t('txMsgMore')),
         h('pre', { class: 'tx-md-detail' }, String(payload.pem)))
-      : null);
+      : null,
+    log.element);
 
   function accept(remember, close) {
     deliver(request, { accept: true, remember })
@@ -413,6 +451,7 @@ function openCertificateDialog(request) {
     dismissOnScrim: false,
     content: body,
     onClose: () => {
+      log.destroy();
       openPrompts.delete(promptId);
       if (answered) return;
       deliver(request, { accept: false })

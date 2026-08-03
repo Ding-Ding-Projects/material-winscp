@@ -509,7 +509,18 @@ class Watcher extends EventEmitter {
 
     if (typeof this.localAdapter.watch === 'function') {
       try {
-        this._native = this.localAdapter.watch(this.localPath, () => this.tick());
+        this._native = this.localAdapter.watch(this.localPath, (event) => {
+          // A monitor can become invalid (for example when its watched
+          // directory disappears).  Treat an Error callback as a terminal
+          // change-source failure, like SynchronizeInvalid does upstream.
+          // Stop first so a late callback cannot start another comparison.
+          if (event instanceof Error) {
+            this.stop();
+            this.emit('error', event);
+            return;
+          }
+          this.tick();
+        });
       } catch (err) {
         this.emit('error', err);
         this._native = null;

@@ -24,3 +24,11 @@ test('certificate acceptance has the same retry-safe delivery semantics', () => 
   assert.match(source, /txCertAcceptOnce.*onSelect: \(close\) => \{ accept\(false, close\); return true; \}/s);
   assert.match(source, /txCertAcceptStore.*onSelect: \(close\) => \{ accept\(true, close\); return true; \}/s);
 });
+
+test('authentication dialogs expose the live session log without handling secrets', () => {
+  assert.match(source, /function authenticationLog\(sessionId\)/);
+  assert.match(source, /b\?\.session\?\.log\?\.\(sessionId, 0\)/);
+  assert.match(source, /payload\?\.sessionId === sessionId/);
+  assert.match(source, /log\.destroy\(\)/);
+  assert.doesNotMatch(source, /console\.(log|debug|error).*value/);
+});

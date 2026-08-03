@@ -885,6 +885,18 @@ test('the last local browser cannot be closed', () => {
   assert.strictEqual(withCompany.canCloseSession(fakeSession({ id: 's2' })), true);
 });
 
+test('closeTab enforces the last local-browser workspace floor on the production path', async () => {
+  const localOnly = fakeSession({ localBrowser: true });
+  const shell = makeShell({
+    session: localOnly,
+    sessions: [localOnly],
+    queue: { list: () => [] },
+  });
+
+  assert.strictEqual(await shell.closeTab(), false);
+  assert.strictEqual(shell._test.calls.filter((c) => c.name === 'closeSession').length, 0);
+});
+
 test('FormCloseQuery offers Yes/No/Cancel only when no workspace will be saved', async () => {
   const withoutAutoSave = makeShell({
     prefs: { confirmClosingSession: true, window: { autoSaveWorkspace: false } },
