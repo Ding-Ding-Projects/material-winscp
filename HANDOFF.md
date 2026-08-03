@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `cd71f05`** — Harden protocol retries and sync boundaries
+**At commit `937ecb0`** — Expand CLI drag palette and overlay parity
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **60.5%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 71.5% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3573 run, **3572 pass, 0 fail**, 1 skipped |
-| Hand-written code | 224,897 lines across 444 files |
-| Commits | 245 on `main` |
+| Tests | 3590 run, **3589 pass, 0 fail**, 1 skipped |
+| Hand-written code | 225,630 lines across 444 files |
+| Commits | 248 on `main` |
 | Working tree | clean |
-| Remote | `origin/main` at `cd71f05` — in sync |
+| Remote | `origin/main` at `937ecb0` — in sync |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `937ecb0` | 2026-08-03 | Expand CLI drag palette and overlay parity |
+| `b53723c` | 2026-08-03 | Keep changelog linked to current history |
+| `87def2e` | 2026-08-03 | Refresh handoff after protocol fixes |
 | `cd71f05` | 2026-08-03 | Harden protocol retries and sync boundaries |
 | `438729b` | 2026-08-03 | Keep nested console discovery headless |
 | `d0bf1d5` | 2026-08-03 | Align handoff with pushed source |
 | `845c04a` | 2026-08-03 | Refresh handoff after CLI boundary fixes |
 | `d788b02` | 2026-08-03 | Harden drag CLI and trust boundaries |
-| `6541962` | 2026-08-03 | Refresh handoff after capability and CLI fixes |
-| `1bd52d3` | 2026-08-03 | Document remaining protocol capability limits |
-| `ad2fc20` | 2026-08-03 | Align SiteAdvanced capability ledger and site identity |
 
 ## Notes from whoever worked on this last
 
