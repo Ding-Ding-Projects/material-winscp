@@ -21,6 +21,25 @@ const { generateKeyPair } = require('./helpers/sftp-server');
 
 const P = ext.SFTP_PACKET;
 
+test('SFTP EOF ends a pipelined read cleanly, including an empty file', async () => {
+  const adapter = new SftpAdapter({ sftpDownloadQueue: 1 });
+  adapter.sftp = {
+    open(path, flags, mode, cb) { cb(null, 'handle'); },
+    read(handle, buffer, offset, length, position, cb) {
+      const error = new Error('End of file');
+      error.code = 1; // SSH_FX_EOF
+      cb(error);
+    },
+    close(handle, cb) { cb(); },
+  };
+
+  const stream = await adapter.createReadStream('/empty');
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  assert.deepEqual(chunks, []);
+  assert.equal(stream.destroyed, true);
+});
+
 // ------------------------------------------------------------- test server
 
 let HOST_KEY = null;

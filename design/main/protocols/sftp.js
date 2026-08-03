@@ -1220,13 +1220,17 @@ class PipelinedReadStream extends Readable {
       this.sftp.read(this.handle, buffer, 0, length, position, (err, bytes, data) => {
         this._inflight--;
         if (this._stopped) return;
-        if (err) return this._fail(err);
+        // SSH_FX_EOF is the normal SFTP answer when a read reaches the end of
+        // a file. ssh2 exposes the wire status as code 1; treating it like a
+        // transport failure makes empty files (and the final speculative
+        // read in a pipelined transfer) emit `error` instead of ending cleanly.
+        if (err && err.code !== 1) return this._fail(err);
 
         const count = Math.max(0, Math.min(Number(bytes) || 0, length));
         // SFTP servers normally report EOF as either status EOF or a zero-byte
         // DATA reply. A short DATA reply is also the only safe boundary when
         // requests are already in flight: later speculative ranges are dropped.
-        if (count < length) {
+        if (err || count < length) {
           const boundary = position + count;
           this._eofAt = this._eofAt === null ? boundary : Math.min(this._eofAt, boundary);
         }

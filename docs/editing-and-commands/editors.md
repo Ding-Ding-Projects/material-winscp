@@ -42,6 +42,9 @@ search term.
   the user's folders and never in a location another user can read.
 - **Upload-on-save is watched, not polled.** Saving triggers an upload through
   the ordinary queue, so transfer settings and speed limits apply.
+- **Editor integrations use the same IPC seam.** A native or renderer editor
+  can call `editor:fileChanged` after writing the owned temporary file; the main
+  process applies the same metadata check and conflict event as `fs.watch`.
 - **`earlyClose` exists because of how modern editors launch.** Many exit
   immediately after handing the file to an already-running instance; treating
   that as "editing finished" would upload an unedited file and close the session

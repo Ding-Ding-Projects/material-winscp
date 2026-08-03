@@ -57,6 +57,20 @@ export function sessionFieldVisibility(site, state = {}) {
   return fieldVisibility(site, { editable: sessionFormEditable(state) });
 }
 
+/** Validate the connection fields before credentials can cross the bridge. */
+export function validateLoginSite(site = {}) {
+  const hostName = String(site.hostName || '').trim();
+  if (!hostName) return { field: 'hostName', message: 'Enter a host name.' };
+  const port = Number(site.portNumber);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    return { field: 'portNumber', message: 'Enter a port from 1 to 65535.' };
+  }
+  if (site.hostKey && !String(site.hostKey).trim()) {
+    return { field: 'hostKey', message: 'Host-key fingerprint cannot be blank.' };
+  }
+  return null;
+}
+
 function storedSearchMode() {
   const all = store.get('search') || {};
   return SITE_SEARCH_MODES.some((m) => m.id === all.siteSearchMode)
@@ -368,10 +382,12 @@ export function createLoginPanel(opts = {}) {
   function hostRow(vis) {
     const hostId = uid('lg-host');
     const portId = uid('lg-port');
+    const validation = validateLoginSite(state.site);
     const hostInput = h('input', {
       type: 'text', id: hostId, class: 'sd-input', spellcheck: 'false',
       autocomplete: 'off', placeholder: 'example.com', required: true, 'aria-required': 'true',
       readonly: vis.hostNameReadOnly, 'aria-readonly': String(vis.hostNameReadOnly),
+      'aria-invalid': String(validation?.field === 'hostName'),
       autofocus: !state.sourceId,
       oninput: () => { state.site.hostName = hostInput.value; state.dirty = true; syncButtons(); },
     });
@@ -380,6 +396,7 @@ export function createLoginPanel(opts = {}) {
     const portInput = h('input', {
       type: 'number', id: portId, class: 'sd-input sd-num', min: '1', max: '65535',
       readonly: vis.portNumberReadOnly, 'aria-readonly': String(vis.portNumberReadOnly),
+      'aria-invalid': String(validation?.field === 'portNumber'),
       oninput: () => { state.site.portNumber = Number(portInput.value) || 0; state.dirty = true; },
       onchange: () => {
         const n = Math.min(65535, Math.max(1, Number(portInput.value) || defaultPortFor(state.site.protocol, state.site.ftps)));
@@ -678,7 +695,7 @@ export function createLoginPanel(opts = {}) {
     if (!loginBtn) return;
     const node = tree.selected;
     const container = node && (node.kind === 'folder' || node.kind === 'workspace');
-    const ready = container ? true : !!state.site.hostName;
+    const ready = container ? true : !validateLoginSite(state.site);
     loginBtn.disabled = !ready;
     loginBtn.title = ready ? '' : t('hostRequired');
   }
@@ -692,8 +709,9 @@ export function createLoginPanel(opts = {}) {
     if (node && node.kind === 'folder') return openFolder(node);
     if (node && node.kind === 'workspace') return openWorkspace(node);
 
-    if (!state.site.hostName) {
-      notify.warning(t('loginBtn'), t('hostRequired'));
+    const validation = validateLoginSite(state.site);
+    if (validation) {
+      notify.warning(t('loginBtn'), validation.message);
       return null;
     }
     return openSession(buildRequest(), siteLabel(state.site));

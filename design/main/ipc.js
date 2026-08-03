@@ -1690,6 +1690,9 @@ class Ipc {
       return this.editors.save(str(id, 'id', 64), str(text, 'text', LIMITS.text), { force: o.force === true });
     });
     this.handle('editor:upload', (id, options) => this.editors.upload(str(id, 'id', 64), { force: optObj(options, 'options').force === true }));
+    // Native/editor integrations report saves through the same conflict-checked
+    // path as fs.watch without receiving the EditorManager itself.
+    this.handle('editor:fileChanged', (id) => this.editors.executedFileChanged(str(id, 'id', 64)));
     this.handle('editor:close', (id, options) => this.editors.close(str(id, 'id', 64), optObj(options, 'options')));
     this.handle('editor:list', () => this.editors.list());
     this.handle('editor:orphans', () => this.editors.findOrphans());
@@ -2085,8 +2088,12 @@ class Ipc {
     };
 
     this.handle('interface:shortcuts', (m, options) => I().shortcutsFor(modeOf(m), optObj(options, 'options')));
-    this.handle('interface:allowedAction', (m, action, phase) =>
-      I().allowedAction(modeOf(m), str(action, 'action', 64), optStr(phase, 'phase', 16) || undefined));
+    this.handle('interface:allowedAction', (m, action, phase, state) => {
+      const a = optObj(action, 'action');
+      need(typeof a.name === 'string' && a.name.length <= 128, 'action.name is required.');
+      return I().allowedAction(modeOf(m), a, optStr(phase, 'phase', 16) || undefined,
+        optObj(state, 'state'));
+    });
     this.handle('interface:commands', (m) => I().commandsFor(modeOf(m)));
     this.handle('interface:panels', (m, options) => I().panelArrangement(modeOf(m), optObj(options, 'options')));
     this.handle('interface:bands', (m) => I().bandsFor(modeOf(m)));

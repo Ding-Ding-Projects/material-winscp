@@ -353,9 +353,19 @@ test.describe('the reconciled subsystems are reachable from the application', ()
 
     // An Explorer-hidden action is refused in the Explorer interface and
     // allowed in the Commander one — the whole point of the TActionFlag tag.
-    const hidden = await app.ok('interface.allowedAction', 'explorer', 'LocalCopy');
+    const hidden = await app.ok('interface.allowedAction', 'explorer', { name: 'LocalCopy', tag: 9 });
     assert.equal(hidden.allowed, false);
     assert.ok(hidden.reason.length > 0);
+
+    const local = await app.ok('interface.allowedAction', 'commander',
+      { name: 'LocalCopyAction', tag: 9 }, 'shortcut', { currentSide: 'local' });
+    assert.equal(local.allowed, true);
+    const wrongPanel = await app.ok('interface.allowedAction', 'commander',
+      { name: 'LocalCopyAction', tag: 9 }, 'shortcut', { currentSide: 'remote' });
+    assert.equal(wrongPanel.allowed, false);
+    const busy = await app.ok('interface.allowedAction', 'commander',
+      { name: 'LocalCopyAction', tag: 9 }, 'execute', { busy: true });
+    assert.equal(busy.allowed, false);
   });
 
   test.it('round-trips the stored interface parameters', async () => {

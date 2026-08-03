@@ -814,6 +814,17 @@ function setKey(site, key, value) {
   return site;
 }
 
+/**
+ * Build the storage-safe patch accepted by the site store.  Keeping this
+ * outside the DOM panel makes the persistence boundary explicit and lets
+ * non-modal consumers use the same secret handling as the dialog.
+ */
+export function siteAdvancedPatch(site, touchedSecrets = []) {
+  const touched = new Set(touchedSecrets);
+  const keep = SECRET_FIELDS.filter((field) => touched.has(field));
+  return stripSecrets({ ...site }, { keep });
+}
+
 /** Everything a `visible`/`enabled` predicate is handed. */
 export function advancedContext(site, prefs = {}) {
   const info = protocolInfo(site.protocol);
@@ -1617,8 +1628,7 @@ export function createSiteAdvancedPanel(site, opts = {}) {
     get touchedSecrets() { return new Set(state.touchedSecrets); },
     /** The patch to send to main: secrets the user never touched are removed. */
     patch() {
-      const keep = SECRET_FIELDS.filter((f) => state.touchedSecrets.has(f));
-      return stripSecrets({ ...state.site }, { keep });
+      return siteAdvancedPatch(state.site, state.touchedSecrets);
     },
     setPage,
     refresh() { renderNav(); renderPage(); },

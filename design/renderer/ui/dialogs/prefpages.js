@@ -1773,7 +1773,15 @@ function row(control, language, controlNode, opts = {}) {
  */
 function applyDisabled(node, disabled) {
   if (!node) return;
-  const set = (el) => { el.disabled = el.dataset?.permDisabled === '1' ? true : !!disabled; };
+  const set = (el) => {
+    const isDisabled = el.dataset?.permDisabled === '1' ? true : !!disabled;
+    el.disabled = isDisabled;
+    // Native disabled controls announce their state automatically. Shared
+    // preference editors may instead expose a focusable button or composite;
+    // mirror the state explicitly so assistive technology gets the same
+    // answer regardless of which renderer supplied the control.
+    el.setAttribute('aria-disabled', String(isDisabled));
+  };
   if (node.tagName === 'INPUT' || node.tagName === 'SELECT' || node.tagName === 'BUTTON' || node.tagName === 'TEXTAREA') {
     set(node);
     return;
@@ -1782,6 +1790,7 @@ function applyDisabled(node, disabled) {
   // controls to disable and must not take the whole page down with them.
   if (typeof node.querySelectorAll !== 'function') return;
   for (const el of node.querySelectorAll('input, select, button, textarea')) set(el);
+  if (node.getAttribute?.('tabindex') !== null) node.setAttribute('aria-disabled', String(!!disabled));
 }
 
 /**

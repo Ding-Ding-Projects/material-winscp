@@ -1740,6 +1740,7 @@ class Terminal extends EventEmitter {
         changesDirectory = true;
         break;
       case 'copyToRemote':
+      case 'copyToLocal':
       case 'deleteFile':
       case 'renameFile':
       case 'moveFile':

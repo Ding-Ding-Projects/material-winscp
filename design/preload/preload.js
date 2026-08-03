@@ -259,6 +259,7 @@ const api = {
     setEncoding: (id, encoding) => call('editor:setEncoding', id, encoding),
     save: (id, text, options) => call('editor:save', id, text, options),
     upload: (id, options) => call('editor:upload', id, options),
+    fileChanged: (id) => call('editor:fileChanged', id),
     close: (id, options) => call('editor:close', id, options),
     list: () => call('editor:list'),
     orphans: () => call('editor:orphans'),
@@ -349,7 +350,7 @@ const api = {
   // ------------------------------------------------------- interface:*
   interface: {
     shortcuts: (mode, options) => call('interface:shortcuts', mode, options),
-    allowedAction: (mode, action, phase) => call('interface:allowedAction', mode, action, phase),
+    allowedAction: (mode, action, phase, state) => call('interface:allowedAction', mode, action, phase, state),
     commands: (mode) => call('interface:commands', mode),
     panels: (mode, options) => call('interface:panels', mode, options),
     bands: (mode) => call('interface:bands', mode),

@@ -1516,6 +1516,7 @@ function encodeUrlPath(s) { return doEncodeUrl(s, '/'); }
 
 /** Appends parameters before the '#fragment', which must stay last. */
 function appendUrlParams(url, params) {
+  if (!params) return String(url);
   const cut = cutToChar(url, '#', false);
   let result = cut.token;
   result += result.indexOf('?') < 0 ? '?' : '&';

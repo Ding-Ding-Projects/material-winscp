@@ -591,6 +591,8 @@ test('appendUrlParams keeps the fragment last', () => {
   assert.equal(C.appendUrlParams('http://x/y', 'a=1'), 'http://x/y?a=1');
   assert.equal(C.appendUrlParams('http://x/y?b=2', 'a=1'), 'http://x/y?b=2&a=1');
   assert.equal(C.appendUrlParams('http://x/y#f', 'a=1'), 'http://x/y?a=1#f');
+  assert.equal(C.appendUrlParams('http://x/y#f', ''), 'http://x/y#f');
+  assert.equal(C.appendUrlParams('http://x/y', ''), 'http://x/y');
 });
 
 test('url predicates', () => {

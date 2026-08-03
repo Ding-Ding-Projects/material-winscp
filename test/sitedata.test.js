@@ -1054,6 +1054,19 @@ test('advancedContext derives the protocol family flags', async () => {
   assert.strictEqual(adv.advancedContext(await siteOf({ protocol: 'ftp', ftps: 'none' })).tls, false);
 });
 
+test('siteAdvancedPatch preserves ordinary edits and only sends touched secrets', async () => {
+  const { adv, tree } = await modules;
+  const site = await siteOf({ remoteDirectory: '/incoming', password: tree.SECRET_SENTINEL });
+  const patch = adv.siteAdvancedPatch({ ...site, remoteDirectory: '/outgoing' });
+  assert.strictEqual(patch.remoteDirectory, '/outgoing');
+  assert.strictEqual(patch.password, undefined);
+  const withSecret = adv.siteAdvancedPatch(
+    { ...site, password: 'new-secret' },
+    ['password'],
+  );
+  assert.strictEqual(withSecret.password, 'new-secret');
+});
+
 test('mergeAlgorithmOrder keeps the stored order and restores what is missing', async () => {
   const { adv } = await modules;
   const merged = adv.mergeAlgorithmOrder(['aes', 'WARN', 'des'], adv.CIPHERS);

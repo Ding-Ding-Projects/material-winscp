@@ -897,6 +897,27 @@ test('autoReadDirectoryAfterOp off means a file operation does not reread', asyn
   assert.strictEqual(adapter.calls.list, 0);
 });
 
+test('a local copy operation rereads the current directory like a remote copy', async () => {
+  const { terminal, adapter } = makeTerminal({ cwd: '/d' });
+  adapter.add('/d/a.txt', {});
+
+  await terminal.reactOnCommand('copyToLocal');
+
+  assert.strictEqual(adapter.calls.list, 1,
+    'a completed local copy must not leave the panel cache stale');
+});
+
+test('local copy rereads are coalesced inside a transaction', async () => {
+  const { terminal, adapter } = makeTerminal({ cwd: '/d' });
+  terminal.beginTransaction();
+
+  await terminal.reactOnCommand('copyToLocal');
+  assert.strictEqual(adapter.calls.list, 0);
+
+  await terminal.endTransaction();
+  assert.strictEqual(adapter.calls.list, 1);
+});
+
 // ===========================================================================
 // ProcessFiles — the operation loop
 // ===========================================================================

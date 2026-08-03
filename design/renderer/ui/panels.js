@@ -817,10 +817,22 @@ export function createFilePanel(opts = {}) {
       navigate(entry.name === '..' ? parentPath() : pathOf(entry));
       return;
     }
-    const action = readPref('panel.doubleClickAction', readPref('doubleClickAction', 'edit'));
-    if (action === 'copy') runAction(isLocal ? 'LocalCopyFocusedAction' : 'RemoteCopyFocusedAction', { side, panel: handle, entry });
-    else if (action === 'open') runAction('CurrentOpenAction', { side, panel: handle, entry });
-    else runAction('CurrentEditFocusedAction', { side, panel: handle, entry });
+    const fallback = () => {
+      const action = readPref('panel.doubleClickAction', readPref('doubleClickAction', 'edit'));
+      if (action === 'copy') runAction(isLocal ? 'LocalCopyFocusedAction' : 'RemoteCopyFocusedAction', { side, panel: handle, entry });
+      else if (action === 'open') runAction('CurrentOpenAction', { side, panel: handle, entry });
+      else runAction('CurrentEditFocusedAction', { side, panel: handle, entry });
+    };
+    // TCustomScpExplorerForm resolves ambiguous remote files in the main
+    // process (unresolved symlinks and encrypted files must be opened, not
+    // handed to the editor). Keep the preview path usable, but use the actual
+    // decision whenever the renderer is connected to preload/IPC.
+    if (!backend.present) { fallback(); return; }
+    void backend.explorer('doubleClick', side, entry).then((decision) => {
+      if (decision === 'open') runAction('CurrentOpenAction', { side, panel: handle, entry });
+      else if (decision === 'edit') runAction('CurrentEditFocusedAction', { side, panel: handle, entry });
+      else if (decision !== 'changeDir') fallback();
+    }).catch(fallback);
   }
 
   /* ---- keyboard ---- */

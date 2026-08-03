@@ -680,6 +680,17 @@ test('every unavailable preference has a bilingual read-only explanation', async
   assert.match(schema.pendingMessage('both'), /唯讀/);
 });
 
+test('the control renderer mirrors disabled state onto native and composite controls', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const prefpages = fs.readFileSync(
+    path.join(repoRoot, 'design', 'renderer', 'ui', 'dialogs', 'prefpages.js'), 'utf8');
+  assert.match(prefpages, /el\.setAttribute\('aria-disabled', String\(isDisabled\)\)/,
+    'disabled native controls must expose their state explicitly');
+  assert.match(prefpages, /node\.setAttribute\('aria-disabled', String\(!!disabled\)\)/,
+    'focusable composite preference editors must expose their disabled state');
+});
+
 test('the guard fails when a dead option is not declared', async () => {
   const { schema } = await load();
   const corpus = scan.readCorpus(repoRoot);

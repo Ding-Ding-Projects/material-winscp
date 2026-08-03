@@ -617,6 +617,22 @@ test('a resumed upload appends rather than truncating', async () => {
   assert.ok(onDisk.equals(whole), 'the interrupted upload finished exactly where it stopped');
 });
 
+test('a resumed upload overwrites from the requested offset', async () => {
+  const whole = bytes(50_000, 25);
+  const cut = 30_000;
+  const target = path.join(srv.root, 'resume-up-offset.bin');
+
+  // Leave stale bytes after the partial file. A correct REST+STOR resume
+  // replaces them; APPE would put the tail after the stale suffix.
+  await fsp.writeFile(target, Buffer.concat([whole.subarray(0, cut), bytes(7_000, 99)]));
+  await withAdapter(srv, {}, async (ftp) => {
+    await writeStream(await ftp.createWriteStream('/resume-up-offset.bin', { start: cut }), whole.subarray(cut));
+  });
+
+  const onDisk = await fsp.readFile(target);
+  assert.ok(onDisk.equals(whole), 'the resumed upload replaced stale bytes at the resume offset');
+});
+
 test('resume is refused outright when the server never advertised REST', async () => {
   const old = await startFtpServer({ users: { [USER]: PASSWORD }, blacklist: ['REST'] });
   try {

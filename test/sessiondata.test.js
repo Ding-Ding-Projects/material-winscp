@@ -395,6 +395,23 @@ test('a plain password is read and flagged for rewriting into the protected form
   assert.strictEqual(S.loadSession({ PasswordPlain: 'x' }, { loadPasswords: false }).data.password, '');
 });
 
+test('loadPasswords false does not load any session secret', () => {
+  const r = S.loadSession({
+    PasswordPlain: 'main',
+    ProxyPassword: 'proxy',
+    ProxyPasswordEnc: 'proxy-encrypted',
+    TunnelPasswordPlain: 'tunnel',
+    TunnelPassphrasePlain: 'passphrase',
+    EncryptKeyPlain: 'encrypt',
+  }, { loadPasswords: false });
+  assert.strictEqual(r.data.password, '');
+  assert.strictEqual(r.data.proxyPassword, '');
+  assert.strictEqual(r.data.tunnelPassword, '');
+  assert.strictEqual(r.data.tunnelPassphrase, '');
+  assert.strictEqual(r.data.encryptKey, '');
+  assert.strictEqual(r.rewritePassword, false);
+});
+
 test('writing one password form deletes the other', () => {
   const d = S.defaultSessionData();
   d.password = 'p';

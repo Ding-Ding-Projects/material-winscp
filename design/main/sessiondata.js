@@ -955,10 +955,12 @@ function doLoad(data, storage, {
     if (data[field] !== before) unsafeSettings = true;
   }
 
-  if (storage.valueExists('ProxyPassword')) {
-    data.proxyPassword = storage.readString('ProxyPassword', data.proxyPassword);
-  } else if (storage.valueExists('ProxyPasswordEnc')) {
-    data.proxyPassword = storage.readString('ProxyPasswordEnc', data.proxyPassword);
+  if (loadPasswords) {
+    if (storage.valueExists('ProxyPassword')) {
+      data.proxyPassword = storage.readString('ProxyPassword', data.proxyPassword);
+    } else if (storage.valueExists('ProxyPasswordEnc')) {
+      data.proxyPassword = storage.readString('ProxyPasswordEnc', data.proxyPassword);
+    }
   }
 
   // Bugs are stored inverted (2 - value) because PuTTY's enum runs the other way.
@@ -1014,11 +1016,13 @@ function doLoad(data, storage, {
     }
   }
 
-  if (storage.valueExists('EncryptKeyPlain')) {
-    data.encryptKey = storage.readString('EncryptKeyPlain', data.encryptKey);
-    rewritePassword = true;
-  } else if (storage.valueExists('EncryptKey')) {
-    data.encryptKey = storage.readString('EncryptKey', data.encryptKey);
+  if (loadPasswords) {
+    if (storage.valueExists('EncryptKeyPlain')) {
+      data.encryptKey = storage.readString('EncryptKeyPlain', data.encryptKey);
+      rewritePassword = true;
+    } else if (storage.valueExists('EncryptKey')) {
+      data.encryptKey = storage.readString('EncryptKey', data.encryptKey);
+    }
   }
 
   return { unsafeSettings, rewritePassword };

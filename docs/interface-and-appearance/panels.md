@@ -97,6 +97,12 @@ support question this feature generates.
 
 ## Verification
 
+The live interface bridge passes each action's `{ name, tag }` descriptor and
+runtime state (`currentSide`, `busy`, and `actionEnabled`) to the Commander or
+Explorer policy. This keeps keyboard shortcuts and action visibility aligned
+with the focused panel; a descriptor is never coerced to `"[object Object]"`.
+The bridge contract is covered by the focused interface IPC tests.
+
 - Virtualization is tested with a synthetic 200,000-entry listing, asserting
   exact counts.
 - Natural-order sorting is tested against a corpus with embedded numbers,

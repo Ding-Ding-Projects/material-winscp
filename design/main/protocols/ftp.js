@@ -1179,9 +1179,13 @@ class FtpAdapter extends Adapter {
           sock.on('finish', res);
         }));
       }
-      // APPE is the portable way to resume an upload: REST+STOR is accepted by
-      // fewer servers and silently truncates on some of them.
-      if (start > 0) return this.client.appendFrom(src, path);
+      // REST+STOR resumes at the requested offset. APPE only appends at EOF,
+      // so it corrupts a retry when the remote file is longer than the local
+      // partial file (for example after a server-side retry or preallocation).
+      if (start > 0) {
+        await this.client.send(`REST ${start}`);
+        return this.client.uploadFrom(src, path);
+      }
       return this.client.uploadFrom(src, path);
     });
     src.transfer.catch((e) => { if (!src.destroyed) src.destroy(e); });

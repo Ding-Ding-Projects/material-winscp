@@ -88,6 +88,13 @@ test('ExecuteFile opens the remote copy and EditedFileUploaded saves it back', a
   }
 });
 
+test('the preload bridge exposes the direct file-changed IPC seam', async () => {
+  const source = await fs.readFile(path.join(__dirname, '..', 'design/preload/preload.js'), 'utf8');
+  const ipcSource = await fs.readFile(path.join(__dirname, '..', 'design/main/ipc.js'), 'utf8');
+  assert.match(source, /fileChanged: \(id\) => call\('editor:fileChanged', id\)/);
+  assert.match(ipcSource, /this\.handle\('editor:fileChanged', \(id\) => this\.editors\.executedFileChanged/);
+});
+
 test('ExecutedFileChanged uses the same conflict guard as an internal save', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-'));
   P.setRoot(root);

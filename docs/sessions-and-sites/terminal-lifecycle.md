@@ -49,6 +49,12 @@ a new read instead of presenting stale entries.
 Directory-change cache keys use a delimiter boundary. Clearing `/a` does not
 clear `/ab`, and clearing target `/var/data` does not clear `/var/database`.
 
+After a foreground file operation, `Terminal.reactOnCommand()` schedules a
+current-directory reread when automatic post-operation reads are enabled. Both
+`copyToRemote` and `copyToLocal` are treated as file-modifying commands, so a
+download cannot leave the panel showing the pre-operation listing. Inside a
+transaction the reread is deferred and coalesced with other file operations.
+
 ## Multi-session ownership
 
 `SessionManager.setActive()` ignores an unknown id instead of falling back to a
