@@ -166,7 +166,9 @@ export const SITE_ADVANCED_PAGES = [
           select('EOLTypeCombo', 'eolType', 'End-of-line characters (if not indicated by server):',
             [['lf', 'LF'], ['crlf', 'CR/LF']],
             { enabled: (c) => c.sftp || c.scp }),
-          autoswitch('UtfCombo', 'utf', 'UTF-8 encoding for filenames:',
+          // SessionData stores WinSCP's reversed Utf option as `notUtf`:
+          // `off` means UTF-8 is forced on, while `on` means it is disabled.
+          autoswitch('UtfCombo', 'notUtf', 'UTF-8 encoding for filenames:',
             { enabled: (c) => c.sftp || c.scp || c.ftp }),
           {
             id: 'TimeDifferenceEdit', kind: 'timezone', key: 'timeDifference',
@@ -287,7 +289,7 @@ export const SITE_ADVANCED_PAGES = [
         id: 'SFTPProtocolGroup', caption: 'Protocol options',
         controls: [
           select('SFTPMaxVersionCombo', 'sftpMaxVersion', 'Preferred SFTP protocol version:',
-            [['auto', 'Auto'], [0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6']],
+            [[-1, 'Auto'], [0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6']],
             { gap: 'sftpMaxVersion', numeric: true }),
           combo('SftpServerEdit', 'sftpServer', 'SFTP server:',
             ['', '/bin/sftp-server', 'sudo su -c /bin/sftp-server'],
@@ -751,7 +753,7 @@ export const SITE_ADVANCED_PAGES = [
           autoswitch('BugRekey2Combo', 'sshBugs.rekey2', 'Handles SSH key re-exchange badly:'),
           autoswitch('BugMaxPkt2Combo', 'sshBugs.maxPkt2', 'Ignores SSH maximum packet size:'),
           autoswitch('BugIgnore2Combo', 'sshBugs.ignore2', 'Chokes on SSH ignore messages:'),
-          autoswitch('BugWinAdjCombo', 'sshBugs.winadj', 'Chokes on the window-adjust request:'),
+          autoswitch('BugWinAdjCombo', 'sshBugs.winAdj', 'Chokes on the window-adjust request:'),
         ],
       },
     ],
@@ -825,7 +827,7 @@ function setKey(site, key, value) {
 export function siteAdvancedPatch(site, touchedSecrets = []) {
   const touched = new Set(touchedSecrets);
   const keep = SECRET_FIELDS.filter((field) => touched.has(field));
-  return stripSecrets({ ...site }, { keep });
+  return stripSecrets(normalizeAdvancedSite(site), { keep });
 }
 
 /** Encryption cannot be enabled without a key; a sentinel means one is stored. */
@@ -854,6 +856,27 @@ export function normalizeAdvancedComboNumber(raw, { min = 0, max = 65535 } = {})
   const value = Number(raw);
   if (!Number.isFinite(value)) return min;
   return Math.min(max, Math.max(min, Math.trunc(value)));
+}
+
+const TLS_VERSION_ORDER = new Map(TLS_VERSIONS.map(([id], index) => [id, index]));
+
+/** Validation shared by both the registered dialog and Login's embedded one. */
+export function advancedValidationErrors(site) {
+  const errors = [];
+  if (!encryptionKeyState(site).valid) errors.push('File encryption requires an encryption key.');
+
+  const minTls = TLS_VERSION_ORDER.get(site?.minTlsVersion);
+  const maxTls = TLS_VERSION_ORDER.get(site?.maxTlsVersion);
+  if (minTls !== undefined && maxTls !== undefined && minTls > maxTls) {
+    errors.push('The minimum TLS version cannot be newer than the maximum TLS version.');
+  }
+
+  const minPacket = Number(site?.sftpMinPacketSize);
+  const maxPacket = Number(site?.sftpMaxPacketSize);
+  if (Number.isFinite(minPacket) && Number.isFinite(maxPacket) && minPacket > 0 && maxPacket > 0 && minPacket > maxPacket) {
+    errors.push('The minimum SFTP packet size cannot exceed the maximum packet size.');
+  }
+  return errors;
 }
 
 /** Everything a `visible`/`enabled` predicate is handed. */
@@ -930,7 +953,7 @@ export function searchTextOf(control, site) {
 export function mergeAlgorithmOrder(stored, catalogue, { noWarn = false } = {}) {
   const known = catalogue.map(([id]) => id);
   const catalogueWarn = known.indexOf('WARN');
-  const list = (Array.isArray(stored) ? stored : []).filter((id) => known.includes(id));
+  const list = [...new Set((Array.isArray(stored) ? stored : []).filter((id) => known.includes(id)))];
   const missing = known.filter((id) => !list.includes(id) && id !== 'WARN');
   if (!noWarn && catalogueWarn >= 0 && !list.includes('WARN')) list.push('WARN');
   if (!missing.length) return list.slice();
@@ -943,9 +966,33 @@ export function mergeAlgorithmOrder(stored, catalogue, { noWarn = false } = {}) 
   return [...list.slice(0, warnAt), ...above, 'WARN', ...list.slice(warnAt + 1), ...below];
 }
 
+/**
+ * Move aliases left by older SiteAdvanced builds onto the names consumed by
+ * SessionData and the protocol adapters. The migration is idempotent, so
+ * opening and cancelling Advanced never changes the caller.
+ */
+export function normalizeAdvancedSite(site) {
+  const out = structuredCloneish(site || {});
+  if (out.sshBugs && typeof out.sshBugs === 'object') {
+    const bugs = out.sshBugs;
+    if (bugs.winadj !== undefined && (bugs.winAdj === undefined || bugs.winAdj === 'auto')) {
+      bugs.winAdj = bugs.winadj;
+    }
+    delete bugs.winadj;
+  }
+  if (out.utf !== undefined) {
+    if (out.notUtf === undefined || out.notUtf === 'auto') {
+      const old = String(out.utf);
+      out.notUtf = old === 'on' ? 'off' : old === 'off' ? 'on' : 'auto';
+    }
+    delete out.utf;
+  }
+  return out;
+}
+
 /** Give the panel an isolated working copy so Cancel cannot leak nested edits. */
 export function cloneAdvancedSite(site) {
-  return structuredCloneish(site || {});
+  return normalizeAdvancedSite(site);
 }
 
 /* ================================================================== */
@@ -1672,7 +1719,7 @@ export function createSiteAdvancedPanel(site, opts = {}) {
     get site() { return state.site; },
     get touchedSecrets() { return new Set(state.touchedSecrets); },
     validationErrors() {
-      return encryptionKeyState(state.site).valid ? [] : ['File encryption requires an encryption key.'];
+      return advancedValidationErrors(state.site);
     },
     /** The patch to send to main: secrets the user never touched are removed. */
     patch() {
@@ -1712,7 +1759,7 @@ export function registerSiteAdvancedDialog() {
           label: t('ok'), kind: 'filled', autofocus: true,
           onSelect: () => {
             const errors = panel.validationErrors();
-            if (errors.length) { notify.error('Cannot save site', errors[0]); return; }
+            if (errors.length) { notify.error('Cannot save site', errors[0]); return true; }
             props.onAccept?.(panel.patch(), panel.touchedSecrets);
           },
         },

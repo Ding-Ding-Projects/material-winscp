@@ -85,7 +85,7 @@ export const SESSION_DEFAULTS = Object.freeze({
   ssh2DES: false,                 // (port key) Ssh2LegacyDESCheck
   sshBugs: {                      // (port key) BugsSheet — auto | on | off
     hmac2: 'auto', deriveKey2: 'auto', rsaPad2: 'auto', pkSessID2: 'auto',
-    rekey2: 'auto', maxPkt2: 'auto', ignore2: 'auto', winadj: 'auto',
+    rekey2: 'auto', maxPkt2: 'auto', ignore2: 'auto', winAdj: 'auto',
   },
 
   // --- SFTP ---
@@ -198,7 +198,8 @@ export const SESSION_DEFAULTS = Object.freeze({
   dSTMode: 'unix',
   trimVMSVersions: false,
   vMSAllRevisions: false,
-  utf: 'auto',
+  // SessionData stores WinSCP's visible UTF control as the reversed `notUtf`.
+  notUtf: 'auto',
 
   // --- Recycle bin ---
   deleteToRecycleBin: false,

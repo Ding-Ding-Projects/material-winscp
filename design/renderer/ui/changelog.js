@@ -187,6 +187,23 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "d3f2003", kind: 'commit', ref: "d3f2003", oid: "d3f2003468289809a25aabf4acf396dd0a048050", date: "2026-08-03",
+    title: "Refresh handoff after packaging audit",
+    changes: [
+      { category: "changed", text: "English: Record the pushed packaging, accessibility, menu-shortcut and discard-history evidence with the full 3,606-test result. The paperwork now knows the release gate from the undo button." },
+      { category: "changed", text: "廣東話: 記低今次 packaging、accessibility、menu shortcut 同 discard history 證據，連 3,606 個 test 結果都對齊；paperwork 而家由 release gate 一路識到 undo button。" },
+    ],
+  },
+  {
+    id: "3e8e823", kind: 'commit', ref: "3e8e823", oid: "3e8e823ab914e2f36741f8660a490655bbd93147", date: "2026-08-03",
+    title: "Harden packaging accessibility menus and history",
+    refs: ["#15", "#16", "#20", "#23"],
+    changes: [
+      { category: "added", text: "English: Tighten Squirrel release gates and updater results, add shared language/regex/reduced-motion contracts, expose menu shortcuts accessibly, and audit unsaved-discard history before close. The parity buffet now checks the receipt before serving seconds." },
+      { category: "changed", text: "廣東話: 收緊 Squirrel release gate 同 updater result，加強 language、regex、reduced motion contract，右鍵 menu 顯示 shortcuts，丟 unsaved document 之前寫低 history；parity buffet 而家先睇收據，唔係食完先搵單。Refs #15, #16, #20, #23." },
+    ],
+  },
+  {
     id: "e11458b", kind: 'commit', ref: "e11458b", oid: "e11458b3debbaf2d6b0bc0c8b6d39d3e9cce03b3", date: "2026-08-03",
     title: "Refresh handoff after parity wave",
     changes: [
@@ -641,26 +658,6 @@ export const DEVELOPMENT = [
     ],
     changesYue: [
       { category: "changed", text: "粵語: RemoteFiles 而家只睇檔名尾巴，唔會畀上層路徑亂入，個 extension 終於唔再食錯位。" },
-    ],
-  },
-  {
-    id: "63ab2fd", kind: 'commit', ref: "63ab2fd", oid: "63ab2fd99e854e9da3bc047b1548623c61cea872", date: "2026-08-03",
-    title: "Record the verified handoff",
-    changes: [
-      { category: "changed", text: "English: The handoff records the real 59.0% logic ledger, 3,438-test verification, Docker smoke evidence, installer state, and the 22 still-open roadmap issues. It is a map, not a magic wand; the unported miles remain plainly marked." },
-    ],
-    changesYue: [
-      { category: "changed", text: "廣東話：交接文件記低真實 59.0% logic coverage、3,438 個測試、Docker smoke、安裝包同 22 個未完 roadmap issue。地圖畫得幾靚都唔會自己行，未搬嘅路照樣清楚標住。" },
-    ],
-  },
-  {
-    id: "778b30c", kind: 'commit', ref: "778b30c", oid: "778b30c89132364c7e080e402abeeaff50097f23", date: "2026-08-03",
-    title: "Refresh the in-app changelog",
-    changes: [
-      { category: "changed", text: "English: The viewer now knows about the latest verified CLI and safety work, with full commit links instead of a vague trail of breadcrumbs." },
-    ],
-    changesYue: [
-      { category: "changed", text: "廣東話：更新日誌終於追得返最新 CLI 同安全修正，仲有完整 commit 連結，唔使靠估邊粒包點心先係真。" },
     ],
   },
 ];

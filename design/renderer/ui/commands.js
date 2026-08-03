@@ -449,6 +449,8 @@ const havePanel = (c) => !!c.panel;
 const haveSel = (c) => !!c.panel && c.selection.length > 0;
 const haveFocus = (c) => !!c.panel && !!(c.focused || (c.panel.focusedEntry && c.panel.focusedEntry()));
 const online = (c) => c.isLocal || c.connected;
+const panelOnline = (panel) => !!panel && (panel.isLocal === true
+  || !!(panel.sessionInfo && panel.sessionInfo() && panel.sessionInfo().connected));
 const cap = (name) => (c) => !!(c.caps && c.caps[name]);
 const bothPanels = (c) => !!c.panel && !!c.other;
 // CustomScpExplorer has one remote panel by design. Its transfer dialog asks
@@ -1212,7 +1214,7 @@ defEach(['LocalOtherDirAction', 'RemoteOtherDirAction'], (name) => ({
   side: name.startsWith('Local') ? 'local' : 'remote',
   // Only meaningful when the other panel is on the same kind of filesystem;
   // WinSCP maps the path across, so a remote path may be opened locally.
-  enabled: (c) => bothPanels(c) && online(c),
+  enabled: (c) => bothPanels(c) && online(c) && panelOnline(c.other),
   run: (c) => c.panel.navigate(mapAcross(c.other.path(), c.isLocal)),
 }));
 
@@ -2986,12 +2988,14 @@ for (const [name, value] of [['FormatSizeBytesNoneAction', 'none'], ['FormatSize
 }
 def('CommanderLocalPanelAction', {
   submenu: () => [], // menus.js supplies the panel submenu; this is its header
-  enabled: () => !!services.workspace,
+  visible: () => !services.workspace || services.workspace.interfaceMode?.() === 'commander',
+  enabled: () => !!services.workspace && services.workspace.interfaceMode?.() === 'commander',
   run: () => services.workspace.setActiveSide('local'),
 });
 def('CommanderRemotePanelAction', {
   submenu: () => [],
-  enabled: () => !!services.workspace,
+  visible: () => !services.workspace || services.workspace.interfaceMode?.() === 'commander',
+  enabled: () => !!services.workspace && services.workspace.interfaceMode?.() === 'commander',
   run: () => services.workspace.setActiveSide('remote'),
 });
 

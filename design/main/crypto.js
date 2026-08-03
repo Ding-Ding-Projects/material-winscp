@@ -61,6 +61,9 @@ function deriveKey(password, saltB64) {
 
 /** Create the verifier blob stored in config so a master password can be checked. */
 function makeVerifier(password) {
+  if (typeof password !== 'string' || password.length === 0) {
+    throw new Error('Master password must not be empty.');
+  }
   const salt = crypto.randomBytes(16);
   const key = deriveKey(password, salt.toString('base64'));
   try {
@@ -73,7 +76,7 @@ function makeVerifier(password) {
 
 /** Verify and, on success, unlock the session master key. */
 function unlockMaster(password, verifier) {
-  if (!verifier || !verifier.salt) return false;
+  if (typeof password !== 'string' || password.length === 0 || !verifier || !verifier.salt) return false;
   let key;
   try {
     key = deriveKey(password, verifier.salt);

@@ -1137,6 +1137,23 @@ test('advancedContext derives the protocol family flags', async () => {
   assert.strictEqual(adv.advancedContext(await siteOf({ protocol: 'ftp', ftps: 'none' })).tls, false);
 });
 
+test('SiteAdvanced uses the canonical main-process persistence keys', async () => {
+  const { adv } = await modules;
+  const { SESSION_DEFAULTS } = require('../design/main/defaults');
+  const controls = new Map(adv.allAdvancedControls().map(({ control }) => [control.id, control]));
+  for (const { control } of adv.allAdvancedControls()) {
+    if (control.kind === 'static' || control.kind === 'button') continue;
+    assert.ok(control.key.split('.')[0] in SESSION_DEFAULTS, `${control.id} is outside main defaults`);
+  }
+  assert.equal(controls.get('UtfCombo').key, 'notUtf');
+  assert.equal(controls.get('BugWinAdjCombo').key, 'sshBugs.winAdj');
+  assert.deepEqual(controls.get('SFTPMaxVersionCombo').options[0], [-1, 'Auto']);
+  assert.equal(SESSION_DEFAULTS.sshBugs.winAdj, 'auto');
+  assert.equal(SESSION_DEFAULTS.ftpProxyLogonType, 0);
+  assert.equal(SESSION_DEFAULTS.webDavCrossDomainRedirects, false);
+  assert.equal(SESSION_DEFAULTS.puttySettings, '');
+});
+
 test('SiteAdvanced clones nested settings before editing', async () => {
   const { adv, tree } = await modules;
   const original = await siteOf({
@@ -1148,6 +1165,26 @@ test('SiteAdvanced clones nested settings before editing', async () => {
   working.sftpBugs.symlink = 'off';
   assert.equal(original.sshBugs.rekey2, 'auto');
   assert.equal(original.sftpBugs.symlink, 'auto');
+});
+
+test('SiteAdvanced migrates legacy UTF and window-adjust aliases before persistence', async () => {
+  const { adv, tree } = await modules;
+  const legacy = await siteOf({
+    utf: 'on',
+    notUtf: 'auto',
+    sshBugs: { ...tree.SESSION_DEFAULTS.sshBugs, winAdj: 'auto', winadj: 'off' },
+  });
+  const normalized = adv.normalizeAdvancedSite(legacy);
+  assert.equal(normalized.notUtf, 'off', 'legacy UTF-on means notUtf-off');
+  assert.equal(normalized.sshBugs.winAdj, 'off');
+  assert.equal('utf' in normalized, false);
+  assert.equal('winadj' in normalized.sshBugs, false);
+
+  const patch = adv.siteAdvancedPatch(legacy);
+  assert.equal(patch.notUtf, 'off');
+  assert.equal(patch.sshBugs.winAdj, 'off');
+  assert.equal('utf' in patch, false);
+  assert.equal('winadj' in patch.sshBugs, false);
 });
 
 test('SiteAdvanced only enables capabilities that the selected adapter consumes', async () => {
@@ -1212,6 +1249,30 @@ test('enabling site encryption requires a key while preserving stored secrets', 
   assert.equal(adv.encryptionKeyState({ encryptFiles: true, encryptKey: '' }).valid, false);
   assert.equal(adv.encryptionKeyState({ encryptFiles: true, encryptKey: tree.SECRET_SENTINEL }).valid, true);
   assert.equal(adv.encryptionKeyState({ encryptFiles: true, encryptKey: 'new-key' }).valid, true);
+});
+
+test('advanced validation rejects impossible TLS and SFTP packet ranges', async () => {
+  const { adv } = await modules;
+  assert.deepEqual(adv.advancedValidationErrors({
+    encryptFiles: false, minTlsVersion: 'tls13', maxTlsVersion: 'tls12',
+  }), ['The minimum TLS version cannot be newer than the maximum TLS version.']);
+  assert.deepEqual(adv.advancedValidationErrors({
+    encryptFiles: false, sftpMinPacketSize: 4096, sftpMaxPacketSize: 1024,
+  }), ['The minimum SFTP packet size cannot exceed the maximum packet size.']);
+  assert.deepEqual(adv.advancedValidationErrors({
+    encryptFiles: false, minTlsVersion: 'tls12', maxTlsVersion: 'tls13',
+    sftpMinPacketSize: 4096, sftpMaxPacketSize: 0,
+  }), []);
+});
+
+test('advanced modal validation keeps both save surfaces open on an error', async () => {
+  const fs = require('node:fs');
+  const advanced = await fs.promises.readFile(
+    path.join(__dirname, '..', 'design', 'renderer', 'ui', 'dialogs', 'siteadvanced.js'), 'utf8');
+  const login = await fs.promises.readFile(
+    path.join(__dirname, '..', 'design', 'renderer', 'ui', 'dialogs', 'login.js'), 'utf8');
+  assert.match(advanced, /if \(errors\.length\) \{ notify\.error\('Cannot save site', errors\[0\]\); return true; \}/);
+  assert.match(login, /if \(errors\.length\) \{[\s\S]*?notify\.error\('Cannot save site', errors\[0\]\);[\s\S]*?return true;/);
 });
 
 test('advanced timezone normalization rejects offsets beyond the ±24:00 boundary', async () => {
@@ -1282,6 +1343,9 @@ test('mergeAlgorithmOrder keeps the stored order and restores what is missing', 
   assert.deepStrictEqual(adv.mergeAlgorithmOrder(['nonsense'], adv.GSS_LIBRARIES, { noWarn: true }),
     ['gssapi32', 'sspi', 'custom']);
   assert.ok(!adv.mergeAlgorithmOrder([], adv.GSS_LIBRARIES, { noWarn: true }).includes('WARN'));
+
+  const deduped = adv.mergeAlgorithmOrder(['aes', 'aes', 'WARN', 'WARN', 'des'], adv.CIPHERS);
+  assert.equal(new Set(deduped).size, deduped.length, 'stored duplicate algorithms must not be persisted');
 
   // Every list is a permutation of the catalogue: no duplicates, nothing lost.
   for (const catalogue of [adv.CIPHERS, adv.KEX_ALGORITHMS, adv.HOST_KEY_ALGORITHMS]) {

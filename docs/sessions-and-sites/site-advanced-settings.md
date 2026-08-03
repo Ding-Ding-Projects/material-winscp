@@ -31,6 +31,22 @@ Numeric fields also expose named increment/decrement buttons. They remain in the
 keyboard tab order and are not hidden from assistive technology, so users can
 make the same bounded adjustment without relying on a pointer.
 
+## Persistence and validation boundary
+
+Advanced edits use the same canonical names as the main session model. The
+UTF-8 selector writes `notUtf` (WinSCP's stored option is reversed: `off` means
+UTF-8 is forced on), the SSH window-adjust workaround writes `sshBugs.winAdj`,
+and SFTP `Auto` writes the session model's `-1` auto sentinel. Older renderer
+aliases (`utf` and `sshBugs.winadj`) are migrated when Advanced opens and are
+removed from the patch, so a visible setting cannot be saved under a key that
+the engine ignores.
+
+Both the standalone Advanced dialog and the Login dialog's embedded Advanced
+surface keep the modal open when validation fails. Saving is refused for an
+encryption-enabled site without a key, a minimum TLS version newer than its
+maximum, or a positive SFTP minimum packet size larger than its positive
+maximum. Algorithm preference lists are also de-duplicated before persistence.
+
 The FTP page's `HOST` selector now reaches the FTP adapter, which sends the
 server-selection command when the site asks for it. The SFTP page's listing
 pipelining depth also now feeds the directory-entry metadata walker, so the

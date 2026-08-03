@@ -78,8 +78,10 @@ available through the visible Up and Down buttons for pointer users.
   that as "editing finished" would upload an unedited file and close the session
   too early.
 - **Remote changes are detected.** Before uploading, the remote file's timestamp
-  and size (and ETag for WebDAV) are compared with what was downloaded. A change
-  means a conflict prompt, not a silent overwrite.
+  and size are compared with what was downloaded. When the protocol provides a
+  strong ETag (currently WebDAV and S3), that identity is compared too, so a
+  same-size rewrite with an unchanged coarse timestamp still opens a conflict
+  prompt rather than silently overwriting it.
 - **Saves are serialized and snapshot-based.** If Save is pressed again while an
   upload is pending, the second request joins the first instead of uploading a
   duplicate. Edits made while that upload is pending remain marked unsaved, so
@@ -96,6 +98,10 @@ available through the visible Up and Down buttons for pointer users.
 - **Close drains an active watcher save.** Closing an editor waits for any
   already-running watcher upload to settle before removing its temporary file;
   a save cannot race cleanup and disappear.
+- **Failed saves remain retryable.** If the remote check or upload fails after
+  the temporary bytes are written, the retry stamp is cleared. Reconnect plus
+  `editor:fileChanged`, or another Save, retries those same bytes instead of
+  treating the failed attempt as already observed.
 
 ## Failure modes
 
@@ -112,6 +118,7 @@ available through the visible Up and Down buttons for pointer users.
 | Watcher upload fails temporarily | The edit remains dirty; a later `editor:fileChanged` notification retries the same bytes even if the file was not modified again. | Yes |
 | Orphaned temporaries from a crash | With `warnOrphans`, a startup notification listing them with an option to recover or discard. | Yes |
 | `maxEditors` reached | Refused with a count, rather than opening an editor that cannot be tracked. | Yes |
+| Remote download or temporary-file preparation fails | Any partial temporary copy and empty folders are removed before the error returns; no untracked editor or orphan is published. | Yes |
 
 ## Security considerations
 

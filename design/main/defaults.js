@@ -20,6 +20,7 @@ const SESSION_DEFAULTS = {
   // --- SSH ---
   compression: false,
   sshProt: 2,
+  ssh2DES: false,
   cipherList: ['aes', 'chacha20', '3des', 'WARN', 'des', 'blowfish', 'arcfour'],
   kexList: ['ecdh', 'dh-gex-sha1', 'dh-group18-sha512', 'dh-group17-sha512',
     'dh-group16-sha512', 'dh-group15-sha512', 'dh-group14-sha1', 'rsa', 'WARN', 'dh-group1-sha1'],
@@ -35,10 +36,16 @@ const SESSION_DEFAULTS = {
   authGSSAPI: false,
   authGSSAPIKEX: false,
   gssapiFwdTGT: false,
+  sshBugs: {
+    hmac2: 'auto', deriveKey2: 'auto', rsaPad2: 'auto', pkSessID2: 'auto',
+    rekey2: 'auto', maxPkt2: 'auto', ignore2: 'auto', oldGex2: 'auto',
+    winAdj: 'auto', chanReq: 'auto',
+  },
   publicKeyFile: '',
   detachedCertificate: '',
   passphrase: '',
   puttyProtocol: '',
+  puttySettings: '',
 
   // --- SFTP ---
   sftpServer: '',
@@ -90,6 +97,7 @@ const SESSION_DEFAULTS = {
   // --- WebDAV ---
   webDavLiberalEscaping: false,
   webDavAuthLegacy: false,
+  webDavCrossDomainRedirects: false,
 
   // --- S3 ---
   s3DefaultRegion: '',
@@ -122,6 +130,7 @@ const SESSION_DEFAULTS = {
   proxyLocalCommand: '',
   proxyDNS: 'auto',
   proxyLocalhost: false,
+  ftpProxyLogonType: 0,
 
   // --- Tunnel ---
   tunnel: false,

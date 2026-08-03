@@ -33,7 +33,9 @@ import {
   createColumnModel, createColumnHeader, cellText, extensionOf, typeOf,
   makeMeasurer, naturalCompare,
 } from './panelcolumns.js';
-import { createDriveView, createBrowsingSync, driveJoinPath, driveParentOf, normalizeLocal } from './driveview.js';
+import {
+  createDriveView, createBrowsingSync, driveJoinPath, driveParentOf, normalizeLocal, uncRootOf,
+} from './driveview.js';
 import { createToolbars } from './toolbars.js';
 import { createMenuBar, fileContextItems, panelContextItems, installMenuMnemonics } from './menus.js';
 import { createPanelStatusBar, installSessionStatus } from './statusbar.js';
@@ -150,6 +152,15 @@ export function normalizePanelEntries(entries) {
     valid.push(entry);
   }
   return { entries: valid, invalidCount: invalid.length };
+}
+
+/** Resolve the directory reached by a panel's Root action. */
+export function panelRootPath(side, currentPath) {
+  if (side !== 'local') return '/';
+  const pathText = String(currentPath || '');
+  const uncRoot = uncRootOf(pathText);
+  if (uncRoot) return uncRoot;
+  return pathText.match(/^[a-zA-Z]:/) ? `${pathText.slice(0, 2)}\\` : '\\';
 }
 
 /** Resolve the immutable paths captured by a drag into the source entries. */
@@ -1429,7 +1440,7 @@ export function createFilePanel(opts = {}) {
     navigate,
     refresh,
     goParent() { if (driveParentOf(side, path)) navigate(parentPath()); },
-    goRoot() { navigate(isLocal ? (path.match(/^[a-zA-Z]:/) ? `${path.slice(0, 2)}\\` : '\\') : '/'); },
+    goRoot() { navigate(panelRootPath(side, path)); },
     goHome() {
       const info = sessionInfo();
       navigate(isLocal ? (readPref('scpCommander.localPanel.lastPath', '') || '.') : ((info && info.home) || '/'));

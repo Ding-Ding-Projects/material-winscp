@@ -73,6 +73,22 @@ active filter is stated in the panel status bar with its text, because a
 forgotten filter looks exactly like missing files — the single most common
 support question this feature generates.
 
+### Action state and panel routing
+
+The Commander-only **Local panel** and **Remote panel** entries in Options are
+hidden when the tab is using Explorer. Their parent entries are panel-focus
+actions, not preferences that can be applied to a one-panel interface, so they
+never appear as clickable no-ops in the Explorer command palette.
+
+The **Other directory** action is enabled only when both panels exist and both
+ends are usable. In particular, the local action is disabled while the remote
+session is disconnected; it must not navigate one side and imply that the
+other side followed it. The action maps separators only after that state check.
+
+The local **Root** action preserves UNC semantics: `\\server\\share\\folder`
+goes to `\\server\\share`, while a drive path goes to its drive root. It never
+falls back to the process root `\\` for a UNC path.
+
 ### Drag and drop
 
 Commander and Explorer panel drops preserve the source paths captured when the
@@ -132,6 +148,8 @@ The bridge contract is covered by the focused interface IPC tests.
   accessible name is the full one.
 - Load-generation handling is tested to ensure an out-of-order directory
   response cannot replace a newer path or reset its selection.
+- Commander/Explorer action-state tests cover hidden Commander panel headers,
+  disconnected cross-panel navigation, and UNC-aware Root routing.
 
 ## Suggested articles
 

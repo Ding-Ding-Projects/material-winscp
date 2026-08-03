@@ -246,15 +246,25 @@ class EditorManager extends EventEmitter {
 
     const stat = await adapter.stat(remotePath);
     const local = this.tempPathFor(session, remotePath);
-    await fsp.mkdir(path.dirname(local), { recursive: true });
-
-    const buf = await adapter.readFile(remotePath);
-    await fsp.writeFile(local, buf);
-    session.log.actions.record('download', { filename: remotePath, destination: local, size: String(buf.length) });
-    session.log.add('info', `Opened ${remotePath} for editing (${type} editor).`);
-
-    const enc = detectEncoding(buf, req.encoding || this.prefs().encoding || 'auto');
-    const localStat = await fsp.stat(local);
+    let buf;
+    let enc;
+    let localStat;
+    try {
+      await fsp.mkdir(path.dirname(local), { recursive: true });
+      buf = await adapter.readFile(remotePath);
+      await fsp.writeFile(local, buf);
+      enc = detectEncoding(buf, req.encoding || this.prefs().encoding || 'auto');
+      localStat = await fsp.stat(local);
+      session.log.actions.record('download', { filename: remotePath, destination: local, size: String(buf.length) });
+      session.log.add('info', `Opened ${remotePath} for editing (${type} editor).`);
+    } catch (e) {
+      // The editor record is created only after the download is complete, so
+      // launch rollback cannot clean failures in this preparation phase.
+      // Remove the partial copy and empty folders here before surfacing the
+      // adapter/filesystem error to the caller.
+      await this._removeTemp({ localPath: local });
+      throw e;
+    }
 
     const rec = {
       id: newEditorId(),
@@ -268,7 +278,7 @@ class EditorManager extends EventEmitter {
       encodingDetected: enc.detected,
       /** What the remote file looked like when we took our copy. The change
        *  check compares against exactly this. */
-      remoteStamp: { size: stat.size, mtime: stat.mtime },
+      remoteStamp: remoteStamp(stat),
       localStamp: { size: localStat.size, mtimeMs: localStat.mtimeMs },
       openedAt: Date.now(),
       dirty: false,
@@ -382,7 +392,15 @@ class EditorManager extends EventEmitter {
       });
       return { uploaded: false, local: true };
     }
-    return this.editedFileUploaded(rec.id, { force: o.force });
+    try {
+      return await this.editedFileUploaded(rec.id, { force: o.force });
+    } catch (e) {
+      // A direct Save can fail after the temporary bytes were written. Clear
+      // the stamp so a reconnect or editor:fileChanged notification retries
+      // those same bytes instead of treating them as unchanged.
+      rec.localStamp = null;
+      throw e;
+    }
   }
 
   // -------------------------------------------------------------- upload
@@ -417,7 +435,7 @@ class EditorManager extends EventEmitter {
           id: rec.id,
           remotePath: rec.remotePath,
           was: rec.remoteStamp,
-          now: { size: current.size, mtime: current.mtime },
+          now: remoteStamp(current),
         };
         this._send('event:editor', { type: 'remote-changed', ...detail });
         this.emit('remote-changed', detail);
@@ -440,7 +458,7 @@ class EditorManager extends EventEmitter {
     rec.lastError = null;
     try {
       const after = await adapter.stat(rec.remotePath);
-      rec.remoteStamp = { size: after.size, mtime: after.mtime };
+      rec.remoteStamp = remoteStamp(after);
     } catch {
       rec.remoteStamp = { size: buf.length, mtime: Date.now() };
     }
@@ -470,7 +488,15 @@ class EditorManager extends EventEmitter {
    * the remote stamp is refreshed only after the server accepted the bytes.
    */
   async editedFileUploaded(id, options) {
-    return this.upload(id, options);
+    const rec = this._require(id);
+    try {
+      return await this.upload(id, options);
+    } catch (e) {
+      // Keep the retry contract consistent for direct IPC uploads and for the
+      // watcher path. The temporary file still contains the user's bytes.
+      rec.localStamp = null;
+      throw e;
+    }
   }
 
   // ----------------------------------------------------- external editor
@@ -583,9 +609,15 @@ class EditorManager extends EventEmitter {
     // after the previous upload/conflict check has settled.
     const previous = rec.changePromise || Promise.resolve();
     const current = previous.then(() => this._processFileChanged(rec));
-    rec.changePromise = current.finally(() => {
-      if (rec.changePromise === current) rec.changePromise = null;
-    });
+    // Store a non-rejecting settled marker. Comparing against `current` here
+    // would never clear it because the stored value is the `finally`/settled
+    // wrapper, leaving every editor with a permanently retained promise.
+    let settled;
+    settled = current.then(
+      () => { if (rec.changePromise === settled) rec.changePromise = null; },
+      () => { if (rec.changePromise === settled) rec.changePromise = null; },
+    );
+    rec.changePromise = settled;
     return current;
   }
 
@@ -717,17 +749,23 @@ class EditorManager extends EventEmitter {
   async _removeTemp(rec) {
     try {
       await fsp.unlink(rec.localPath);
-      // Remove the folders we created for this file, but only while they are
-      // empty and only inside our own temp root.
-      let dir = path.dirname(rec.localPath);
-      const root = path.resolve(P.temp());
-      while (path.resolve(dir).startsWith(root) && path.resolve(dir) !== root) {
-        const left = await fsp.readdir(dir);
-        if (left.length) break;
-        await fsp.rmdir(dir);
-        dir = path.dirname(dir);
-      }
-    } catch { /* a temp file we cannot delete is not worth failing a close over */ }
+    } catch (e) {
+      // A preparation failure can happen before the file is created. ENOENT
+      // still permits pruning the empty folders; other unlink failures must
+      // leave the path alone rather than risking removal around it.
+      if (e && e.code !== 'ENOENT') return;
+    }
+    // Remove the folders we created for this file, but only while they are
+    // empty and only inside our own temp root.
+    let dir = path.dirname(rec.localPath);
+    const root = path.resolve(P.temp());
+    while (path.resolve(dir).startsWith(root) && path.resolve(dir) !== root) {
+      let left;
+      try { left = await fsp.readdir(dir); } catch { break; }
+      if (left.length) break;
+      try { await fsp.rmdir(dir); } catch { break; }
+      dir = path.dirname(dir);
+    }
   }
 
   /** Close everything — used on shutdown. Uploads pending edits first. */
@@ -803,12 +841,25 @@ class EditorManager extends EventEmitter {
 /** The remote file is different from the copy we took. */
 function changedSince(was, now) {
   if (!was || !now) return false;
+  const wasEtag = String(was.etag || '');
+  const nowEtag = String((now.raw && now.raw.etag) || now.etag || '');
+  if (wasEtag && nowEtag && wasEtag !== nowEtag) return true;
   if (Number(now.size) !== Number(was.size)) return true;
   // Servers report second resolution at best; a whole-second difference is a
   // real change, sub-second jitter is not.
   const a = Math.floor(Number(was.mtime || 0) / 1000);
   const b = Math.floor(Number(now.mtime || 0) / 1000);
   return a !== b;
+}
+
+/** Preserve strong protocol identity when an adapter exposes it. */
+function remoteStamp(stat) {
+  const etag = String((stat && stat.raw && stat.raw.etag) || (stat && stat.etag) || '');
+  return {
+    size: stat && stat.size,
+    mtime: stat && stat.mtime,
+    ...(etag ? { etag } : {}),
+  };
 }
 
 function isNotFoundError(error) {
@@ -860,5 +911,5 @@ function tokenizeCommandLine(line) {
 module.exports = {
   EditorManager,
   detectEncoding, isValidUtf8, decode, encode,
-  splitProgram, tokenizeCommandLine, changedSince, safeName,
+  splitProgram, tokenizeCommandLine, changedSince, remoteStamp, safeName,
 };

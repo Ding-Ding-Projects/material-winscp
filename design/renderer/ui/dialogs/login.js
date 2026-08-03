@@ -38,7 +38,7 @@ import {
   installSessionDialogStyles, stripSecrets, createSiteTree, SITE_SEARCH_MODES,
   DEFAULT_SITE_SEARCH_MODE, ANONYMOUS_USER, ANONYMOUS_PASSWORD,
 } from './sitetree.js';
-import { createSiteAdvancedPanel } from './siteadvanced.js';
+import { createSiteAdvancedPanel, normalizeAdvancedSite } from './siteadvanced.js';
 import {
   buildSessionUrl, parseSessionUrl, siteFromParsedUrl, openGenerateUrl,
 } from './generateurl.js';
@@ -895,8 +895,13 @@ export function createLoginPanel(opts = {}) {
         {
           label: t('ok'), kind: 'filled', autofocus: true,
           onSelect: () => {
+            const errors = panel.validationErrors();
+            if (errors.length) {
+              notify.error('Cannot save site', errors[0]);
+              return true;
+            }
             for (const field of panel.touchedSecrets) state.touchedSecrets.add(field);
-            state.site = { ...state.site, ...panel.site };
+            state.site = normalizeAdvancedSite({ ...state.site, ...panel.site });
             state.dirty = true;
             panel.destroy();
             renderForm();

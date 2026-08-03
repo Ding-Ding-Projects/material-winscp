@@ -89,6 +89,24 @@ test('ExecuteFile opens the remote copy and EditedFileUploaded saves it back', a
   }
 });
 
+test('failed remote preparation removes the partial temporary copy before an editor exists', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-open-failure-'));
+  P.setRoot(root);
+  const f = fixture();
+  f.session.adapter.readFile = async () => { throw Object.assign(new Error('download failed'), { code: 'NETWORK' }); };
+  try {
+    await assert.rejects(
+      () => f.manager.openRemote({ sessionId: f.session.id, remotePath: '/notes.txt', mode: 'internal' }),
+      /download failed/,
+    );
+    assert.deepEqual(f.manager.list(), []);
+    assert.deepEqual(await f.manager.findOrphans(), []);
+    assert.deepEqual(await fs.readdir(P.temp()), [], 'failed preparation leaves no empty editor folder');
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('forced Unicode encodings preserve content when the file has no BOM', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-encoding-'));
   P.setRoot(root);
@@ -201,6 +219,71 @@ test('a failed watcher upload can be retried without modifying the temporary fil
     assert.equal(attempts, 2);
     assert.equal((await f.session.adapter.readFile('/notes.txt')).toString(), 'retry me');
     await f.manager.close(opened.id, {});
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a failed direct save clears its stamp so the same bytes can be retried by the watcher seam', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-save-retry-'));
+  P.setRoot(root);
+  const f = fixture();
+  try {
+    const opened = await f.manager.openRemote({ sessionId: f.session.id, remotePath: '/notes.txt', mode: 'internal' });
+    f.manager._unwatch(f.manager.open.get(opened.id));
+    const originalWrite = f.session.adapter.writeFile;
+    let attempts = 0;
+    f.session.adapter.writeFile = async (...args) => {
+      attempts++;
+      if (attempts === 1) throw Object.assign(new Error('temporary outage'), { code: 'NETWORK' });
+      return originalWrite(...args);
+    };
+
+    await assert.rejects(() => f.manager.save(opened.id, 'retry me', {}), { code: 'NETWORK' });
+    assert.equal(f.manager.open.get(opened.id).localStamp, null);
+    const retry = await f.manager.executedFileChanged(opened.id);
+    assert.equal(retry.uploaded, true);
+    assert.equal(attempts, 2);
+    assert.equal((await f.session.adapter.readFile('/notes.txt')).toString(), 'retry me');
+    await f.manager.close(opened.id, {});
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('watcher queue state clears after a settled notification', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-watch-state-'));
+  P.setRoot(root);
+  const f = fixture();
+  try {
+    const opened = await f.manager.openRemote({ sessionId: f.session.id, remotePath: '/notes.txt', mode: 'internal' });
+    f.manager._unwatch(f.manager.open.get(opened.id));
+    await fs.writeFile(opened.localPath, 'settled');
+    await f.manager.executedFileChanged(opened.id);
+    assert.equal(f.manager.open.get(opened.id).changePromise, null);
+    await f.manager.close(opened.id, {});
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('an ETag change detects a same-size same-time remote rewrite', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-etag-'));
+  P.setRoot(root);
+  const f = fixture();
+  let etag = 'before';
+  const originalStat = f.session.adapter.stat;
+  f.session.adapter.stat = async (p) => ({ ...(await originalStat(p)), raw: { etag } });
+  try {
+    const opened = await f.manager.openRemote({ sessionId: f.session.id, remotePath: '/notes.txt', mode: 'internal' });
+    f.manager._unwatch(f.manager.open.get(opened.id));
+    await fs.writeFile(opened.localPath, 'after');
+    etag = 'after';
+    const result = await f.manager.executedFileChanged(opened.id);
+    assert.equal(result.conflict, true);
+    assert.equal(result.uploaded, false);
+    assert.equal((await f.session.adapter.readFile('/notes.txt')).toString(), 'before');
+    await f.manager.close(opened.id, { keep: true });
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
