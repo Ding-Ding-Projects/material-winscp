@@ -111,6 +111,8 @@ class History extends EventEmitter {
    */
   settled() { return this._queue; }
 
+  async _waitForWrites() { await this.settled(); }
+
   /** Serialize every mutating operation; isomorphic-git shares one index file. */
   _serial(fn) {
     const run = this._queue.then(fn, fn);
@@ -174,6 +176,7 @@ class History extends EventEmitter {
     const o = options || {};
     try {
       await this.init();
+      await this._waitForWrites();
       let entries;
       try {
         entries = await git.log({ fs, dir: this.dir, ref: BRANCH, depth: o.limit || undefined });
@@ -220,6 +223,7 @@ class History extends EventEmitter {
   async read(rev) {
     try {
       await this.init();
+      await this._waitForWrites();
       const oid = await this._resolve(rev);
       if (!oid) return fail(new Error(`No such revision: ${rev}`), 'NO_SUCH_REVISION');
       return ok(await this._stateAt(oid));
@@ -272,6 +276,7 @@ class History extends EventEmitter {
   async diff(a, b) {
     try {
       await this.init();
+      await this._waitForWrites();
       const left = typeof a === 'object' && a !== null ? a : (await this.read(a)).value;
       const right = typeof b === 'object' && b !== null ? b : (await this.read(b === undefined ? 'HEAD' : b)).value;
       if (!left || !right) return fail(new Error('One of the revisions could not be read'), 'NO_SUCH_REVISION');
@@ -344,16 +349,35 @@ class History extends EventEmitter {
   }
 
   /** Export the whole history as a portable JSON bundle. */
-  async export_() {
+  async export_(options) {
     try {
+      const o = options || {};
+      if (o.oids !== undefined && (!Array.isArray(o.oids) ||
+          o.oids.some((oid) => typeof oid !== 'string' || oid === ''))) {
+        throw new TypeError('History export revisions must be a list of revision IDs.');
+      }
+      await this.init();
+      await this._waitForWrites();
       const rows = await this.list({});
       if (!rows.ok) return rows;
+      let selected = rows.value;
+      if (o.oids !== undefined) {
+        const wanted = new Set(o.oids);
+        const missing = [...wanted].filter((oid) => !rows.value.some((row) => row.oid === oid));
+        if (missing.length) return fail(new Error(`No such revision: ${missing[0]}`), 'NO_SUCH_REVISION');
+        selected = rows.value.filter((row) => wanted.has(row.oid));
+      }
       const revisions = [];
-      for (const r of rows.value) {
+      for (const r of selected) {
         const s = await this.read(r.oid);
         revisions.push({ ...r, state: s.ok ? s.value : null });
       }
-      return ok({ app: 'WinSCP Material', exportedAt: Date.now(), revisions });
+      return ok({
+        app: 'WinSCP Material',
+        exportedAt: Date.now(),
+        exportedRange: typeof o.statement === 'string' ? o.statement : '',
+        revisions,
+      });
     } catch (e) {
       return fail(e);
     }

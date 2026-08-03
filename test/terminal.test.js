@@ -896,6 +896,11 @@ test('the reconnect budget is one function, and zero still means forever', () =>
   assert.strictEqual(T.continueReopen(bounded, 1000, 6000), false, 'the boundary is exclusive');
   assert.strictEqual(T.continueReopen(bounded, 1000, 60000), false);
 
+  // An explicitly malformed ceiling must not become the fail-open default.
+  assert.strictEqual(T.continueReopen({ security: { sessionReopenTimeout: 'not-a-duration' } }, 0, 1), false);
+  assert.strictEqual(T.continueReopen({ security: { sessionReopenTimeout: Infinity } }, 0, 1), false);
+  assert.strictEqual(T.continueReopen({ security: { sessionReopenTimeout: -1 } }, 0, 1), false);
+
   // And the terminal's own method must BE that function, not a twin of it.
   let clock = 1000;
   const { terminal } = makeTerminal({
@@ -908,6 +913,18 @@ test('the reconnect budget is one function, and zero still means forever', () =>
       T.continueReopen(terminal.prefs, 1000, clock),
       `the two disagreed after ${elapsed}ms`);
   }
+});
+
+test('reopen restores a transaction suspension that existed before reconnect', async () => {
+  const { terminal, session } = makeTerminal({ cwd: '/d' });
+  terminal._inTransaction = 1;
+  terminal._suspendTransaction = true;
+
+  await terminal.reopen();
+
+  assert.equal(session.reconnects, 1);
+  assert.equal(terminal._suspendTransaction, true);
+  assert.equal(terminal._inTransaction, 1);
 });
 
 test('a fatal error on a still-open session closes it before reporting', async () => {

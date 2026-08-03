@@ -414,12 +414,18 @@ export function createCleanupBody(opts = {}) {
         h('p', { class: 'prose' }, s('cuUndoNote'))),
       actions: [
         { label: t('cancel'), kind: 'text' },
-        { label: s('cuConfirmBtn'), kind: 'danger', onSelect: () => runRemoval(rows) },
+        {
+          label: s('cuConfirmBtn'), kind: 'danger',
+          onSelect: (closeDialog) => {
+            runRemoval(rows, closeDialog);
+            return true;
+          },
+        },
       ],
     });
   }
 
-  async function runRemoval(rows) {
+  async function runRemoval(rows, closeDialog) {
     const done = [];
     for (const row of rows) {
       try {
@@ -439,6 +445,7 @@ export function createCleanupBody(opts = {}) {
         actions: [{ label: s('cuOpenHistory'), onSelect: () => openHistoryPanel() }],
       });
       announce(summary);
+      closeDialog?.('removed');
     }
     opts.onDone?.(done);
   }

@@ -28,6 +28,7 @@ const { EventEmitter } = require('events');
 
 const { SessionLog } = require('./logging');
 const { SessionInfo } = require('./sessioninfo');
+const SD = require('./sessiondata');
 
 /** Protocol name -> adapter module, resolved lazily so a session that never
  *  uses S3 does not pay for loading it (and a missing module is reported when
@@ -35,6 +36,7 @@ const { SessionInfo } = require('./sessioninfo');
 const ADAPTERS = {
   local: './protocols/local',
   sftp: './protocols/sftp',
+  sftponly: './protocols/sftp',
   scp: './protocols/scp',
   ftp: './protocols/ftp',
   ftps: './protocols/ftp',
@@ -42,7 +44,7 @@ const ADAPTERS = {
   s3: './protocols/s3',
 };
 
-const DEFAULT_PORTS = { sftp: 22, scp: 22, ftp: 21, webdav: 80, s3: 443, local: 0 };
+const DEFAULT_PORTS = { sftp: 22, sftponly: 22, scp: 22, ftp: 21, webdav: 80, s3: 443, local: 0 };
 const SECRET_FIELDS = ['password', 'passphrase', 'proxyPassword', 'tunnelPassword',
   'tunnelPassphrase', 'encryptKey', 's3SessionToken'];
 
@@ -102,7 +104,12 @@ class Session extends EventEmitter {
     this.id = d.id || newSessionId();
     this.config = d.config;
     this.data = { ...data };
-    this.data.portNumber = Number(this.data.portNumber) || DEFAULT_PORTS[String(this.data.protocol || 'sftp').toLowerCase()] || 0;
+    const protocol = String(this.data.protocol || 'sftp').toLowerCase();
+    const configuredPort = Number(this.data.portNumber);
+    const defaultPort = SD.defaultPort(this.data.protocol || 'sftp', this.data.ftps);
+    this.data.portNumber = Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65535
+      ? configuredPort
+      : (defaultPort > 0 ? defaultPort : DEFAULT_PORTS[protocol] || 0);
 
     /** How the session talks to the outside world. Injected so this class is
      *  testable without Electron. */
@@ -213,8 +220,26 @@ class Session extends EventEmitter {
         }, o.timeoutMs);
       }
       this._pending.set(id, entry);
-      this._send('event:prompt', { sessionId: this.id, promptId: id, kind, payload });
-      this.emit('prompt', { promptId: id, kind, payload });
+      try {
+        this._send('event:prompt', { sessionId: this.id, promptId: id, kind, payload });
+        this.emit('prompt', { promptId: id, kind, payload });
+      } catch (error) {
+        // A renderer bridge can disappear between registration and delivery.
+        // Do not leave a timer and an unreachable entry behind; that would make
+        // a later answer target a ghost prompt and keep reconnect state alive.
+        this._pending.delete(id);
+        if (entry.timer) clearTimeout(entry.timer);
+        this._promptCancelled = true;
+        try {
+          this._send('event:prompt-cancelled', {
+            sessionId: this.id, promptId: id, reason: 'delivery-failed',
+          });
+        } catch (_) { /* the bridge is already unavailable */ }
+        try {
+          this.log.add('error', `The ${kind} prompt could not be delivered and was cancelled.`);
+        } catch (_) { /* logging shares the same bridge */ }
+        resolve(null);
+      }
     });
   }
 
@@ -234,7 +259,9 @@ class Session extends EventEmitter {
       if (entry.timer) clearTimeout(entry.timer);
       this._pending.delete(id);
       entry.resolve(null);
-      this._send('event:prompt-cancelled', { sessionId: this.id, promptId: id, reason: reason || 'cancelled' });
+      try {
+        this._send('event:prompt-cancelled', { sessionId: this.id, promptId: id, reason: reason || 'cancelled' });
+      } catch (_) { /* teardown must finish even when the renderer is gone */ }
     }
   }
 
@@ -250,8 +277,9 @@ class Session extends EventEmitter {
    * Host-key verification. Ported behaviour:
    *   * a key we already trust for this host:port is accepted silently;
    *   * a key pinned in the site data (data.hostKey) is accepted silently;
+   *   * a pinned key that does not match is rejected without a prompt;
    *   * ANY other key is shown to the user — new, or worse, changed — and the
-   *     answer decides. There is no third path.
+   *     answer decides. There is no silent fallback around a hard pin.
    */
   async verifyHostKey(key) {
     const hostPort = formatHostPort(key.host || this.data.hostName, key.port || this.data.portNumber);
@@ -269,6 +297,11 @@ class Session extends EventEmitter {
     if (pinned && fingerprintMatches(pinned, key)) {
       this.log.add('info', `Host key for ${hostPort} matches the fingerprint configured for this site.`);
       return true;
+    }
+    if (pinned) {
+      this._promptRefused = true;
+      this.log.add('error', `The host key for ${hostPort} does NOT match the fingerprint pinned for this site.`);
+      return false;
     }
 
     const known = this.config ? this.config.knownHostKey(hostPort) : null;
@@ -922,7 +955,9 @@ class Session extends EventEmitter {
     }
     const host = String(d.hostName || '');
     url += host.includes(':') ? `[${host}]` : encodeURIComponent(host);
-    if (d.portNumber && d.portNumber !== DEFAULT_PORTS[this.protocol]) url += ':' + d.portNumber;
+    const defaultPort = SD.defaultPort(d.protocol || this.protocol, d.ftps);
+    const urlDefaultPort = defaultPort > 0 ? defaultPort : (DEFAULT_PORTS[this.protocol] || 0);
+    if (d.portNumber && d.portNumber !== urlDefaultPort) url += ':' + d.portNumber;
     url += '/';
     if (f.remoteDirectory && this.state.remotePath && this.state.remotePath !== '/') {
       url += this.state.remotePath.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/');

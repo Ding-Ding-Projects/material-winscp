@@ -1175,7 +1175,7 @@ registerDialog('rights', ({ props, close }) => {
       { label: t('cancel'), kind: 'text' },
       {
         label: t('ok'), kind: 'filled', autofocus: true, disabled: !supported || !targets.length,
-        onSelect: () => {
+        onSelect: (closeDialog) => {
           const mode = editor.chmodString(anyDirectories);
           ops.fs.setRights(props.sessionId, targets, mode, {
             recursive,
@@ -1183,10 +1183,11 @@ registerDialog('rights', ({ props, close }) => {
           }).then((count) => {
             notify.success(tx('rightsApplied', count ?? targets.length, editor.text));
             props.onApplied?.({ rights, mode, recursive, addXToDirectories: editor.addXToDirectories });
+            closeDialog('action');
           }).catch((err) => {
             notify.error(tx('rightsApplyTitle'), tx('rightsFailed', err.message));
           });
-          close();
+          return true;
         },
       },
     ],

@@ -209,6 +209,48 @@ test('negative automatic reconnect timeout disables the retry timer', () => {
   assert.equal(session._reconnect.startedAt, 0);
 });
 
+test('sftpOnly sessions use the SFTP adapter identity and default port', () => {
+  const session = new Session({ protocol: 'sftpOnly', hostName: 'sftp-only.example', portNumber: 0 }, { emit() {} });
+  const info = session.info();
+  assert.equal(session.protocol, 'sftponly');
+  assert.equal(info.portNumber, 22);
+  assert.equal(info.hostPort, 'sftp-only.example:22');
+});
+
+test('a pinned host-key mismatch fails before the known-host store or prompt', async () => {
+  let lookedUp = 0;
+  let prompted = false;
+  const session = new Session(
+    { protocol: 'sftp', hostName: 'pinned.example', portNumber: 22, hostKey: 'SHA256:pinned' },
+    {
+      config: {
+        prefs: { logging: {}, security: {} },
+        knownHostKey() { lookedUp++; return { fingerprint: 'SHA256:presented' }; },
+      },
+      emit() {},
+    },
+  );
+  session.ask = async () => { prompted = true; return { accept: true }; };
+
+  assert.equal(await session.verifyHostKey({
+    host: 'pinned.example', port: 22, fingerprintSHA256: 'SHA256:presented',
+  }), false);
+  assert.equal(lookedUp, 0);
+  assert.equal(prompted, false);
+  assert.equal(session._promptRefused, true);
+});
+
+test('prompt delivery failure cancels and removes the pending prompt', async () => {
+  const session = new Session({ protocol: 'sftp', hostName: 'bridge.example' }, {
+    emit() { throw new Error('renderer gone'); },
+  });
+
+  assert.equal(await session.ask('custom', { message: 'answer?' }, { timeoutMs: 1000 }), null);
+  assert.equal(session._pending.size, 0);
+  assert.equal(session._promptCancelled, true);
+  assert.doesNotThrow(() => session._cancelPrompts('test teardown'));
+});
+
 test('a refused security prompt does not schedule an automatic reconnect', async () => {
   const session = new Session(
     { protocol: 'webdav', hostName: 'tls.example' },

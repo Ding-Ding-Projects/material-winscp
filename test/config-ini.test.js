@@ -145,6 +145,41 @@ test('JSON load and import assign IDs to legacy sites that omit them', () => wit
   config.flush();
 }));
 
+test('JSON load and import repair duplicate site IDs without losing either site', () => withRoot((root) => {
+  fs.writeFileSync(P.config(), JSON.stringify({ sites: [
+    { id: 'same', name: 'One', hostName: 'one.example.com' },
+    { id: 'same', name: 'Two', hostName: 'two.example.com' },
+  ] }), 'utf8');
+  const config = new Config().load();
+  assert.equal(config.sites.length, 2);
+  assert.notEqual(config.sites[0].id, config.sites[1].id);
+  assert.deepEqual(JSON.parse(fs.readFileSync(P.config(), 'utf8')).sites.map((s) => s.id),
+    config.sites.map((s) => s.id));
+
+  config.importState({ sites: [
+    { id: 'imported', name: 'Three' },
+    { id: 'imported', name: 'Four' },
+  ] });
+  assert.equal(config.sites.length, 2);
+  assert.notEqual(config.sites[0].id, config.sites[1].id);
+  void root;
+}));
+
+test('workspace persistence rejects unprotected secrets and startup migration removes legacy plaintext', () => withRoot((root) => {
+  fs.writeFileSync(P.config(), JSON.stringify({ workspaces: [{
+    name: 'Legacy', sessions: [{ name: 'session', password: 'plain', savePassword: true }],
+  }] }), 'utf8');
+  const loaded = new Config().load();
+  assert.equal(loaded.data.workspaces[0].sessions[0].password, '');
+  assert.doesNotMatch(fs.readFileSync(P.config(), 'utf8'), /plain/);
+
+  loaded.save = () => {};
+  assert.throws(() => loaded.saveWorkspace('New', [{ password: 'plain', savePassword: true }]),
+    /could not be protected/i);
+  assert.equal(loaded.data.workspaces.some((workspace) => workspace.name === 'New'), false);
+  void root;
+}));
+
 test('JSON load sanitizes malformed collections before they reach consumers', () => withRoot((root) => {
   fs.writeFileSync(P.config(), JSON.stringify({
     prefs: null,
@@ -207,19 +242,55 @@ test('host-key writes remain intact when their atomic rename fails', () => withR
   config.flush();
   const hostkeys = P.hostkeys();
   const before = fs.readFileSync(hostkeys, 'utf8');
+  const configFile = P.config();
+  const beforeConfig = fs.readFileSync(configFile, 'utf8');
   const rename = fs.renameSync;
   fs.renameSync = (source, target) => {
     if (String(source).includes('hostkeys.json.tmp-')) throw new Error('simulated host-key rename failure');
     return rename(source, target);
   };
   try {
+    config.data.prefs.language = 'yue';
     config.data.hostKeys = { 'new.example.com:22': { fingerprint: 'new', algorithm: 'ssh-ed25519' } };
     assert.throws(() => config.flush(), /simulated host-key rename failure/);
   } finally {
     fs.renameSync = rename;
   }
   assert.equal(fs.readFileSync(hostkeys, 'utf8'), before);
+  assert.equal(fs.readFileSync(configFile, 'utf8'), beforeConfig);
   assert.equal(fs.readdirSync(path.dirname(hostkeys)).some((name) => name.startsWith('hostkeys.json.tmp-')), false);
+}));
+
+test('a final flush records a pending configuration mutation in history', () => withRoot(() => {
+  const config = new Config();
+  const revisions = [];
+  config.attachHistory({ snapshot: (label, state) => revisions.push({ label, state }) });
+  assert.equal(config.setPref('language', 'yue', 'Changed the language'), true);
+  config.flush();
+  assert.equal(revisions.length, 1);
+  assert.equal(revisions[0].label, 'Changed the language');
+  assert.equal(revisions[0].state.prefs.language, 'yue');
+}));
+
+test('preferences patches reject non-objects and repair malformed history containers', () => withRoot(() => {
+  const config = new Config();
+  config.save = () => {};
+  assert.throws(() => config.setPrefs([]), /preferences patch must be an object/);
+  assert.equal(config.setPrefs({ versionHistory: null, bookmarks: null, history: null }), false);
+  assert.equal(typeof config.prefs.versionHistory.enabled, 'boolean');
+  assert.deepEqual(config.prefs.bookmarks, {});
+  assert.deepEqual(config.prefs.history, {});
+}));
+
+test('configuration export and restore include host-key trust state', () => withRoot(() => {
+  const config = new Config();
+  const hostKeys = { 'host.example.com:22': { fingerprint: 'ssh-ed25519 256:x', algorithm: 'ssh-ed25519' } };
+  config.data.hostKeys = hostKeys;
+  assert.deepEqual(config.exportState().hostKeys, hostKeys);
+  config.importState({ hostKeys: {} });
+  assert.deepEqual(config.data.hostKeys, {});
+  config.importState({ hostKeys });
+  assert.deepEqual(config.data.hostKeys, hostKeys);
 }));
 
 test('malformed JSON import reports a configuration error without mutating sites', () => withRoot((root) => {

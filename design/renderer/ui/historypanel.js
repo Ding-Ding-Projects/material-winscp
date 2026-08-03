@@ -713,7 +713,10 @@ export function createHistoryPanel(opts = {}) {
               });
               const file = Array.isArray(picked) ? picked[0] : picked;
               if (!file) return;
-              const written = await callMain('history.export', file);
+              const written = await callMain('history.export', file, {
+                oids: visible.map((row) => row.oid),
+                statement,
+              });
               notify.success(s('hpTitle'), s('hpExported', written || file));
             } catch (err) {
               notify.error(s('hpTitle'), s('hpExportFailed', err.message));

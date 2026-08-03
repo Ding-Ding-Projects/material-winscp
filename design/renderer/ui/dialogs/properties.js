@@ -80,6 +80,7 @@ const STRINGS = {
   propsTagAdd: ['Add tag…', '加標籤…'],
   propsTagEdit: ['Edit tag…', '改標籤…'],
   propsTagRemove: ['Remove tag', '刪標籤'],
+  propsTagRequired: ['A tag key is required.', '標籤要有個鍵先得。'],
   propsTagDuplicate: ['A tag with the key "{0}" already exists.', '已經有個鍵叫「{0}」嘅標籤。'],
   propsRecursiveHint: [
     'With recursion on, a permission left as "leave as is" stays untouched everywhere in the subtree.',
@@ -570,9 +571,12 @@ registerDialog('properties', ({ props, close }) => {
       valueInput,
       onOk: () => {
         const key = keyInput.value.trim();
-        if (!key) return;
+        if (!key) {
+          notify.warning(tx('propsValueSheet'), tx('propsTagRequired'));
+          return true;
+        }
         const clash = tags.findIndex((x, i) => x.key === key && i !== index);
-        if (clash >= 0) { notify.warning(tx('propsValueSheet'), tx('propsTagDuplicate', key)); return; }
+        if (clash >= 0) { notify.warning(tx('propsValueSheet'), tx('propsTagDuplicate', key)); return true; }
         if (isAdd) tags.push({ key, value: valueInput.value });
         else tags[index] = { key, value: valueInput.value };
         paintTags();
@@ -689,7 +693,11 @@ registerDialog('properties', ({ props, close }) => {
         while (stack.length && !stopped) {
           const dir = stack.pop();
           let listing = null;
-          try { listing = await ops.fs.localList(dir, {}); } catch { continue; }
+          try {
+            listing = await ops.fs.localList(dir, {});
+          } catch (err) {
+            throw new Error(`Could not read "${dir}": ${err.message || err}`);
+          }
           for (const e of (listing.entries || [])) {
             if (e.name === '..' || e.name === '.') continue;
             if (e.type === 'dir') { dirCount += 1; stack.push(joinPath(dir, e.name, sep)); }
@@ -711,6 +719,10 @@ registerDialog('properties', ({ props, close }) => {
       if (stopped) sizeValue.title = tx('propsPartialSize');
       announce(`${t('sizeLbl')}: ${sizeValue.textContent}${stopped ? ` — ${tx('propsPartialSize')}` : ''}`);
     } catch (err) {
+      statsCalculated = false;
+      calculatedBytes = agg.bytes;
+      calculatedStats = null;
+      sizeValue.title = '';
       notify.error(t('calcSize'), err.message);
       sizeValue.textContent = describeSize(agg.bytes, agg.statsNotCalculated);
     } finally {
@@ -769,8 +781,10 @@ registerDialog('properties', ({ props, close }) => {
       style: { flex: '1 1 auto', minWidth: 0 },
       oninput: () => { current.group = groupInput.value; updateOk(); },
     });
-    ownerInput.value = agg.ownerKnown ? agg.owner : '';
-    groupInput.value = agg.groupKnown ? agg.group : '';
+    // Capability discovery rebuilds this area after the dialog opens; retain
+    // values already typed while that request is in flight.
+    ownerInput.value = current.owner || (agg.ownerKnown ? agg.owner : '');
+    groupInput.value = current.group || (agg.groupKnown ? agg.group : '');
     ownerInput.placeholder = agg.ownerKnown ? '' : t('none');
     groupInput.placeholder = agg.groupKnown ? '' : t('none');
 
@@ -859,7 +873,7 @@ registerDialog('properties', ({ props, close }) => {
         await props.onApplyTags(tags);
         applied.push(tx('propsValueSheet'));
       }
-      if (!applied.length) { notify.info(t('properties'), tx('propsNothingChanged')); return; }
+      if (!applied.length) { notify.info(t('properties'), tx('propsNothingChanged')); return false; }
       notify.success(tx('propsSaved', targets.length), applied.join(' · '));
       props.onApplied?.({
         rights: rightsEditor ? rightsEditor.rights : null,
@@ -869,8 +883,10 @@ registerDialog('properties', ({ props, close }) => {
         recursive: current.recursive,
         tags,
       });
+      return true;
     } catch (err) {
       notify.error(t('properties'), tx('propsFailed', err.message));
+      return false;
     }
   }
 
@@ -912,7 +928,10 @@ registerDialog('properties', ({ props, close }) => {
       {
         label: t('ok'), kind: 'filled', autofocus: true,
         ref: (btn) => { okButton = btn; updateOk(); },
-        onSelect: () => { apply(); close(); },
+        onSelect: () => {
+          apply().then((applied) => { if (applied) close('action'); });
+          return true;
+        },
       },
     ],
   };

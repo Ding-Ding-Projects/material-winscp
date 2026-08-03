@@ -38,14 +38,16 @@ Every one of those is a revision. Nothing was removed to make room for anything.
 The restore preview shows exactly what will change — created, modified, deleted —
 before anything happens, with counts.
 
-## The AAD trap
+## Encrypted state
 
 This is the subtlest bug in the whole feature, and it is worth stating plainly
 because it fails in a way that looks exactly like data corruption.
 
-Encrypted fields use authenticated encryption with **additional authenticated
-data** binding the ciphertext to the record it belongs to. If that AAD is bound
-to an autoincrement row id or an array index, then:
+The history stores encrypted fields as opaque ciphertext. Restoring a snapshot
+preserves the site IDs and ciphertext bytes; it does not decrypt credentials or
+re-encrypt them against a new array position. If record-bound authenticated
+data is added in the future, it must use a stable site identifier rather than
+an autoincrement row id or array index, because:
 
 1. The record is deleted.
 2. It is restored, and receives a **fresh id**.
@@ -53,9 +55,7 @@ to an autoincrement row id or an array index, then:
 4. The data becomes permanently undecryptable — and the failure is
    indistinguishable from corruption.
 
-**So AAD is bound to a stable identifier that survives delete and restore** — a
-record UUID assigned at creation, carried through history, and reused on restore.
-There is a dedicated test for exactly this sequence.
+the restored record would otherwise fail authentication after delete and restore.
 
 ## Failure modes
 

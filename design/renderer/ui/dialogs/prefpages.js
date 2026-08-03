@@ -818,7 +818,7 @@ export const PAGES = [
               dependsOn: { key: 'copyParam.resumeSupport', equals: 'smart' },
             }),
           text('copyParam.partialFileExt', '.filepart', 'Temporary filename extension', '臨時檔名副檔名',
-            { placeholder: '.filepart' }),
+            { placeholder: '.filepart', pattern: '^\\.(?!\\.$)[^\\\\/\\0]{1,63}$' }),
         ],
       },
       {
@@ -1533,7 +1533,14 @@ export function storedValueStatus(control, stored) {
   }
 
   if (['text', 'path', 'color', 'font'].includes(control.type)) {
-    return typeof stored === 'string'
+    const validType = typeof stored === 'string';
+    const validLength = validType && (control.maxLength == null || stored.length <= control.maxLength);
+    let validPattern = true;
+    if (validType && control.pattern) {
+      try { validPattern = new RegExp(control.pattern).test(stored); }
+      catch { validPattern = false; }
+    }
+    return validType && validLength && validPattern
       ? { valid: true, ui: stored }
       : { valid: false, ui: fallback };
   }
@@ -1984,7 +1991,22 @@ export function renderControl(control, ctx) {
           autocomplete: 'off', spellcheck: 'false',
           placeholder: control.placeholder || '',
           maxlength: control.maxLength,
-          onchange: () => commit(input.value),
+          pattern: control.pattern || null,
+          onchange: () => {
+            input.setCustomValidity('');
+            const storedStatus = storedValueStatus(control, input.value);
+            const browserValid = typeof input.checkValidity === 'function' ? input.checkValidity() : true;
+            const valid = storedStatus.valid && browserValid;
+            input.setAttribute('aria-invalid', String(!valid));
+            if (!valid) {
+              input.setCustomValidity(language === 'yue'
+                ? '請輸入有效值。'
+                : language === 'both' ? 'Enter a valid value. · 請輸入有效值。' : 'Enter a valid value.');
+              input.reportValidity?.();
+              return;
+            }
+            commit(input.value);
+          },
         });
         input.value = shown == null ? '' : String(shown);
         if (control.mask && ctx.custom && typeof ctx.custom.mask === 'function') {

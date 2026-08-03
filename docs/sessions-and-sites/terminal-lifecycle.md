@@ -60,6 +60,17 @@ read during the retry. Concurrent `connect()` calls share one in-flight promise;
 disconnecting invalidates that generation, cleans the adapter, and prevents a
 late result from changing the current session state.
 
+Reconnect temporarily suspends transaction reads, but restores the suspension
+state that existed before the retry. A configured `hostKey` is a hard identity
+pin: a presented mismatch fails before the known-host store or approval prompt,
+so it cannot be silently rescued by another trust record. If prompt delivery
+fails because the renderer bridge is gone, the prompt is cancelled and removed
+from the pending set.
+
+The foreground retry budget treats a missing, blank, or zero
+`sessionReopenTimeout` as unlimited. An explicitly negative, non-finite, or
+otherwise malformed value fails closed and stops retrying.
+
 Remote command execution fails closed at the session boundary. The adapter must
 both advertise `caps.exec` and provide an `exec()` function; if either is
 missing, `Session.exec()` returns the standard `NOT_SUPPORTED` error instead of
@@ -117,7 +128,7 @@ so a trusted key cannot be lost behind the colons in the address.
 
 ## Verification
 
-- `node --test test/terminal.test.js test/session-manager.test.js`
+- `node --test test/terminal.test.js test/session-manager.test.js test/sessioninfo.test.js test/authenticate.test.js`
 - `node --check design/main/terminal.js`
 - `node --check design/main/session.js`
 - `git diff --check`

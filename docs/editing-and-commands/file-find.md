@@ -12,6 +12,11 @@ regular-expression builder—are disabled together. This keeps keyboard users
 from opening the builder and applying a new mask to a field that the active
 search can no longer read, and makes the Stop/Start state unambiguous.
 
+The destructive Delete action keeps its confirmation dialog open until the
+filesystem bridge responds: a wholly failed deletion remains available for
+retry, while successful or partial results remove only confirmed paths and
+report failed paths explicitly.
+
 This matters for remote adapters: an empty result request must not start a
 network listing, and cancellation must not turn into a late match after the
 caller has stopped consuming the stream. A permitted `test/filefind.test.js`

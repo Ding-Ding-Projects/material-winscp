@@ -34,9 +34,13 @@ Keepalives are per site; reconnection policy is global, under
 - **Invalid retry delays fail closed.** A non-finite or negative
   `sessionReopenAuto` value disables automatic reconnect rather than becoming an
   immediate timer and retry loop.
-- **Idle sessions reconnect lazily.** With `sessionReopenAutoIdle`, a session
-  nobody is using does not reconnect until it is needed. This is the difference
-  between a laptop waking to twelve reconnect attempts and waking to none.
+- **Malformed retry ceilings fail closed.** A non-finite, negative, or otherwise
+  malformed explicit `sessionReopenTimeout` stops the foreground retry loop;
+  missing, blank, and zero values retain the unlimited default.
+- **Idle policy is separate from the low-level session timer.**
+  `sessionReopenAutoIdle` controls the interactive idle-error policy; an
+  unexpected adapter drop still follows the Session reconnect timer described
+  above. This keeps the setting from being mistaken for a global timer switch.
 - **Queued work reconnects eagerly**, on the shorter `sessionReopenBackground`.
   That is the interval the queue waits before touching the adapter again after a
   dropped transfer; the session's own reconnect timer runs in parallel on

@@ -2,9 +2,9 @@
 
 The main-process store keeps the current configuration in
 `winscp-material.json`. A portable `WinSCP.ini` beside the app data is imported
-once when the JSON store does not exist. Both paths write atomically. The
-known-host-key file is also written through a temporary sibling and rename, so
-a failed write cannot truncate the previous file.
+once when the JSON store does not exist. Each file is written through a unique
+temporary sibling and rename. If the separate host-key write fails, the JSON
+write is rolled back to its previous bytes as well.
 
 ## What it does
 
@@ -25,6 +25,11 @@ fields are protected before the site is usable. If either migration is needed,
 the normalized configuration is immediately written back. This means a legacy
 password is not left clear on disk while waiting for the next user action.
 
+Duplicate site IDs are regenerated during the same migration, and a legacy
+workspace session containing clear-text secret material is rewritten without
+that material. The two records remain usable even when only the second site had
+the duplicate ID.
+
 Already protected `mp:` and `os:` values are preserved. A failed migration
 write leaves the existing file in place and emits a configuration error; the
 loader continues with the normalized in-memory state.
@@ -32,6 +37,10 @@ loader continues with the normalized in-memory state.
 Site mutations also fail closed for malformed non-string secret values from
 IPC or imported payloads: the value is discarded rather than causing a raw
 `startsWith` error or being written as a credential.
+
+Workspace saves apply the same boundary. A supplied plain-text workspace
+secret must be protectable; otherwise the save is rejected and no workspace is
+added or replaced.
 
 ## Failure modes
 

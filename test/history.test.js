@@ -152,6 +152,24 @@ test('actionOf derives the action from the label', () => {
   assert.equal(actionOf('Discarded unsaved document "notes.txt"'), 'discarded');
 });
 
+test('read APIs wait for queued writes before showing history', async () => {
+  const h = newHistory('settled-read');
+  await h.init();
+  let release;
+  h._queue = new Promise((resolve) => { release = resolve; });
+  const writing = h.snapshot('Added the site "Queued"', stateWith([{ id: 'queued' }]));
+  const reading = h.list({});
+  let finished = false;
+  reading.then(() => { finished = true; });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(finished, false);
+  release();
+  await writing;
+  const result = await reading;
+  assert.equal(result.ok, true);
+  assert.equal(result.value.length, 1);
+});
+
 // ------------------------------------------------------------------- read
 
 test('read returns the exact state stored in a revision', async () => {
@@ -432,6 +450,16 @@ test('export produces every revision with its state', async () => {
   assert.equal(r.value.revisions[0].label, 'Added the site "B"');
   assert.equal(r.value.revisions[0].state.sites.length, 2);
   assert.equal(r.value.revisions[1].state.sites.length, 1);
+});
+
+test('history export can contain exactly the filtered revisions', async () => {
+  const h = newHistory('filtered-export');
+  const first = await h.snapshot('Added the site "A"', stateWith([{ id: 'a' }]));
+  await h.snapshot('Added the site "B"', stateWith([{ id: 'a' }, { id: 'b' }]));
+  const r = await h.export_({ oids: [first.value.oid], statement: 'filtered to A' });
+  assert.equal(r.ok, true);
+  assert.equal(r.value.exportedRange, 'filtered to A');
+  assert.deepEqual(r.value.revisions.map((revision) => revision.oid), [first.value.oid]);
 });
 
 test('the repository is created under the directory it was given, and nowhere else', async () => {

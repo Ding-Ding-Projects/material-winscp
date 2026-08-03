@@ -35,6 +35,35 @@ test('Preferences tree keyboard navigation wraps and supports Home/End', async (
   assert.equal(preferenceTreeIndex('ArrowDown', 0, 0), -1);
 });
 
+test('a failed preference write restores the cached value', async () => {
+  const hadWindow = Object.prototype.hasOwnProperty.call(global, 'window');
+  const previousWindow = global.window;
+  global.window = {
+    api: {
+      config: {
+        get: async () => ({ ok: true, value: { prefs: { queue: { transfersLimit: 2 } } } }),
+        setPref: async () => ({ ok: false, error: { message: 'disk full' } }),
+      },
+    },
+  };
+  try {
+    const { loadPrefs, readPref, writePref } = await import('../design/renderer/ui/dialogs/preferences.js');
+    await loadPrefs(true);
+    await assert.rejects(() => writePref('queue.transfersLimit', 4), /disk full/);
+    assert.equal(readPref('queue.transfersLimit'), 2);
+  } finally {
+    if (hadWindow) global.window = previousWindow;
+    else delete global.window;
+  }
+});
+
+test('a preference search keeps matching child pages reachable through their parents', async () => {
+  const { schema } = await load();
+  const { preferenceNavigationPages } = await import('../design/renderer/ui/dialogs/preferences.js');
+  const visible = preferenceNavigationPages(schema.PAGES, [{ pageId: 'editor-internal' }]).map((p) => p.id);
+  assert.deepEqual(visible, ['editors', 'editor-internal']);
+});
+
 test('preference revert snapshots companion persisted keys', async () => {
   const { snapshotPreferenceValues } = await import('../design/renderer/ui/dialogs/preferences.js');
   const values = { 'panel.doubleClickAction': 'open', 'panel.singleClickAction': 'select' };
@@ -268,6 +297,17 @@ test('invalid imported preference values get an honest fallback', async () => {
 
   assert.equal(schema.controlEnabled({ dependsOn: 'showHiddenFiles' }, () => 'false'), false,
     'an imported string must not enable a dependent control');
+});
+
+test('text constraints in the Preferences schema reject malformed stored values', async () => {
+  const { schema } = await load();
+  const byKey = new Map(schema.flattenControls().map((e) => [e.control.key, e.control]));
+  const rights = byKey.get('copyParam.rights');
+  const extension = byKey.get('copyParam.partialFileExt');
+  assert.deepEqual(schema.storedValueStatus(rights, 'rwx'), { valid: false, ui: rights.def });
+  assert.deepEqual(schema.storedValueStatus(rights, 'rw-r--r--'), { valid: true, ui: 'rw-r--r--' });
+  assert.deepEqual(schema.storedValueStatus(extension, '..'), { valid: false, ui: extension.def });
+  assert.deepEqual(schema.storedValueStatus(extension, '.part'), { valid: true, ui: '.part' });
 });
 
 test('describeValue names the option rather than the stored primitive', async () => {

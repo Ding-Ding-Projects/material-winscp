@@ -38,8 +38,9 @@ Under **Preferences → History**, stored in `PREF_DEFAULTS.versionHistory`.
 | `snapshotSettings` | `true` | Include settings changes. |
 | `snapshotSites` | `true` | Include site and folder changes. |
 
-Export is available: the history can be archived as an ordinary git bundle, so
-it is portable and readable by ordinary tools.
+Export is available as a UTF-8 JSON archive. It contains the selected revision
+metadata and complete snapshot states, including protected secret envelopes;
+the history panel records the active filter statement in the exported file.
 
 ## Behaviour worth knowing
 
@@ -61,7 +62,7 @@ it is portable and readable by ordinary tools.
 | Situation | What the user sees | Recoverable |
 | --- | --- | --- |
 | History write fails (disk full, permissions) | Logged and reported once as a corner notification. **The user's operation still succeeds.** | Yes |
-| The repository is corrupt | Detected on open; a new repository is started beside the damaged one, which is kept. Nothing is deleted to make room. | Partially |
+| The repository is corrupt | The history operation fails softly and reports the error; the damaged repository is not silently replaced. | Partially |
 | Pruning by retention or count | Old revisions removed. The panel states the oldest retained revision so the horizon is visible rather than mysterious. | n/a |
 | A very large configuration | Snapshots are of a JSON tree, so storage is small and git deduplicates. `maxRevisions` bounds the worst case. | n/a |
 | History disabled and re-enabled | The gap is visible in the panel, labelled as a period when history was off. Not silently interpolated. | n/a |
@@ -70,8 +71,9 @@ it is portable and readable by ordinary tools.
 
 ## Security considerations
 
-- **The history mirrors the store, including its ciphertext.** It never decrypts
-  to snapshot, so it never creates a plaintext copy of a secret.
+- **The history mirrors the store, including its ciphertext and host-key trust
+  records.** It never decrypts to snapshot, so it never creates a plaintext
+  copy of a secret.
 - **It lives in the app's data directory** with the user's permissions, not in a
   user folder and not in a location another account can read.
 - **Deleting a record does not remove it from history** — that is the entire
@@ -80,8 +82,8 @@ it is portable and readable by ordinary tools.
   and the panel offers a purge for exactly that.
 - **Never pushed anywhere.** The repository has no remote configured, and adding
   one requires explicit user action.
-- **Export is a git bundle containing everything.** The export dialog states that
-  it includes protected secrets in their encrypted form.
+- **Export is a JSON archive containing the selected revisions.** The export
+  dialog states that it includes protected secrets in their encrypted form.
 
 ## Verification
 

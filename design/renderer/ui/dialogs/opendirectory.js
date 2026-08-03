@@ -191,7 +191,9 @@ registerDialog('opendirectory', ({ props, close }) => {
 
     function paint() {
       const items = visibleItems();
-      list.setItems(items);
+      const selectedPath = list.selected?.path || '';
+      list.setItems(items, false);
+      list.index = selectedPath ? items.findIndex((item) => item.path === selectedPath) : -1;
       note.textContent = search.isActive && !items.length
         ? noMatchMessage(search.predicate, tx(id === 'site' ? 'odSiteSheet' : 'odSharedSheet'))
         : '';
@@ -199,23 +201,26 @@ registerDialog('opendirectory', ({ props, close }) => {
     }
 
     function paintButtons() {
-      const index = list.index;
+      const selectedPath = list.selected?.path || '';
+      const index = data[side].findIndex((bookmark) => bookmark.path === selectedPath);
       const current = pathInput.value.trim();
       addButton.disabled = !current || data[side].some((b) => b.path === current);
       removeButton.disabled = index < 0;
       upButton.disabled = index <= 0;
-      downButton.disabled = index < 0 || index >= list.items.length - 1;
+      downButton.disabled = index < 0 || index >= data[side].length - 1;
       if (shortcutButton) shortcutButton.disabled = index < 0;
     }
 
     async function addCurrent() {
       const path = pathInput.value.trim();
       if (!path || data[side].some((b) => b.path === path)) return;
-      const index = list.index;
+      const before = snapshot();
+      const selectedPath = list.selected?.path || '';
+      const index = data[side].findIndex((bookmark) => bookmark.path === selectedPath);
       const entry = { path, name: path };
       if (index >= 0) data[side].splice(index, 0, entry);
       else data[side].push(entry);
-      await save(`Added a ${side} bookmark for ${path}`);
+      if (!await save(`Added a ${side} bookmark for ${path}`)) { restore(before); return; }
       paint();
       notify.success(t('bookmarkAdded', path));
       announce(t('bookmarkAdded', path));
@@ -226,11 +231,12 @@ registerDialog('opendirectory', ({ props, close }) => {
       if (!item) return;
       const at = data[side].findIndex((b) => b.path === item.path);
       if (at < 0) return;
+      const before = snapshot();
       data[side].splice(at, 1);
       for (const [combo, target] of Object.entries(data.shortCuts || {})) {
         if (target === item.path) delete data.shortCuts[combo];
       }
-      await save(`Removed a ${side} bookmark for ${item.path}`);
+      if (!await save(`Removed a ${side} bookmark for ${item.path}`)) { restore(before); return; }
       paint();
       notify.info(tx('odRemoved', item.path));
     }
@@ -241,11 +247,11 @@ registerDialog('opendirectory', ({ props, close }) => {
       const at = data[side].findIndex((b) => b.path === item.path);
       const to = at + delta;
       if (at < 0 || to < 0 || to >= data[side].length) return;
+      const before = snapshot();
       const [moved] = data[side].splice(at, 1);
       data[side].splice(to, 0, moved);
-      await save('Reordered the bookmarks');
+      if (!await save('Reordered the bookmarks')) { restore(before); return; }
       paint();
-      list.index = to;
     }
 
     function assignShortcut() {
@@ -257,19 +263,34 @@ registerDialog('opendirectory', ({ props, close }) => {
         current: shortcutOf(item.path),
         taken: data.shortCuts || {},
         onAssign: async (combo) => {
+          const before = snapshot();
           for (const [existing, target] of Object.entries(data.shortCuts || {})) {
             if (target === item.path) delete data.shortCuts[existing];
           }
           if (combo) data.shortCuts[combo] = item.path;
-          await save('Changed a bookmark shortcut');
+          if (!await save('Changed a bookmark shortcut')) { restore(before); return false; }
           paint();
           if (combo) notify.success(tx('odShortcutSet', combo, item.label));
+          return true;
         },
       });
     }
 
     async function save(label) {
-      await writeBookmarks(key, data, label);
+      return writeBookmarks(key, data, label);
+    }
+
+    function snapshot() {
+      return {
+        local: data.local.slice(),
+        remote: data.remote.slice(),
+        shortCuts: { ...data.shortCuts },
+      };
+    }
+
+    function restore(before) {
+      data = before;
+      paint();
     }
 
     async function load() {
@@ -423,8 +444,20 @@ registerDialog('bookmark-shortcut', ({ props, close }) => {
       display),
     actions: [
       { label: t('cancel'), kind: 'text' },
-      { label: t('remove'), kind: 'text', onSelect: () => props.onAssign('') },
-      { label: t('ok'), kind: 'filled', onSelect: () => props.onAssign(combo) },
+      {
+        label: t('remove'), kind: 'text',
+        onSelect: () => {
+          Promise.resolve(props.onAssign('')).then((ok) => { if (ok !== false) close('action'); });
+          return true;
+        },
+      },
+      {
+        label: t('ok'), kind: 'filled',
+        onSelect: () => {
+          Promise.resolve(props.onAssign(combo)).then((ok) => { if (ok !== false) close('action'); });
+          return true;
+        },
+      },
     ],
   };
 });

@@ -867,8 +867,12 @@ class RetryLoop {
  * against another is either instantly spent or eternal.
  */
 function continueReopen(prefs, start, now) {
-  const timeout = Number((((prefs || {}).security) || {}).sessionReopenTimeout) || 0;
-  return timeout === 0 || (now - start) < timeout;
+  const raw = (((prefs || {}).security) || {}).sessionReopenTimeout;
+  if (raw === undefined || raw === null || raw === '') return true;
+  const timeout = Number(raw);
+  if (timeout === 0) return true;
+  if (!Number.isFinite(timeout) || timeout < 0) return false;
+  return (now - start) < timeout;
 }
 
 class RobustLoop {
@@ -1410,6 +1414,7 @@ class Terminal extends EventEmitter {
     const prevReadCurrent = this._readCurrentDirectoryPending;
     const prevReadDir = this._readDirectoryPending;
     const prevAutoRead = this.autoReadDirectory;
+    const prevSuspendTransaction = this._suspendTransaction;
     const prevExceptionOnFail = this._exceptionOnFail;
     try {
       this._readCurrentDirectoryPending = false;
@@ -1432,7 +1437,7 @@ class Terminal extends EventEmitter {
       this.autoReadDirectory = prevAutoRead;
       this._readCurrentDirectoryPending = prevReadCurrent;
       this._readDirectoryPending = prevReadDir;
-      this._suspendTransaction = false;
+      this._suspendTransaction = prevSuspendTransaction;
       this._exceptionOnFail = prevExceptionOnFail;
     }
   }

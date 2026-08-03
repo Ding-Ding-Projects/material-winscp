@@ -55,6 +55,44 @@ function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function isProtectedSecret(value) {
+  return typeof value === 'string' && (value.startsWith('mp:') || value.startsWith('os:'));
+}
+
+function normalizeSecretFields(record, required = false, fillMissing = true) {
+  for (const field of SECRET_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(record, field) && !fillMissing) continue;
+    const value = record[field];
+    if (!value || typeof value !== 'string') {
+      record[field] = '';
+      continue;
+    }
+    if (isProtectedSecret(value)) continue;
+    if (field === 'password' && !record.savePassword) {
+      record[field] = '';
+      continue;
+    }
+    record[field] = protectSecret(value, field, required);
+  }
+  return record;
+}
+
+function normalizeSites(value) {
+  if (!Array.isArray(value)) return [];
+  const ids = new Set();
+  return value.map((site) => {
+    const normalized = normalizeSite(site);
+    while (ids.has(normalized.id)) normalized.id = newId('site');
+    ids.add(normalized.id);
+    return normalized;
+  });
+}
+
+function normalizeWorkspaceSession(session, required = false) {
+  const normalized = clone(session);
+  return normalizeSecretFields(normalized, required, false);
+}
+
 function normalizeFolders(value) {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.filter((folder) => typeof folder === 'string' && folder !== ''))];
@@ -66,10 +104,27 @@ function normalizeWorkspaces(value) {
     .map((workspace) => {
       const copy = clone(workspace);
       copy.sessions = Array.isArray(copy.sessions)
-        ? copy.sessions.filter(isRecord)
+        ? copy.sessions.filter(isRecord).map((session) => normalizeWorkspaceSession(session))
         : [];
       return copy;
     });
+}
+
+function hasPlainWorkspaceSecrets(value) {
+  return Array.isArray(value) && value.some((workspace) => isRecord(workspace) &&
+    Array.isArray(workspace.sessions) && workspace.sessions.some((session) => isRecord(session) &&
+      SECRET_FIELDS.some((field) => {
+        const secret = session[field];
+        return secret && (typeof secret !== 'string' ||
+          (!isProtectedSecret(secret) && !(field === 'password' && !session.savePassword)));
+      })));
+}
+
+function normalizeHostKeys(value) {
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(Object.entries(value)
+    .filter(([hostPort, record]) => hostPort !== '' && isRecord(record))
+    .map(([hostPort, record]) => [hostPort, clone(record)]));
 }
 
 function isValidWorkspace(workspace) {
@@ -80,6 +135,12 @@ function isValidWorkspace(workspace) {
 
 function normalizePrefs(value) {
   const prefs = deepMerge(clone(PREF_DEFAULTS), isRecord(value) ? value : {});
+  if (!isRecord(prefs.bookmarks)) prefs.bookmarks = {};
+  if (!isRecord(prefs.history)) prefs.history = {};
+  if (!Array.isArray(prefs.locationProfiles)) prefs.locationProfiles = [];
+  prefs.versionHistory = isRecord(prefs.versionHistory)
+    ? deepMerge(clone(PREF_DEFAULTS.versionHistory), prefs.versionHistory)
+    : clone(PREF_DEFAULTS.versionHistory);
   if (!Array.isArray(prefs.copyParamList) || !prefs.copyParamList.length) {
     prefs.copyParamList = clone(DEFAULT_PRESETS);
   }
@@ -97,6 +158,10 @@ function requireImportArray(state, name, predicate) {
   if (!Array.isArray(state[name])) invalidCollection(name, 'an array');
   const invalid = state[name].findIndex((value) => !predicate(value));
   if (invalid >= 0) invalidCollection(`${name}[${invalid}]`, 'a valid record');
+}
+
+function requireImportObject(state, name) {
+  if (!isRecord(state[name])) invalidCollection(name, 'an object');
 }
 
 const INI_SECRET_FIELDS = ['password', 'passphrase', 'proxyPassword', 'tunnelPassword',
@@ -136,15 +201,7 @@ function normalizeSite(site) {
   // but cannot be addressed by update/remove/move operations.
   normalized.id = typeof normalized.id === 'string' && normalized.id !== ''
     ? normalized.id : newId('site');
-  for (const field of SECRET_FIELDS) {
-    const value = normalized[field];
-    if (!value) { normalized[field] = ''; continue; }
-    if (typeof value !== 'string') { normalized[field] = ''; continue; }
-    if (value.startsWith('mp:') || value.startsWith('os:')) continue;
-    normalized[field] = normalized.savePassword || field !== 'password' ? protectSecret(value, field) : '';
-  }
-  if (!normalized.savePassword) normalized.password = '';
-  return normalized;
+  return normalizeSecretFields(normalized);
 }
 
 let nextId = 1;
@@ -190,14 +247,16 @@ class Config extends EventEmitter {
           const value = site && site[field];
           return typeof value === 'string' && value && !value.startsWith('mp:') && !value.startsWith('os:');
         }));
-        this.data.sites = validSites.map(normalizeSite);
+        this.data.sites = normalizeSites(validSites);
+        migratedJson = migratedJson || this.data.sites.some((site, i) => site.id !== validSites[i].id);
         this.data.folders = normalizeFolders(raw.folders);
         this.data.workspaces = normalizeWorkspaces(raw.workspaces);
         migratedJson = migratedJson || (raw.folders !== undefined &&
           (!Array.isArray(raw.folders) || this.data.folders.length !== raw.folders.length));
         migratedJson = migratedJson || (raw.workspaces !== undefined &&
           (!Array.isArray(raw.workspaces) || this.data.workspaces.length !== raw.workspaces.length ||
-            raw.workspaces.some((workspace) => !isValidWorkspace(workspace))));
+            raw.workspaces.some((workspace) => !isValidWorkspace(workspace)) ||
+            hasPlainWorkspaceSecrets(raw.workspaces)));
         this.data.version = Number.isInteger(raw.version) && raw.version > 0 ? raw.version : 1;
         migratedJson = migratedJson || (raw.version !== undefined && this.data.version !== raw.version);
       } catch (e) {
@@ -223,7 +282,7 @@ class Config extends EventEmitter {
     if (fs.existsSync(P.hostkeys())) {
       try {
         const hostKeys = JSON.parse(fs.readFileSync(P.hostkeys(), 'utf8'));
-        this.data.hostKeys = isRecord(hostKeys) ? hostKeys : {};
+        this.data.hostKeys = normalizeHostKeys(hostKeys);
       } catch { this.data.hostKeys = {}; }
     }
     if (migratedIni || migratedJson) {
@@ -234,8 +293,9 @@ class Config extends EventEmitter {
   }
 
   /** Atomic write. Debounced by save(); call flush() to force it out now. */
-  flush() {
+  flush(options) {
     if (this._saveTimer) { clearTimeout(this._saveTimer); this._saveTimer = null; }
+    const pendingReason = this._pendingSaveReason;
     const file = P.config();
     P.ensure(path.dirname(file));
     const payload = JSON.stringify({
@@ -245,27 +305,42 @@ class Config extends EventEmitter {
       folders: this.data.folders,
       workspaces: this.data.workspaces,
     }, null, 2);
-    const tmp = file + '.tmp';
-    fs.writeFileSync(tmp, payload, 'utf8');
-    fs.renameSync(tmp, file);
-    writeAtomic(P.hostkeys(), JSON.stringify(this.data.hostKeys, null, 2));
+    const hostKeysFile = P.hostkeys();
+    const previousConfig = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+    try {
+      writeAtomic(file, payload);
+      writeAtomic(hostKeysFile, JSON.stringify(this.data.hostKeys, null, 2));
+    } catch (e) {
+      try {
+        if (previousConfig === null) fs.rmSync(file, { force: true });
+        else writeAtomic(file, previousConfig);
+      } catch { /* best effort; report the original write failure */ }
+      throw e;
+    }
+    this._pendingSaveReason = null;
     this.emit('saved');
+    if (!options || options.snapshotPending !== false) {
+      if (pendingReason) this._snapshot(pendingReason);
+    }
   }
 
   save(reason) {
     if (this._saveTimer) clearTimeout(this._saveTimer);
+    this._pendingSaveReason = reason || 'Updated settings';
     this._saveTimer = setTimeout(() => {
       try {
         this.flush();
-        this._snapshot(reason || 'Updated settings');
       } catch (e) { this.emit('error', e); }
     }, 150);
   }
 
   /** Record a revision. A history failure must never fail the user's action. */
   _snapshot(label) {
-    if (!this._history || !this.data.prefs.versionHistory.enabled) return;
-    try { this._history.snapshot(label, this.exportState()); } catch { /* logged by history */ }
+    if (!this._history || this.data.prefs?.versionHistory?.enabled === false) return;
+    try {
+      const result = this._history.snapshot(label, this.exportState());
+      if (result && typeof result.catch === 'function') result.catch(() => undefined);
+    } catch { /* logged by history */ }
   }
 
   exportState() {
@@ -274,6 +349,7 @@ class Config extends EventEmitter {
       sites: clone(this.data.sites),
       folders: clone(this.data.folders),
       workspaces: clone(this.data.workspaces),
+      hostKeys: clone(this.data.hostKeys),
     };
   }
 
@@ -383,6 +459,7 @@ class Config extends EventEmitter {
       sites: this.data.sites,
       folders: this.data.folders,
       workspaces: this.data.workspaces,
+      hostKeys: this.data.hostKeys,
     };
     try {
       if (Object.prototype.hasOwnProperty.call(state, 'prefs')) {
@@ -391,7 +468,7 @@ class Config extends EventEmitter {
       }
       if (Object.prototype.hasOwnProperty.call(state, 'sites')) {
         requireImportArray(state, 'sites', isRecord);
-        this.data.sites = state.sites.map(normalizeSite);
+        this.data.sites = normalizeSites(state.sites);
       }
       if (Object.prototype.hasOwnProperty.call(state, 'folders')) {
         requireImportArray(state, 'folders', (folder) => typeof folder === 'string' && folder !== '');
@@ -401,12 +478,17 @@ class Config extends EventEmitter {
         requireImportArray(state, 'workspaces', isValidWorkspace);
         this.data.workspaces = normalizeWorkspaces(state.workspaces);
       }
+      if (Object.prototype.hasOwnProperty.call(state, 'hostKeys')) {
+        requireImportObject(state, 'hostKeys');
+        this.data.hostKeys = normalizeHostKeys(state.hostKeys);
+      }
       this.flush();
     } catch (e) {
       this.data.prefs = previous.prefs;
       this.data.sites = previous.sites;
       this.data.folders = previous.folders;
       this.data.workspaces = previous.workspaces;
+      this.data.hostKeys = previous.hostKeys;
       throw e;
     }
     this._snapshot(label || 'Restored an earlier revision');
@@ -433,9 +515,13 @@ class Config extends EventEmitter {
   }
 
   setPrefs(patch, label) {
-    this.data.prefs = deepMerge(this.data.prefs, patch);
+    if (!isRecord(patch)) invalidCollection('preferences patch', 'an object');
+    const next = normalizePrefs(deepMerge(this.data.prefs, patch));
+    if (JSON.stringify(next) === JSON.stringify(this.data.prefs)) return false;
+    this.data.prefs = next;
     this.save(label || 'Changed settings');
     this.emit('pref-changed', null, patch);
+    return true;
   }
 
   // ---------------------------------------------------------------- sites
@@ -551,7 +637,11 @@ class Config extends EventEmitter {
     const invalid = sessions.findIndex((session) => !isRecord(session));
     if (invalid >= 0) invalidCollection(`workspace sessions[${invalid}]`, 'a valid record');
     const i = this.data.workspaces.findIndex((w) => w.name === name);
-    const w = { name, sessions: clone(sessions), savedAt: Date.now() };
+    const w = {
+      name,
+      sessions: sessions.map((session) => normalizeWorkspaceSession(session, true)),
+      savedAt: Date.now(),
+    };
     if (i >= 0) this.data.workspaces[i] = w; else this.data.workspaces.push(w);
     this.save(`Saved the workspace "${name}"`);
     this.emit('sites-changed');

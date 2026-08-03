@@ -21,6 +21,8 @@ before they can poison the store.
 
 Site IDs are durable identities: malformed or colliding IDs receive a fresh ID
 when a site is loaded or added, and an update cannot reassign an existing ID.
+Host-key trust state is part of the JSON backup and is validated as an object;
+INI import remains site-only and does not replace it.
 
 Focused verification:
 

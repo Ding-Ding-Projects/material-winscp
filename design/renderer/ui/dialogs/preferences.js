@@ -145,23 +145,39 @@ const prefs = {
    * rather than "Updated settings".
    */
   async set(key, value, label) {
+    const before = this.values;
+    const hadValue = getAt(before, key) !== undefined;
+    const previous = getAt(before, key);
     // Keep the local cache in step immediately: the dialog re-renders from it
     // and must never show a stale value while the write is in flight.
     this.values = assignPath(this.values, key, value);
     this._notify();
 
-    if (RENDERER_LIVE.has(key) && LIVE_APPLY[key]) {
-      // These paths persist themselves through state.js's own writer.
-      LIVE_APPLY[key](value);
-    } else {
-      const a = api.raw;
-      if (a?.config?.setPref) {
-        const res = await a.config.setPref(key, value, label);
-        if (res && res.ok === false) throw new Error(res.error?.message || `Could not write ${key}`);
+    try {
+      if (RENDERER_LIVE.has(key) && LIVE_APPLY[key]) {
+        // These paths persist themselves through state.js's own writer.
+        LIVE_APPLY[key](value);
       } else {
-        // Degraded mode (no preload bridge): the façade's localStorage path.
-        await api.configSet(pathPatch(key, value), label);
+        const a = api.raw;
+        if (a?.config?.setPref) {
+          const res = await a.config.setPref(key, value, label);
+          if (res && res.ok === false) throw new Error(res.error?.message || `Could not write ${key}`);
+        } else {
+          // Degraded mode (no preload bridge): the façade's localStorage path.
+          await api.configSet(pathPatch(key, value), label);
+        }
       }
+    } catch (err) {
+      // A rejected write must not leave a value that never reached durable
+      // storage in the live cache. Restore the exact shape that was there,
+      // including the absent-key case, then repaint subscribers before the
+      // caller reports the failure.
+      this.values = hadValue ? assignPath(before, key, previous) : deletePath(before, key);
+      if (RENDERER_LIVE.has(key) && LIVE_APPLY[key]) {
+        try { LIVE_APPLY[key](this.get(key)); } catch { /* best-effort repaint */ }
+      }
+      this._notify('rollback');
+      throw err;
     }
     if (LIVE_MAIN[key]) { try { await LIVE_MAIN[key](value); } catch { /* the stored value still stands */ } }
     bus.emit('prefs:changed', { key, value });
@@ -215,6 +231,20 @@ function assignPath(obj, dotted, value) {
     cur = cur[s];
   }
   cur[segs[segs.length - 1]] = value;
+  return out;
+}
+
+function deletePath(obj, dotted) {
+  const segs = String(dotted).split('.');
+  const isPlain = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const out = isPlain(obj) ? { ...obj } : {};
+  let cur = out;
+  for (let i = 0; i < segs.length - 1; i += 1) {
+    const s = segs[i];
+    cur[s] = isPlain(cur[s]) ? { ...cur[s] } : {};
+    cur = cur[s];
+  }
+  delete cur[segs[segs.length - 1]];
   return out;
 }
 
@@ -552,6 +582,22 @@ export function preferenceTreeIndex(key, index, count) {
   return current;
 }
 
+/** Keep matching child pages reachable in the tree by retaining their parents. */
+export function preferenceNavigationPages(pages, matches = null) {
+  const ordered = orderedPages(pages);
+  if (!matches) return ordered;
+  const included = new Set(matches.map((match) => match.pageId));
+  const byId = new Map(pages.map((page) => [page.id, page]));
+  for (const id of Array.from(included)) {
+    let page = byId.get(id);
+    while (page?.parent) {
+      included.add(page.parent);
+      page = byId.get(page.parent);
+    }
+  }
+  return ordered.filter((page) => included.has(page.id));
+}
+
 /* ================================================================== */
 /* the dialog                                                          */
 /* ================================================================== */
@@ -601,7 +647,7 @@ export function createPreferences(opts = {}) {
   let hitKey = opts.controlKey && entries.some((e) => e.pageId === currentPageId && e.control.key === opts.controlKey)
     ? opts.controlKey : null;         // the row to flash after navigating from a result
 
-  const navList = h('div', { class: 'prefs-tree', role: 'tree', 'aria-label': 'Preference pages' });
+  const navList = h('div', { class: 'prefs-tree', role: 'tree', 'aria-label': localized(tx('Preference pages', '偏好設定頁')) });
   const mainEl = h('main', { class: 'prefs-main', tabindex: '-1' });
 
   navList.addEventListener('keydown', (event) => {
@@ -624,7 +670,7 @@ export function createPreferences(opts = {}) {
     onChange: () => { renderNav(); renderMain(); },
   });
 
-  const nav = h('nav', { class: 'prefs-nav', 'aria-label': 'Preferences navigation' },
+  const nav = h('nav', { class: 'prefs-nav', 'aria-label': localized(tx('Preferences navigation', '偏好設定導覽')) },
     h('div', { class: 'prefs-nav-search' }, allBar.element),
     navList);
   appearanceTarget(nav, 'preferences-nav', 'Preferences navigation');
@@ -646,17 +692,24 @@ export function createPreferences(opts = {}) {
     const matches = globalMatches();
     const counts = new Map();
     if (matches) for (const m of matches) counts.set(m.pageId, (counts.get(m.pageId) || 0) + 1);
+    const visiblePages = preferenceNavigationPages(pages, matches);
+    const focusPageId = visiblePages.some((page) => page.id === currentPageId)
+      ? currentPageId : visiblePages[0]?.id;
+    nav.setAttribute('aria-label', localized(tx('Preferences navigation', '偏好設定導覽')));
+    navList.setAttribute('aria-label', localized(tx('Preference pages', '偏好設定頁')));
 
-    for (const page of pages) {
-      if (matches && !counts.has(page.id)) continue;
+    for (const page of visiblePages) {
+      const hasChildren = pages.some((candidate) => candidate.parent === page.id);
       const btn = h('button', {
         type: 'button', role: 'treeitem',
         class: `prefs-nav-item${page.id === currentPageId ? ' is-active' : ''}`,
         'aria-selected': String(page.id === currentPageId),
         'aria-current': page.id === currentPageId ? 'page' : null,
+        'aria-expanded': hasChildren ? 'true' : null,
         'aria-level': String(page.depth + 1),
+        tabindex: page.id === focusPageId ? '0' : '-1',
         dataset: { depth: String(page.depth), pageId: page.id },
-        onclick: () => goTo(page.id),
+        onclick: () => { if (allBar.isActive) allBar.clear(); goTo(page.id); },
       },
       icon(page.icon || 'tune', 16),
       h('span', { class: 'prefs-nav-label' }, pageTitle(page)),
@@ -1275,7 +1328,7 @@ export function createPreferences(opts = {}) {
 export function createFileColorList({ value = [], onChange }) {
   let rows = value.map((r) => ({ ...r }));
   let selected = rows.length ? 0 : -1;
-  const listEl = h('div', { class: 'pref-list-rows', role: 'listbox', 'aria-label': 'File colour rules' });
+  const listEl = h('div', { class: 'pref-list-rows', role: 'listbox', 'aria-label': localized(tx('File colour rules', '檔案顏色規則')) });
   const tools = h('div', { class: 'pref-list-tools' });
   const root = h('div', { class: 'pref-list' }, listEl, tools);
 

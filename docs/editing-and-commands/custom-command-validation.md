@@ -13,7 +13,9 @@ real single-file `!` as well as `!&`.
 
 Unterminated prompts and embedded commands remain errors. The dialog reports
 the error before saving, and `app:runCustomCommand` repeats the check before
-expansion and execution.
+expansion and execution. Preview requests invalidate older generations even
+when the newly typed command is empty or invalid, so late output cannot replace
+the current validation state.
 
 ## Verification
 

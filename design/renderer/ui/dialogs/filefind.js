@@ -416,26 +416,33 @@ export function openFileFind(props = {}) {
         { label: t('cancel'), kind: 'text' },
         {
           label: t('delete_'), kind: 'danger',
-          onSelect: async () => {
-            try {
-              const res = await ops.fs.remove(props.sessionId, hits.map((x) => x.path), { recursive: true });
-              const removed = (res && res.removed) || [];
-              results = results.filter((r) => !removed.includes(r.path));
-              for (const p of removed) selection.delete(p);
-              paintResults();
-              updateControls();
-              notify.success(tx('ffDeleted', removed.length));
-              props.onDeleted?.(removed);
-              if (res && res.failed && res.failed.length) {
-                notify.error(tx('ffDeleteTitle'), res.failed.map((f) => `${f.path}: ${f.message}`).join('\n'));
-              }
-            } catch (err) {
-              notify.error(tx('ffDeleteTitle'), err.message);
-            }
+          onSelect: (closeDialog) => {
+            removeHits(hits, closeDialog);
+            return true;
           },
         },
       ],
     });
+  }
+
+  async function removeHits(hits, closeDialog) {
+    try {
+      const res = await ops.fs.remove(props.sessionId, hits.map((x) => x.path), { recursive: true });
+      const removed = (res && res.removed) || [];
+      results = results.filter((r) => !removed.includes(r.path));
+      for (const p of removed) selection.delete(p);
+      paintResults();
+      updateControls();
+      notify.success(tx('ffDeleted', removed.length));
+      props.onDeleted?.(removed);
+      const failed = (res && res.failed) || [];
+      if (failed.length) {
+        notify.error(tx('ffDeleteTitle'), failed.map((f) => `${f.path}: ${f.message}`).join('\n'));
+      }
+      if (!failed.length || removed.length) closeDialog?.('deleted');
+    } catch (err) {
+      notify.error(tx('ffDeleteTitle'), err.message);
+    }
   }
 
   async function copyResults() {

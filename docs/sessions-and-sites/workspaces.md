@@ -8,7 +8,9 @@ arrangement instead of five sites one at a time.
 
 ## Configuration
 
-Stored under `PREF_DEFAULTS.window`, plus the workspace records themselves.
+Workspace behaviour options are stored under `PREF_DEFAULTS.window`; the saved
+workspace records themselves are stored in the top-level `workspaces` collection
+of the configuration document.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -47,6 +49,9 @@ covered by [version history](../version-history/).
   workspace.
 - **A workspace is a map of your infrastructure.** Names, hosts, usernames and
   paths in one record. Exports of it are as sensitive as the site export.
+- Workspace session records are normalized at the configuration boundary. Plain
+  secrets are protected when possible and otherwise rejected on a new save or
+  removed during legacy migration.
 - **Restoring connects to everything at once.** For a workspace containing
   production sites that is a lot of simultaneous authentication; the colour tags
   from the site manager carry through to the restored tabs so it stays obvious

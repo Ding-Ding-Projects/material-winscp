@@ -62,8 +62,8 @@ value changed, never the value.
 | Restore | See [restore](restore.md). Writes a new revision. |
 | Label | Attach a note to a revision. Labelling is itself a revision. |
 | Compare | Diff any two revisions. |
-| Export | The history, or a range of it, as a git bundle. |
-| Purge | Permanently remove revisions older than a chosen point, for anyone who needs true erasure. Confirmed, and counted. |
+| Export | The currently visible revisions as a UTF-8 JSON archive, including the active filter statement. |
+| Apply retention | Prune revisions using the configured age/count limits. The operation reports how many were kept and removed. |
 
 ## Failure modes
 
@@ -82,10 +82,10 @@ value changed, never the value.
 
 - **Diffs never reveal a secret.** Encrypted fields are shown as changed, with no
   value on either side.
-- **Export contains everything**, including protected secrets in encrypted form.
-  The dialog says so.
-- **Purge is the only irreversible action in a feature whose purpose is
-  reversibility**, so it is confirmed, counted, and clearly labelled as such.
+- **Export contains the selected revisions**, including protected secrets in
+  encrypted form. The dialog says so and records the visible filter statement.
+- **Retention pruning is irreversible for the removed revisions**, so it is
+  confirmed, counted, and clearly labelled as such.
 - **Restoring a security-relevant setting is highlighted** in the preview rather
   than buried among cosmetic changes.
 - **The panel is read-only against the repository** — it never rewrites history,

@@ -107,6 +107,11 @@ Shortcuts are intentionally cleared so duplication cannot steal an existing
 shortcut. The operation is persisted through the same profile preference and
 history path as the other profile mutations.
 
+Bookmark and profile mutations restore their in-memory list when the preference
+write fails, rather than announcing a change that disappears on reload.
+Filtered bookmark lists retain selection by path, so Add, Remove and Reorder
+continue to address the intended backing-list entry while a search is active.
+
 ## Suggested articles
 
 - [The site manager](site-manager.md) — saved connection identity and folders.

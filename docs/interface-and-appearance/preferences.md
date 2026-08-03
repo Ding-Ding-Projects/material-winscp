@@ -9,7 +9,7 @@ assistive technology with `aria-current="page"` as well as the tree selection
 state. Filtering changes the visible set, so keyboard movement always stays
 inside the current search results.
 
-The Preferences dialog is generated from [`prefpages.js`](../../design/renderer/ui/dialogs/prefpages.js), and every control points at a real path in [`defaults.js`](../../design/main/defaults.js). A normal edit goes through the real preload bridge:
+The Preferences dialog is generated from [`prefpages.js`](../../design/renderer/ui/dialogs/prefpages.js): 206 declared controls cover 207 persisted paths, including the compatibility companion for double-click behaviour, and every control points at a real path in [`defaults.js`](../../design/main/defaults.js). A normal edit goes through the real preload bridge:
 
 ```text
 Preferences control
@@ -35,6 +35,16 @@ Revert captures every persisted path behind a control, including companion
 `alsoKeys`. This matters for controls with one visible value that writes more
 than one configuration key: reverting restores the visible setting and its
 companion together, rather than leaving the stored configuration inconsistent.
+
+Failed writes are transactional from the dialog’s point of view. The cached
+value is restored when `config:setPref` rejects, including when the original
+key was absent, so the screen never claims a value was saved when durable
+configuration refused it.
+
+The all-pages search keeps matching descendants reachable by retaining their
+parent pages in the navigation tree. Selecting one of those pages exits the
+results view and opens the page. Tree parents expose their expanded state and
+the navigation uses a roving tab stop for keyboard and screen-reader users.
 
 ## Consumer ledger
 
@@ -123,6 +133,11 @@ with an explicit invalid-value note until the user chooses a replacement; it is
 not silently rewritten on load. Boolean, enum, text and list controls apply the
 same honest-fallback rule to malformed imported values, so a string such as
 `"false"` cannot render as an enabled checkbox.
+
+Text constraints are enforced at the same seam. Schema `pattern` and
+`maxLength` rules are applied both when an imported value is displayed and when
+the user changes a field; invalid edits are marked `aria-invalid` and are not
+written. This includes transfer permissions and temporary-file extensions.
 
 ## Security and accessibility
 

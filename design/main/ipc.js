@@ -2446,9 +2446,14 @@ class Ipc {
       return r.value;
     });
 
-    this.handle('history:export', async (file) => {
+    this.handle('history:export', async (file, options) => {
       const target = path.resolve(str(file, 'file', LIMITS.path));
-      const r = await this.history.export_();
+      const o = optObj(options, 'options');
+      const exportOptions = {
+        oids: o.oids === undefined ? undefined : strArr(o.oids, 'options.oids', 100000),
+        statement: o.statement === undefined ? '' : str(o.statement, 'options.statement', 4096),
+      };
+      const r = await this.history.export_(exportOptions);
       if (!r.ok) throw Object.assign(new Error(r.error.message), { code: r.error.code });
       await fsp.writeFile(target, JSON.stringify(r.value, null, 2), 'utf8');
       return target;

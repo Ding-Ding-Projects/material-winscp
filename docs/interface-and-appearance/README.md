@@ -29,6 +29,7 @@ rather than decoration.
 | [properties-rights.md](properties-rights.md) | Defensive permission metadata parsing, editing failure semantics and accessibility. |
 | [symlink-dialog-validation.md](symlink-dialog-validation.md) | Safe link-name validation and target/path separation. |
 | [create-directory-dialog.md](create-directory-dialog.md) | Async create/permission failure handling and retry behavior. |
+| [cleanup-dialog.md](cleanup-dialog.md) | Destructive cleanup confirmation, pending state and retryable failures. |
 
 ## The two rules that decide everything here
 

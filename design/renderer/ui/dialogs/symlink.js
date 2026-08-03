@@ -152,8 +152,8 @@ registerDialog('symlink', ({ props, close }) => {
   async function createLink() {
     const name = nameInput.value.trim();
     const target = targetInput.value.trim();
-    if (!name || !target) { notify.warning(t('symlinkTitle'), tx('slBothRequired')); return; }
-    if (validateSymlinkName(name)) { notify.warning(t('symlinkTitle'), tx('slInvalidName')); return; }
+    if (!name || !target) { notify.warning(t('symlinkTitle'), tx('slBothRequired')); return false; }
+    if (validateSymlinkName(name)) { notify.warning(t('symlinkTitle'), tx('slInvalidName')); return false; }
     const linkPath = /^([A-Za-z]:[\\/]|\/|\\\\)/.test(name) ? name : joinPath(directory, name, sep);
 
     try {
@@ -164,15 +164,17 @@ registerDialog('symlink', ({ props, close }) => {
           await ops.fs.remove(props.sessionId, [linkPath], { recursive: false });
         } catch (err) {
           notify.error(t('symlinkTitle'), tx('slReplaceFailed', err.message));
-          return;
+          return false;
         }
       }
       await ops.fs.symlink(props.sessionId, target, linkPath, hard.input.checked === true);
       notify.success(tx('slCreated', name, target));
       announce(t('createdMsg', name));
       props.onDone?.(linkPath);
+      return true;
     } catch (err) {
       notify.error(t('symlinkTitle'), tx('slFailed', err.message));
+      return false;
     }
   }
 
@@ -185,7 +187,10 @@ registerDialog('symlink', ({ props, close }) => {
       {
         label: t('ok'), kind: 'filled', autofocus: true,
         ref: (btn) => { okButton = btn; updateOk(); },
-        onSelect: () => { createLink(); close(); },
+        onSelect: () => {
+          createLink().then((created) => { if (created) close('action'); });
+          return true;
+        },
       },
     ],
   };

@@ -315,7 +315,15 @@ registerDialog('locationprofiles', ({ props, close }) => {
     }
 
     async function save(label) {
-      await writeProfiles(which, list(), sessionKey, label);
+      const ok = await writeProfiles(which, list(), sessionKey, label);
+      if (!ok) {
+        const restored = await readProfiles(sessionKey);
+        const current = list();
+        current.splice(0, current.length, ...restored[which].map(normalizeProfile));
+        selected = null;
+        paint();
+      }
+      return ok;
     }
 
     function addProfile() {
@@ -338,10 +346,11 @@ registerDialog('locationprofiles', ({ props, close }) => {
             list().push(normalizeProfile({ name, node, local, remote }));
           }
           selected = { kind: 'profile', name, node };
-          await save(`Saved the location profile ${name}`);
+          if (!await save(`Saved the location profile ${name}`)) return false;
           paint();
           notify.success(tx('lpAdded', name));
           announce(tx('lpAdded', name));
+          return true;
         },
       });
     }
@@ -353,7 +362,7 @@ registerDialog('locationprofiles', ({ props, close }) => {
         // deleting work the user never asked to lose.
         for (const p of list()) if (p.node === selected.node) p.node = '';
         selected = null;
-        await save('Removed a location-profile folder');
+        if (!await save('Removed a location-profile folder')) return;
         paint();
         return;
       }
@@ -361,7 +370,7 @@ registerDialog('locationprofiles', ({ props, close }) => {
       if (at < 0) return;
       const [gone] = list().splice(at, 1);
       selected = null;
-      await save(`Removed the location profile ${gone.name}`);
+      if (!await save(`Removed the location profile ${gone.name}`)) return;
       paint();
       notify.info(tx('lpRemoved', gone.name));
     }
@@ -374,9 +383,10 @@ registerDialog('locationprofiles', ({ props, close }) => {
           onOk: async (name) => {
             for (const p of list()) if (p.node === selected.node) p.node = name;
             selected = { kind: 'folder', node: name };
-            await save('Renamed a location-profile folder');
+            if (!await save('Renamed a location-profile folder')) return false;
             paint();
             notify.success(tx('lpRenamed', name));
+            return true;
           },
         });
         return;
@@ -389,14 +399,15 @@ registerDialog('locationprofiles', ({ props, close }) => {
         onOk: async (name, node) => {
           if (list().some((p, i) => i !== at && p.name === name && p.node === node)) {
             notify.warning(tx('lpNameTitle'), tx('lpNameTaken', name));
-            return;
+            return false;
           }
           profile.name = name;
           profile.node = node;
           selected = { kind: 'profile', name, node };
-          await save(`Renamed the location profile to ${name}`);
+          if (!await save(`Renamed the location profile to ${name}`)) return false;
           paint();
           notify.success(tx('lpRenamed', name));
+          return true;
         },
       });
     }
@@ -415,9 +426,10 @@ registerDialog('locationprofiles', ({ props, close }) => {
         onOk: async (_name, node) => {
           profile.node = node;
           selected = { kind: 'profile', name: profile.name, node };
-          await save(`Moved the location profile ${profile.name}`);
+          if (!await save(`Moved the location profile ${profile.name}`)) return false;
           paint();
           notify.success(tx('lpMoved', node || tx('lpTopLevel')));
+          return true;
         },
       });
     }
@@ -427,7 +439,7 @@ registerDialog('locationprofiles', ({ props, close }) => {
       if (at < 0) return;
       const copy = duplicateProfile(list(), list()[at]);
       selected = { kind: 'profile', name: copy.name, node: copy.node };
-      await save(`Duplicated the location profile ${copy.name}`);
+      if (!await save(`Duplicated the location profile ${copy.name}`)) return;
       paint();
       notify.success(tx('lpAdded', copy.name));
       announce(tx('lpAdded', copy.name));
@@ -444,7 +456,7 @@ registerDialog('locationprofiles', ({ props, close }) => {
       if (target === undefined) return;
       all[at] = all[target];
       all[target] = profile;
-      await save('Reordered the location profiles');
+      if (!await save('Reordered the location profiles')) return;
       paint();
     }
 
@@ -462,9 +474,10 @@ registerDialog('locationprofiles', ({ props, close }) => {
         onAssign: async (combo) => {
           for (const p of list()) if (p.shortCut === combo && p !== profile) p.shortCut = '';
           profile.shortCut = combo;
-          await save('Changed a location-profile shortcut');
+          if (!await save('Changed a location-profile shortcut')) return false;
           paint();
           if (combo) notify.success(tx('lpShortcutSet', combo, profile.name));
+          return true;
         },
       });
     }
@@ -638,8 +651,9 @@ registerDialog('profile-name', ({ props, close }) => {
         onSelect: () => {
           const name = nameInput.value.trim();
           if (!name && !props.hideName) { notify.warning(props.title, tx('lpNameRequired')); return true; }
-          props.onOk(name, folderInput.value.trim());
-          close();
+          Promise.resolve(props.onOk(name, folderInput.value.trim()))
+            .then((ok) => { if (ok !== false) close('action'); })
+            .catch((err) => { notify.error(props.title, err.message || String(err)); });
           return true;
         },
       },

@@ -54,6 +54,14 @@ test('missing ports use the protocol-aware sessiondata default and IPv6 is displ
   assert.equal(ipv6.hostPort, '[2001:db8::7]:2222');
 });
 
+test('live Session snapshots keep sftpOnly default identity consistent', () => {
+  const session = new Session(site({ protocol: 'sftpOnly', portNumber: 0 }), { emit() {} });
+  const info = session.info();
+  assert.equal(info.portNumber, 22);
+  assert.equal(info.hostPort, 'example.com:22');
+  assert.equal(info.protocolBaseName, 'SFTP');
+});
+
 test('display fields preserve site naming and never expose credentials', () => {
   const info = SessionInfo.fromSessionData(site({
     name: '', password: 'do-not-leak', passphrase: 'also-do-not-leak',

@@ -39,6 +39,13 @@ undefined multi-selection bits expose the explanatory hint. The rights sheets
 use the tablist/tab/tabpanel pattern and retain keyboard focus. Inline octal
 validation marks the field invalid while preserving the typed value.
 
+The OK action waits for every requested metadata write and closes only after
+success. A bridge failure or a no-op leaves Properties open. Tag editing keeps
+its prompt open for a blank or duplicate key, and capability discovery retains
+owner/group text typed before those fields are rebuilt. Local recursive size
+calculation reports an unreadable directory and returns to the unknown-size
+state instead of presenting an incomplete total as complete.
+
 ## Verification
 
 `node --test test/dialogs-fileops.test.js` covers all 4096 permission modes,

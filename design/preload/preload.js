@@ -413,7 +413,7 @@ const api = {
     /** Append-only: this writes a NEW revision holding the old state. */
     restore: (revision, label) => call('history:restore', revision, label),
     prune: () => call('history:prune'),
-    export: (file) => call('history:export', file),
+    export: (file, options) => call('history:export', file, options),
   },
 };
 

@@ -342,6 +342,8 @@ export function openCustomCommand({ entry, sessionId, onSave, title } = {}) {
 
   let previewSeq = 0;
   async function refresh() {
+    // Invalidate an in-flight preview before validating the newly typed value.
+    const seq = ++previewSeq;
     remoteFilesCheck.row.hidden = draft.params.remote;
     reference.refresh();
 
@@ -359,7 +361,6 @@ export function openCustomCommand({ entry, sessionId, onSave, title } = {}) {
     secretNote.textContent = tx('This command carries the password. The preview never expands !P or !E and the log redacts them, but the password does appear on the command line when it runs.', '呢個指令會帶密碼落去。預覽唔會展開 !P／!E，記錄亦都會遮蓋，但係跑嘅時候密碼真係會出現喺命令列度。');
 
     if (!result.ok || !draft.command.trim()) { preview.textContent = ''; preview.className = 'cc-preview'; return; }
-    const seq = ++previewSeq;
     try {
       const res = await api.raw?.app?.customCommandPreview?.(draft.command, {
         sessionId,
