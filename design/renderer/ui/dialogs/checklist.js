@@ -279,6 +279,22 @@ export function summarizeChecklist(items, options = {}) {
   };
 }
 
+/**
+ * Stable identity for a comparison row. Sorting changes presentation order,
+ * while the main-process checklist remains in comparison order, so paths are
+ * the only safe way to match the two copies back up.
+ */
+function rowIdentity(item) {
+  return [
+    item?.local?.path || '',
+    item?.remote?.path || '',
+    item?.local?.directory || '',
+    item?.remote?.directory || '',
+    item?.local?.name || '',
+    item?.remote?.name || '',
+  ].join('\u0000');
+}
+
 /** Recalculate the checked outcome without changing rows or touching a bridge. */
 export function calculateChecklist(items) {
   return summarizeChecklist(items, { onlyChecked: true });
@@ -311,11 +327,21 @@ export function describeChecklist(summary) {
  * the flags and returned as `overrides` for the direct path.
  */
 export function partitionForApply(originalItems, currentItems) {
+  const currentByIdentity = new Map();
+  for (const [index, item] of (currentItems || []).entries()) {
+    const key = rowIdentity(item);
+    const matches = currentByIdentity.get(key) || [];
+    matches.push({ index, item });
+    currentByIdentity.set(key, matches);
+  }
+
   const checked = [];
   const overrides = [];
   for (let i = 0; i < originalItems.length; i += 1) {
     const before = originalItems[i];
-    const now = currentItems[i] || before;
+    const matches = currentByIdentity.get(rowIdentity(before)) || [];
+    const match = matches.shift();
+    const now = match?.item || currentItems[i] || before;
     const changed = now.action !== before.action;
     checked.push(!!now.checked && !changed && now.action !== 'nothing');
     if (now.checked && changed && now.action !== 'nothing') overrides.push({ index: i, item: now });

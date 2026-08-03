@@ -388,6 +388,10 @@ class Session extends EventEmitter {
 
   // ------------------------------------------------------------- connect
   async connect() {
+    // A connected adapter can still be in the middle of an explicit
+    // disconnect. Waiting for that gate prevents a reconnect request from
+    // returning a stale connected snapshot while teardown is still running.
+    if (this._disconnectPromise) await this._disconnectPromise;
     if (this.connected) return this.info();
     if (this._connectPromise) return this._connectPromise;
     const promise = this._connect();

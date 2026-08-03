@@ -34,7 +34,7 @@ row context menu without scrolling through unrelated directories.
 | Check/uncheck all | The toolbar and its context menu tick every actionable row or clear every row. `Do nothing` rows remain unticked. Keyboard users can use <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>A</kbd> to check all and <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> to uncheck all. Shortcuts do not intercept typing in controls. |
 | Invert selection | Flip checked/unticked state for every actionable row. Rows whose action is `Do nothing` remain unticked, so inversion cannot create a ticked no-op. |
 | Search | Filter rows by name or reason. Wired to the [regex builder](../search-and-regex/regex-builder.md) like every search bar here. |
-| Sort | By any column; sorting never changes actions. |
+| Sort | By any column; sorting is presentation-only, so selection and action overrides stay attached to the same file. |
 | Calculate | Recompute the checked outcome on demand and announce the resulting transfers and deletions; it does not execute anything. |
 | Save checklist | Export the list as text for review before committing. |
 

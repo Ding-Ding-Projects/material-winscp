@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateChecklist, reverseAction, sortChecklistItems } from '../design/renderer/ui/dialogs/checklist.js';
+import {
+  calculateChecklist, partitionForApply, reverseAction, sortChecklistItems,
+} from '../design/renderer/ui/dialogs/checklist.js';
 
 test('reversing a Do nothing row is gated with a direction-specific reason', () => {
   const item = { action: 'nothing', reason: 'identical' };
@@ -41,4 +43,32 @@ test('Calculate summarizes only checked rows without mutating the checklist', ()
     total: 3,
   });
   assert.deepEqual(rows, before);
+});
+
+test('sorting keeps selection and overrides attached to their original rows', () => {
+  const original = [
+    {
+      action: 'upload', checked: true,
+      local: { name: 'z.txt', directory: '/local', path: '/local/z.txt' },
+      remote: { name: 'z.txt', directory: '/remote', path: '/remote/z.txt' },
+    },
+    {
+      action: 'download', checked: true,
+      local: { name: 'a.txt', directory: '/local', path: '/local/a.txt' },
+      remote: { name: 'a.txt', directory: '/remote', path: '/remote/a.txt' },
+    },
+  ];
+  const sorted = sortChecklistItems(original.map((item) => ({ ...item })), 'name');
+  sorted[0] = { ...sorted[0], checked: false };
+
+  const selection = partitionForApply(original, sorted);
+  assert.deepEqual(selection.checked, [true, false], 'the unticked a.txt row stays unticked');
+  assert.deepEqual(selection.overrides, []);
+
+  sorted[1] = { ...sorted[1], action: 'deleteLocal', checked: true };
+  const changed = partitionForApply(original, sorted);
+  assert.deepEqual(changed.checked, [false, false], 'the overridden z.txt row is withheld from the engine');
+  assert.equal(changed.overrides.length, 1);
+  assert.equal(changed.overrides[0].index, 0, 'the override uses comparison order for IPC');
+  assert.equal(changed.overrides[0].item.local.path, '/local/z.txt');
 });

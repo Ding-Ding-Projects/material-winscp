@@ -93,6 +93,41 @@ test('concurrent disconnects share one adapter teardown', async () => {
   assert.equal(session.state.status, 'closed');
 });
 
+test('connect waits for an in-flight disconnect instead of returning a stale adapter', async () => {
+  const session = new Session({ protocol: 'sftp', hostName: 'connect-race.example' }, { emit() {} });
+  const adapter = cacheAdapter();
+  let release;
+  adapter.disconnect = async () => {
+    await new Promise((resolve) => { release = resolve; });
+    adapter.connected = false;
+  };
+  session.adapter = adapter;
+  session.state.status = 'connected';
+
+  const closing = session.disconnect({ keepOpen: true });
+  let connects = 0;
+  session._connect = async () => {
+    connects++;
+    return session.info();
+  };
+
+  let settled = false;
+  const reconnecting = session.connect().then((info) => {
+    settled = true;
+    return info;
+  });
+  await Promise.resolve();
+
+  assert.equal(settled, false, 'connect must not resolve while teardown is pending');
+  assert.equal(connects, 0, 'a new adapter must not be created before teardown finishes');
+
+  release();
+  await closing;
+  const info = await reconnecting;
+  assert.equal(connects, 1);
+  assert.equal(info.status, 'closed');
+});
+
 test('a close event from a replaced adapter cannot take down the new adapter', () => {
   const session = new Session({ protocol: 'sftp', hostName: 'race.example' }, { emit() {} });
   const oldAdapter = new EventEmitter();
