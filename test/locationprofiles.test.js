@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 // booting Electron or the dialog registration side effects.
 const fs = require('node:fs');
 const source = fs.readFileSync(require.resolve('../design/renderer/ui/dialogs/locationprofiles.js'), 'utf8');
-const body = source.match(/function normalizeProfile[\s\S]*?export function duplicateProfile[\s\S]*?\n}\n/)[0]
+const body = source.match(/function normalizeProfile[\s\S]*?export function duplicateProfile[\s\S]*?\r?\n}\r?\n/)[0]
   .replace('export function duplicateProfile', 'function duplicateProfile');
 const duplicateProfile = new Function(`${body}; return duplicateProfile;`)();
 
