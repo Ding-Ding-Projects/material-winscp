@@ -77,6 +77,7 @@ behaviour, and only then apply it.
 | Transfer interrupted | The queue item records the byte offset and moves to `failed`. Resume restarts from that offset if `resumeSupport` permits and preserves existing remote permissions unless an explicit mode is supplied. | Yes |
 | SSH handshake, host-key or authentication failure | Any partially opened SSH socket, channel, or tunnel listener is closed before the classified error is returned. The transport remains retryable unless the classification says otherwise. | Yes, when the classification is retriable |
 | Server rejects `SSH_FXP_LSTAT` | A read-only `stat()` probe retries with `STAT` only when the detected workaround applies. Symlink identity is not guessed, and the followed result keeps its `file`, `dir`, or `special` type; mutating operations continue to require `LSTAT`. | Yes for ordinary files/directories |
+| Directory entries omit SFTP attributes | The listing performs an `LSTAT` for that entry so size, times, ownership, permissions, and symlink identity are not fabricated from zero values. If the probe fails, the partial directory row is retained. | Yes, when the server permits `LSTAT` |
 | Rekey during a large transfer | Handled by the transport; the transfer pauses for a few hundred milliseconds. No user action. | n/a |
 | `sftpDownloadQueue` or `sftpUploadQueue` too high for the server | Stalls or resets. Lower it to 8 or 16. Values above 256 are clamped and logged; the server may still need a smaller value. | Yes |
 
@@ -122,6 +123,9 @@ behaviour, and only then apply it.
   attributes. This preserves directory removal while treating symlinked
   directories as links, so a cleanup cannot follow a link outside its target
   tree.
+- Directory listing is also tested with omitted entry attributes; it
+  `lstat`-probes the child and reports its actual size, timestamps, ownership,
+  permissions, and type instead of silently presenting a zero-metadata file.
 - Resumed uploads are verified against the in-process SFTP server for both the
   wire offset and permission preservation. Reopening an existing file does not
   apply the default upload mode; an explicit `mode` remains available when

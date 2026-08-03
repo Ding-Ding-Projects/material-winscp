@@ -912,6 +912,7 @@ class S3Adapter extends Adapter {
     const contents = [];
     const prefixes = [];
     let token = null;
+    let previousToken = null;
     const maxKeys = this._maxKeys();
 
     do {
@@ -944,6 +945,11 @@ class S3Adapter extends Adapter {
         this._log('warning', 'Server reported a truncated listing but returned no continuation token');
         break;
       }
+      if (token && token === previousToken) {
+        this._log('warning', 'Server repeated a continuation token; stopping the listing to avoid a loop');
+        break;
+      }
+      previousToken = token;
     } while (token);
 
     return { contents, prefixes };

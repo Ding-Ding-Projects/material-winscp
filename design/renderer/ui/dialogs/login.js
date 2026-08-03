@@ -94,6 +94,13 @@ export function createLoginSubmitGuard() {
   };
 }
 
+/** Keep the password reveal button's name truthful for assistive technology. */
+export function passwordRevealAttributes(revealed) {
+  return revealed
+    ? { pressed: 'true', label: 'Hide the password' }
+    : { pressed: 'false', label: 'Show the password' };
+}
+
 /** Return every site below a folder, including sites in nested folders. */
 export function folderSites(node) {
   const sites = [];
@@ -494,7 +501,10 @@ export function createLoginPanel(opts = {}) {
       'aria-label': 'Show the password', title: 'Show the password',
       onclick: () => {
         const on = revealBtn.getAttribute('aria-pressed') === 'true';
-        revealBtn.setAttribute('aria-pressed', String(!on));
+        const attributes = passwordRevealAttributes(!on);
+        revealBtn.setAttribute('aria-pressed', attributes.pressed);
+        revealBtn.setAttribute('aria-label', attributes.label);
+        revealBtn.title = attributes.label;
         passInput.type = on ? 'password' : 'text';
         // Announced rather than silent: a revealed password on a shared screen
         // should never be a surprise.

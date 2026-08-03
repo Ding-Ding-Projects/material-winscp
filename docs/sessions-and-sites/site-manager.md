@@ -34,6 +34,11 @@ the wrong host, and the tag follows the session into its tab and panel caption.
 | `anonymous` | `false` | FTP anonymous login. |
 | `publicKeyFile`, `passphrase` | `''` | SSH key and its passphrase. |
 
+The password reveal button is keyboard reachable and exposes its current state
+to assistive technology: it is named “Show the password” while hidden and
+“Hide the password” while revealed. Revealing is temporary renderer state; it
+does not change what is stored or sent to the application shell.
+
 ### Operations
 
 | Operation | Notes |

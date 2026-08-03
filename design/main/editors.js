@@ -632,6 +632,12 @@ class EditorManager extends EventEmitter {
     const o = options || {};
     const rec = this.open.get(id);
     if (!rec) return false;
+    // A watcher callback may already be reading or uploading the temporary.
+    // Drain it before marking the record closed or removing the file, so a
+    // close cannot delete the only copy while that save is in flight.
+    if (rec.changePromise) {
+      try { await rec.changePromise; } catch { /* the queue reports the error */ }
+    }
     rec.closed = true;
     this._unwatch(rec);
     if (rec.child) { try { rec.child.kill(); } catch { /* already gone */ } rec.child = null; }

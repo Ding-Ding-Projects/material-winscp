@@ -81,6 +81,35 @@ test('SFTP recursive removal lstat-probes directory entries without attributes',
   ]);
 });
 
+test('SFTP listing recovers omitted directory-entry metadata with lstat', async () => {
+  const adapter = new SftpAdapter({});
+  const calls = [];
+  adapter.sftp = {};
+  adapter._call = async (method, path) => {
+    calls.push([method, path]);
+    if (method === 'readdir') return [{ filename: 'remote.txt', attrs: {} }];
+    if (method === 'lstat') return {
+      mode: 0o100640,
+      size: 17,
+      mtime: 1700000000,
+      atime: 1700000001,
+      uid: 12,
+      gid: 34,
+    };
+    throw new Error(`unexpected ${method}`);
+  };
+
+  const [row] = await adapter.list('/incoming');
+
+  assert.deepEqual(calls, [['readdir', '/incoming'], ['lstat', '/incoming/remote.txt']]);
+  assert.equal(row.type, 'file');
+  assert.equal(row.size, 17);
+  assert.equal(row.mtime, 1700000000000);
+  assert.equal(row.rights, 'rw-r-----');
+  assert.equal(row.owner, '12');
+  assert.equal(row.group, '34');
+});
+
 // ------------------------------------------------------------- test server
 
 let HOST_KEY = null;

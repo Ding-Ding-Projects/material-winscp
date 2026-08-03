@@ -1102,6 +1102,16 @@ test('siteAdvancedPatch preserves ordinary edits and only sends touched secrets'
   assert.strictEqual(withSecret.password, 'new-secret');
 });
 
+test('password reveal control names the action matching its pressed state', async () => {
+  const { login } = await modules;
+  assert.deepStrictEqual(login.passwordRevealAttributes(false), {
+    pressed: 'false', label: 'Show the password',
+  });
+  assert.deepStrictEqual(login.passwordRevealAttributes(true), {
+    pressed: 'true', label: 'Hide the password',
+  });
+});
+
 test('enabling site encryption requires a key while preserving stored secrets', async () => {
   const { adv, tree } = await modules;
   assert.deepStrictEqual(adv.encryptionKeyState({ encryptFiles: false, encryptKey: '' }),

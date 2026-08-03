@@ -1672,7 +1672,13 @@ class SftpAdapter extends Adapter {
     const visible = rows.filter((row) => row.filename !== '.' && row.filename !== '..');
 
     const out = await Promise.all(visible.map(async (row) => {
-      const a = row.attrs || {};
+      let a = row.attrs || {};
+      // SFTP permits directory entries without an attribute block. Do not
+      // turn those into zero-sized regular files: recover the remote metadata
+      // with LSTAT, which also preserves symlink identity.
+      if (a.mode === undefined) {
+        try { a = await this._call('lstat', this.join(target, row.filename)); } catch { /* keep the partial listing row */ }
+      }
       const mode = a.mode || 0;
       const fmt = mode & S_IFMT;
       const isSymlink = fmt === S_IFLNK;

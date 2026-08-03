@@ -88,6 +88,9 @@ available through the visible Up and Down buttons for pointer users.
   several overlapping filesystem events. The editor queues those callbacks per
   document, then rechecks the temporary file before each upload so the newest
   edit is not lost or uploaded out of order.
+- **Close drains an active watcher save.** Closing an editor waits for any
+  already-running watcher upload to settle before removing its temporary file;
+  a save cannot race cleanup and disappear.
 
 ## Failure modes
 

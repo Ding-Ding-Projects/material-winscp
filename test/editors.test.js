@@ -206,6 +206,37 @@ test('a failed watcher upload can be retried without modifying the temporary fil
   }
 });
 
+test('close drains an in-flight watcher upload before cleaning the temporary', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-close-'));
+  P.setRoot(root);
+  const f = fixture();
+  try {
+    const opened = await f.manager.openRemote({ sessionId: f.session.id, remotePath: '/notes.txt', mode: 'internal' });
+    await fs.writeFile(opened.localPath, 'save before close');
+    const originalWrite = f.session.adapter.writeFile;
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    f.session.adapter.writeFile = async (...args) => {
+      await gate;
+      return originalWrite(...args);
+    };
+
+    const changed = f.manager.executedFileChanged(opened.id);
+    await new Promise((resolve) => setImmediate(resolve));
+    const closing = f.manager.close(opened.id, {});
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(f.manager.list().length, 1, 'close waits while the watcher upload is active');
+
+    release();
+    assert.deepEqual(await changed, { changed: true, uploaded: true, bytes: 17, uploads: 1 });
+    assert.equal(await closing, true);
+    assert.equal((await f.session.adapter.readFile('/notes.txt')).toString(), 'save before close');
+    await assert.rejects(() => fs.stat(opened.localPath), { code: 'ENOENT' });
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('a failed external launch rolls back its watcher, registry record, and temporary copy', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-launch-'));
   P.setRoot(root);
