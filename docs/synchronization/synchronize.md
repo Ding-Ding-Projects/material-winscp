@@ -53,6 +53,11 @@ a server in another timezone does not make every file look changed.
 
 ## Failure modes
 
+Invalid clock settings are refused before a comparison starts: `timeTolerance`
+must be finite and non-negative milliseconds, while `timeDifference` must be a
+finite number of seconds. This prevents a malformed configuration from making
+all files appear newer, older, or unchanged.
+
 | Situation | What the user sees | Recoverable |
 | --- | --- | --- |
 | Server clock skew | Everything appears newer on one side. `timeDifferenceAuto` measures the offset at connect; when it cannot, the checklist shows the raw times side by side so the pattern is obvious. | Yes |

@@ -790,3 +790,17 @@ test('validateOptions is exported for the UI to grey out impossible combinations
     ...sync.OPTION_DEFAULTS, direction: 'both', criteria: 'either', mode: 'synchronize',
   }), sync.SyncOptionError);
 });
+
+test('validateOptions refuses unsafe non-finite or negative clock settings', () => {
+  for (const timeTolerance of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.throws(() => sync.validateOptions({
+      ...sync.OPTION_DEFAULTS, timeTolerance,
+    }), sync.SyncOptionError);
+  }
+  assert.throws(() => sync.validateOptions({
+    ...sync.OPTION_DEFAULTS, timeDifference: Number.NEGATIVE_INFINITY,
+  }), sync.SyncOptionError);
+  assert.doesNotThrow(() => sync.validateOptions({
+    ...sync.OPTION_DEFAULTS, timeTolerance: 0, timeDifference: -3600,
+  }));
+});
