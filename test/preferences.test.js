@@ -959,6 +959,24 @@ test('a dependency-disabled preference row exposes its disabled state', async ()
     'the row must announce dependency-disabled controls, not only unavailable settings');
 });
 
+test('the Preferences layout collapses safely at narrow widths', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const preferences = fs.readFileSync(path.join(repoRoot,
+    'design', 'renderer', 'ui', 'dialogs', 'preferences.js'), 'utf8');
+  assert.match(preferences,
+    /grid-template-columns:\s*minmax\(0, 0\.34fr\)\s+minmax\(0, 1fr\)/,
+    'the desktop grid must allow both columns to shrink without horizontal overflow');
+  assert.match(preferences, /\.prefs-nav-search \.sb, \.prefs-page-search \.sb, \.pref-list \.sb \{ min-width: 0; \}/,
+    'embedded search bars must be allowed to shrink with their column');
+  assert.match(preferences,
+    /@media \(max-width: 760px\) \{[\s\S]*?\.prefs \{ grid-template-columns: 1fr; height: auto; max-height: 70vh;/,
+    'narrow Preferences must stack navigation above content and stay viewport bounded');
+  assert.match(preferences,
+    /\.prefs-nav \{ border-right: none; border-bottom: 1px solid var\(--outline-var\); max-height: 40vh;/,
+    'stacked navigation must retain an independently bounded scroll area');
+});
+
 test('the guard fails when a dead option is not declared', async () => {
   const { schema } = await load();
   const corpus = scan.readCorpus(repoRoot);

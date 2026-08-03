@@ -1470,11 +1470,13 @@ export function createSiteAdvancedPanel(site, opts = {}) {
   }
 
   function buildSelect(control, id, enabled, commit) {
+    const stored = getKey(state.site, control.key);
+    const options = selectOptionsWithStoredValue(control, stored);
     const select = h('select', {
       id, class: 'sd-input',
       onchange: () => commit(control.numeric && select.value !== 'auto' ? Number(select.value) : select.value),
-    }, ...control.options.map(([value, label]) => h('option', { value: String(value) }, label)));
-    select.value = String(getKey(state.site, control.key) ?? control.options[0][0]);
+    }, ...options.map(([value, label, extra = {}]) => h('option', { value: String(value), ...extra }, label)));
+    select.value = String(stored ?? control.options[0][0]);
     select.disabled = !enabled;
     return labelled(control, id, select, enabled);
   }
@@ -1660,6 +1662,10 @@ export function createSiteAdvancedPanel(site, opts = {}) {
     }
 
     function move(delta) {
+      // A disabled page/group must be inert for pointer *and* keyboard users.
+      // The listbox remains focusable so its stored value can be inspected,
+      // but Alt+Arrow must not mutate a setting the UI has disabled.
+      if (!enabled) return;
       const target = selected + delta;
       if (target < 0 || target >= merged.length) return;
       const [item] = merged.splice(selected, 1);
@@ -1789,4 +1795,11 @@ export { bindText };
 /** Stable DOM id used by the order-list listbox's active-descendant link. */
 export function orderListOptionId(listId, index) {
   return `${listId}-option-${index}`;
+}
+
+/** Preserve an unknown stored enum value visibly instead of rendering a blank select. */
+export function selectOptionsWithStoredValue(control, stored) {
+  const options = [...(control.options || [])];
+  if (stored === undefined || stored === null || options.some(([value]) => String(value) === String(stored))) return options;
+  return [[stored, `Stored value: ${String(stored)}`, { 'data-unsupported': 'true' }], ...options];
 }

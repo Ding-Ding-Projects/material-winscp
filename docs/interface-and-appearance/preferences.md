@@ -119,7 +119,8 @@ ported merely because the Preferences page can save it.
 
 - `node --test test/preferences.test.js` checks schema/default parity, the
   production consumer set, bilingual pending copy, search, regex mode and
-  transfer-setting coverage.
+  transfer-setting coverage, including the narrow-width grid and its bounded
+  stacked navigation.
 - `node --test test/e2e-app.test.js` drives the real Electron renderer and main
   process, including persistence and live queue prompting.
 - `npm test` is the required full regression suite before integration.

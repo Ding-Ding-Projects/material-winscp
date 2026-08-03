@@ -8,6 +8,8 @@ const { spawnSync } = require('node:child_process');
 const { test } = require('node:test');
 
 const cli = require('../bin/winscp');
+const P = require('../design/main/paths');
+const { Config } = require('../design/main/config');
 
 function output() {
   let text = '';
@@ -405,4 +407,53 @@ test('capabilities exposes the complete headless command surface as JSON', async
   assert.deepEqual(value.simulations.drop, ['classify', 'simulate', 'target']);
   assert.ok(value.console.switches.includes('/rawsettings'));
   assert.deepEqual(value.urls, ['parse', 'generate']);
+  assert.deepEqual(value.configuration, ['sites', 'workspaces', 'export', 'import']);
+});
+
+test('configuration CLI lists safe records and round-trips JSON and INI headlessly', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'winscp-cli-config-'));
+  const importedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'winscp-cli-config-import-'));
+  P.setRoot(root);
+  try {
+    const config = new Config();
+    config.addSite({ name: 'Deploy', hostName: 'example.com', userName: 'alice', password: 'os:opaque', savePassword: true });
+    config.saveWorkspace('Morning', [{ id: 'tab-1', password: 'os:workspace-opaque' }]);
+    config.flush();
+
+    const list = output();
+    assert.equal(await cli.runCli(['config', 'sites'], { stdout: list.stream, stderr: list.stream }), 0);
+    const listed = JSON.parse(list.text());
+    assert.equal(listed.count, 1);
+    assert.equal(listed.sites[0].hostName, 'example.com');
+    assert.equal(listed.sites[0].hasPassword, true);
+    assert.equal(JSON.stringify(listed).includes('os:opaque'), false);
+
+    const workspaces = output();
+    assert.equal(await cli.runCli(['config', 'workspaces'], { stdout: workspaces.stream, stderr: workspaces.stream }), 0);
+    assert.deepEqual(JSON.parse(workspaces.text()).workspaces.map((w) => w.name), ['Morning']);
+    assert.equal(workspaces.text().includes('os:workspace-opaque'), false);
+
+    const jsonFile = path.join(root, 'backup.json');
+    const jsonExport = output();
+    assert.equal(await cli.runCli(['config', 'export', jsonFile], { stdout: jsonExport.stream, stderr: jsonExport.stream }), 0);
+    assert.equal(fs.readFileSync(jsonFile, 'utf8').includes('os:opaque'), true);
+
+    const iniFile = path.join(root, 'backup.ini');
+    const iniExport = output();
+    assert.equal(await cli.runCli(['config', 'export', iniFile], { stdout: iniExport.stream, stderr: iniExport.stream }), 0);
+    assert.equal(fs.readFileSync(iniFile, 'utf8').includes('do-not-export'), false);
+
+    P.setRoot(importedRoot);
+    const imported = output();
+    assert.equal(await cli.runCli(['config', 'import', jsonFile], { stdout: imported.stream, stderr: imported.stream }), 0);
+    assert.equal(JSON.parse(fs.readFileSync(P.config(), 'utf8')).sites[0].hostName, 'example.com');
+
+    const invalid = output();
+    assert.equal(await cli.runCli(['config', 'export'], { stdout: invalid.stream, stderr: invalid.stream }), 2);
+    assert.match(invalid.text(), /needs exactly one FILE/);
+  } finally {
+    P.setRoot(null);
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(importedRoot, { recursive: true, force: true });
+  }
 });

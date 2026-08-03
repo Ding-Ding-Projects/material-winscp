@@ -31,6 +31,14 @@ Numeric fields also expose named increment/decrement buttons. They remain in the
 keyboard tab order and are not hidden from assistive technology, so users can
 make the same bounded adjustment without relying on a pointer.
 
+Disabled controls are inert through every input path. In particular, an
+algorithm order list remains inspectable but ignores `Alt+Up` and `Alt+Down`
+when its page or group does not apply to the selected protocol; its move
+buttons are disabled as well. If an imported or older profile contains an enum
+value this port no longer recognises, the select shows `Stored value: …` rather
+than appearing blank. The value stays visible and is preserved until the user
+chooses a supported replacement.
+
 ## Persistence and validation boundary
 
 Advanced edits use the same canonical names as the main session model. The

@@ -296,6 +296,21 @@ test('closeOnFailure disconnects and removes the failed session', async () => {
   assert.deepEqual(manager.all(), []);
 });
 
+test('closeAll publishes the final empty active-session ownership state', async () => {
+  const activeStates = [];
+  const manager = new SessionManager({ emit() {} });
+  manager.on('active', (session) => activeStates.push(session ? session.id : null));
+  const first = await manager.open({ protocol: 'local', localDirectory: process.cwd() }, { connect: false });
+  const second = await manager.open({ protocol: 'local', localDirectory: process.cwd() }, { connect: false });
+  manager.setActive(second.id);
+
+  await manager.closeAll();
+
+  assert.equal(manager.active(), null);
+  assert.ok(activeStates.length >= 1);
+  assert.equal(activeStates.at(-1), null);
+});
+
 test('exec fails closed when a stale capability flag has no implementation', async () => {
   const session = new Session({ protocol: 'sftp', hostName: 'capability.example' }, { emit() {} });
   session.adapter = { connected: true, protocolName: 'SFTP', caps: { exec: true } };

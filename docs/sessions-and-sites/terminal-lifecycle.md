@@ -2,6 +2,9 @@
 
 `SessionManager` owns live session identity; one `Terminal` is attached to each
 session and owns its operation progress, directory caches and retry decisions.
+When shutdown closes the last sessions, it publishes one final empty active
+ownership state after per-session teardown, so a renderer cannot retain a dead
+tab as the selected session.
 The IPC layer addresses sessions by their runtime id and creates/reuses that
 same Terminal, so a command for one tab cannot borrow another tab's cache or
 operation state.

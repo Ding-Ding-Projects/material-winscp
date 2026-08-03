@@ -1298,6 +1298,23 @@ test('advanced numeric steppers remain keyboard reachable and named', async () =
   assert.ok(source.includes("'aria-label': `Decrease ${control.label}`"));
 });
 
+test('disabled advanced order lists reject keyboard reordering', async () => {
+  const source = await require('node:fs').promises.readFile(
+    path.join(__dirname, '..', 'design', 'renderer', 'ui', 'dialogs', 'siteadvanced.js'), 'utf8');
+  assert.match(source, /function move\(delta\) \{\s*\/\/ A disabled page\/group must be inert[\s\S]*?if \(!enabled\) return;/);
+});
+
+test('advanced selects keep unknown stored enum values visible', async () => {
+  const { adv } = await modules;
+  const control = { options: [['auto', 'Auto'], ['on', 'On']] };
+  assert.deepEqual(adv.selectOptionsWithStoredValue(control, 'legacy'), [
+    ['legacy', 'Stored value: legacy', { 'data-unsupported': 'true' }],
+    ['auto', 'Auto'],
+    ['on', 'On'],
+  ]);
+  assert.deepEqual(adv.selectOptionsWithStoredValue(control, 'on'), control.options);
+});
+
 test('WebDAV legacy authentication persists its real key and exposes the enabled warning', async () => {
   const { adv, tree } = await modules;
   const control = adv.allAdvancedControls().find(({ control: c }) => c.id === 'WebDavAuthLegacyCheck').control;

@@ -15,6 +15,7 @@ const { runConsoleFrontEnd } = require('../design/main/console');
 const shell = require('../design/main/shellintegration');
 const { resolveDropTarget } = require('../design/main/explorershell');
 const sessionData = require('../design/main/sessiondata');
+const { Config } = require('../design/main/config');
 
 const HELP = `WinSCP Material ${packageInfo.version} — headless command line
 
@@ -38,6 +39,12 @@ Session URL utilities:
 
 Discovery:
   winscp capabilities                List script, URL, and simulation surfaces as JSON
+
+Configuration (headless, credential-safe summaries):
+  winscp config sites [options]     List stored sites without secrets
+  winscp config workspaces [options] List stored workspaces without secrets
+  winscp config export FILE         Export JSON or WinSCP INI by extension
+  winscp config import FILE         Import JSON or WinSCP INI into the store
 
 Drag plan options:
   --source remote|local              Where the dragged items originate
@@ -518,7 +525,63 @@ function capabilities(argv) {
       drop: ['classify', 'simulate', 'target'],
     },
     urls: ['parse', 'generate'],
+    configuration: ['sites', 'workspaces', 'export', 'import'],
   };
+}
+
+function configurationStore() {
+  return new Config().load();
+}
+
+function safeSiteRecord(site) {
+  return {
+    id: site.id,
+    name: site.name,
+    folder: site.folder,
+    protocol: site.protocol,
+    ftps: site.ftps,
+    hostName: site.hostName,
+    portNumber: site.portNumber,
+    userName: site.userName,
+    remoteDirectory: site.remoteDirectory,
+    savePassword: !!site.savePassword,
+    hasPassword: !!site.password,
+    hasPassphrase: !!site.passphrase,
+  };
+}
+
+function configCommand(argv) {
+  const subcommand = String(argv[0] || '');
+  const subArgs = argv.slice(1);
+  const { positional, options } = parseOptions(subArgs);
+  assertKnownOptions(options, new Set(['json', 'pretty']), `config ${subcommand || 'help'}`);
+  if (hasHelpFlag(subArgs) || subcommand === 'help' || !subcommand) {
+    return { command: 'config help', help: 'Use config sites, config workspaces, config export FILE, or config import FILE.' };
+  }
+  const config = configurationStore();
+  if (subcommand === 'sites') {
+    if (positional.length) throw new Error('config sites does not accept positional arguments');
+    return { command: 'config sites', count: config.sites.length, sites: config.sites.map(safeSiteRecord) };
+  }
+  if (subcommand === 'workspaces') {
+    if (positional.length) throw new Error('config workspaces does not accept positional arguments');
+    return {
+      command: 'config workspaces',
+      count: config.data.workspaces.length,
+      workspaces: config.data.workspaces.map((workspace) => ({
+        name: workspace.name,
+        savedAt: workspace.savedAt || null,
+        sessionCount: Array.isArray(workspace.sessions) ? workspace.sessions.length : 0,
+      })),
+    };
+  }
+  if (subcommand === 'export' || subcommand === 'import') {
+    if (positional.length !== 1) throw new Error(`config ${subcommand} needs exactly one FILE`);
+    const file = positional[0];
+    if (subcommand === 'export') return { command: 'config export', ...config.exportFile(file) };
+    return { command: 'config import', ...config.importFile(file, `Imported configuration from ${path.basename(file)}`) };
+  }
+  throw new Error(`unknown config subcommand ${JSON.stringify(subcommand)}`);
 }
 
 async function stageDrag(argv) {
@@ -703,6 +766,16 @@ async function runCli(argv = process.argv.slice(2), io = {}) {
       printJson(streams, capabilities(capabilityArgs), outputIsPretty(options));
       return 0;
     }
+    if (first === 'config') {
+      const configArgs = args.slice(1);
+      if (hasHelpFlag(configArgs)) {
+        streams.stdout.write(HELP);
+        return 0;
+      }
+      const { options } = parseOptions(configArgs);
+      printJson(streams, configCommand(configArgs), outputIsPretty(options));
+      return 0;
+    }
 
     let consoleArgs = args;
     if (first === 'run') {
@@ -758,5 +831,5 @@ if (require.main === module) {
 
 module.exports = {
   HELP, EFFECTS, parseOptions, dragPlan, classifyDrop, dropTarget, dropSimulate, capabilities, stageDrag,
-  parseSessionUrl, generateSessionUrl, buildConsoleArgs, runCli,
+  parseSessionUrl, generateSessionUrl, configCommand, buildConsoleArgs, runCli,
 };

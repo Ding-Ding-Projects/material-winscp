@@ -1236,8 +1236,13 @@ class SessionManager extends EventEmitter {
   async closeAll() {
     const all = [...this.sessions.values()];
     await Promise.all(all.map((s) => s.disconnect().catch(() => undefined)));
+    const hadActiveSession = !!this._activeId;
     this.sessions.clear();
     this._activeId = '';
+    // Individual session teardown may announce the next surviving session.
+    // Publish the final empty ownership state as well, otherwise a renderer
+    // can keep the last fallback tab selected after application shutdown.
+    if (hadActiveSession || all.length) this.emit('active', null);
   }
 
   /** A workspace is the open sessions plus where each one is looking. */

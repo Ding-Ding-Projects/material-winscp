@@ -20,6 +20,10 @@ winscp drag extension-status
 winscp url parse sftp://alice:secret@example.com:2222/home/report.txt --want-file
 winscp url generate --protocol sftp --host example.com --username alice --specific
 winscp capabilities --pretty
+winscp config sites
+winscp config workspaces
+winscp config export backup.json
+winscp config import backup.ini
 ```
 
 The `script` and `command` forms forward the console runner's practical
@@ -76,6 +80,14 @@ the drag/drop simulation commands, and the URL utilities. This lets scripts
 feature-detect the installed CLI without opening the app or scraping help.
 The capability record distinguishes the real console's network-capable session
 runner from the simulation commands, which are deliberately local-only.
+
+The `config` commands use the same local configuration store as the app and
+never start Electron, a terminal window, or a network session. `config sites`
+and `config workspaces` emit safe summaries: credentials are represented only
+by boolean presence flags or session counts. `config export FILE` writes JSON
+when the extension is not `.ini`, or a credential-free WinSCP INI for `.ini`.
+`config import FILE` validates and atomically persists either format, including
+legacy-secret migration and rollback on a failed write.
 
 Help is available at every level: `winscp drag --help`, `winscp drop --help`,
 `winscp drag plan --help`, and `winscp url --help` all return the same command
@@ -141,6 +153,12 @@ There is no stored preference. The command line is the configuration boundary:
 | `--host HOST`, `--port N`, `--username USER` | Connection fields for `url generate`; no password option is provided. |
 | `--want-file` | Ask `url parse` to split the final path component into `session.fileName`. |
 
+The configuration subcommands take one positional file for `export` or
+`import`; `sites` and `workspaces` take no positional arguments. Add
+`--pretty` for readable JSON. JSON exports retain only the store's protected
+secret representation; INI exports omit credential fields entirely. Never put
+passwords on the command line.
+
 All simulation output is structured JSON so a CI job or another process can
 assert the decision without scraping prose. `drag stage` removes its temporary
 directory in a `finally` path even when staging fails; its output labels the
@@ -168,6 +186,8 @@ accepted as an explicit synonym for the default machine-readable format.
 | A console script fails | The existing console engine returns its normal non-zero script result. | Yes — inspect its log/XML output |
 | A URL is malformed or has no host | `url parse` returns exit code `2` without opening a session. | Yes — provide a supported session URL |
 | A simulated drop has no target or actionable effect | `drop simulate` returns `accepted.ok: false` and `effectiveOperation: null`; no filesystem mutation occurs. | Yes — provide a target and COPY/MOVE effect |
+| A configuration file is missing, malformed, or invalid | `config import` exits `2` with a validation error and leaves the live store unchanged. | Yes — repair or choose another file |
+| A JSON export contains protected values | The export contains no plaintext secret; site listings expose only `hasPassword`/`hasPassphrase`. | Yes — keep the file protected like any configuration backup |
 
 ## Security considerations
 
@@ -196,6 +216,11 @@ accepted as an explicit synonym for the default machine-readable format.
 - `node --check bin/winscp.js` checks the executable syntax.
 - `node bin/winscp.js drag plan --source remote --result invalid --last-effect move`
   is a smoke check for the safe MOVE branch.
+- `node bin/winscp.js config sites` and `node bin/winscp.js config workspaces` are
+  credential-safe store inspection smoke checks.
+- `node bin/winscp.js config export backup.json` and `node bin/winscp.js config import
+  backup.json` cover headless persistence round-trips; use a temporary file path
+  ending in `.ini` to exercise the interoperable export.
 - `node bin/winscp.js url parse sftp://alice:secret@example.com/home/a.txt --want-file`
   is a smoke check for the redacted URL parser; its output must not contain
   `secret`.
