@@ -73,6 +73,14 @@ answers.
 | `hostkeys.json` deleted | Every host becomes unknown again. Data loss, not a security failure — but it does erase the ability to notice a change. | Yes, by re-verifying |
 | Two sites on the same host, different ports | Stored per host **and** port. A tunnel to `localhost:port` records the real host, not the forwarded port. | n/a |
 
+### Failed answer delivery
+
+Accepting a host key or certificate is not considered complete until the
+answer reaches the session manager. If that bridge call fails, the dialog
+stays open, the choice is not marked answered, and the user can retry or
+cancel. Closing or cancelling still sends an explicit rejection; there is no
+implicit acceptance and no secret or fingerprint is logged while retrying.
+
 ## Security considerations
 
 - **Trust-on-first-use is a real limitation, and it is stated rather than
@@ -102,6 +110,9 @@ answers.
   self-signature, name mismatch and unknown issuer, each producing its own
   message.
 - Pinned-mismatch is tested to assert no prompt is shown at all.
+- Host-key and certificate dialogs keep their decision open when answer
+  delivery fails, then close only after a successful retry; cancellation still
+  rejects the prompt.
 
 ## Suggested articles
 

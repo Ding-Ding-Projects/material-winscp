@@ -311,11 +311,12 @@ function openHostKeyDialog(request) {
     h('p', { class: 'tx-sy-note' }, t('txHkAcceptOnceHint')),
     h('p', { class: 'tx-sy-note' }, t('txHkAcceptStoreHint')));
 
-  function accept(remember) {
-    answered = true;
+  function accept(remember, close) {
     deliver(request, { accept: true, remember })
       .then((ok) => {
         if (!ok) return;
+        answered = true;
+        close?.('action');
         notify.success(t('hostKeyTitle'),
           remember ? t('txHkAcceptedStored', hostPort) : t('txHkAcceptedOnce', hostPort));
       });
@@ -336,13 +337,13 @@ function openHostKeyDialog(request) {
       // Reject is first AND focused for a changed key: the safe answer must be
       // the one a reflexive Enter or Escape produces.
       { label: t('txHkReject'), kind: changed ? 'danger' : 'text', autofocus: changed },
-      { label: t('txHkAcceptOnce'), kind: 'text', onSelect: () => accept(false) },
+      { label: t('txHkAcceptOnce'), kind: 'text', onSelect: (close) => { accept(false, close); return true; } },
       {
         label: t('txHkAcceptStore'),
         kind: 'filled',
         autofocus: !changed,
         onSelect: (close) => {
-          if (!changed) { accept(true); return false; }
+          if (!changed) { accept(true, close); return true; }
           // Storing a CHANGED key overwrites the evidence that it changed, so
           // it takes a second, explicit yes.
           messageDialog({
@@ -353,7 +354,7 @@ function openHostKeyDialog(request) {
             buttons: 'yesNo',
             danger: true,
             defaultAnswer: 'no',
-          }).then((r) => { if (r.answer === 'yes') { accept(true); close(); } });
+          }).then((r) => { if (r.answer === 'yes') accept(true, close); });
           return true;
         },
       },
@@ -396,10 +397,14 @@ function openCertificateDialog(request) {
         h('pre', { class: 'tx-md-detail' }, String(payload.pem)))
       : null);
 
-  function accept(remember) {
-    answered = true;
+  function accept(remember, close) {
     deliver(request, { accept: true, remember })
-      .then((ok) => { if (ok) notify.success(t('txCertTitle'), hostPort); });
+      .then((ok) => {
+        if (!ok) return;
+        answered = true;
+        close?.('action');
+        notify.success(t('txCertTitle'), hostPort);
+      });
   }
 
   const handle = openModal({
@@ -415,8 +420,8 @@ function openCertificateDialog(request) {
     },
     actions: [
       { label: t('txHkReject'), kind: 'danger', autofocus: true },
-      { label: t('txCertAcceptOnce'), kind: 'text', onSelect: () => accept(false) },
-      { label: t('txCertAcceptStore'), kind: 'filled', onSelect: () => accept(true) },
+      { label: t('txCertAcceptOnce'), kind: 'text', onSelect: (close) => { accept(false, close); return true; } },
+      { label: t('txCertAcceptStore'), kind: 'filled', onSelect: (close) => { accept(true, close); return true; } },
     ],
   });
   if (promptId) openPrompts.set(promptId, handle);

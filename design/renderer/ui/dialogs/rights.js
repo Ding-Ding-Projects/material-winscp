@@ -197,7 +197,9 @@ export function fromText(value, options = {}) {
 /** True when `value` looks like something fromText/fromOctal can read. */
 export function looksLikeRights(value) {
   const v = String(value == null ? '' : value).trim();
-  return /^0?[0-7]{3,4}$/.test(v) || /^[-rwxsStT$*]{9}$/.test(v);
+  // Keep the recognizer stricter than the parser so metadata guards cannot
+  // admit a five-digit value and then throw while aggregating a selection.
+  return /^0?[0-7]{3}$/.test(v) || /^[-rwxsStT$*]{9}$/.test(v);
 }
 
 /** Read either representation, so a paste of '644' or 'rw-r--r--' both work. */

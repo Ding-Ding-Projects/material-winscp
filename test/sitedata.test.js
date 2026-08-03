@@ -700,6 +700,15 @@ test('parsePuttyRegistry also accepts KiTTY’s key path', async () => {
   assert.strictEqual(found[0].source, 'kitty');
 });
 
+test('site tree UI state persists only safe navigation identifiers', async () => {
+  const { tree } = await modules;
+  const values = new Map();
+  const storage = { getItem: (key) => values.get(key) || null, setItem: (key, value) => values.set(key, value) };
+  assert.strictEqual(tree.writeSiteTreeState({ expanded: new Set(['Work', 'Work/EU']), selectedId: 'site:s1' }, storage), true);
+  assert.deepStrictEqual(tree.readSiteTreeState(storage), { expanded: new Set(['Work', 'Work/EU']), selectedId: 'site:s1' });
+  assert.ok(!values.get('winscp-material.renderer.site-tree').includes('password'));
+});
+
 test('decodePuttySessionName matches WinSCP UTF-8 percent decoding', async () => {
   const { imp } = await modules;
   assert.strictEqual(

@@ -67,6 +67,16 @@ The site list has a search bar with the [regex builder](../search-and-regex/rege
 anchored beside it, searching names, hosts, usernames, folders and notes. Plain
 text is the default; regex is an explicit opt-in.
 
+### Site-tree navigation
+
+The tree is a single keyboard stop with a roving focused row. Arrow keys move
+through visible rows, expand/collapse folders, or move to a parent; Home and
+End select the first and last visible row. Enter activates a site or workspace,
+but toggles a folder instead of attempting a connection. Folder expansion and
+the selected stable identifier persist as UI-only state; no site fields or
+credentials are stored there. A missing saved selection falls back to the
+first reachable row.
+
 ## Failure modes
 
 | Situation | What the user sees | Recoverable |

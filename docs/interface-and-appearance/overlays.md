@@ -21,6 +21,13 @@ The queue popover has an additional flex constraint. Its root and body now use
 This prevents the queue toolbar and empty/list state from pushing through the
 surface at a short viewport.
 
+Blocking dialogs use the same narrow-window discipline. The scrim gutter
+shrinks from 24px to 8px as needed and scrolls if the viewport is shorter than
+the dialog. The dialog is `box-sizing: border-box`, capped to the available
+width and height, and clips its shell so `.modal-body` owns vertical scrolling;
+the action row therefore remains reachable instead of being painted below the
+window.
+
 ## Configuration and failure modes
 
 There is no user setting for overlay placement. The surface follows the
@@ -44,7 +51,8 @@ contract, keyboard Escape handling and scrollable regions remain unchanged.
 ## Verification
 
 - `test/overlay.test.js` checks bounded geometry, side flipping, tiny viewport
-  dimensions and the production surface/scroll contracts.
+  dimensions, the modal narrow-window contract and the production
+  surface/scroll contracts.
 - `test/e2e-overlays.test.js` opens the real regex builder and queue popover in
   a 420×260 Electron window and checks their real rectangles, computed
   backgrounds and overflow behaviour.

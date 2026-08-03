@@ -25,6 +25,7 @@ rather than decoration.
 | [winapi-boundary.md](winapi-boundary.md) | Cross-platform path, display, keyboard, shell, and unsupported-operation boundaries. |
 | [local-drive-view.md](local-drive-view.md) | Commander local drive roots, UNC share reveal, keyboard navigation and refresh behaviour. |
 | [window-geometry.md](window-geometry.md) | Safe display metrics, minimum sizing and reachable restored window bounds. |
+| [properties-rights.md](properties-rights.md) | Defensive permission metadata parsing, editing failure semantics and accessibility. |
 
 ## The two rules that decide everything here
 

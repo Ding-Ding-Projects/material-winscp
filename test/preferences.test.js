@@ -520,6 +520,15 @@ test('an editor mask honours wildcards, alternatives and case', async () => {
   assert.equal(editors.matchesMask('read?e.txt', 'readme.txt'), true);
 });
 
+test('CopyParams validates inherited defaults and rejects unsafe edits', async () => {
+  const { copy } = await load();
+  assert.deepEqual(copy.validateCopyParam({}), []);
+  assert.deepEqual(copy.validateCopyParam({ preserveRights: true, rights: 'rwx' }), ['rights']);
+  assert.deepEqual(copy.validateCopyParam({ replaceInvalidChars: true, invalidCharsReplacement: '' }), ['invalidCharsReplacement']);
+  assert.deepEqual(copy.validateCopyParam({ cpsLimit: -1, transferMode: 'wat' }), ['transferMode', 'cpsLimit']);
+  assert.deepEqual(copy.validateCopyParam({ preserveRights: true, rights: 'rw-r--r--' }), []);
+});
+
 test('editor masks keep WinSCP catch-all and exclusion semantics in the live probe', async () => {
   const { editors } = await load();
   assert.equal(editors.matchesMask('*.*', 'README'), true,

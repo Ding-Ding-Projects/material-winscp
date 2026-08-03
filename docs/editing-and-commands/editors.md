@@ -52,6 +52,10 @@ search term.
 - **Remote changes are detected.** Before uploading, the remote file's timestamp
   and size (and ETag for WebDAV) are compared with what was downloaded. A change
   means a conflict prompt, not a silent overwrite.
+- **Saves are serialized and snapshot-based.** If Save is pressed again while an
+  upload is pending, the second request joins the first instead of uploading a
+  duplicate. Edits made while that upload is pending remain marked unsaved, so
+  they cannot be mistaken for the text that was uploaded.
 
 ## Failure modes
 
@@ -100,6 +104,8 @@ search term.
 - Encoding round trips are tested for UTF-8 with and without BOM, and for the
   ANSI fallback path including the warning.
 - Orphan recovery is tested by leaving temporaries behind and restarting.
+- Renderer save lifecycle invariants are tested for serialization, snapshot
+  ownership, and release of the in-flight guard after failure.
 
 ## Suggested articles
 

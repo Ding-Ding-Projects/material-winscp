@@ -52,6 +52,22 @@ export function copyParamDefaults() {
   return out;
 }
 
+/** Validate the values that can make a transfer setting internally unsafe. */
+export function validateCopyParam(value = {}) {
+  const cp = { ...copyParamDefaults(), ...value };
+  const errors = [];
+  if (!['text', 'binary', 'automatic'].includes(cp.transferMode)) errors.push('transferMode');
+  if (!['noChange', 'upper', 'lower', 'firstUpper'].includes(cp.fileNameCase)) errors.push('fileNameCase');
+  if (!['overwrite', 'resume', 'append'].includes(cp.overwriteMode)) errors.push('overwriteMode');
+  if (!['none', 'disconnect', 'suspend', 'shutdown'].includes(cp.onceDoneOperation)) errors.push('onceDoneOperation');
+  if (!['off', 'on', 'smart'].includes(cp.resumeSupport)) errors.push('resumeSupport');
+  if (!Number.isFinite(Number(cp.cpsLimit)) || Number(cp.cpsLimit) < 0 || Number(cp.cpsLimit) > 1048576) errors.push('cpsLimit');
+  if (!Number.isFinite(Number(cp.resumeThreshold)) || Number(cp.resumeThreshold) < 0) errors.push('resumeThreshold');
+  if (cp.preserveRights && !/^[-r][-w][-xsS][-r][-w][-xsS][-r][-w][-xtT]$/.test(String(cp.rights))) errors.push('rights');
+  if (cp.replaceInvalidChars && [...String(cp.invalidCharsReplacement ?? '')].length !== 1) errors.push('invalidCharsReplacement');
+  return errors;
+}
+
 /** Short field name from a dotted schema key. */
 const fieldOf = (key) => key.slice(key.indexOf('.') + 1);
 
@@ -255,6 +271,7 @@ export function openTransferSettings({ value, title, presets, onApply } = {}) {
   const list = presets || readPref('copyParamList') || [];
 
   const presetRow = h('div', { class: 'pref-list-tools' });
+  const error = h('p', { class: 'pref-hint is-danger', hidden: true, role: 'alert' });
   for (const preset of list) {
     presetRow.appendChild(h('button', {
       type: 'button', class: 'prefs-elsewhere-chip',
@@ -271,11 +288,20 @@ export function openTransferSettings({ value, title, presets, onApply } = {}) {
     content: h('div', { class: 'stack dlg-widest' },
       list.length ? h('div', {},
         h('p', { class: 'prefs-result-where' }, t('presetsHint')), presetRow) : null,
-      frame.element),
+      frame.element,
+      error),
     onClose: () => frame.destroy(),
     actions: [
       { label: t('cancel'), kind: 'text' },
-      { label: t('ok'), kind: 'filled', autofocus: true, onSelect: () => onApply?.(frame.value) },
+      { label: t('ok'), kind: 'filled', autofocus: true, onSelect: () => {
+        const invalid = validateCopyParam(frame.value);
+        if (invalid.length) {
+          error.textContent = tx('Correct the highlighted transfer settings before applying.', '請先改正有問題嘅傳輸設定先可以套用。');
+          error.hidden = false;
+          return true;
+        }
+        return onApply?.(frame.value);
+      } },
     ],
   });
 }
@@ -388,6 +414,12 @@ export function openCopyParamPreset({ preset, current, onSave } = {}) {
             return true;
           }
           draft.copyParam = frame.value;
+          const invalid = validateCopyParam(draft.copyParam);
+          if (invalid.length) {
+            error.textContent = tx('Correct the invalid transfer settings before saving this preset.', '請先改正有問題嘅傳輸設定先可以儲存呢個預設組合。');
+            error.hidden = false;
+            return true;
+          }
           draft.autoSelect = hasRule.checked
             ? RULES.map(([f]) => draft.rule[f]).filter(Boolean).join(' ')
             : '';

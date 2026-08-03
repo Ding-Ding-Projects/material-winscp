@@ -695,6 +695,21 @@ export function folderPathsOf(sites = [], folders = []) {
 // exactly the way state.js does for preferences.
 
 const LS_SITES_KEY = 'winscp-material.renderer.sites';
+const LS_TREE_KEY = 'winscp-material.renderer.site-tree';
+
+export function readSiteTreeState(storage = globalThis.localStorage) {
+  try {
+    const value = JSON.parse(storage?.getItem(LS_TREE_KEY) || '{}');
+    return { expanded: new Set(Array.isArray(value.expanded) ? value.expanded.filter(Boolean).map(String) : []), selectedId: typeof value.selectedId === 'string' ? value.selectedId : 'new-site' };
+  } catch { return { expanded: new Set(), selectedId: 'new-site' }; }
+}
+
+export function writeSiteTreeState(state, storage = globalThis.localStorage) {
+  try {
+    storage?.setItem(LS_TREE_KEY, JSON.stringify({ expanded: Array.from(state?.expanded || []).filter(Boolean).map(String).sort(), selectedId: typeof state?.selectedId === 'string' ? state.selectedId : 'new-site' }));
+    return true;
+  } catch { return false; }
+}
 
 function localSites() {
   try { return JSON.parse(localStorage.getItem(LS_SITES_KEY) || '{"sites":[],"folders":[],"workspaces":[]}'); }
@@ -1073,9 +1088,9 @@ export function createSiteTree(opts = {}) {
     sites: [],
     folders: [],
     workspaces: [],
-    expanded: new Set(),
+    expanded: new Set(readSiteTreeState().expanded),
     nodes: [],
-    selectedId: 'new-site',
+    selectedId: readSiteTreeState().selectedId,
     searchMode: opts.searchMode || DEFAULT_SITE_SEARCH_MODE,
     incremental: '',
     incrementalFailed: false,
@@ -1116,6 +1131,10 @@ export function createSiteTree(opts = {}) {
       workspaces: state.workspaces,
       expanded: state.expanded,
     });
+    if (!nodeById(state.selectedId)) {
+      state.selectedId = flattenTree(state.nodes)[0]?.id || 'new-site';
+      writeSiteTreeState(state);
+    }
     render();
   }
 
@@ -1348,6 +1367,7 @@ export function createSiteTree(opts = {}) {
   function select(id, { notifyHost = true } = {}) {
     if (!nodeById(id)) return;
     state.selectedId = id;
+    writeSiteTreeState(state);
     syncSelection();
     if (notifyHost) opts.onSelect?.(nodeById(id));
   }
@@ -1361,6 +1381,7 @@ export function createSiteTree(opts = {}) {
     const next = force === undefined ? !node.expanded : force;
     if (next) state.expanded.add(node.path); else state.expanded.delete(node.path);
     node.expanded = next;
+    writeSiteTreeState(state);
     render();
     focusRow(state.selectedId);
     announce(`${node.label} ${next ? 'expanded' : 'collapsed'}`);
@@ -1399,7 +1420,8 @@ export function createSiteTree(opts = {}) {
       if (last) { select(last.id); focusRow(last.id); }
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (node) opts.onActivate?.(node);
+      if (node?.kind === 'folder') toggleFolder(node);
+      else if (node) opts.onActivate?.(node);
     } else if (e.key === 'F2') {
       e.preventDefault();
       if (node && node.kind !== 'newSite') beginRename(node.id);

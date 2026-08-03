@@ -12,6 +12,15 @@ preset** so a routine job is one click rather than eight checkboxes.
 Under **Transfer settings** (in any transfer dialog) and
 **Preferences → Transfer**.
 
+The dialog resolves the site/default settings and any supplied preset into a
+private draft. Editing that draft does not change preferences or the pending
+transfer; **Cancel** discards it, while **OK/Save** validates it before handing
+the complete snapshot to the caller. Invalid permission strings, speed limits,
+resume thresholds, enum values, or replacement characters are rejected with an
+accessible alert. This preserves inherited values while making the edit
+transaction explicit and prevents a partial or malformed snapshot from being
+queued.
+
 ### Mode and naming
 
 | Option | Default | Meaning |

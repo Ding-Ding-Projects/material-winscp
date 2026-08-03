@@ -70,3 +70,10 @@ test('the production overlay surfaces have an explicit scroll/background contrac
   assert.match(queue, /\.tx-q-popbody\s*\{[\s\S]*?min-height: 0;[\s\S]*?overflow: hidden;/);
   assert.match(contextMenu, /root\.style\.maxHeight = `\$\{Math\.max\(1, vh - 12\)\}px`/);
 });
+
+test('blocking dialogs keep a scrollable body inside a narrow viewport', () => {
+  const components = fs.readFileSync(path.join(__dirname, '..', 'design', 'renderer', 'styles', 'components.css'), 'utf8');
+  assert.match(components, /padding: clamp\(8px, 4vh, 24px\) clamp\(8px, 4vw, 24px\)/);
+  assert.match(components, /\.modal \{[\s\S]*?max-width: 100%;[\s\S]*?max-height: 100%;[\s\S]*?min-height: 0;[\s\S]*?box-sizing: border-box;[\s\S]*?overflow: hidden;/);
+  assert.match(components, /\.modal-body \{[\s\S]*?overflow-y: auto;[\s\S]*?min-height: 0;/);
+});

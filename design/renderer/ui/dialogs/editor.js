@@ -819,22 +819,33 @@ export function createEditorWindow(record, initial, opts = {}) {
 
   /* ---------------- saving ---------------- */
 
+  let savePromise = null;
+
   async function save(force) {
     if (state.readOnly) return false;
     if (!isDirty() && !force) { notify.info(t('editorTitle'), s('edNothingToSave')); return false; }
-    try {
-      const res = await callMain('editor.save', state.id, state.text, { force: !!force });
-      state.saved = state.text;
-      updateStatus();
-      if (res && res.local) notify.success(t('editorTitle'), s('edSavedLocal', record.fileName));
-      else if (force) notify.warning(t('editorTitle'), s('edForced', record.fileName, (res && res.bytes) || 0));
-      else notify.success(t('editorTitle'), s('edSaved', record.fileName, (res && res.bytes) || 0));
-      return true;
-    } catch (err) {
-      if (err.code === 'REMOTE_CHANGED') { conflict(err.detail); return false; }
-      notify.error(t('editorTitle'), s('edSaveFailed', record.fileName, err.message));
-      return false;
-    }
+    if (savePromise) return savePromise;
+    const snapshot = state.text;
+    savePromise = (async () => {
+      try {
+        const res = await callMain('editor.save', state.id, snapshot, { force: !!force });
+        // Text changed while the upload was in flight is still unsaved. Only
+        // advance the clean marker when the response belongs to current text.
+        if (state.text === snapshot) state.saved = snapshot;
+        updateStatus();
+        if (res && res.local) notify.success(t('editorTitle'), s('edSavedLocal', record.fileName));
+        else if (force) notify.warning(t('editorTitle'), s('edForced', record.fileName, (res && res.bytes) || 0));
+        else notify.success(t('editorTitle'), s('edSaved', record.fileName, (res && res.bytes) || 0));
+        return true;
+      } catch (err) {
+        if (err.code === 'REMOTE_CHANGED') { conflict(err.detail); return false; }
+        notify.error(t('editorTitle'), s('edSaveFailed', record.fileName, err.message));
+        return false;
+      } finally {
+        savePromise = null;
+      }
+    })();
+    return savePromise;
   }
 
   /**

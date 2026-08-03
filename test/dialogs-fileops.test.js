@@ -93,6 +93,14 @@ test('a three-digit octal is accepted and normalized to four', async () => {
   assert.strictEqual(R.octalOf(R.parseRights('rwxr-xr-x')), '0755');
 });
 
+test('rights recognition rejects five-digit octal metadata before parsing', async () => {
+  const R = await load('rights');
+  assert.strictEqual(R.looksLikeRights('0644'), true);
+  assert.strictEqual(R.looksLikeRights('644'), true);
+  assert.strictEqual(R.looksLikeRights('01234'), false);
+  assert.strictEqual(R.looksLikeRights('9999'), false);
+});
+
 test('malformed permissions are refused with WinSCP’s own wording', async () => {
   const R = await load('rights');
   assert.throws(() => R.fromOctal('89'), /'89' is not valid permission in octal format\./);
@@ -376,6 +384,15 @@ test('a backend that reports no permissions is reported as unknown, not as 000',
   const mixed = P.aggregateSelection([FILES[0], { name: 'x', type: 'file', size: 0, rights: '' }]);
   assert.strictEqual(mixed.rightsKnown, false);
   assert.strictEqual(mixed.rights, null);
+});
+
+test('malformed permission metadata is ignored rather than aborting properties aggregation', async () => {
+  const P = await load('properties');
+  const agg = P.aggregateSelection([
+    { name: 'bad.txt', type: 'file', size: 1, rights: '01234', owner: 'root', group: 'staff' },
+  ]);
+  assert.strictEqual(agg.rightsKnown, false);
+  assert.strictEqual(agg.rights, null);
 });
 
 test('a single symlink carries its target, and an empty selection says so', async () => {
