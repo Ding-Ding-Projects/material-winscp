@@ -38,6 +38,10 @@ Under **Preferences → Transfer → Background**, stored in `PREF_DEFAULTS.queu
   moved by hand, and a moved item keeps its settings.
 - **Pause is real.** Pausing suspends the stream rather than buffering it, so a
   paused transfer stops consuming bandwidth immediately.
+- **Cancellation is checked after throttling as well as before it.** If a
+  cancellation arrives while a transfer is waiting for its speed-limit token,
+  the delayed chunk is discarded before it reaches the destination. The same
+  guard applies to the final text-conversion tail and parallel ranged writes.
 - **Progress never blocks a reply.** Long work pushes to `event:progress` with a
   correlation id; the IPC call that started it returns straight away.
 - **An item's settings are a snapshot.** See the note in the

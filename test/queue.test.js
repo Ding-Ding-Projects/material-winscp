@@ -1750,6 +1750,21 @@ test('transfersLimit bounds how many items run at once', async () => {
   for (let i = 0; i < 5; i++) assert.ok(remote.read(`/r/f${i}.bin`), `f${i} missing`);
 });
 
+test('cancellation during throttling does not write the delayed chunk', async () => {
+  const { local, remote } = makePair({ chunkSize: 4 });
+  local.put('/l/a.bin', Buffer.from('abcdefgh'));
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const item = q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote,
+    copyParam: { cpsLimit: 1 },
+  });
+  await waitFor(() => item.state === 'active', 1000, 'transfer start');
+  q.remove(item.id);
+  await q.idle();
+  assert.equal(remote.read('/r/a.bin'), null, 'cancelled transfer must not publish a target');
+});
+
 test('queue management: enable/disable, reorder, delete, delete all done', async () => {
   const { local, remote } = makePair();
   for (const n of ['a', 'b', 'c']) local.put(`/l/${n}.txt`, n);

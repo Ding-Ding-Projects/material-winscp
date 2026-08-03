@@ -482,3 +482,27 @@ test('HTTPS redirects cannot downgrade a WebDAV session to HTTP', async () => {
     /Refusing redirect from HTTPS to HTTP/,
   );
 });
+
+test('recursive MKCOL does not mistake an existing file for a directory', async () => {
+  const adapter = new WebDavAdapter({
+    hostName: 'dav.example.test', portNumber: 443, ftps: 'implicit',
+    remoteDirectory: '/',
+  });
+  const calls = [];
+  adapter.request = async (method, path) => {
+    calls.push({ method, path });
+    if (method === 'MKCOL' && path === '/parent') {
+      const error = new Error('Method Not Allowed');
+      error.status = 405;
+      throw error;
+    }
+    return { status: 201, headers: {}, text: '' };
+  };
+  adapter.stat = async (path) => ({ name: path.slice(1), type: 'file' });
+
+  await assert.rejects(
+    adapter.mkdir('/parent/child', { recursive: true }),
+    /existing resource is not a directory/,
+  );
+  assert.deepStrictEqual(calls, [{ method: 'MKCOL', path: '/parent' }]);
+});

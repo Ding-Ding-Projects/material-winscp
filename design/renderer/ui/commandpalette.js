@@ -308,7 +308,11 @@ export function openCommandPalette() {
         type: 'button', class: 'cmdp-row', id: rowId, 'data-cmdp-index': String(index),
         role: 'option', 'aria-selected': String(index === currentIndex()),
         'aria-label': `${entryLabel(entry)} — ${detail}`,
-        'aria-disabled': entry.pending ? 'true' : 'false',
+        // Pending preferences are still reachable destinations.  The real
+        // Preferences surface explains why the control is unavailable; marking
+        // the palette row disabled would make keyboard activation impossible
+        // and contradict the palette's job of finding every setting.
+        'data-cmdp-status': entry.pending ? 'unavailable' : 'available',
         onclick: () => { activeIndex = index; selectActive(); },
         onmouseenter: () => { activeIndex = index; paintActive(); },
       },

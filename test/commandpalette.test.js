@@ -40,6 +40,14 @@ test('setting destinations teleport by page and exact control without exposing s
   }
 });
 
+test('unavailable settings remain keyboard-reachable destinations', () => {
+  const settings = P.preferenceDestinations(() => false);
+  const pending = settings.find((e) => e.type === 'setting' && e.pending);
+  assert.ok(pending, 'the preference schema should expose at least one pending setting');
+  assert.equal(typeof pending.run, 'function');
+  assert.equal(typeof pending.value, 'string');
+});
+
 test('palette search corpus contains both destination context and command metadata', () => {
   const settings = P.preferenceDestinations(() => 22);
   const transfer = settings.find((e) => e.type === 'setting' && e.key === 'queue.transfersLimit');

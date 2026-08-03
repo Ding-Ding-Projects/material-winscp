@@ -138,6 +138,20 @@ const MODULE_CSS = `
 @media (max-width:900px){.wsp-panels{flex-direction:column}.wsp-split{flex-basis:calc(6px*var(--den,1));cursor:row-resize}}
 `;
 
+/** Keep a malformed backend row from masquerading as an empty directory. */
+export function normalizePanelEntries(entries) {
+  const invalid = [];
+  const valid = [];
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    if (!entry || typeof entry !== 'object' || typeof entry.name !== 'string' || !entry.name) {
+      invalid.push(entry);
+      continue;
+    }
+    valid.push(entry);
+  }
+  return { entries: valid, invalidCount: invalid.length };
+}
+
 /* ================================================================== */
 /* file masks — the panel-local fast path                              */
 /* ================================================================== */
@@ -370,6 +384,7 @@ export function createFilePanel(opts = {}) {
 
   /* ---- state ---- */
   let rawEntries = [];
+  let invalidCount = 0;
   let view = [];
   let path = '';
   let selected = new Set();
@@ -499,7 +514,7 @@ export function createFilePanel(opts = {}) {
           entries = [{ name: '..', type: 'dir', size: 0, mtime: 0, rights: '', owner: '', group: '', linkTarget: '', isSymlink: false, hidden: false }, ...entries];
         }
       }
-      rawEntries = entries;
+      ({ entries: rawEntries, invalidCount } = normalizePanelEntries(entries));
       // A directory's calculated size survives a refresh of the same directory.
       // The cache key joins the path and the name with NUL, which is the one
       // byte a path on any of these filesystems can never contain.
@@ -529,6 +544,7 @@ export function createFilePanel(opts = {}) {
     } catch (err) {
       loadError = err.message || String(err);
       rawEntries = [];
+      invalidCount = 0;
       // The header must never go blank: a panel with no title looks broken,
       // where "Not connected" is a state the user can act on.
       titlePath.textContent = path || loadError;
@@ -627,6 +643,9 @@ export function createFilePanel(opts = {}) {
       }
       if (!loading && !loadError && hiddenCount) {
         emptyNote.appendChild(h('div', { class: 'muted' }, t('hiddenCount', String(hiddenCount))));
+      }
+      if (!loading && invalidCount) {
+        emptyNote.appendChild(h('div', { class: 'muted' }, t('invalidRows', String(invalidCount))));
       }
     }
 

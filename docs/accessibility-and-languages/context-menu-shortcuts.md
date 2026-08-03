@@ -14,6 +14,14 @@ shortcut, the menu resolves that action through `ui/commands.js`. A literal
 uses the same formatter. This prevents a context menu from silently drifting
 away from the keyboard handler.
 
+Focused row actions are resolved with the same side-aware action registry. If a
+focused handler has no duplicated accelerator, the menu checks only its exact
+registered counterpart (for example,
+`CurrentCopyToClipboardFocusedAction2` → `CurrentCopyToClipboardAction2`). It
+does not infer a shortcut from the label or borrow one from the opposite panel.
+This keeps a right-click on the local panel and one on the remote panel tied to
+the action that actually owns the shortcut.
+
 The display formatter canonicalizes WinSCP names before rendering:
 
 | Registry value | Windows/Linux display | macOS display |

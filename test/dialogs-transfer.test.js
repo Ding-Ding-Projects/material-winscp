@@ -42,6 +42,19 @@ test.before(async () => {
   engine = require('../design/main/queue');
 });
 
+test('directory-scoped check includes descendants but not similarly named siblings', () => {
+  const rows = [
+    item({ checked: false, local: { ...item().local, directory: '/local/a' } }),
+    item({ checked: false, local: { ...item().local, directory: '/local/a/nested' } }),
+    item({ checked: false, local: { ...item().local, directory: '/local/ab' } }),
+  ];
+
+  const checked = CL.setCheckedInDirectory(rows, '/local/a/', true);
+  assert.deepEqual(checked.map((r) => r.checked), [true, true, false]);
+  assert.equal(CL.isInDirectory('C:\\data\\a', 'C:\\data\\a\\nested'), true);
+  assert.equal(CL.isInDirectory('C:\\data\\a', 'C:\\data\\ab'), false);
+});
+
 // ---------------------------------------------------------------------------
 // byte, speed and clock formatting
 // ---------------------------------------------------------------------------

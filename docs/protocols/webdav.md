@@ -40,6 +40,7 @@ The remote path is the URL path. A site whose `hostName` is
 | `401` on every request with `webDavAuthLegacy` off | Some servers never issue a challenge. Turning the option on fixes it — with the caveat below. | Yes |
 | Paths containing `+`, `#`, `%` or non-ASCII | Servers disagree about encoding. `webDavLiberalEscaping` widens the escaping set. | Usually |
 | `MOVE`/`COPY` across a quota boundary | The server's `507` is surfaced verbatim, including its message. | Depends on the server |
+| Recursive `MKCOL` meets an existing file | The adapter checks the `405` response with `stat` and reports that the intermediate resource is not a directory; it never silently treats a file as a folder. | Yes, choose a different path |
 | Locking (`LOCK`/`UNLOCK`) | Not implemented. Concurrent edits are last-write-wins, and the editor warns when a file's ETag changed under it. | Partially |
 | No resume support | `caps.resume` is false; interrupted uploads restart. Range `GET` is not used for resumed downloads because servers report support inconsistently. | n/a |
 | Certificate untrusted | The same blocking trust dialog as FTPS, with the same fingerprint pinning. | Yes |

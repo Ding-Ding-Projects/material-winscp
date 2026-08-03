@@ -87,6 +87,7 @@ export const I18N = {
   changeDrive: ['Change drive','轉磁碟機'], treeToggle: ['Directory tree','目錄樹'],
   statusOf: ['{0} B of {1} B in {2} of {3}','{2}／{3} 項，揀咗 {0} B／共 {1} B'],
   hiddenCount: ['{0} hidden','{0} 個隱藏'],
+  invalidRows: ['{0} directory entries could not be displayed. Refresh to try again.','有 {0} 個目錄項目無法顯示。請重新整理再試。'],
   emptyDir: [[
     'This directory is empty.','Nothing in this directory.','Empty folder — nothing to see here.','This folder is emptier than a teahouse at 4 am.','Absolutely, gloriously empty — even the dust bunnies checked out!'],[
     '呢個目錄係空嘅。','呢度乜都冇。','空資料夾——冇嘢好睇。','呢個資料夾凌晨四點茶樓咁靜。','空到閃閃發光——連塵蟎都搬走晒喇！']],

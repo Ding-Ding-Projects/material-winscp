@@ -109,6 +109,9 @@ text is the default; regex is an explicit opt-in.
 - Name-uniqueness and folder-move semantics are tested directly.
 - Every mutation is asserted to produce exactly one history revision, with a
   label naming what changed.
+- Directory panels keep a truthful empty state: malformed backend rows are
+  rejected and counted as an actionable refresh notice instead of crashing the
+  listing or pretending the directory is empty.
 
 ## Suggested articles
 

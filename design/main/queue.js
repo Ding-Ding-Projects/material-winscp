@@ -1686,6 +1686,10 @@ class TransferQueue extends EventEmitter {
         await this._waitRunnable(item);
         if (item._cancelled) throw new TransferCancelled();
         await item._throttle.take(chunk.length);
+        // Cancellation can arrive while the token bucket is waiting. Check
+        // again before touching the destination; otherwise a cancelled item
+        // can still write one delayed chunk and even finish its stream.
+        if (item._cancelled) throw new TransferCancelled();
         const out = conv ? conv.convert(chunk) : chunk;
         if (out.length) await writer.write(out);
         written += chunk.length;
@@ -1695,9 +1699,11 @@ class TransferQueue extends EventEmitter {
         this._emitProgress(item, false);
       }
       if (conv) {
+        if (item._cancelled) throw new TransferCancelled();
         const tail = conv.flush();
         if (tail.length) await writer.write(tail);
       }
+      if (item._cancelled) throw new TransferCancelled();
       await writer.end();
     } catch (err) {
       writer.destroy();
@@ -1740,6 +1746,7 @@ class TransferQueue extends EventEmitter {
           if (item._cancelled) throw new TransferCancelled();
           await this._waitRunnable(item);
           await item._throttle.take(chunk.length);
+          if (item._cancelled) throw new TransferCancelled();
           await writer.write(chunk);
           written += chunk.length;
           item.progress.bytes += chunk.length;

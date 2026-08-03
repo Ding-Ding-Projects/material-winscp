@@ -1064,9 +1064,17 @@ class WebDavAdapter extends Adapter {
       try {
         await this.request('MKCOL', cur);
       } catch (e) {
-        // 405 is "already a collection here", which is success for a
-        // recursive mkdir. Anything else is a real failure.
+        // 405 is commonly returned for an existing collection, but it is
+        // also what many servers return when the path names an existing file.
+        // Verify the resource before treating it as the recursive mkdir
+        // equivalent of mkdir -p.
         if (e.status !== 405) throw e;
+        const existing = await this.stat(cur);
+        if (existing.type !== 'dir') {
+          throw Object.assign(new Error(`MKCOL ${cur} failed: an existing resource is not a directory`), {
+            status: 405,
+          });
+        }
       }
     }
   }

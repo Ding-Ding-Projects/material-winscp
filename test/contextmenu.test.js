@@ -60,6 +60,29 @@ test('action aliases use the same shortcut and ARIA normalization path', () => {
   }
 });
 
+test('focused context actions inherit only their exact registered counterpart shortcut', () => {
+  assert.equal(C.shortcutForAction({ action: 'CurrentCopyToClipboardFocusedAction2' }), 'Ctrl+C');
+  assert.equal(C.shortcutForMenu({ action: 'CurrentCopyToClipboardFocusedAction2' }, { platform: 'win32' }), 'Ctrl+C');
+  assert.equal(C.ariaShortcutForMenu({ action: 'CurrentCopyToClipboardFocusedAction2' }), 'Ctrl+C');
+  // Local and remote focused actions have no counterpart accelerator and must
+  // not borrow a shortcut from the other side.
+  assert.equal(C.shortcutForAction({ action: 'LocalCopyFocusedAction' }), '');
+  assert.equal(C.shortcutForAction({ action: 'RemoteCopyFocusedAction' }), '');
+});
+
+test('file context providers retain the focused side while resolving shortcuts', () => {
+  for (const side of ['local', 'remote']) {
+    const items = M.fileContextItems({ side });
+    assert.ok(items.length > 0, `${side} provider has menu items`);
+    // buildMenuItems has already resolved the side-specific focused action;
+    // every shortcut it exposes must still be renderable by the shared layer.
+    for (const item of walkRendered(items).filter((entry) => entry.shortcut)) {
+      assert.equal(C.shortcutForMenu(item, { platform: 'win32' }),
+        C.shortcutForMenu({ shortcut: item.shortcut }, { platform: 'win32' }), `${side}:${item.label}`);
+    }
+  }
+});
+
 function walk(nodes, out = []) {
   for (const node of nodes || []) {
     if (!node || node.separator) continue;

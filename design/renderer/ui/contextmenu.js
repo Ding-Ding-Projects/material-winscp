@@ -74,7 +74,20 @@ export function shortcutForAction(item) {
   if (explicit !== undefined && explicit !== null && String(explicit).trim()) return String(explicit).trim();
   const name = actionName(item);
   if (!name) return '';
-  try { return getCommand(name)?.shortcut || ''; }
+  try {
+    const command = getCommand(name);
+    if (command?.shortcut) return command.shortcut;
+    // Focused actions are separate registered handlers so a row context menu
+    // can operate on the item under the pointer. Their keyboard accelerator is
+    // normally registered on the corresponding selection action instead of
+    // duplicated on the focused variant. Reuse it only for the exact command
+    // counterpart; never guess from a label or from the opposite panel side.
+    if (command?.focused) {
+      const counterpart = getCommand(name.replace('Focused', ''));
+      return counterpart?.shortcut || '';
+    }
+    return '';
+  }
   catch { return ''; }
 }
 

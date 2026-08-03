@@ -186,6 +186,15 @@ export function overrideAction(item, action) {
 /** Tick or untick without changing the action. */
 export function setChecked(item, checked) { return { ...item, checked: !!checked }; }
 
+/** Match a directory and its descendants, like WinSCP's directory action. */
+export function isInDirectory(directory, candidate) {
+  const scope = String(directory || '').replace(/[\\/]+$/, '');
+  const path = String(candidate || '').replace(/[\\/]+$/, '');
+  if (!scope || !path) return scope === path;
+  if (scope === path) return true;
+  return path.startsWith(`${scope}/`) || path.startsWith(`${scope}\\`);
+}
+
 /**
  * Apply the checklist's directory scope to selection without changing any
  * proposed actions. `nothing` rows have no checkbox in the UI, so a scoped
@@ -193,7 +202,7 @@ export function setChecked(item, checked) { return { ...item, checked: !!checked
  */
 export function setCheckedInDirectory(items, directory, checked) {
   return (items || []).map((item) => {
-    if (rowDirectory(item) !== directory) return item;
+    if (!isInDirectory(directory, rowDirectory(item))) return item;
     if (checked && item.action === 'nothing') return item;
     return setChecked(item, checked);
   });

@@ -30,7 +30,7 @@ row context menu without scrolling through unrelated directories.
 | --- | --- |
 | Per-row action override | Change one file's fate without re-running the comparison. |
 | Delete files / existing files only | These policies travel with the comparison request, so deletion rows are present when requested and new-file rows are excluded by the engine before the checklist opens. |
-| Select/deselect all in group | Drop an entire class of change. The row context menu also checks or unticks every actionable row in that row's displayed directory; rows whose action is `Do nothing` remain unticked. |
+| Select/deselect all in group | Drop an entire class of change. The row context menu checks or unticks every actionable row in the selected directory and its descendants; similarly named sibling directories are excluded. Rows whose action is `Do nothing` remain unticked. |
 | Invert selection | |
 | Search | Filter rows by name or reason. Wired to the [regex builder](../search-and-regex/regex-builder.md) like every search bar here. |
 | Sort | By any column; sorting never changes actions. |
@@ -76,7 +76,8 @@ as an explicit opt-in, with the builder anchored beside the field.
 - Per-row override is tested for not disturbing other rows and for respecting
   protocol capabilities.
 - Directory-scoped check and uncheck is tested for changing only the displayed
-  directory, preserving each row's action, and never ticking `Do nothing`.
+  directory subtree, preserving each row's action, excluding similarly named
+  siblings, and never ticking `Do nothing`.
 - Changed-since-comparison detection is tested by mutating a file between
   comparison and execution.
 - The search field is covered by the shared search-surface tests: plain-text

@@ -42,6 +42,9 @@ intentional: duplicating controls would create a second validation and
 persistence path. Inline live controls, site-properties destinations and
 appearance-editor property destinations remain roadmap work; the exact
 Preferences teleport is the shipped seam that keeps those gaps discoverable.
+Even a preference that is unavailable in this build remains a keyboard-
+reachable destination: its row is labelled unavailable and opens the exact
+Preferences control, where the canonical explanation and disabled state live.
 
 ## Verification
 

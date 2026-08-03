@@ -22,6 +22,15 @@ const loadRegex = () => import('../design/renderer/ui/regexbuilder.js');
 const loadSearch = () => import('../design/renderer/ui/searchbar.js');
 const loadColor = () => import('../design/renderer/ui/colorpicker.js');
 const loadData = () => import('../design/winscp-data.js');
+const loadPanels = () => import('../design/renderer/ui/panels.js');
+
+test('panel listings reject malformed rows without turning them into a fake empty state', async () => {
+  const { normalizePanelEntries } = await loadPanels();
+  const result = normalizePanelEntries([{ name: 'readme.txt', type: 'file' }, null, {}, { name: '' }, { name: 'folder', type: 'dir' }]);
+  assert.deepEqual(result.entries.map((entry) => entry.name), ['readme.txt', 'folder']);
+  assert.equal(result.invalidCount, 3);
+  assert.deepEqual(normalizePanelEntries(undefined), { entries: [], invalidCount: 0 });
+});
 
 /* ================================================================== */
 /* the match predicate                                                 */
