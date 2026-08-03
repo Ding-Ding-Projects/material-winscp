@@ -187,6 +187,20 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "8c87551", kind: 'commit', ref: "8c87551", oid: "8c8755121f7b5b2d84d358d0ac0191baffbeae41", date: "2026-08-03",
+    title: "Harden editor security and session lifecycles",
+    changes: [
+      { category: "security", text: "English: Serialize editor closes, reject authenticated non-UTF-8 secrets, bracket IPv6 host keys, and refuse empty cache subtrees. The lifecycle gremlins have fewer trapdoors now.\\n\\n粵語：Editor close 而家排隊，壞 UTF-8 secret 唔准入場，IPv6 host key 加方括號，空 cache subtree 直接拒絕；啲 lifecycle 小妖怪少咗幾個地窖可以匿喇。" },
+    ],
+  },
+  {
+    id: "72f52c0", kind: 'commit', ref: "72f52c0", oid: "72f52c097a5720b239caf5c71ce1d48dbb6c015f", date: "2026-08-03",
+    title: "Refresh protocol hardening evidence",
+    changes: [
+      { category: "fixed", text: "English: The evidence now counts the safer protocol parsers and transfer settings, so the handoff stops pretending the bug buffet has fewer plates.\\n\\n粵語：而家 handoff 真係數埋啲安全啲嘅 protocol parser 同 transfer settings，唔再扮個 bug buffet 少咗碟。" },
+    ],
+  },
+  {
     id: "cd350d3", kind: 'commit', ref: "cd350d3", oid: "cd350d3982e02da391dd7699942c410674d0c8f8", date: "2026-08-03",
     title: "Harden protocol inputs and transfer settings",
     changes: [
@@ -688,20 +702,6 @@ export const DEVELOPMENT = [
     title: "Record Windows CI newline fix",
     changes: [
       { category: "added", text: "Add the location-profile CRLF-safe test correction to the in-app changelog with its verified commit link. The build diary now notes that Windows newline fashion was the culprit, not the profile logic.\\n\\n廣東話：changelog 記低今次係 Windows CRLF 搞事，唔係 profile logic；換行符號都有自己嘅戲份。" },
-    ],
-  },
-  {
-    id: "0e0969b", kind: 'commit', ref: "0e0969b", oid: "0e0969bbe0dd01226821c7463d197593ad763cba", date: "2026-08-03",
-    title: "Fix Windows line-ending test extraction",
-    changes: [
-      { category: "fixed", text: "Make the location-profile source-extraction regression accept LF and CRLF endings so the Windows CI checkout tests the same behavior as the local checkout. The regex now reads the file instead of arguing with the newline fashion police.\\n\\n廣東話：location profile 個 regex 而家識睇 LF 同 CRLF，唔會再同換行符號鬥氣，Windows CI 可以正常開工。" },
-    ],
-  },
-  {
-    id: "2fabb27", kind: 'commit', ref: "2fabb27", oid: "2fabb27c86183c360d5b0c6b49496e1a96a4f630", date: "2026-08-03",
-    title: "Refresh handoff for CLI parity wave",
-    changes: [
-      { category: "fixed", text: "Update the handoff with 59.0% logic coverage, 114 outstanding units, 3337 total tests with one skip, the 22-issue scan, and the verified third-wave CLI and platform fixes. The road map gains another honest signpost, not a cardboard finish line.\\n\\n廣東話：roadmap 再加一塊真路牌，唔會整張紙牌寫住『終點』就當到站。" },
     ],
   },
 ];
