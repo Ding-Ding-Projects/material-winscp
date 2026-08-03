@@ -625,70 +625,180 @@ test('describeCommand states where a command runs and what it does with the outp
  * The rest of this file proves each key EXISTS in defaults.js with the right
  * default, which is a weaker claim — a key can exist, persist, round-trip
  * through the dialog and still be read by nothing at all. This test scans the
- * whole tree for a consumer of every key the preferences surface writes, and
+ * application for a consumer of every key the preferences surface writes, and
  * holds the schema's own PENDING_KEYS list to exactly the set with none.
  *
  * It fails in both directions on purpose. An option that quietly stops being
  * honoured fails, and so does one that gains a consumer while still telling the
  * user on its row that nothing reads it — the note has to go when the wiring
  * lands, or the note becomes the new lie.
+ *
+ * What counts as a consumer is the whole test, and it lives in
+ * test/helpers/consumer-scan.js: production code under design/, comments and
+ * prose discounted. Two earlier definitions were wrong in the same direction —
+ * they counted a mention that was not a read — and each one let real dead
+ * options pass as honoured. The scan's own header records both.
  */
+const scan = require('./helpers/consumer-scan');
+const repoRoot = require('node:path').join(__dirname, '..');
+
 test('every option either has a consumer or says on its own row that it has none', async () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const { schema } = await load();
 
-  // The preferences surface itself is excluded: it declares and writes these
-  // keys, so a reference from here proves nothing about anything honouring them.
-  const SURFACE = new Set([
-    'prefpages.js', 'preferences.js', 'copyparams.js', 'editorpreferences.js',
-    'customcommand.js', 'defaults.js',
-  ]);
-  const files = [];
-  const walk = (dir) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name === 'node_modules') continue;
-      const p = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(p);
-      else if (entry.name.endsWith('.js') && !SURFACE.has(entry.name)) files.push(p);
-    }
-  };
-  const repo = path.join(__dirname, '..');
-  walk(path.join(repo, 'design'));
-  walk(path.join(repo, 'test'));
-  const blobs = files.map((f) => fs.readFileSync(f, 'utf8'));
-
-  const escape = (s) => Array.from(s)
-    .map((ch) => (/[A-Za-z0-9_]/.test(ch) ? ch : `\${ch}`)).join('');
-
-  const orphans = [];
-  for (const key of schema.allKeys()) {
-    const leaf = key.split('.').pop();
-    // Either the whole dotted path appears, or the leaf appears as a property
-    // name / string key somewhere — which is how a consumer reads it after
-    // destructuring a prefs object.
-    //
-    // The leading class must NOT exclude `.`, however tempting it looks. A
-    // consumer almost never writes the dotted path: it holds the sub-object and
-    // reads `cp.excludeEmptyDirectories`, `p.showOnStartup`,
-    // `this.prefs().maxEditors`. Excluding a preceding dot made every one of
-    // those invisible, so the scan called three honoured options orphans and the
-    // dialog told users nothing acted on them — the guard producing exactly the
-    // lie it exists to catch, in reverse.
-    const re = new RegExp(`[^A-Za-z0-9_]${escape(leaf)}[^A-Za-z0-9_]`);
-    if (!blobs.some((s) => s.includes(key) || re.test(s))) orphans.push(key);
-  }
-
+  const corpus = scan.readCorpus(repoRoot);
+  const orphans = scan.orphanKeys(schema.allKeys(), corpus);
   const declared = [...schema.PENDING_KEYS].sort();
-  assert.deepEqual(orphans.sort(), declared,
+  assert.deepEqual(orphans, declared,
     'PENDING_KEYS no longer matches the options nothing reads — either an option '
-    + 'lost its consumer, or one gained a consumer and is still telling the user it has none');
+    + 'lost its consumer, or one gained a consumer and is still telling the user it has none. '
+    + 'If you believe a key listed here IS read, find the read: the scan is what is wrong, '
+    + 'and declaring a working option pending is the lie this test exists to stop.');
 
   // And the note really is rendered for them: a list nobody shows is a list
   // nobody reads.
   const prefpages = fs.readFileSync(
-    path.join(repo, 'design', 'renderer', 'ui', 'dialogs', 'prefpages.js'), 'utf8');
+    path.join(repoRoot, 'design', 'renderer', 'ui', 'dialogs', 'prefpages.js'), 'utf8');
   assert.match(prefpages, /if \(isPending\(control\.key\)\) \{/,
     'the pending note is no longer rendered on the row');
   assert.match(prefpages, /nothing in this build acts on it yet/);
+});
+
+test('the guard fails when a dead option is not declared', async () => {
+  const { schema } = await load();
+  const corpus = scan.readCorpus(repoRoot);
+  const orphans = scan.orphanKeys(schema.allKeys(), corpus);
+  // Every guard that "passes" needs this: proof that it can still fail. Drop
+  // one genuinely dead option from the declaration and the comparison the test
+  // above makes must reject it.
+  const short = [...schema.PENDING_KEYS].filter((k) => k !== 'dDDrives').sort();
+  assert.throws(() => assert.deepEqual(orphans, short));
+  // And an option that gained a consumer while still declared fails too.
+  const long = [...schema.PENDING_KEYS, 'showHiddenFiles'].sort();
+  assert.throws(() => assert.deepEqual(orphans, long));
+});
+
+test('a test that names an option is not a consumer of it', async () => {
+  const { schema } = await load();
+  // The eight options of issue #27. Each is stored, has a control, and is read
+  // by nothing — yet the guard was green, because it walked test/ and THIS FILE
+  // names every one of them (mustCover above, the controlEnabled cases, the
+  // value-search case). The guard was proving its own subject matter consumed.
+  const namedOnlyByTests = [
+    'beepOnFinish', 'beepOnFinishAfter', 'refreshRemotePanelInterval',
+    'queue.keepDoneItemsFor', 'window.minimizeToTray', 'dDFakeFile', 'dDDrives',
+    'integration.dragExtEnabled',
+  ];
+  const here = require('node:fs').readFileSync(__filename, 'utf8');
+  for (const key of namedOnlyByTests) {
+    assert.ok(here.includes(key), `${key} is no longer named by this test file`);
+  }
+
+  // The corpus is production code. No test file is in it, so no test can rescue
+  // a key — including this one.
+  const path = require('node:path');
+  const files = scan.productionFiles(repoRoot);
+  const designRoot = path.join(repoRoot, 'design') + path.sep;
+  assert.ok(files.length > 50, `the scan found only ${files.length} files`);
+  const outside = files.filter((f) => !f.startsWith(designRoot));
+  assert.deepEqual(outside, [], 'the consumer scan is reading something that is not the application');
+
+  // Three of the eight are read now — the transfer queue honours them — so they
+  // are named by production code and not by this list.
+  const corpus = scan.readCorpus(repoRoot);
+  for (const key of ['queue.keepDoneItemsFor', 'beepOnFinish', 'beepOnFinishAfter']) {
+    assert.ok(scan.consumersOf(key, corpus).includes('design/main/queue.js'),
+      `${key} is no longer read by the queue`);
+    assert.ok(!schema.PENDING_KEYS.has(key), `${key} is honoured and still claims it is not`);
+  }
+  // The other five are declared, so their rows say plainly that nothing acts
+  // on them.
+  for (const key of ['refreshRemotePanelInterval', 'window.minimizeToTray',
+    'dDFakeFile', 'dDDrives', 'integration.dragExtEnabled']) {
+    assert.deepEqual(scan.consumersOf(key, corpus), [], `${key} has a consumer now`);
+    assert.ok(schema.PENDING_KEYS.has(key), `${key} is read by nothing and says so on no row`);
+  }
+});
+
+test('a comment that names an option is not a consumer of it either', async () => {
+  const { schema } = await load();
+  const corpus = scan.readCorpus(repoRoot);
+  // design/main/session.js documents four sessionReopen* settings in one doc
+  // comment above _scheduleReconnect and reads two of them. The other two were
+  // counted as honoured on the strength of that comment alone, so their rows
+  // never warned anybody.
+  const session = require('node:fs')
+    .readFileSync(require('node:path').join(repoRoot, 'design', 'main', 'session.js'), 'utf8');
+  assert.ok(session.includes('sessionReopenBackground'), 'the comment under test is gone');
+  for (const key of ['security.sessionReopenBackground', 'security.sessionReopenAutoStall',
+    'editor.warnOrphans']) {
+    assert.deepEqual(scan.consumersOf(key, corpus), [], `${key} has a consumer now`);
+    assert.ok(schema.PENDING_KEYS.has(key), `${key} is read by nothing and says so on no row`);
+  }
+  // The two that ARE read still read as read, so the comment rule did not take
+  // its neighbours down with it.
+  assert.ok(scan.consumersOf('security.sessionReopenAuto', corpus).includes('design/main/session.js'));
+  assert.ok(scan.consumersOf('security.sessionReopenTimeout', corpus).length > 0);
+});
+
+/* ---------------------------------------------------- the scan's own rules */
+
+/** A one-file corpus, so the rules can be stated on sources small enough to read. */
+const fakeCorpus = (source) => [{ file: 'design/main/fake.js', ...scan.splitSource(source) }];
+
+test('a read counts however the consumer spells it', async () => {
+  const shapes = [
+    'const keep = qp.keepDoneItemsFor;',
+    'const { keepDoneItemsFor } = this.prefs().queue;',
+    'const n = prefs.queue["keepDoneItemsFor"];',
+    "const n = readPref('queue.keepDoneItemsFor', 15);",
+    'const MAP = {\n  QueueKeepDoneItemsFor: "keepDoneItemsFor",\n};',
+    'log(`kept for ${p.keepDoneItemsFor}s`);',
+  ];
+  for (const src of shapes) {
+    assert.deepEqual(scan.consumersOf('queue.keepDoneItemsFor', fakeCorpus(src)),
+      ['design/main/fake.js'], src);
+  }
+});
+
+test('a comment or a sentence about an option is not a read of it', async () => {
+  const notReads = [
+    '// TODO: honour keepDoneItemsFor one day\nconst x = 1;',
+    '/** Completed items are kept for keepDoneItemsFor seconds. */\nfunction f() {}',
+    'note("keepDoneItemsFor was never wired up in this build");',
+    'const entry = { text: "queue.keepDoneItemsFor had no consumer" };',
+  ];
+  for (const src of notReads) {
+    assert.deepEqual(scan.consumersOf('queue.keepDoneItemsFor', fakeCorpus(src)), [], src);
+  }
+});
+
+test('a regular expression does not swallow the code after it', async () => {
+  // /['"]/ carries a lone quote. A scanner that reads it as the start of a
+  // string loses every line up to the next quote — which is how an earlier
+  // draft lost editors.js:218 and reported four honoured options as dead.
+  const src = [
+    'const q = /[\'"]/;',
+    'const drive = /^[A-Z]:$/i;',
+    'if (this.prefs().singleEditor !== false) reuse();',
+    'const half = total / 2 / count;',
+    'return /\\.tmp$/.test(name);',
+    'if (this.prefs().maxEditors > 0) cap();',
+  ].join('\n');
+  const corpus = fakeCorpus(src);
+  assert.deepEqual(scan.consumersOf('editor.singleEditor', corpus), ['design/main/fake.js']);
+  assert.deepEqual(scan.consumersOf('editor.maxEditors', corpus), ['design/main/fake.js']);
+});
+
+test('an apostrophe in a comment does not open a string', async () => {
+  const src = "// the queue's own sweep\nconst n = qp.keepDoneItemsFor;\n";
+  assert.deepEqual(scan.consumersOf('queue.keepDoneItemsFor', fakeCorpus(src)),
+    ['design/main/fake.js']);
+});
+
+test('an option no file mentions at all is an orphan', async () => {
+  const corpus = fakeCorpus('const a = 1;');
+  assert.deepEqual(scan.orphanKeys(['dDDrives', 'queue.keepDoneItemsFor'], corpus),
+    ['dDDrives', 'queue.keepDoneItemsFor']);
 });

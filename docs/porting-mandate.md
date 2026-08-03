@@ -52,6 +52,39 @@ This exemption covers only those two directories. It is not a precedent for
 skipping anything in `core/`, `windows/`, `forms/`, `components/`, `console/`,
 `dragext/` or `resource/`.
 
+## How "a setting that persists but changes no behaviour" is enforced
+
+That sentence is the easiest clause in this document to violate by accident,
+because the option looks finished from every angle: it is in `defaults.js`, it
+has a control, it round-trips through the dialog, it survives a restart. Only
+one thing is missing, and nothing about the screen shows it.
+
+Two mechanisms hold the line:
+
+- **`PENDING_KEYS`** in `design/renderer/ui/dialogs/prefpages.js` — the options
+  this port stores and does not yet act on. Every one of them says so on its own
+  row, in both languages, so a user never has to run a grep to find out.
+- **The consumer scan** in `test/helpers/consumer-scan.js`, asserted by
+  `test/preferences.test.js`. It finds every option nothing reads and holds
+  `PENDING_KEYS` to exactly that set — failing in both directions, so an option
+  that loses its consumer fails and so does one that gained a consumer while
+  still claiming to have none.
+
+What counts as a consumer is the whole game, and getting it wrong has cost this
+repository three separate times:
+
+| The scan counted… | What it let through |
+|---|---|
+| a leaf NOT preceded by a dot | three honoured options reported as dead (the guard's own lie, inverted) |
+| a mention anywhere under `test/` | eight dead options reported as honoured — `test/preferences.test.js` names every key it asserts, so the guard proved its own subject matter consumed |
+| a mention inside a comment | three more, each described in one doc comment above a function that never reads it |
+
+So: a consumer is **production code under `design/`, outside the preferences
+surface, that reads the key** — comments and prose discounted, tests never. When
+adding a scan rule, remember which direction is expensive: a consumer the scan
+cannot see gets called an orphan, and the honest-looking fix is to declare a
+working option pending, which is the exact lie the guard exists to stop.
+
 ## How progress is measured
 
 `node tools/port-matrix.js` regenerates [`port-coverage.md`](port-coverage.md)

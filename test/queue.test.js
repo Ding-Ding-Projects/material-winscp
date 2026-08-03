@@ -1556,3 +1556,178 @@ test('answerQuery rejects an answer it does not know', async () => {
   await q.idle();
   assert.strictEqual(item.state, 'done');
 });
+
+// ---------------------------------------------------------------------------
+// "Keep completed items for" and "Beep when work finishes"
+//
+// Both settings were stored, rendered on their own row in the Preferences
+// dialog, and read by absolutely nothing (issue #27). The guard meant to catch
+// exactly that missed them because it scanned test/ as well as design/, and
+// test/preferences.test.js names every key it asserts — so the guard was
+// reading its own subject matter back as proof that something consumed them.
+// ---------------------------------------------------------------------------
+
+test('"do not keep completed items" removes the row the moment it finishes', async () => {
+  const { local, remote } = makePair();
+  local.put('/l/a.bin', bigBuffer(1000));
+
+  const q = new TransferQueue({ prefs: prefs({ queue: { keepDoneItemsFor: 0 } }), progressMs: 0 });
+  const seen = [];
+  q.on('item-done', (v) => seen.push(`done:${v.id}`));
+  q.on('item-updated', (v) => { if (v.state === 'removed') seen.push(`removed:${v.id}`); });
+
+  const item = q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote,
+  });
+  await q.idle();
+
+  assert.deepStrictEqual(q.list().map((i) => i.id), [], 'the finished item is still listed');
+  // The completion is still announced first: a row that vanishes without ever
+  // saying it finished is a transfer the user cannot tell from a lost one.
+  assert.deepStrictEqual(seen, [`done:${item.id}`, `removed:${item.id}`]);
+});
+
+test('"forever" keeps completed items however long ago they finished', async () => {
+  const { local, remote } = makePair();
+  local.put('/l/a.bin', bigBuffer(1000));
+
+  const q = new TransferQueue({ prefs: prefs({ queue: { keepDoneItemsFor: -1 } }), progressMs: 0 });
+  q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote,
+  });
+  await q.idle();
+
+  assert.strictEqual(q.list().length, 1);
+  assert.strictEqual(q.pruneDoneItems(Date.now() + (365 * 24 * 3600 * 1000)), 0);
+  assert.strictEqual(q.list().length, 1, 'nothing may sweep an item the user asked to keep');
+});
+
+test('a completed item is swept once its keep-for window has passed', async () => {
+  const { local, remote } = makePair();
+  local.put('/l/a.bin', bigBuffer(1000));
+
+  // 15 seconds is the shipped default, so this is what the option does out of
+  // the box.
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  assert.strictEqual(q.queuePrefs.keepDoneItemsFor, 15);
+  const a = q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote,
+  });
+  await q.idle();
+  assert.deepStrictEqual(q.list().map((i) => i.id), [a.id], 'swept far too early');
+
+  // Still inside the window.
+  assert.strictEqual(q.pruneDoneItems(a.finishedAt + 14999), 0);
+  assert.strictEqual(q.list().length, 1);
+
+  const removed = [];
+  q.on('item-updated', (v) => { if (v.state === 'removed') removed.push(v.id); });
+  assert.strictEqual(q.pruneDoneItems(a.finishedAt + 15000), 1);
+  assert.deepStrictEqual(q.list(), []);
+  assert.deepStrictEqual(removed, [a.id], 'the panel was never told the row went');
+});
+
+test('a failed item is never swept, however long it sits there', async () => {
+  const { local, remote } = makePair();
+  local.put('/l/a.bin', bigBuffer(1000));
+  remote.createWriteStream = async () => { throw new Error('remote is read-only'); };
+
+  const q = new TransferQueue({
+    prefs: prefs({ queue: { keepDoneItemsFor: 0 } }), progressMs: 0, maxReconnects: 0,
+  });
+  const item = q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote,
+  });
+  await q.idle();
+
+  assert.strictEqual(item.state, 'error');
+  assert.strictEqual(q.pruneDoneItems(Date.now() + 3600000), 0);
+  assert.deepStrictEqual(q.list().map((i) => i.state), ['error'],
+    'a failure that deletes itself is the queue hiding its own bad news');
+});
+
+test('changing the preference on a running queue takes effect without a restart', async () => {
+  const { local, remote } = makePair();
+  local.put('/l/a.bin', bigBuffer(1000));
+
+  const q = new TransferQueue({ prefs: prefs({ queue: { keepDoneItemsFor: -1 } }), progressMs: 0 });
+  q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote,
+  });
+  await q.idle();
+  assert.strictEqual(q.list().length, 1);
+
+  // Exactly what ipc.js's refreshQueuePrefs does when the store changes, and
+  // then the sweep TTerminalQueue::SetKeepDoneItemsFor runs on the spot.
+  q.queuePrefs = { ...q.queuePrefs, keepDoneItemsFor: 0 };
+  assert.strictEqual(q.pruneDoneItems(), 1);
+  assert.deepStrictEqual(q.list(), []);
+});
+
+test('beepOnFinish sounds once when the queue drains, and only when it is on', async () => {
+  // A batch that takes a real, measurable moment. WinSCP's test is strictly
+  // "longer than", exactly as the row reads — "if it lasted longer than 0
+  // seconds" — so a batch that finishes inside the same millisecond it started
+  // is correctly silent, and a test that transferred two in-memory buffers
+  // instantly would be asserting on the clock rather than on the setting.
+  const run = async (overrides) => {
+    const { local, remote } = makePair({ chunkSize: 256, readDelayMs: 3 });
+    local.put('/l/a.bin', bigBuffer(1000));
+    local.put('/l/b.bin', bigBuffer(1000));
+    const q = new TransferQueue({ prefs: prefs(overrides), progressMs: 0 });
+    const beeps = [];
+    q.on('beep', (e) => beeps.push(e));
+    q.add({
+      side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+      sourceAdapter: local, targetAdapter: remote,
+    });
+    q.add({
+      side: 'upload', source: '/l/b.bin', target: '/r/b.bin',
+      sourceAdapter: local, targetAdapter: remote,
+    });
+    await q.idle();
+    return beeps;
+  };
+
+  // Off is the default, and off means silent.
+  assert.deepStrictEqual(await run({}), []);
+
+  // On, with no minimum duration: one beep for the whole batch, not one per file.
+  const on = await run({ beepOnFinish: true, beepOnFinishAfter: 0 });
+  assert.strictEqual(on.length, 1, `expected one beep, got ${on.length}`);
+  assert.ok(on[0].elapsedMs >= 0 && on[0].elapsedMs < 60000, `implausible duration ${on[0].elapsedMs}`);
+
+  // On, but the work has to have lasted a minute first. Two small files in
+  // memory do not, so nothing sounds — that is the half of the setting which
+  // makes it bearable, and the half a careless implementation drops.
+  assert.deepStrictEqual(await run({ beepOnFinish: true, beepOnFinishAfter: 60 }), []);
+});
+
+test('the beep clock runs from the start of the batch, not the last file', async () => {
+  const { local, remote } = makePair();
+  local.put('/l/a.bin', bigBuffer(1000));
+
+  const q = new TransferQueue({
+    prefs: prefs({ beepOnFinish: true, beepOnFinishAfter: 1 }), progressMs: 0,
+  });
+  const beeps = [];
+  q.on('beep', (e) => beeps.push(e));
+
+  q.add({
+    side: 'upload', source: '/l/a.bin', target: '/r/a.bin',
+    sourceAdapter: local, targetAdapter: remote,
+  });
+  // TCustomScpExplorerForm::AddQueueItem stamps QueueOperationStart only when
+  // the queue was empty and OperationComplete measures from there, so a batch
+  // that began two seconds ago beeps even though its last file took no time.
+  q._busySince = Date.now() - 2000;
+  await q.idle();
+
+  assert.strictEqual(beeps.length, 1);
+  assert.ok(beeps[0].elapsedMs >= 2000, `measured only ${beeps[0].elapsedMs}ms`);
+});

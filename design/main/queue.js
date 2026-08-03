@@ -318,6 +318,12 @@ class TransferQueue extends EventEmitter {
     this._idleWaiters = [];
     this._pumping = false;
     this._wasIdle = true;
+    // When work arrived at an empty queue — TManagedTerminal::QueueOperationStart,
+    // stamped by TCustomScpExplorerForm::AddQueueItem (CustomScpExplorer.cpp:1401).
+    // "Beep when work finishes, if it lasted longer than" is measured from here
+    // to the moment the queue drains, so one batch is timed end to end rather
+    // than each file separately.
+    this._busySince = 0;
   }
 
   // ---- item management -------------------------------------------------
@@ -382,6 +388,9 @@ class TransferQueue extends EventEmitter {
       _bytesDone: 0,
       skipped: [],
     };
+    // AddQueueItem starts the stopwatch only when the queue was EMPTY, so a
+    // second file dropped onto a running queue does not reset the clock.
+    if (this._wasIdle) this._busySince = Date.now();
     this._wasIdle = false;
     this.items.push(item);
     this.emit('item-added', this.view(item));
@@ -449,6 +458,58 @@ class TransferQueue extends EventEmitter {
     this.items = this.items.filter((i) => i.state !== 'done');
     for (const it of gone) this.emit('item-updated', { ...this.view(it), state: 'removed' });
     return gone.length;
+  }
+
+  /**
+   * "Keep completed items for" — the sweep TTerminalQueue::ProcessEvent runs on
+   * every queue event (core/Queue.cpp:1018-1035), reading the same three cases
+   * WinSCP writes there in a comment:
+   *
+   *     0   do not keep a finished item at all
+   *    <0   keep it forever
+   *     N   keep it for N seconds after it finished
+   *
+   * The preference is read live out of `queuePrefs` rather than cached in the
+   * constructor, because ipc.js pushes a changed store straight into that
+   * object (`refreshQueuePrefs`, ipc.js:380) and a queue that had copied the
+   * value would go on using the setting the application started with.
+   *
+   * Only 'done' items are swept. An item that ERRORED stays in the list exactly
+   * as WinSCP leaves it — the user has to see a failure to retry it, and a
+   * failure that quietly deleted itself after fifteen seconds would be the
+   * queue hiding its own bad news.
+   */
+  pruneDoneItems(now = Date.now()) {
+    const keep = Number(this.queuePrefs && this.queuePrefs.keepDoneItemsFor);
+    if (!Number.isFinite(keep) || keep < 0) return 0;
+    const cutoff = keep === 0 ? now : now - (keep * 1000);
+    const gone = this.items.filter((i) => i.state === 'done' && (i.finishedAt || 0) <= cutoff);
+    if (!gone.length) return 0;
+    const doomed = new Set(gone);
+    this.items = this.items.filter((i) => !doomed.has(i));
+    // The same shape "Delete all done" sends, so the queue panel drops the row
+    // through the path it already handles instead of needing a second one.
+    for (const it of gone) this.emit('item-updated', { ...this.view(it), state: 'removed' });
+    return gone.length;
+  }
+
+  /**
+   * Sweep this item when its keep-for window expires.
+   *
+   * WinSCP gets this for free: its queue thread sweeps on every event, and a
+   * queue that is doing nothing has no rows left to expire. Ours would strand
+   * the LAST completed item on screen until the next transfer, which is exactly
+   * the item the user is watching, so the expiry gets its own timer. It is
+   * unref'd: a pending sweep must never be the reason a headless run refuses to
+   * exit.
+   */
+  _scheduleDonePrune() {
+    const keep = Number(this.queuePrefs && this.queuePrefs.keepDoneItemsFor);
+    if (!Number.isFinite(keep) || keep < 0) return null;
+    if (keep === 0) { this.pruneDoneItems(); return null; }
+    const timer = setTimeout(() => this.pruneDoneItems(), keep * 1000);
+    if (timer && typeof timer.unref === 'function') timer.unref();
+    return timer;
   }
 
   // ---- flow control ----------------------------------------------------
@@ -635,7 +696,38 @@ class TransferQueue extends EventEmitter {
     if (!this._wasIdle) {
       this._wasIdle = true;
       this.emit('idle', { onceDone: this._onceDoneAction() });
+      this._beepIfDue();
     }
+  }
+
+  /**
+   * "Beep when work finishes, if it lasted longer than N seconds."
+   *
+   * TCustomScpExplorerForm::OperationComplete (CustomScpExplorer.cpp:1695):
+   *
+   *     if (GUIConfiguration->BeepOnFinish &&
+   *         (Now() - StartTime > GUIConfiguration->BeepOnFinishAfter))
+   *
+   * and for the queue specifically it is called on the qeEmpty event with the
+   * terminal's QueueOperationStart (CustomScpExplorer.cpp:8201) — so the
+   * duration compared against the threshold is how long the WHOLE batch took,
+   * from arriving at an empty queue to draining it.
+   *
+   * Emitting rather than sounding: this module owns no I/O and is unit-tested
+   * outside Electron. ipc.js turns the event into `shell.beep()`.
+   */
+  _beepIfDue(now = Date.now()) {
+    const prefs = this.prefs || {};
+    if (!prefs.beepOnFinish) return false;
+    if (!this._busySince) return false;             // nothing ever ran
+    // Strictly "longer than", exactly as WinSCP writes it and exactly as the
+    // row reads: 0 is no minimum, not "beep even for work that took no time".
+    const after = Number(prefs.beepOnFinishAfter) || 0;   // seconds
+    const elapsed = now - this._busySince;
+    this._busySince = 0;
+    if (!(elapsed > after * 1000)) return false;
+    this.emit('beep', { elapsedMs: elapsed, after });
+    return true;
   }
 
   /**
@@ -663,6 +755,9 @@ class TransferQueue extends EventEmitter {
         item.finishedAt = Date.now();
         this._setState(item, 'done');
         this.emit('item-done', this.view(item));
+        // The sweep runs AFTER the event, so "do not keep them" still announces
+        // that the transfer finished before the row disappears.
+        this._scheduleDonePrune();
         return;
       } catch (err) {
         if (item._cancelled) return;

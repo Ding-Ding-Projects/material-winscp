@@ -45,6 +45,19 @@ Under **Preferences → Transfer → Background**, stored in `PREF_DEFAULTS.queu
 - **Failures are per item.** One unreadable file in a 4,000-file upload fails
   that file. `continueOnError` (in the environment preferences) controls whether
   the *foreground* progress dialog stops to ask.
+- **Completed rows are swept, failed rows are not.** `keepDoneItemsFor` is read
+  live, so changing it applies to the queue that is already running; each
+  completed item gets its own expiry timer, so the last row of a batch
+  disappears on time instead of waiting for the next transfer. An item that
+  ERRORED is never swept — the user has to see a failure to retry it. This is
+  `TTerminalQueue::ProcessEvent` (core/Queue.cpp:1018-1035).
+- **The finish beep is measured over the batch.** `beepOnFinish` and
+  `beepOnFinishAfter` (environment preferences, not queue ones) sound once when
+  the queue drains, timed from the moment work arrived at an empty queue —
+  WinSCP's `QueueOperationStart` / `OperationComplete` pair. The threshold is a
+  minimum duration and is strictly "longer than", so `0` seconds means every
+  batch that took a measurable moment. The queue owns no I/O: it emits `beep`
+  and `design/main/ipc.js` calls `shell.beep()`.
 
 ## Failure modes
 

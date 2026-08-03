@@ -226,7 +226,12 @@ const PREF_DEFAULTS = {
   confirmTransferring: true,
   confirmCommandSession: true,
   continueOnError: false,
-  beepOnFinishAfter: 0,            // seconds; 0 = never
+  // The MINIMUM duration, not a switch: TCustomScpExplorerForm::OperationComplete
+  // beeps when `Now() - StartTime > BeepOnFinishAfter`, so 0 means no minimum
+  // and anything that took a measurable moment beeps. (The old comment here
+  // read "0 = never", which is the opposite; nothing read the value at the
+  // time, so nothing contradicted it.) beepOnFinish is the switch.
+  beepOnFinishAfter: 0,            // seconds; 0 = no minimum duration
   beepOnFinish: false,
   copyOnDoubleClick: false,
   copyOnDoubleClickConfirmation: true,

@@ -345,6 +345,11 @@ class Ipc {
     }
     q.on('progress', (item) => this.emit('event:progress', { kind: 'transfer', item }));
 
+    // "Beep when work finishes" (GUIConfiguration->BeepOnFinish). queue.js owns
+    // no I/O, so it decides WHETHER to beep and this is the half that makes a
+    // noise — WinSCP's OperationComplete calls PlaySound/MessageBeep here.
+    q.on('beep', () => { try { shell.beep(); } catch { /* a silent host is not a failed transfer */ } });
+
     // A query or a prompt from inside a transfer is a decision the user must
     // make; it goes out on the prompt channel like every other one.
     //
@@ -386,6 +391,13 @@ class Ipc {
     const limit = Number(prefs.queue && prefs.queue.transfersLimit);
     if (Number.isFinite(limit) && limit >= 1 && limit <= 32 && typeof q.setTransfersLimit === 'function') {
       try { q.setTransfersLimit(limit); } catch { /* the queue keeps the limit it was running with */ }
+    }
+    // TTerminalQueue::SetKeepDoneItemsFor (core/Queue.cpp:1126) sweeps as soon
+    // as the setting changes, so shortening "Keep completed items for" clears
+    // the rows that are already past the new window instead of leaving them
+    // until the next transfer finishes.
+    if (typeof q.pruneDoneItems === 'function') {
+      try { q.pruneDoneItems(); } catch { /* a sweep that fails leaves the rows alone */ }
     }
     return true;
   }
