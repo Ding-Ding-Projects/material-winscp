@@ -67,6 +67,11 @@ queued.
 | `encryptNewFiles` | `true` | Apply the site's at-rest encryption to newly uploaded files. |
 | `saveTransferOptions` | `false` | Make the current settings the new default after this transfer. This is a one-shot command instruction: after saving, the checkbox is cleared in the stored defaults so later transfers do not keep rewriting their settings. |
 
+The copy-parameter validator accepts numeric form values (including numeric
+strings), but rejects missing, blank, boolean, non-finite, negative, and
+out-of-range values for `cpsLimit` and `resumeThreshold`. This prevents a
+malformed imported preset from being silently coerced to zero.
+
 ## Presets
 
 `copyParamList` holds named presets; `copyParamCurrent` names the active one.

@@ -46,6 +46,16 @@ test('SFTP EOF ends a pipelined read cleanly, including an empty file', async ()
   assert.equal(stream.destroyed, true);
 });
 
+test('SFTP stream offsets reject fractional, negative, and infinite values', async () => {
+  const adapter = new SftpAdapter({});
+  adapter.sftp = {};
+  await assert.rejects(() => adapter.createReadStream('/file', { start: -1 }), /start offset/);
+  await assert.rejects(() => adapter.createReadStream('/file', { start: 1.5 }), /start offset/);
+  await assert.rejects(() => adapter.createReadStream('/file', { end: Infinity }), /end offset/);
+  await assert.rejects(() => adapter.createWriteStream('/file', { start: -1 }), /start offset/);
+  await assert.rejects(() => adapter.createWriteStream('/file', { start: 1.5 }), /start offset/);
+});
+
 test('SFTP recursive removal lstat-probes directory entries without attributes', async () => {
   const adapter = new SftpAdapter({});
   const calls = [];

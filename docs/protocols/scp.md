@@ -60,6 +60,7 @@ codes 126/127, so real checksum failures remain visible.
 | Locale gives non-English month names | Dates parse wrongly or not at all. `unsetNationalVars` prevents this. | Yes |
 | Filenames containing newlines | Cannot be represented in `ls` output. Such entries are reported as unparseable rather than silently mangled or merged. | No — use SFTP |
 | Server clock is in another timezone | Timestamps look shifted; `timeDifferenceAuto` measures and corrects it. | Yes |
+| Server sends an epoch timestamp whose millisecond conversion exceeds JavaScript's safe-integer range | The SCP record is rejected with a protocol error rather than producing a rounded timestamp. | No — retry with a supported server timestamp |
 | Transfer interrupted | SCP has no resume. The queue item fails with the whole file to redo — `caps.resume` is `false`, so the UI never offers Resume. | Partially |
 | A malformed or truncated SCP stream | The operation fails with a protocol error; a recursive download is never reported complete merely because its SSH channel closed. | No — retry the transfer |
 | The declared upload size is wrong | The upload fails validation before it can send an overlong payload, or after an incomplete payload, and the queue receives a bounded error. | Yes, retry with the real size |

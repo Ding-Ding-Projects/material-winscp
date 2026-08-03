@@ -51,6 +51,10 @@ under **Site → Advanced → SSH** and **→ SFTP**.
 | `sftpBugs.signedTS` | `auto` | Work around servers sending signed timestamps. |
 | `sftpServer` | `''` | Run a non-default subsystem command instead of `sftp`. |
 
+Stream `start` and `end` offsets are validated before opening a remote handle.
+They must be non-negative safe integers; negative, fractional, and infinite
+values fail immediately instead of being silently treated as zero or omitted.
+
 `auto` for any bug workaround means: detect from the server's version banner and
 behaviour, and only then apply it.
 

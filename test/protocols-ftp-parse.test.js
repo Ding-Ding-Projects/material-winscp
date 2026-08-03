@@ -264,3 +264,12 @@ test('ftpTimestamp formats MFMT arguments in UTC', () => {
 test('parseMlsdLine rejects a line with no name', () => {
   assert.strictEqual(parseMlsdLine('type=file;size=1'), null);
 });
+
+test('listing sizes reject unsafe and overflowing remote values', () => {
+  const unix = parseUnixLine('-rw-r--r-- 1 root root 9007199254740992 Jan 1 2024 huge.bin', NOW);
+  const dos = parseDosLine('01-01-2024  12:00AM  999999999999999999999 huge.bin');
+  const mlsd = parseMlsdLine('type=file;size=Infinity;modify=20240101000000; huge.bin');
+  assert.strictEqual(unix.size, 0);
+  assert.strictEqual(dos.size, 0);
+  assert.strictEqual(mlsd.size, 0);
+});

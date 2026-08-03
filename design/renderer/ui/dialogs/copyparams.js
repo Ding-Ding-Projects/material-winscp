@@ -56,13 +56,20 @@ export function copyParamDefaults() {
 export function validateCopyParam(value = {}) {
   const cp = { ...copyParamDefaults(), ...value };
   const errors = [];
+  const numeric = (input) => {
+    if (input === null || input === undefined || typeof input === 'boolean') return NaN;
+    if (typeof input === 'string' && !input.trim()) return NaN;
+    return Number(input);
+  };
   if (!['text', 'binary', 'automatic'].includes(cp.transferMode)) errors.push('transferMode');
   if (!['noChange', 'upper', 'lower', 'firstUpper'].includes(cp.fileNameCase)) errors.push('fileNameCase');
   if (!['overwrite', 'resume', 'append'].includes(cp.overwriteMode)) errors.push('overwriteMode');
   if (!['none', 'disconnect', 'suspend', 'shutdown'].includes(cp.onceDoneOperation)) errors.push('onceDoneOperation');
   if (!['off', 'on', 'smart'].includes(cp.resumeSupport)) errors.push('resumeSupport');
-  if (!Number.isFinite(Number(cp.cpsLimit)) || Number(cp.cpsLimit) < 0 || Number(cp.cpsLimit) > 1048576) errors.push('cpsLimit');
-  if (!Number.isFinite(Number(cp.resumeThreshold)) || Number(cp.resumeThreshold) < 0) errors.push('resumeThreshold');
+  const cpsLimit = numeric(cp.cpsLimit);
+  const resumeThreshold = numeric(cp.resumeThreshold);
+  if (!Number.isFinite(cpsLimit) || cpsLimit < 0 || cpsLimit > 1048576) errors.push('cpsLimit');
+  if (!Number.isFinite(resumeThreshold) || resumeThreshold < 0) errors.push('resumeThreshold');
   if (cp.preserveRights && !/^[-r][-w][-xsS][-r][-w][-xsS][-r][-w][-xtT]$/.test(String(cp.rights))) errors.push('rights');
   if (cp.replaceInvalidChars && [...String(cp.invalidCharsReplacement ?? '')].length !== 1) errors.push('invalidCharsReplacement');
   return errors;

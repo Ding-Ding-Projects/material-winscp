@@ -626,6 +626,11 @@ class WebDavAdapter extends Adapter {
     this.emit('log', { level, message });
   }
 
+  _timeoutMs() {
+    const seconds = Number(this.session.timeout);
+    return (Number.isFinite(seconds) && seconds > 0 ? seconds : 15) * 1000;
+  }
+
   // -- TLS -----------------------------------------------------------------
 
   _tlsBase() {
@@ -658,7 +663,7 @@ class WebDavAdapter extends Adapter {
     const socket = await new Promise((res, rej) => {
       const s = tls.connect(opts, () => res(s));
       s.once('error', rej);
-      s.setTimeout(Math.max(1, Number(this.session.timeout || 15)) * 1000, () => {
+      s.setTimeout(this._timeoutMs(), () => {
         s.destroy(new Error(`Timed out connecting to ${this.host}:${this.port}`));
       });
     });
@@ -812,7 +817,7 @@ class WebDavAdapter extends Adapter {
         path: uri,
         headers,
         agent: sameOrigin ? this._agent : undefined,
-        timeout: Math.max(1, Number(this.session.timeout || 15)) * 1000,
+        timeout: this._timeoutMs(),
         // A redirect can land on a different host, which the session agent
         // must not serve; it gets the session's TLS policy but its own name.
         ...(isTls && url.hostname !== this.host ? { ...this._tlsBase(), servername: url.hostname } : {}),

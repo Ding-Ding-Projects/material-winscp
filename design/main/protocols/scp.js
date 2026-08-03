@@ -340,7 +340,14 @@ function parseControl(line) {
     if (!m || m.slice(1).some((value) => !Number.isSafeInteger(Number(value)))) {
       throw scpProtocolError(`The remote scp sent a time record this client cannot read: ${line}`);
     }
-    return { kind, mtime: Number(m[1]) * 1000, atime: Number(m[3]) * 1000 };
+    const mtimeSeconds = Number(m[1]);
+    const atimeSeconds = Number(m[3]);
+    const mtime = mtimeSeconds * 1000;
+    const atime = atimeSeconds * 1000;
+    if (!Number.isSafeInteger(mtime) || !Number.isSafeInteger(atime)) {
+      throw scpProtocolError(`The remote scp sent a timestamp outside the safe millisecond range: ${line}`);
+    }
+    return { kind, mtime, atime };
   }
   if (line === 'E') return { kind: 'E' };
   if (line.charCodeAt(0) === 1 || line.charCodeAt(0) === 2) {

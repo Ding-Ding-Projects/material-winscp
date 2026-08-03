@@ -48,6 +48,12 @@ const MONTHS = {
   jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
 };
 
+/** Remote listings are untrusted; preserve only exact, finite byte counts. */
+function listingSize(value) {
+  const size = typeof value === 'number' ? value : Number(String(value).replace(/,/g, ''));
+  return Number.isSafeInteger(size) && size >= 0 ? size : 0;
+}
+
 /** `-rw-r--r--` style permission block → the 9-character rights string. */
 function permsFromUnix(block) {
   // Strip the leading type character and any trailing ACL marker ('+', '.').
@@ -138,7 +144,7 @@ function parseUnixLine(line, now) {
   if (!middle) return null;
 
   const sizeTok = middle[middle.length - 1];
-  const size = /^\d+$/.test(sizeTok) ? Number(sizeTok) : 0;
+  const size = /^\d+$/.test(sizeTok) ? listingSize(sizeTok) : 0;
   const names = middle.slice(1, -1);
   const owner = names[0] || '';
   const group = names[1] || '';
@@ -189,7 +195,7 @@ function parseDosLine(line) {
   return entry({
     name,
     type: isDir ? 'dir' : 'file',
-    size: isDir ? 0 : Number(m[7].replace(/,/g, '')),
+    size: isDir ? 0 : listingSize(m[7]),
     mtime,
     raw: line,
   });
@@ -234,7 +240,7 @@ function parseVmsRecord(text, opts) {
   else if (!trimVersions) name = `${name};${version}`;
 
   // VMS reports allocation in 512-byte blocks, used/allocated.
-  const size = Number(m[3]) * 512;
+  const size = listingSize(Number(m[3]) * 512);
   const ownerField = (m[11] || '').split(',');
   return entry({
     name,
@@ -303,7 +309,7 @@ function parseMlsdLine(line) {
   return entry({
     name,
     type,
-    size: Number(facts.size || facts.sizd || 0) || 0,
+    size: listingSize(facts.size || facts.sizd || 0),
     mtime,
     rights,
     owner: facts['unix.ownername'] || facts['unix.owner'] || '',

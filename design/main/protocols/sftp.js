@@ -1137,6 +1137,15 @@ function streamQueueDepth(value) {
   return Math.max(1, Math.min(256, n));
 }
 
+function validateStreamOffset(value, name) {
+  if (value === undefined) return undefined;
+  const offset = Number(value);
+  if (!Number.isSafeInteger(offset) || offset < 0) {
+    throw new RangeError(`SFTP ${name} must be a non-negative safe integer`);
+  }
+  return offset;
+}
+
 /**
  * Read several fixed ranges at once, but publish them in file order. ssh2's
  * built-in ReadStream deliberately reads one range at a time; this adapter
@@ -2013,9 +2022,11 @@ class SftpAdapter extends Adapter {
   async createReadStream(p, opts = {}) {
     if (!this.sftp) throw new Error('Not connected');
     const target = this.normalize(p);
+    const start = validateStreamOffset(opts.start, 'start offset');
+    const end = validateStreamOffset(opts.end, 'end offset');
     const options = { autoClose: true };
-    if (Number(opts.start) > 0) options.start = Number(opts.start);
-    if (Number.isFinite(opts.end)) options.end = Number(opts.end);
+    if (start !== undefined && start > 0) options.start = start;
+    if (end !== undefined) options.end = end;
     // The stream's high-water mark *is* the SFTP read packet size in this
     // library, so the site's maximum packet size lands here.
     const hwm = opts.highWaterMark || this._packetSize();
@@ -2056,7 +2067,7 @@ class SftpAdapter extends Adapter {
   async createWriteStream(p, opts = {}) {
     if (!this.sftp) throw new Error('Not connected');
     const target = this.normalize(p);
-    const start = Number(opts.start) || 0;
+    const start = validateStreamOffset(opts.start, 'start offset') || 0;
     const options = { autoClose: true };
     if (start > 0) { options.flags = 'r+'; options.start = start; }
     else options.flags = opts.append ? 'a' : 'w';

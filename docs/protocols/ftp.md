@@ -49,6 +49,7 @@ Under **Site → Advanced → FTP** and **→ TLS/SSL**.
 | Idle disconnect | Detected on the next command; auto-reconnect follows `security.sessionReopen*`. | Yes |
 | Username, password or ACCT contains a line break | Login is rejected before any credential command is sent. FTP has no escaping for command record separators, so accepting one could send an unintended command. | Yes — correct the saved site value |
 | A post-login command contains a line break | The command is rejected before it reaches the control connection. FTP has no escaping for command record separators, so accepting one could append an unintended command. | Yes — correct the saved command |
+| A listing reports an unsafe or overflowing size | The entry is retained with size `0` (unknown) rather than propagating an inaccurate `Infinity` or rounded byte count into transfers and comparisons. | Yes — enable MLSD or fix the server listing |
 
 The passive-host choice is applied when the FTP client is constructed, before
 the first `PASV`/`EPSV` negotiation. In particular, `on` is not merely a UI

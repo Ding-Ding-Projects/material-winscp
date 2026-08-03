@@ -19,6 +19,11 @@ is false and the menu entry is greyed out rather than failing.
 
 Under **Site → Advanced → WebDAV**.
 
+Connection timeouts are interpreted in seconds. A missing, malformed, zero or
+negative value safely falls back to 15 seconds; positive fractional values are
+preserved. This normalization applies to both TLS certificate probing and HTTP
+requests.
+
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `webDavLiberalEscaping` | `false` | Percent-encode a wider set of characters in paths, for servers that reject the conservative encoding. |

@@ -598,6 +598,15 @@ test('rebuilding a WebDAV connection destroys the previous agent pool', () => {
   assert.notEqual(adapter._agent.destroy, undefined);
 });
 
+test('invalid WebDAV timeouts fall back to the safe default', () => {
+  for (const timeout of [undefined, '', 'not-a-number', 0, -1, Infinity, NaN]) {
+    const adapter = new WebDavAdapter({ hostName: 'dav.example.test', timeout });
+    assert.equal(adapter._timeoutMs(), 15000);
+  }
+  const adapter = new WebDavAdapter({ hostName: 'dav.example.test', timeout: 2.5 });
+  assert.equal(adapter._timeoutMs(), 2500);
+});
+
 test('recursive MKCOL does not mistake an existing file for a directory', async () => {
   const adapter = new WebDavAdapter({
     hostName: 'dav.example.test', portNumber: 443, ftps: 'implicit',

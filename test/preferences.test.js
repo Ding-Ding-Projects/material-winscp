@@ -586,6 +586,8 @@ test('CopyParams validates inherited defaults and rejects unsafe edits', async (
   assert.deepEqual(copy.validateCopyParam({ preserveRights: true, rights: 'rwx' }), ['rights']);
   assert.deepEqual(copy.validateCopyParam({ replaceInvalidChars: true, invalidCharsReplacement: '' }), ['invalidCharsReplacement']);
   assert.deepEqual(copy.validateCopyParam({ cpsLimit: -1, transferMode: 'wat' }), ['transferMode', 'cpsLimit']);
+  assert.deepEqual(copy.validateCopyParam({ cpsLimit: null, resumeThreshold: '' }), ['cpsLimit', 'resumeThreshold']);
+  assert.deepEqual(copy.validateCopyParam({ cpsLimit: false, resumeThreshold: true }), ['cpsLimit', 'resumeThreshold']);
   assert.deepEqual(copy.validateCopyParam({ preserveRights: true, rights: 'rw-r--r--' }), []);
 });
 
