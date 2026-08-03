@@ -187,6 +187,61 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "a74836c", kind: 'commit', ref: "a74836c", oid: "a74836cd985151cfe71f4b3479dd3a0a589e7288", date: "2026-08-03",
+    title: "Harden CLI drop classification and progress accessibility",
+    changes: [
+      { category: "added", text: "Reject missing-only drop classifications instead of handing an empty parcel to the transfer engine, and name progress bars with their visible labels for assistive technology. Add focused regressions and documentation. The CLI now refuses to serve imaginary files, and the progress bar finally knows who its label is.\\n\\n廣東話：空手 drop 唔再扮有貨，progress bar 亦終於認得自己個 label；兩邊都唔使再玩猜謎遊戲。" },
+    ],
+  },
+  {
+    id: "b03c84f", kind: 'commit', ref: "b03c84f", oid: "b03c84feea4cb89f7bfc211f63a4f1e8a61e7d9f", date: "2026-08-03",
+    title: "Cancel pending queue prompts on removal",
+    changes: [
+      { category: "fixed", text: "Resolve a queued item's credential prompt when its row is removed, so the transfer and idle lifecycle cannot remain blocked on a response from a vanished UI. Add a focused regression test and document the cancellation behavior. The queue no longer waits for a ghost password prompt, laah." },
+    ],
+  },
+  {
+    id: "ac29837", kind: 'commit', ref: "ac29837", oid: "ac2983762dde67e310b6148fb0f85e04bbeb742a", date: "2026-08-03",
+    title: "Assign IDs during configuration import",
+    changes: [
+      { category: "fixed", text: "Legacy JSON sites without identifiers now receive generated IDs during load and import, so they remain addressable by update, move, and delete operations. Add regression coverage and document the compatibility behavior." },
+      { category: "changed", text: "The importer used to show these sites with no name tag for the toolbox; now every one gets a proper label, 勁過冇牌茶餐廳。" },
+    ],
+  },
+  {
+    id: "2960899", kind: 'commit', ref: "2960899", oid: "296089966e9cb0f6031395d3f5ae64e221633b7b", date: "2026-08-03",
+    title: "Fix case-insensitive workspace reconnect links",
+    changes: [
+      { category: "fixed", text: "Keep workspace-link reconnect lookup consistent with case-insensitive stored-site names, and reject mixed-case cycles safely. Add focused regression coverage and document the persistence edge case." },
+    ],
+    changesYue: [
+      { category: "changed", text: "Workspace links 而家唔會因為大小楷玩失蹤；混合大小楷嘅循環都會安全收工，唔再喺重連迷宮入面兜圈。" },
+    ],
+  },
+  {
+    id: "bf98db8", kind: 'commit', ref: "bf98db8", oid: "bf98db81d3b7a508d6677d2a3b4758eb013ebe13", date: "2026-08-03",
+    title: "Refuse invalid Explorer drop effects",
+    changes: [
+      { category: "added", text: "Reject NONE, cancel, and unknown shell effects before transfer dispatch so a refused drag can never become an upload. Add focused coverage and document the direct-integration boundary. The drop handler now reads the sign instead of inventing a copy, 唔好亂咁將拒絕變成上載。" },
+    ],
+  },
+  {
+    id: "ceff51c", kind: 'commit', ref: "ceff51c", oid: "ceff51c1f58ad12998de05a6fec6c9a6b368c3b4", date: "2026-08-03",
+    title: "Refresh editor-wave handoff metadata",
+    changes: [
+      { category: "changed", text: "English: Record the verified 3,320/3,321 test result, unchanged 59.0% logic coverage, 114 remaining units, and the current editor/config checkpoint. The handoff keeps the breadcrumbs numbered." },
+      { category: "changed", text: "廣東話：記低已驗證嘅 3,320/3,321 測試、仍然 59.0% logic coverage、剩低 114 個 units 同今次 editor/config checkpoint。交更紙幫啲麵包屑編埋號。" },
+    ],
+  },
+  {
+    id: "9e8c679", kind: 'commit', ref: "9e8c679", oid: "9e8c67979b5abe25dd0351119997358915522934", date: "2026-08-03",
+    title: "Refresh in-app changelog for editor and lifecycle hardening",
+    changes: [
+      { category: "changed", text: "English: Record the editor, terminal, SCP, configuration, and transfer-settings lifecycle wave in the in-app history. The diary now includes the breadcrumbs used to escape the maze." },
+      { category: "changed", text: "廣東話：將 editor、terminal、SCP、configuration 同 transfer-settings lifecycle wave 寫入 app history，日記而家都有記低逃出迷宮嗰啲麵包屑。" },
+    ],
+  },
+  {
     id: "abe24d9", kind: 'commit', ref: "abe24d9", oid: "abe24d943e60264d6c1983705b4b84efbe389c0f", date: "2026-08-03",
     title: "Harden editor, terminal, SCP, and configuration lifecycles",
     changes: [
@@ -581,77 +636,6 @@ export const DEVELOPMENT = [
     title: "Fix CI coverage checkout and anchored smoke races",
     changes: [
       { category: "changed", text: "English: The queue popover was still wearing the progress window's centring hat, while CI's coverage test was counting an empty upstream cupboard. Give the anchored selector enough specificity to stay inside the viewport, wait for the real keyboard focus before issuing Insert, and check out the read-only WinSCP reference submodule so the ledger cannot quietly inspect zero units.\\n\\nCantonese: Queue popover 仲戴住 progress window 嗰頂置中帽，CI coverage 仲對住個空櫃數零件。加返夠力嘅 selector、等真實 focus 落定先撳 Insert，再 checkout 只讀 WinSCP reference submodule，等 coverage 唔會扮冇嘢做。" },
-    ],
-  },
-  {
-    id: "50233a0", kind: 'commit', ref: "50233a0", oid: "50233a09522f551ed1c7c4e43f47af8cf0c8c63c", date: "2026-08-03",
-    title: "Refresh real Electron smoke capture",
-    changes: [
-      { category: "changed", text: "The smoke harness captured the current boot surface after the final renderer changes, so the tracked evidence now matches the tested application instead of an older frame." },
-    ],
-    changesYue: [
-      { category: "changed", text: "最後一次 smoke test 影到最新 boot surface，張相而家同真正測過嘅 app 對得上，唔再拎舊畫面扮新鮮。" },
-    ],
-  },
-  {
-    id: "5d0e67a", kind: 'commit', ref: "5d0e67a", oid: "5d0e67adabb98848965d704ca15f8fdace22d48d", date: "2026-08-03",
-    title: "Port core session, protocol, UI, and transfer seams",
-    changes: [
-      { category: "changed", text: "The port now wires the remaining session, protocol, preference, panel, synchronization, notification, resource, and foreground-transfer seams through production contracts, with focused regressions, real Electron/SFTP smoke coverage, categorized docs, and regenerated handoff ledgers. The code's old loose ends were less connected than a dim sum steamer with the lid missing; they now at least arrive on the same queue, with cancellation and cache races called out honestly." },
-      { category: "changed", text: "今次補返 session、protocol、preference、panel、同步、notification、resource 同 foreground transfer 嘅真實接駁，仲加埋測試、Electron/SFTP smoke、分類文件同 handoff ledger。之前啲 code seam 鬆過茶樓蒸籠個冚，而家起碼同一條 queue 入場，cancel 同 cache race 都有實話實說。" },
-    ],
-  },
-  {
-    id: "20c2b38", kind: 'commit', ref: "20c2b38", oid: "20c2b38499ab8e35bb00ad6966b6a89f40af3bda", date: "2026-08-02",
-    title: "Refresh the post-packaging handoff",
-    refs: ["#15", "#26", "#27", "#28"],
-    changes: [
-      { category: "changed", text: "English: The handoff now records the green 3,021-test suite, the measured Squirrel artifacts, the 31 MB app archive, and the one harness-owned screenshot still rewritten by smoke tests. The report has receipts instead of vibes." },
-      { category: "changed", text: "Cantonese: Handoff 而家有齊 3,021 個測試、Squirrel artifact、31 MB app archive，同埋個 smoke harness 會自己改寫嘅 screenshot；今次有單有據，唔靠感覺吹水。" },
-      { category: "changed", text: "Verification: node tools/handoff.js; node site/build.js --verify; 67 site tests passed." },
-      { category: "changed", text: "Refs #15 #26 #27 #28" },
-    ],
-  },
-  {
-    id: "8935691", kind: 'commit', ref: "8935691", oid: "89356917eefcbca33b61617d909d383f0416dd7b", date: "2026-08-02",
-    title: "Record the packaging guard in the changelog",
-    refs: ["#15"],
-    changes: [
-      { category: "changed", text: "English: The changelog now tells the truth about the packaging guard and its measured artifacts, so the app does not pretend the multi-gigabyte asar was a feature." },
-      { category: "changed", text: "Cantonese: Changelog 而家老實交代個 packaging guard 同實測 artifact，唔會再將幾 GB 嘅 app.asar 當成「豪華版」功能。" },
-      { category: "changed", text: "Verification: node --test test/changelog.test.js test/packaging.test.js (44 passed)." },
-      { category: "changed", text: "Refs #15" },
-    ],
-  },
-  {
-    id: "12dd655", kind: 'commit', ref: "12dd655", oid: "12dd6555a08866e5a7f73919a8b8a7650fc23ff3", date: "2026-08-02",
-    title: "Exclude agent worktrees from Electron packages",
-    refs: ["#15"],
-    changes: [
-      { category: "fixed", text: "English: The packager was swallowing linked-agent worktrees and even yesterday's output, turning a tidy Windows app into a multi-gigabyte asar. Ignore the local checkout maze and pin the guard with a regression test." },
-    ],
-    changesYue: [
-      { category: "changed", text: "Cantonese: 打包器之前食晒 agent worktree，同埋連舊 out 都一齊吞，個 app.asar 大到似要搬屋。依家封鎖本地迷宮，仲用測試睇實佢唔好再食錯嘢。" },
-      { category: "changed", text: "Verification: node --test test/packaging.test.js; npm run package; npm run make; RELEASES SHA-1 and byte count match the NuGet; portable zip has 73 entries and no .claude or out content." },
-      { category: "changed", text: "Refs #15" },
-    ],
-  },
-  {
-    id: "5788976", kind: 'commit', ref: "5788976", oid: "578897671b21203d48593cf554699660b3bbb945", date: "2026-08-02",
-    title: "Record the final smoke-tested handoff",
-    refs: ["#26", "#27", "#28"],
-    changes: [
-      { category: "fixed", text: "Refresh the generated handoff after the Windows dirty-path fix. It now records 3019 tests with 3018 passing, one skip, zero failures, the current commit, and exactly one remaining tracked e2e screenshot capture.\\n\\nRefs #26 #27 #28" },
-      { category: "changed", text: "Windows dirty path 修好之後再 refresh handoff，而家寫實 3019 條測試、3018 過、1 skip、0 衰，commit 同埋仲剩低嗰一張 tracked e2e screenshot 都講清楚。\\n\\nRefs #26 #27 #28" },
-    ],
-  },
-  {
-    id: "c212107", kind: 'commit', ref: "c212107", oid: "c2121077afc156012137b95180f54c0213b92601", date: "2026-08-02",
-    title: "Use the set size for the handoff count",
-    refs: ["#26", "#27", "#28"],
-    changes: [
-      { category: "changed", text: "The name-list rewrite deduplicates dirty paths in a Set, so the report must read size rather than the old array length. Keep the smoke test honest: undefined is not a count, it is the tool shrugging at its own arithmetic.\\n\\nRefs #26 #27 #28" },
-      { category: "changed", text: "name-list rewrite 用 Set 去重，所以 handoff 要讀 size，唔可以仲用舊 array length。smoke test 個數字要講人話：undefined 唔係 count，係個工具對住自己份 arithmetic 聳吓膊頭。\\n\\nRefs #26 #27 #28" },
     ],
   },
 ];
