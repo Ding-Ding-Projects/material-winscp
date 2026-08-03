@@ -33,6 +33,11 @@ Concurrent fatal unwind paths share one reconnect decision per error object, so
 cleanup cannot open duplicate prompts or let nested callers choose different
 actions for the same dropped connection.
 
+If an operation is waiting on a renderer confirmation, `cancelOperation()` also
+settles that operation-owned prompt with the safe cancellation answer. A lost
+or closed prompt therefore cannot leave the operation awaiting forever; the
+original renderer promise is ignored after the operation has unwound.
+
 ## Reconnect policy
 
 Unexpected drops use `security.sessionReopenAuto` as the base delay and a

@@ -800,6 +800,15 @@ test('the control renderer mirrors disabled state onto native and composite cont
     'focusable composite preference editors must expose their disabled state');
 });
 
+test('a dependency-disabled preference row exposes its disabled state', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const prefpages = fs.readFileSync(
+    path.join(repoRoot, 'design', 'renderer', 'ui', 'dialogs', 'prefpages.js'), 'utf8');
+  assert.match(prefpages, /'aria-disabled': \(opts\.disabled \|\| opts\.pending\) \? 'true' : 'false'/,
+    'the row must announce dependency-disabled controls, not only unavailable settings');
+});
+
 test('the guard fails when a dead option is not declared', async () => {
   const { schema } = await load();
   const corpus = scan.readCorpus(repoRoot);

@@ -783,16 +783,20 @@ class WebDavAdapter extends Adapter {
     if (body) headers['Content-Length'] = String(body.length);
 
     const uri = url.pathname + (url.search || '');
-    // Credentials go out preemptively. A PUT streamed from disk cannot be
-    // replayed after a 401, so waiting for a challenge on every request would
-    // make uploads unresumable; the first request of the session discovers the
-    // scheme and every later one uses it.
+    // Wait for a challenge by default. Sending Basic credentials before the
+    // server asks leaks them to any endpoint that accepts the connection,
+    // which is especially dangerous for plain HTTP and redirects. The
+    // legacy option is an explicit escape hatch for servers that never issue
+    // a challenge (streamed PUTs must use it because their body cannot be
+    // replayed after a 401).
     // A redirect target is allowed to be absolute. Never send the session's
     // credentials to another origin, even when the user explicitly allowed
     // following cross-host redirects. The redirect policy below decides
     // whether to follow; this check decides what may cross the boundary.
     const sameOrigin = this._sameOrigin(url);
-    const auth = sameOrigin ? this._authHeader(method, uri, body) : null;
+    const auth = sameOrigin && (this.session.webDavAuthLegacy || this._challenge)
+      ? this._authHeader(method, uri, body)
+      : null;
     if (auth) headers.Authorization = auth;
 
     return new Promise((resolve, reject) => {

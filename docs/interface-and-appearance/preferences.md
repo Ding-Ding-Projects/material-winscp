@@ -20,6 +20,11 @@ Preferences control
   -> live renderer or main-process consumer
 ```
 
+When a control is disabled because its prerequisite is off, the preference row
+also exposes `aria-disabled="true"`, not just the native input. This keeps
+composite editors and screen-reader navigation honest about the same
+dependency state that the visual row shows.
+
 The renderer smoke test opens the actual dialog, checks both search bars and
 their regex-builder buttons, changes `queue.noConfirmations` and
 `refreshRemotePanelInterval`, and proves the already-running queue changes its

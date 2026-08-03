@@ -67,3 +67,19 @@ test('AssumeRole rejects incomplete temporary credentials before use', async () 
   );
   assert.equal(adapter.credentials.secretAccessKey, 'base-secret');
 });
+
+test('AssumeRole rejects a malformed expiration instead of disabling refresh', async () => {
+  const adapter = adapterWith(`
+    <AssumeRoleResponse><AssumeRoleResult><Credentials>
+      <AccessKeyId>temporary-key</AccessKeyId>
+      <SecretAccessKey>temporary-secret</SecretAccessKey>
+      <SessionToken>temporary-token</SessionToken>
+      <Expiration>not-a-date</Expiration>
+    </Credentials></AssumeRoleResult></AssumeRoleResponse>`);
+
+  await assert.rejects(
+    () => adapter._assumeRole(),
+    /AssumeRole returned invalid credentials: Expiration is not an ISO date/,
+  );
+  assert.equal(adapter.credentials.accessKeyId, 'base-access-key');
+});

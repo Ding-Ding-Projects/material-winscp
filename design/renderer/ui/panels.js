@@ -152,6 +152,19 @@ export function normalizePanelEntries(entries) {
   return { entries: valid, invalidCount: invalid.length };
 }
 
+/** Resolve the immutable paths captured by a drag into the source entries. */
+export function entriesForDragPaths(entries, paths, pathOf, isLocal = false) {
+  const wanted = new Set((Array.isArray(paths) ? paths : []).map((value) => {
+    const text = String(value || '').replace(/\\/g, '/');
+    return isLocal ? text.toLowerCase() : text;
+  }));
+  return (Array.isArray(entries) ? entries : []).filter((entry) => {
+    if (!entry || entry.name === '..') return false;
+    const value = String(pathOf(entry) || '').replace(/\\/g, '/');
+    return wanted.has(isLocal ? value.toLowerCase() : value);
+  });
+}
+
 /* ================================================================== */
 /* file masks — the panel-local fast path                              */
 /* ================================================================== */
@@ -1038,7 +1051,17 @@ export function createFilePanel(opts = {}) {
       });
       if (!ok) return;
     }
-    runAction(action, { side: data.side, panel: sourcePanel, other: handle, selection: sourcePanel.selection() });
+    const selection = entriesForDragPaths(
+      sourcePanel.allEntries ? sourcePanel.allEntries() : sourcePanel.entries(),
+      data.paths,
+      sourcePanel.pathOf,
+      sourcePanel.isLocal,
+    );
+    if (!selection.length) {
+      notify.warning(t('transferSettingsShort'), 'The dragged items are no longer available in the source panel. Refresh it and try again.');
+      return;
+    }
+    runAction(action, { side: data.side, panel: sourcePanel, other: handle, selection });
     void ctx;
   }
 

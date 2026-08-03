@@ -581,11 +581,16 @@ class S3Adapter extends Adapter {
     const required = ['AccessKeyId', 'SecretAccessKey', 'SessionToken', 'Expiration'];
     const missing = required.find((name) => !textOf(creds, name));
     if (missing) throw new Error(`AssumeRole returned incomplete credentials: missing ${missing}`);
+    const expirationText = textOf(creds, 'Expiration');
+    const expiresAt = Date.parse(expirationText);
+    if (!Number.isFinite(expiresAt)) {
+      throw new Error('AssumeRole returned invalid credentials: Expiration is not an ISO date');
+    }
     this.credentials = {
       accessKeyId: textOf(creds, 'AccessKeyId'),
       secretAccessKey: textOf(creds, 'SecretAccessKey'),
       sessionToken: textOf(creds, 'SessionToken'),
-      expiresAt: Date.parse(textOf(creds, 'Expiration')) || 0,
+      expiresAt,
       base: this.credentials,
     };
     this._log('info', `Assumed role ${s.s3RoleArn}`);

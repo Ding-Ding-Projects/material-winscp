@@ -447,6 +447,7 @@ test('cross-origin redirects do not forward WebDAV credentials', async () => {
       portNumber: originPort,
       ftps: 'none',
       userName: 'alice',
+      webDavAuthLegacy: true,
       webDavLiberalEscaping: false,
       timeout: 2,
     }, { password: 'correct horse battery staple', allowCrossHostRedirect: true });
@@ -458,6 +459,33 @@ test('cross-origin redirects do not forward WebDAV credentials', async () => {
   } finally {
     await close(origin);
     await close(destination);
+  }
+});
+
+test('WebDAV waits for an authentication challenge unless legacy auth is enabled', async () => {
+  const seen = [];
+  const server = http.createServer((req, res) => {
+    seen.push(req.headers.authorization);
+    if (!req.headers.authorization) {
+      res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="dav"' });
+      res.end();
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('ok');
+  });
+  const port = await listen(server);
+  try {
+    const adapter = new WebDavAdapter({
+      hostName: '127.0.0.1', portNumber: port, ftps: 'none',
+      userName: 'alice', timeout: 2,
+    }, { password: 'secret' });
+    const result = await adapter.request('GET', '/private');
+    assert.strictEqual(result.text, 'ok');
+    assert.strictEqual(seen[0], undefined);
+    assert.match(seen[1], /^Basic /);
+  } finally {
+    await close(server);
   }
 });
 

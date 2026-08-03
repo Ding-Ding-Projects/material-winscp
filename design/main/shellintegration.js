@@ -369,6 +369,11 @@ class DragOut {
     const local = this.copyParam.replaceInvalidChars === false
       ? remoteName
       : validLocalFileName(remoteName, this.copyParam.invalidCharsReplacement);
+    // Preserving unusual remote names must not turn the shell payload into a
+    // relative or absolute path outside the private staging directory.
+    if (!local || local === '.' || local === '..' || /[\\/]/.test(local)) {
+      throw new DragError('The dragged name is not a safe local file name.', 'DRAG_UNSAFE_NAME');
+    }
 
     if (this.totalSize >= 0) {
       if (f.isDirectory) this.totalSize = -1;

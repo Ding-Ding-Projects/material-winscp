@@ -982,6 +982,8 @@ class Terminal extends EventEmitter {
     this._readingCurrentDirectory = false;
     this._opening = 0;
     this._progressStack = [];
+    // Let cancellation release prompts owned by an active operation.
+    this._pendingOperationQueries = new Set();
 
     /** AutoReadDirectory — off while a reconnect is in flight. */
     this.autoReadDirectory = d.autoReadDirectory !== false;
@@ -1151,7 +1153,23 @@ class Terminal extends EventEmitter {
       aliases: query.aliases || {},
     };
     let answer;
-    if (this._queryUser) {
+    const progress = this.operationProgress;
+    if (progress && progress.inProgress) {
+      let cancel;
+      const cancelled = new Promise((resolve) => { cancel = () => resolve(ANSWERS.cancel); });
+      const pending = { cancel };
+      this._pendingOperationQueries.add(pending);
+      try {
+        const prompt = this._queryUser
+          ? this._queryUser(q)
+          : (this.session && typeof this.session.ask === 'function'
+            ? this.session.ask('custom', { kind: 'query', ...q }).then((reply) => reply && reply.answer)
+            : undefined);
+        answer = await Promise.race([Promise.resolve(prompt), cancelled]);
+      } finally {
+        this._pendingOperationQueries.delete(pending);
+      }
+    } else if (this._queryUser) {
       answer = await this._queryUser(q);
     } else if (this.session && typeof this.session.ask === 'function') {
       const reply = await this.session.ask('custom', { kind: 'query', ...q });
@@ -2101,6 +2119,7 @@ class Terminal extends EventEmitter {
     // stack is the JavaScript equivalent: an inner operation must not finish
     // and leave the enclosing batch advancing through later files.
     for (const progress of active) progress.setCancelAtLeast(CANCEL.cancel);
+    for (const pending of this._pendingOperationQueries) pending.cancel();
     return true;
   }
 

@@ -27,6 +27,10 @@ this command only stages bytes; it never performs the destructive source
 deletion. It does not pretend to deliver a GUI drop; use a console script or
 the app for a real transfer.
 
+Explorer drag payloads fail closed when a preserved remote name contains `/`,
+`\\`, `.` or `..`. Those names are not allowed to escape the private staging
+directory, even when invalid-character replacement is disabled.
+
 The application-side drop executor has the same safety boundary: only an
 explicit `COPY` or `MOVE` effect is actionable. `NONE`, cancel, and unknown
 shell effects are refused and cannot be interpreted as a copy. This matters

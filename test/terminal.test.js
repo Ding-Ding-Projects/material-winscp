@@ -1829,6 +1829,20 @@ test('clearCaches empties both caches and the session panel cache', async () => 
   assert.strictEqual(session.cleared, 1);
 });
 
+test('cancelling while an operation prompt is pending releases the operation', async () => {
+  const t = makeTerminal({ cwd: '/' });
+  let releasePrompt;
+  t.terminal._queryUser = () => new Promise((resolve) => { releasePrompt = resolve; });
+  const pending = t.terminal.processFiles(['/d/a'], 'delete', async () => {
+    await t.terminal.queryUser({ message: 'Confirm', answers: [ANSWERS.yes, ANSWERS.cancel] });
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.strictEqual(t.terminal.cancelOperation(), true);
+  assert.strictEqual(await pending, false);
+  assert.strictEqual(t.terminal.operationProgress, null);
+  assert.ok(releasePrompt);
+});
+
 test('refresh after cache clearing rereads the current directory', async () => {
   const { terminal, adapter } = makeTerminal({ cwd: '/d' });
   adapter.add('/d/a', {});

@@ -1753,7 +1753,11 @@ function row(control, language, controlNode, opts = {}) {
     class: `pref-row pref-row-${control.type}${opts.disabled ? ' is-disabled' : ''}${opts.pending ? ' is-unavailable' : ''}`,
     'data-pref-key': control.key,
     'data-pref-status': opts.pending ? 'unavailable' : 'wired',
-    'aria-disabled': opts.pending ? 'true' : 'false',
+    // Keep the row's announced state in sync with both dependency-disabled
+    // controls and settings unavailable in this build. Native descendants
+    // already carry their own disabled state; the wrapper must tell assistive
+    // technology the same thing when focus lands on a composite editor.
+    'aria-disabled': (opts.disabled || opts.pending) ? 'true' : 'false',
   }, ...parts, ...meta);
   appearanceTarget(rowEl, `pref-row-${control.key}`, `Preference: ${control.label.en}`);
   const describedBy = [hintId, pendingId].filter(Boolean).join(' ');

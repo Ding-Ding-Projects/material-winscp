@@ -22,7 +22,7 @@ Under **Site → Advanced → WebDAV**.
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `webDavLiberalEscaping` | `false` | Percent-encode a wider set of characters in paths, for servers that reject the conservative encoding. |
-| `webDavAuthLegacy` | `false` | Send Basic credentials pre-emptively instead of waiting for a `401` challenge. Needed by a few servers; it leaks the credential to any server that asks. |
+| `webDavAuthLegacy` | `false` | Send credentials pre-emptively instead of waiting for a `401` challenge. Needed by a few servers (especially streamed PUT endpoints that never challenge); it leaks the credential to any server that accepts the connection. |
 | `ftps` (shared field) | — | `implicit` selects HTTPS; `none` selects plain HTTP. |
 | `tlsCertificateFile` | `''` | Client certificate for mutual TLS. |
 | `minTlsVersion` / `maxTlsVersion` | `tls10` / `tls13` | Negotiated version window. |
@@ -43,7 +43,7 @@ trusted endpoint, preferably over HTTPS.
 | Situation | What the user sees | Recoverable |
 | --- | --- | --- |
 | Server returns HTML for `PROPFIND` (a login page, a proxy interstitial) | The listing fails with "the server did not return WebDAV XML", quoting the first line of what it did return. Guessing is deliberately not attempted. | Yes |
-| `401` on every request with `webDavAuthLegacy` off | Some servers never issue a challenge. Turning the option on fixes it — with the caveat below. | Yes |
+| `401` on every request with `webDavAuthLegacy` off | The adapter waits for a challenge by default. Some servers never issue one, or require streamed PUTs to be authenticated before the body starts; turning the option on fixes those cases — with the caveat below. | Yes |
 | Paths containing `+`, `#`, `%` or non-ASCII | Servers disagree about encoding. `webDavLiberalEscaping` widens the escaping set. | Usually |
 | `MOVE`/`COPY` across a quota boundary | The server's `507` is surfaced verbatim, including its message. | Depends on the server |
 | Recursive `MKCOL` meets an existing file | The adapter checks the `405` response with `stat` and reports that the intermediate resource is not a directory; it never silently treats a file as a folder. | Yes, choose a different path |
@@ -53,10 +53,12 @@ trusted endpoint, preferably over HTTPS.
 
 ## Security considerations
 
-- **`webDavAuthLegacy` sends your password before the server proves it wants
-  it.** Over plain HTTP that hands the credential to anything on the path; over
-  HTTPS to any server presenting a trusted certificate for that host. The option
-  is off by default and its UI states the trade-off.
+- **By default, WebDAV waits for a `401` challenge before sending credentials.**
+  `webDavAuthLegacy` sends the credential pre-emptively for servers that never
+  challenge or for streamed uploads that cannot be replayed. Over plain HTTP
+  that hands the credential to anything on the path; over HTTPS it sends it to
+  any server presenting a trusted certificate for that host. The option is off
+  by default and its UI states the trade-off.
 - **Plain HTTP WebDAV is as exposed as plain FTP.** Selecting `none` for
   encryption raises the same non-dismissible warning.
 - **Redirects are not followed blindly.** A cross-origin redirect drops
@@ -85,6 +87,8 @@ trusted endpoint, preferably over HTTPS.
 - Cross-origin redirect handling is exercised with two local HTTP servers: the
   original request is authenticated, while the redirected request carries no
   `Authorization` header.
+- Challenge-based authentication is tested to prove the first request carries
+  no `Authorization` header and the retry carries the negotiated credentials.
 
 Manual check: connect over HTTPS, open the session log, and confirm the
 `PROPFIND` for the root directory returns `207 Multi-Status` with a `D:multistatus`

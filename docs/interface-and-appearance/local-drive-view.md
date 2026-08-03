@@ -46,3 +46,14 @@ particular network server or share exists on the test host.
 
 The case-insensitive refresh/selection regression is covered by
 `test/dirview.test.js`.
+
+## Commander drag/drop selection
+
+An internal Commander drag carries the absolute paths selected when the drag
+starts. The drop handler resolves those paths against the source panel rather
+than reading whatever selection happens to be visible when the pointer is
+released. This prevents a selection change during a drag from transferring a
+different file. Local Windows paths are matched with slash and case
+normalization; remote paths remain case-sensitive.
+
+The focused regression is in `test/scp-commander-parity.test.js`.
