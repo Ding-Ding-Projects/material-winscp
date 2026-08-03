@@ -187,6 +187,30 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "10f6d8a", kind: 'commit', ref: "10f6d8a", oid: "10f6d8a63c0cbd41640b27c372518e0add29c6f8", date: "2026-08-03",
+    title: "Harden Login, commands, site security, and S3 WebDAV",
+    changes: [
+      { category: "added", text: "English: Open nested Login folders in tree order, reopen the queue surface, validate SiteAdvanced encryption keys, cap WebDAV buffered responses, reject incomplete AssumeRole credentials, and add accessible LocationProfiles duplication. Add focused tests and documentation. The protocol edges now bring a clipboard, a seatbelt, and a very strict bouncer." },
+      { category: "security", text: "廣東話：Login folder 會按 tree order 開 nested sites、queue surface 會重開、SiteAdvanced encryption key 會驗、WebDAV response 有上限、AssumeRole 唔完整就拒絕，同 LocationProfiles 有 accessible duplicate。加 tests 同 docs，protocol edges 而家有 clipboard、安全帶，同一個好嚴嘅門口保安。" },
+    ],
+  },
+  {
+    id: "046c0df", kind: 'commit', ref: "046c0df", oid: "046c0df3a34b70af5933c58f0d8d5cd949c74722", date: "2026-08-03",
+    title: "Refresh session-wave handoff metadata",
+    changes: [
+      { category: "changed", text: "English: Record the verified 3,305/3,306 test result, unchanged 59.0% logic coverage, 114 remaining units, and the current session/surface checkpoint. The handoff keeps the expedition log factual while the trail continues." },
+      { category: "changed", text: "廣東話：記低已驗證嘅 3,305/3,306 測試、仍然 59.0% logic coverage、剩低 114 個 units 同今次 session/surface checkpoint。交更紙繼續講真話，隊伍照行。" },
+    ],
+  },
+  {
+    id: "6ae0377", kind: 'commit', ref: "6ae0377", oid: "6ae0377e85f37f32c774a2b29eab0e5f726458d9", date: "2026-08-03",
+    title: "Refresh in-app changelog for session and surface hardening",
+    changes: [
+      { category: "changed", text: "English: Record the session, panel, search, bookmark, tooling, and About surface wave in the in-app history. The diary now remembers the buttons that finally learned to speak." },
+      { category: "changed", text: "廣東話：將 session、panel、search、bookmark、tooling 同 About surface 呢輪寫入 app history，日記終於記得啲掣學識開口講嘢。" },
+    ],
+  },
+  {
     id: "f61f353", kind: 'commit', ref: "f61f353", oid: "f61f353115f24bedc01661f5412845578aa409d3", date: "2026-08-03",
     title: "Harden session, panel, search, bookmark, and About surfaces",
     changes: [
@@ -631,35 +655,6 @@ export const DEVELOPMENT = [
     changes: [
       { category: "changed", text: "The handoff generator now excludes HANDOFF.md and ROADMAP.md from its own dirty count. Without that guard, the report counted the files it had just rewritten and became stale the moment its generated output was committed.\\n\\nRefs #26 #27 #28" },
       { category: "changed", text: "handoff generator 而家唔再將自己重寫緊嘅 HANDOFF.md 同 ROADMAP.md 計入 dirty count。之前份報告一寫完就算兩份文件未 commit，commit 完又即刻講錯；而家個數字終於同佢留下嘅狀態對得返。\\n\\nRefs #26 #27 #28" },
-    ],
-  },
-  {
-    id: "5853825", kind: 'commit', ref: "5853825", oid: "58538258002af6485c21e9568ccaf014bffa8073", date: "2026-08-02",
-    title: "Refresh the verified handoff and roadmap",
-    refs: ["#26", "#27", "#28"],
-    changes: [
-      { category: "fixed", text: "Regenerate the successor record from the current ledger, the real 3019-test run, the current commit history, and the live issue list. The handoff now reports the actual 3018 passing tests and carries the three current bug reports instead of the closed issue that had overstayed its welcome.\\n\\nRefs #26 #27 #28" },
-      { category: "fixed", text: "用最新 ledger、真實 3019 條測試、commit 歷史同 live issue list 重生 handoff 同 roadmap。現時份 handoff 寫實 3018 條過，三單未完 bug 亦有列返，之前已關嗰單唔再霸住個位扮長住客。\\n\\nRefs #26 #27 #28" },
-    ],
-  },
-  {
-    id: "c0cf846", kind: 'commit', ref: "c0cf846", oid: "c0cf8466701d333209530d27b282015d30e57180", date: "2026-08-02",
-    title: "Document queued symlink planning in the changelog",
-    refs: ["#26"],
-    changes: [
-      { category: "fixed", text: "The in-app changelog now links the queue fix to commit 640d1f4, so the shipped explanation and the code share one exact breadcrumb. A changelog entry without a real commit is just a rumour wearing a bullet point.\\n\\nRefs #26" },
-      { category: "changed", text: "內置更新記錄而家連返 640d1f4，queue 修正同說明有同一條真 breadcrumb。冇真 commit 嘅 changelog 條目，只係一粒著住 bullet point 外套嘅傳聞。\\n\\nRefs #26" },
-    ],
-  },
-  {
-    id: "640d1f4", kind: 'commit', ref: "640d1f4", oid: "640d1f4f795d987b98fb1dadf610ca93b0ddf50c", date: "2026-08-02",
-    title: "Align queued local symlink planning with foreground transfers",
-    refs: ["#26"],
-    changes: [
-      { category: "fixed", text: "Queued local-upload planning now follows the same directory-symlink rule as the foreground engine, while remote-source plans keep the explicit followDirectorySymlinks guard. The old queue had two opinions about one folder; this makes the folder stop asking which route it took. Regression coverage proves the symlink content arrives and the empty-directory plan stays honest.\\n\\nRefs #26" },
-    ],
-    changesYue: [
-      { category: "changed", text: "佇列上載本機資料夾而家同前景引擎一樣，會落入本機 directory symlink；remote source 就繼續要明確開 followDirectorySymlinks 先跟。之前同一個 folder 走兩條路有兩套意見，搞到個資料夾都唔知自己應該係邊個。測試釘實檔案真係到，空目錄計劃亦唔再扮嘢。\\n\\nRefs #26" },
     ],
   },
 ];
