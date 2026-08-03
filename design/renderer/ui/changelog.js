@@ -187,6 +187,27 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "c274856", kind: 'commit', ref: "c274856", oid: "c274856d2332c201b2f48b4fe4bb2f535747da9f", date: "2026-08-03",
+    title: "Harden CLI output, geometry, queue, and SCP",
+    changes: [
+      { category: "removed", text: "Headless drag/drop JSON is compact unless --pretty is requested, extension roots resolve environment and relative paths, window bounds keep a visible edge, reconnect prompts coalesce, parallel queue failures abort siblings, and SCP overwrite removes only the exact destination before copying. Tests and docs make the behavior auditable, so the code can stop losing the plot in six different file formats.\\n\\nHeadless drag/drop JSON 預設 compact，想靚啲先用 --pretty；extension root 識環境同 relative path，window bounds 留返 visible edge，reconnect prompt 合併，queue 平行失敗會收掣，SCP overwrite 只刪 exact destination 先 copy。測試文件都對齊，等 code 唔好喺六種 file format 入面一齊迷路。" },
+    ],
+  },
+  {
+    id: "8d3a02e", kind: 'commit', ref: "8d3a02e", oid: "8d3a02ef5f1f74e0a237f8979eac0ade2065550b", date: "2026-08-03",
+    title: "Refresh CLI boundary handoff metadata",
+    changes: [
+      { category: "fixed", text: "The handoff now records the 3,227-pass regression run, Docker smoke, the 1e1c543 and 2a2d946 milestones, and the honest 59.0% coverage with 114 units outstanding. The successor gets the real state, not a motivational poster.\\n\\nHandoff 而家記低 3,227 pass regression、Docker smoke、1e1c543 同 2a2d946 milestone，仲有老實嘅 59.0% coverage 同 114 個未完成 unit。交接畀 successor 嘅係真 state，唔係勵志海報。" },
+    ],
+  },
+  {
+    id: "2a2d946", kind: 'commit', ref: "2a2d946", oid: "2a2d946a3bca56fc46d931fa63eee5e42ba9d078", date: "2026-08-03",
+    title: "Refresh in-app changelog for CLI boundary work",
+    changes: [
+      { category: "changed", text: "The in-app history now includes the verified 1e1c543 headless CLI, console, SFTP cleanup, RemoteFiles, reconnect, and Preferences changes with full links and bilingual copy. The changelog now knows the command line has entered the room.\\n\\nApp 入面嘅歷史而家收錄已驗證嘅 1e1c543 headless CLI、console、SFTP cleanup、RemoteFiles、reconnect 同 Preferences 修正，連埋完整 link 同雙語 copy；changelog 終於知道 command line 入咗場。" },
+    ],
+  },
+  {
     id: "1e1c543", kind: 'commit', ref: "1e1c543", oid: "1e1c54392fd27c023399c85434ddbc32f7edc7c2", date: "2026-08-03",
     title: "Expand headless CLI and harden lifecycle boundaries",
     changes: [
@@ -871,60 +892,6 @@ export const DEVELOPMENT = [
       { category: "changed", text: "一個 `/` 引發嘅血案。個 queue 淨低空目錄嘅時候，硬係用 `/` 去比對路徑 —— 但 下載嘅目的地係 Windows 本機，人哋分隔符係 `\\`，於是「呢個目錄有冇檔案？」永遠 答「冇」，連塞爆檔案嗰啲都照斬。斬晒之後冇人開資料夾，第一個檔案即刻 ENOENT 仆街，成單嘢玩完。而家改成問目的地 adapter 自己個 `sep`，佢一路都識答，只係 之前冇人問過佢。" },
       { category: "changed", text: "引擎嗰邊更加離譜：`excludeEmptyDirectories` 全個 transfer.js 只出現喺 `allowAnyTransfer` 入面 —— 即係「有冇開過濾器呀？」嗰道閘。你一開佢，引擎就 好勤力咁行慢路，然後乜都唔篩。而家補返 WinSCP 原本嗰個 IsEmptyDirectory： 會遞歸（空目錄裝住空目錄，一樣係空）、識睇 mask 同隱藏檔、見到第一個檔案就 收手、開唔到就當「唔空」—— 寧願多開個冇人要嘅資料夾，都好過靜靜雞漏低成個 目錄。" },
       { category: "changed", text: "測試特登由下載入手：淨測上載嘅話，個 bug 可以繼續瞓大覺。" },
-    ],
-  },
-  {
-    id: "8e75cb2", kind: 'commit', ref: "8e75cb2", oid: "8e75cb216a77e6f97c4e8a9da85879c3256029f4", date: "2026-08-02",
-    title: "Impose the FTP reconnect budget tfUseFileTransferAny was always meant to set",
-    changes: [
-      { category: "changed", text: "TRANSFER_FLAGS.useFileTransferAny was declared, read in two places, and ORed in by absolutely nobody. The upload flag producer returned preCreateDir or 0, both download call sites passed a literal 0, so `trackTransfer` was false for every transfer ever made and the reset branch in RobustLoop was dead code reachable only by reading it." },
-      { category: "removed", text: "The consequence was the opposite of what the gap list claimed. Read TRobustOperationLoop::TryReopen (Terminal.cpp:538-559) with the braces in view: the progress-based reset AND the ContinueReopen(FStart) call that IS the budget both sit inside `if (FAnyTransfer != NULL)`. Clearing the flag does not tighten the ceiling, it removes the ceiling. So this port was strictly more permissive than WinSCP: an FTP transfer that dropped every ten seconds without moving a single byte would reconnect politely, forever, like a dog that has decided the closed door is a negotiation. WinSCP gives up after SessionReopenTimeout and says so out loud. docs/protocol-gaps.md:229 asserted the reverse and has been corrected rather than quietly deleted." },
-      { category: "added", text: "transferFlags() and a new downloadFlags() now set the bit for FTP and FTPS only - FtpFileSystem.cpp:1585 and :1682, the FTP back end's two transfer entry points and nothing else, which is why SFTP keeps retrying indefinitely upstream and keeps doing so here. caps.limitTransferReconnects overrides the protocol test. RobustLoop's third argument is now a holder object rather than a boolean, because the C++ takes a `bool *` and WHICH bool it points at is the entire design: null for no budget, the terminal for a budget the progress callback can reset, a throwaway object for a budget nothing can reset." },
-      { category: "changed", text: "Two fidelity defects fell out while wiring it. customReadDirectory was pointing its loop at the terminal-wide flag, so a directory that could not be listed got a fresh retry window every time some unrelated download managed a chunk - WinSCP uses a function-local that nothing ever sets (Terminal.cpp:3760), which is how \"we limit it unconditionally\" was meant to read. And the reset arm never set FPrevAnyTransfer (Terminal.cpp:546), so a loop that watched bytes go by would cheerfully report to the enclosing scope that nothing had happened. RobustLoop also stamped its start from Date.now() while ContinueReopen compared against the terminal's injectable clock; harmless in production where they are the same function, fatal to anyone trying to test a timeout without waiting for one." },
-      { category: "changed", text: "一句話：TRANSFER_FLAGS.useFileTransferAny 呢個旗，聲明咗、讀咗兩次、就係冇人" },
-    ],
-    changesYue: [
-      { category: "changed", text: "set 過。個 reset 分支等咗成世，等到自己變成註解。" },
-      { category: "changed", text: "更搞笑係方向搞錯咗。C++ 入面「重試預算」同「重設預算」兩隻手都喺同一個 `if (FAnyTransfer != NULL)` 裏面，即係唔 set 旗唔係扣預算，係根本冇預算。所以 我哋以前係比 WinSCP 更加癡情：FTP 一路斷線一路零 byte，佢照樣重連到天光，重連 到你老咗，重連到隻 socket 都覺得尷尬。原裝 WinSCP 過咗 SessionReopenTimeout 就講一聲「唔試喇」然後收工。文件仲要寫反轉咗，一併改返。" },
-      { category: "changed", text: "另外執埋兩單。列目錄嗰個 loop 之前掛住成個 terminal 嘅旗，即係隔籬有人下載到 幾個 byte，呢邊讀唔到嘅資料夾就當自己有得再嚟一鑊 —— WinSCP 用嘅係一個永遠冇 人 set 嘅 local 變數，咁先叫「無條件設上限」。仲有 reset 嗰陣冇寫返 FPrevAnyTransfer，搞到明明見住啲 byte 飛過，出返去就話「乜都冇發生過」。順手 令個 loop 同 ContinueReopen 睇返同一個鐘，唔係一個睇 Date.now() 一個睇注入嘅 時鐘，否則寫個逾時測試就要真係等足五秒。" },
-      { category: "changed", text: "Tests: test/terminal.test.js 96 -> 100, test/transfer.test.js 77 -> 80. Six of the seven new cases fail against the unmodified source; the seventh (\"a robust loop with no flag has no reconnect budget at all\") passes either way and is named here as the inert guard it is - it exists so a future change that hands every protocol a budget cannot land quietly." },
-    ],
-  },
-  {
-    id: "bc6fbed", kind: 'commit', ref: "bc6fbed", oid: "bc6fbed98d6b6378fb2bcaa9af08cadfe8119b92", date: "2026-08-02",
-    title: "Stop the queue's resume from deleting the symlink it was told to upload over",
-    changes: [
-      { category: "changed", text: "TSFTPFileSystem::Source refuses the resumable route for an existing target of two kinds (SftpFileSystem.cpp:4674-4700): a symbolic link, and a file owned by another user. Neither survives being recreated, and resuming does not overwrite in place — it fills `<name>.filepart`, removes the target and renames the part onto the name." },
-      { category: "removed", text: "transfer.js's source() enforced both arms. queue.js's `_copyBytes` performs the same delete-and-rename and carried only the ownership half, so uploading over a symbolic link through the queue — the route a click in the UI actually takes — removed the link, dropped an ordinary file where it had been, and left whatever it pointed at untouched. The bytes landed at the right path and read back correctly, which is precisely why nobody noticed the link was gone. The ownership guard next door had the opposite problem: it worked, silently, so a transfer that stopped resuming looked like a slow server rather than a decision." },
-      { category: "changed", text: "Both copies of the rule now live in one place, transfer.js's `resumeRefusalReason`, which answers with WinSCP's own log line or '' — the reason being the useful part. WinSCP's middle arm, DoesFileLookLikeSymLink, is deliberately left out and the omission is documented on the function: it guesses \"0777 and under 100 bytes\" because SFTP-3's attribute block will not say whether a file is a link, and protocols/sftp.js:1325-1327 lstats and reads the type straight out of the mode bits. Guessing on top of a fact only costs real tiny files their resume, and its `FVersion < 4` gate means nothing in a function that also serves FTP, WebDAV and S3." },
-      { category: "fixed", text: "The uid-is-not-a-name gate stays exactly where it was and is now pinned from both sides, because getting it wrong is worse than the bug: ssh2 asks for SFTP-3, sftp.js hands over String(uid), and reading \"1000\" as a person called 1000 would switch resumable uploads off on every SFTP server on earth." },
-      { category: "added", text: "test/queue.test.js 39 pass 2 fail -> 41 pass 0 fail; the two new gates are the symlink refusal and the ownership refusal's missing log line. test/transfer.js 77 -> 78 pass, the new one covering the symlink arm that this commit moved into shared code and that no test had ever asserted." },
-    ],
-    changesYue: [
-      { category: "changed", text: "—— 廣東話版 ——" },
-      { category: "changed", text: "「見到 symlink 都照劈」——隊列版上載嘅真實死法" },
-      { category: "changed", text: "WinSCP 好耐之前就寫低：目標係 symlink，或者係人哋嘅檔案，就唔好 resume，因為 resume 唔係原地覆寫，係寫 .filepart、remove、rename 一條龍,直情連檔案都重新開過。" },
-      { category: "changed", text: "transfer.js 兩樣都識驚。但 queue.js 個 `_copyBytes` 只係抄咗「人哋嘅檔案」嗰半， 撞正 symlink 照劈 —— 條捷徑冇咗，變成一個普通檔案，佢本來指住嗰份嘢一條毛都冇 郁。最陰功係 bytes 真係落咗正確位置，讀返出嚟仲要係啱嘅，所以完全睇唔出條 link 已經升天。隔籬個 owner 守衛就啱啱相反：佢做緊嘢，但一聲都唔出，用家只會以為部 server 今日食咗懶惰藥。" },
-      { category: "changed", text: "而家兩邊共用同一個 `resumeRefusalReason`，唔准 resume 就照 WinSCP 原文寫落 log， 唔准都要講聲點解。至於 WinSCP 中間嗰條 DoesFileLookLikeSymLink（0777 又細過 100 bytes 就當你係 symlink），我哋唔抄，而且喺 function 上面寫明點解唔抄：人哋要靠估 係因為 SFTP-3 死都唔肯講；我哋 protocols/sftp.js 一個 lstat 就睇到 mode bits。 明明知道答案仲要摸估，最後淨係累到啲真係細過 100 bytes 嘅檔案冇得 resume。" },
-      { category: "changed", text: "至於「uid 唔係人名」嗰道閘，原封不動，仲要兩邊都加測試釘實佢：ssh2 講 SFTP-3， sftp.js 交出嚟嘅係 String(uid)，如果當「1000」係一個叫 1000 嘅人，全世界 SFTP server 嘅 resume 就一齊收工 —— 嗰個先真係大鑊過原本個 bug。" },
-    ],
-  },
-  {
-    id: "1c7bbce", kind: 'commit', ref: "1c7bbce", oid: "1c7bbce075e1350011e59224d0ba308609adfa5f", date: "2026-08-02",
-    title: "Give CI's checkouts full history so changelog shas can resolve",
-    changes: [
-      { category: "changed", text: "test/changelog.test.js resolves every changelog entry's commit against the repository with `git cat-file`, and it failed on CI while passing on every developer's machine — the worst shape a failure can take, because the machine whose output anyone actually reads was the only one disagreeing." },
-      { category: "changed", text: "Cause: actions/checkout defaults to `fetch-depth: 1`. Both jobs in ci.yml (lines 59-64 and 84-87) took that default, so CI cloned exactly the commit that triggered the run and nothing before it. All nineteen referenced shas reach further back than that, so the very first one lost the argument and the suite went red. Reproduced exactly: a `git clone --depth=1` of this repository fails with the identical message, byte for byte, while a full clone passes 41/41. The existing skip guard cannot help and should not — it fires only when the tree is not a git checkout at all, and a shallow clone very much is one." },
-      { category: "fixed", text: "Fix: `fetch-depth: 0` on both checkouts. Zero rather than a fixed number on purpose — the changelog reaches one commit further back with every entry added, so any finite depth works right up until the day it silently does not. It does not drag in vendor/winscp: fetch-depth and submodules are independent inputs and `submodules: false` still stands, so full history costs 2 MB here (22 MB against 20 MB shallow), not 300k lines of borrowed C++." },
-      { category: "fixed", text: "The release job gets it too, and that half is deliberate rather than copy-paste. Nothing it runs today reads history — make-icon.js, pick-codename.js and release-notes.js do not spawn git once between them. But release notes are meant to report per-line authorship, and `git blame` on a shallow clone does not have the decency to fail: it exits 0 and cheerfully credits every line of every file to the one grafted boundary commit. README.md blames to three commits with history and to exactly one without, with a smile and a zero exit code. Better to fix the checkout before the counter arrives than to publish a confidently wrong number to a page nobody re-runs." },
-      { category: "fixed", text: "The obvious wrong fix was skipping the sha check when the clone is shallow, which would make the one assertion guarding against dead changelog links permanently green in the only place it ever runs. So a guard keeps the YAML honest instead: it counts checkouts against fetch-depth lines, so a third job added later without history fails loudly, and it rejects a fixed depth by name." },
-    ],
-    changesYue: [
-      { category: "changed", text: "--- 廣東話 ---" },
-      { category: "changed", text: "CI 一路紅，個個機都綠。原來 actions/checkout 唔講就預設 `fetch-depth: 1` — 淨係 clone 咗觸發嗰個 commit，之前嘅歷史一律當冇。changelog 十九個 sha 全部 喺更早嘅位，`git cat-file` 梗係搵唔到，第一個就仆街。" },
-      { category: "changed", text: "改 `fetch-depth: 0`。唔寫死數字，因為 changelog 每加一條就伸長少少，寫 50 今日夠用，聽日就靜靜雞唔夠 —— 呢種先至最恐怖。順帶一提，`submodules: false` 照舊，vendor/winscp 嗰三十萬行 C++ 唔會跟埋入嚟，多咗歷史都係貴 2MB 咋。" },
-      { category: "changed", text: "release job 都一齊改。今日佢真係一次 git 都冇 call 過，但 release notes 遲早要用 `git blame` 數邊行邊個寫。而 `git blame` 喺 shallow clone 唔會報錯, 佢會笑住 exit 0，然後話你知全世界每一行都係同一個 commit 寫嘅 —— README.md 有歷史數到三個 commit，冇歷史就淨返一個，數字錯得好有自信。" },
-      { category: "changed", text: "最誘人嗰個錯誤修法係：見到 shallow 就 skip 個 sha 檢查。咁做等於叫唯一會跑 呢個 test 嘅機器永遠開綠燈,個 test 就變咗擺設。所以寧願補返歷史，再加個 guard 守住段 YAML：數 checkout 對唔對得上 fetch-depth，將來多開一個 job 唔記得寫就 即刻嘈,寫死數字都照踢。" },
     ],
   },
 ];
