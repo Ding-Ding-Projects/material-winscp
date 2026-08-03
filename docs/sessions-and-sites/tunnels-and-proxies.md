@@ -12,6 +12,11 @@ on a private network.
 A **proxy** routes the connection through an intermediary — SOCKS, HTTP CONNECT,
 Telnet, a local command, or the system's configured proxy.
 
+In this port, the Proxy page is active only for SSH sessions (SFTP and SCP),
+because that is the adapter path that consumes these settings. FTP, WebDAV and
+S3 retain imported proxy values but leave the page disabled until their
+adapters support proxying.
+
 They compose: the tunnel connection itself can go through a proxy.
 
 ## Configuration
@@ -56,7 +61,7 @@ inside the proxied network.
 | SOCKS5 authentication rejected | Reported as a proxy failure, not a server failure. | Yes |
 | HTTP proxy refuses CONNECT to a non-443 port | Common policy. The proxy's own status line is quoted. | Depends on the proxy |
 | `cmd` proxy command exits immediately | The command's stderr is captured and shown; a silent failure here is otherwise impossible to debug. | Yes |
-| `system` proxy configured with a PAC file | The PAC result is resolved once per connection and logged at debug level. | Yes |
+| `system` proxy selected | The setting is refused with the supported proxy methods; system/PAC discovery is not available in this runtime. | Yes |
 
 ## Security considerations
 

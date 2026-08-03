@@ -31,7 +31,7 @@ requests.
 | `ftps` (shared field) | — | `implicit` selects HTTPS; `none` selects plain HTTP. |
 | `tlsCertificateFile` | `''` | Client certificate for mutual TLS. |
 | `minTlsVersion` / `maxTlsVersion` | `tls10` / `tls13` | Negotiated version window. |
-| `proxyMethod` and friends | `none` | HTTP proxying uses the same per-site proxy block as every other protocol. |
+| `proxyMethod` and friends | `none` | The current WebDAV adapter does not consume the shared proxy block; Advanced keeps those stored values visible but disables the Proxy page for WebDAV. |
 
 The remote path is the URL path. A site whose `hostName` is
 `dav.example.com` and whose `remoteDirectory` is `/team/docs` addresses

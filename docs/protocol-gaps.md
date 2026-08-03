@@ -25,6 +25,8 @@ for a completed copy. The failure is still returned to the caller unchanged.
 | **`ed448` host keys**, **RSA key exchange** | `hostKeyList`, `kexList` | ⬜ Not offered | Not in `ssh2`'s supported algorithm lists. Logged as not offered rather than silently dropped from the preference order. |
 | **`des`, `blowfish`, `arcfour` ciphers** | `cipherList` | ➖ Deliberate | Unsupported by `ssh2`, and all three sit below the `WARN` marker in WinSCP's own defaults. Not a gap worth closing. |
 | **`proxyMethod: 'system'`** | proxy settings | ⬜ Not available | No reliable cross-version way to read Windows system proxy configuration from Node. Throws a message naming the working alternatives instead of silently connecting direct — which would be a privacy failure, not a convenience. |
+| **Loopback proxy bypass** | `proxyLocalhost` | ⬜ Not wired | The SSH transport does not yet consult this setting, so a configured proxy is used for localhost targets too. Advanced stores the value and names the consequence. |
+| **Protocol feature overrides** | `protocolFeatures` | ⬜ Not wired | No current adapter consumes the feature override list. The value is preserved for compatibility but does not change feature detection. |
 
 **Honoured despite the engine change:** `sftpMaxPacketSize` maps to the stream
 high-water mark, which genuinely is the SFTP read packet size in this library;
@@ -111,7 +113,8 @@ reads underneath it are covered by the resume tests).
 | **Active mode** | `ftpPasvMode` | ✅ Closed | `basic-ftp` is passive-only; `PORT`/`EPRT` is implemented directly against the control connection, including RFC 4217's rule that we remain the TLS client on a connection the server opened. Verified end to end against a real server in `test/e2e-ftp.test.js` — listing, download, resumed download and upload, over plain FTP and over FTPS. |
 | **A resumed upload uses `APPE` in passive mode and `REST` + `STOR` in active mode** | resume support on upload | 🔁 Worked around | `basic-ftp` exposes no start offset for an upload, so the passive path can only append; the hand-written active path sends the offset properly because it owns the control dialogue. Appending gives the identical result whenever the partial file on the server is exactly as long as the client thinks it is, which is the case the queue creates — but the two paths fail differently, and that difference is invisible to the user. A server that implements `REST STREAM` while refusing `APPE` cannot resume a passive upload at all (the transfer restarts from zero rather than failing), and a server whose `REST` + `STOR` truncates instead of overwriting in place would corrupt an active one. Both are exercised end to end in `test/e2e-ftp.test.js`. |
 | **Multi-byte code pages** | `codePage` | 🚧 Partial | Encodings outside Node's built-in set fall back to `latin1`, which preserves bytes rather than mangling names. A real Big5/GB18030 filename needs an encoding table. |
-| `ftpTransferActiveImmediately`, `ftpDupFF`, `ftpUndupFF` | as named | ⬜ Not wired | Session-level options not yet threaded through to the adapter. `ftpHost` is closed: the explicit `on` value sends `HOST <hostName>` after login, while `auto` and `off` preserve the default no-command behaviour. |
+| `ftpDupFF`, `ftpUndupFF` | as named | ⬜ Not wired | The FTP adapter does not yet apply the two `0xFF` filename workarounds. The values are stored and called out in Advanced; `ftpTransferActiveImmediately` and `ftpHost` are closed because they reach the adapter. |
+| **VMS revision display** | `vMSAllRevisions` | ⬜ Not wired | The FTP listing parser does not implement VMS revision filtering; the stored value does not change which revisions the server returns. |
 
 **Closed by the end-to-end run**, and listed here so nobody re-opens them from
 the commit history alone: the generic `HASH` command (draft-bryan-ftpext-hash)
@@ -146,6 +149,7 @@ adapter against a real server (`test/e2e-webdav.test.js`).
 | **Setting a modification time** | `preserveTime` | ➖ By design | `getlastmodified` is a live property in RFC 4918; a client cannot set it. `caps.timestamp` is `false`, so the queue never tries. |
 | **Permissions and ownership** | `preserveRights` | ➖ By design | WebDAV has no portable permission model. |
 | **Server-side COPY and MOVE on a reduced endpoint** | rename, duplicate | ➖ By design | `caps.copyRemote`, `caps.nativeMove`, `caps.rename` and `caps.move` are taken from the `Allow` header the server answers `OPTIONS` with, not assumed. An endpoint that does not advertise `COPY`/`MOVE` (SharePoint read-only shares, several object-store gateways) has those capabilities withdrawn instead of being offered a rename that would `405`. Covered by `test/e2e-webdav.test.js`. |
+| **Cross-host redirects** | `webDavCrossDomainRedirects` | ⬜ Not wired | The adapter refuses redirects to another host regardless of the stored option. Advanced keeps the option visible with this consequence because forwarding credentials to an untrusted host must remain impossible to miss. |
 
 ## S3 (written directly against the REST API)
 

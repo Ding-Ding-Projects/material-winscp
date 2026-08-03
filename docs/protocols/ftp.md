@@ -28,7 +28,7 @@ Under **Site → Advanced → FTP** and **→ TLS/SSL**.
 | `ftpTransferActiveImmediately` | `auto` | Passive transfer ordering: `on` sends `RETR`/`STOR` before opening the data socket, `off` opens the socket during normal preparation, and `auto` enables the delayed-connect mode only for an Idea FTP Server welcome banner. Active mode already sends the command before the server dials the listening socket. |
 | `ftpListAll` | `auto` | Try `LIST -a` to reveal dot-files, falling back if the server treats `-a` as a filename. |
 | `ftpHost` | `auto` | Send `HOST` for virtual-host servers. |
-| `ftpDupFF` / `ftpUndupFF` | `false` | Work around servers that mangle `0xFF` bytes in filenames. |
+| `ftpDupFF` / `ftpUndupFF` | `false` | Stored for compatibility, but the current adapter does not yet apply the `0xFF` filename workarounds. |
 | `sslSessionReuse` | `true` | Reuse the control channel's TLS session on the data channel. Required by most modern servers; a few old ones break on it. |
 | `tlsCertificateFile` | `''` | Client certificate for mutual TLS. |
 | `minTlsVersion` / `maxTlsVersion` | `tls10` / `tls13` | Negotiated version window. |
@@ -75,8 +75,9 @@ control connection is public.
   says so.
 - **FTP has no integrity guarantee for the data channel** unless TLS covers it.
   A checksum comparison after transfer is the only way to be sure over plain FTP.
-- The `0xFF` workarounds change bytes in filenames. They are `false` by default
-  because a wrong guess corrupts names rather than displaying them oddly.
+- The `0xFF` workaround settings are preserved but not yet applied by the
+  adapter. They remain `false` by default because a wrong guess would corrupt
+  names rather than displaying them oddly.
 
 ## Verification
 
