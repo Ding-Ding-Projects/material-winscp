@@ -187,6 +187,27 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "ae54b2a", kind: 'commit', ref: "ae54b2a", oid: "ae54b2a10ef9b397ef88f602fb968f2bcfa40d9b", date: "2026-08-03",
+    title: "Harden drag shell terminal and protocol security",
+    changes: [
+      { category: "added", text: "Expose disabled preference state, capture drag-start panel paths, refuse unsafe staged names, release pending terminal prompts on cancel, reject invalid AssumeRole expiry, and require WebDAV challenges unless legacy auth is explicit. Add focused tests and documentation. The drag payload now knows where it started, and the protocols have stopped handing credentials to surprise guests.\\n\\n廣東話：drag payload 記住自己由邊度出發，WebDAV 唔再見人就派 credentials；Terminal、S3、panel 同 Preferences 都收好尾。" },
+    ],
+  },
+  {
+    id: "599ae98", kind: 'commit', ref: "599ae98", oid: "599ae984e0d4cb3fc164b7440bb15434c8fc0dbd", date: "2026-08-03",
+    title: "Refresh handoff for queue and panel wave",
+    changes: [
+      { category: "fixed", text: "Update the factual handoff with 59.0% logic coverage, 114 outstanding units, 3342 passing tests plus one skip, the 22-issue scan and the fourth-wave queue/session/search/panel/setup fixes. Another pothole is flagged; the cardboard finish line is still unemployed.\\n\\n廣東話：handoff 報清楚多咗幾個測試同新修正，終點紙牌繼續失業，因為條路仲未行完。" },
+    ],
+  },
+  {
+    id: "b80efd9", kind: 'commit', ref: "b80efd9", oid: "b80efd97f9f8d89ba30a2a670246ee9368171296", date: "2026-08-03",
+    title: "Refresh changelog for queue and platform fixes",
+    changes: [
+      { category: "changed", text: "Record the queue, session, search, panel, synchronize and setup hardening from the fourth wave with verified commit links. The changelog now documents that zero-result searches and non-Windows shortcuts both mean exactly what they say.\\n\\n廣東話：更新日誌講清楚零結果就係零，非 Windows shortcut 就唔做，唔會畀讀者玩文字魔術。" },
+    ],
+  },
+  {
     id: "aa5ee78", kind: 'commit', ref: "aa5ee78", oid: "aa5ee78c22119ff7a0ba3ae75db9f3a1bb7ba010", date: "2026-08-03",
     title: "Harden queue sessions search panels and setup",
     changes: [
@@ -615,27 +636,6 @@ export const DEVELOPMENT = [
     title: "Refresh hardening handoff metadata",
     changes: [
       { category: "changed", text: "The handoff now records the 7d90403 and 92a9211 milestones, the verified 3,213-pass suite, and the honest 59.0% coverage with 114 units still outstanding. The paperwork has finally caught up with the code instead of chasing it down the corridor.\\n\\nHandoff 而家記低 7d90403 同 92a9211、已驗證嘅 3,213 pass 測試，同埋老實嘅 59.0% coverage 及 114 個未完成 unit。文件終於追返上 code，唔使再喺走廊追住份紙跑。" },
-    ],
-  },
-  {
-    id: "92a9211", kind: 'commit', ref: "92a9211", oid: "92a921191ee5b397d7fcd9026b3d66c9714dc032", date: "2026-08-03",
-    title: "Refresh in-app changelog for hardening wave",
-    changes: [
-      { category: "fixed", text: "The in-app history now includes the verified 7d90403 configuration, crypto, mask, storage, and WinAPI fixes with full commit links and bilingual copy. The changelog no longer forgets the latest plot twist.\\n\\nApp 入面嘅歷史而家收錄已驗證嘅 7d90403 設定、crypto、mask、storage 同 WinAPI 修正，連埋完整 commit link 同雙語 copy；changelog 唔再漏咗最新一幕。" },
-    ],
-  },
-  {
-    id: "7d90403", kind: 'commit', ref: "7d90403", oid: "7d9040307ce9bcbe971ab34f9aea4ac3e325f697", date: "2026-08-03",
-    title: "Harden config, masks, crypto, storage, and WinAPI",
-    changes: [
-      { category: "fixed", text: "Configuration imports now re-protect clear-text secrets, crypto rejects malformed base64 envelopes, editor masks follow WinSCP wildcard rules, storage normalizes duplicate keys, and WinAPI dispatch accepts only safe own methods. Regression tests and focused documentation cover each boundary so the code stops improvising at the edges instead of making the edges do stand-up comedy.\\n\\n設定匯入會重新保護明文秘密，crypto 會拒絕古怪 base64，editor mask 跟足 WinSCP 萬用字元，storage 會整理重複 key，WinAPI 只准安全嘅 own method。測試同文件一齊補齊，等啲邊界位唔好再自己加戲。" },
-    ],
-  },
-  {
-    id: "2eb26e3", kind: 'commit', ref: "2eb26e3", oid: "2eb26e3320bd65c64dea1997cbc52d147fc3def2", date: "2026-08-03",
-    title: "Fix protocol, session, UI, and changelog gaps",
-    changes: [
-      { category: "security", text: "English: Tighten the seams where the port was confidently pretending: stale FTP resumes, EOF reads, secret loading, login validation, panel reachability, editor IPC, and current changelog links now have real guards and tests.\\n\\nCantonese: 執返啲 port 扮緊冇事嘅位：FTP resume 唔再留垃圾尾、EOF 唔再扮 network error、secret 唔亂出、login 同 panel 真係有門，editor IPC 同 changelog 亦有憑有據。" },
     ],
   },
 ];
