@@ -79,6 +79,7 @@ support question this feature generates.
 | A file colour rule with poor contrast | The rule editor shows the measured contrast for both light and dark. | Yes |
 | Panel comparison with clock skew | Uses the same time correction as [synchronization](../synchronization/synchronize.md). | Yes |
 | Extremely long filename | Truncated in the middle, so both the beginning and the extension stay visible, with the full name in the tooltip and the accessible name. | n/a |
+| Overlapping directory loads | Only the newest requested path is applied; a slower response for an older path is discarded, preserving the current listing and selection. | Yes — navigate again or refresh. |
 
 ## Security considerations
 
@@ -114,6 +115,8 @@ The bridge contract is covered by the focused interface IPC tests.
   bulk-operation counts match the intended scope.
 - Middle-truncation is tested to assert the extension remains visible and the
   accessible name is the full one.
+- Load-generation handling is tested to ensure an out-of-order directory
+  response cannot replace a newer path or reset its selection.
 
 ## Suggested articles
 

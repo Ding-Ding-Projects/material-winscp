@@ -1639,10 +1639,10 @@ class Ipc {
       this._watchers = this._watchers || new Map();
       this._watchers.set(id, watcher);
       if (watcher && typeof watcher.on === 'function') {
-        // design/main/sync.js's watcher emits `started`, `changes`, `tick`,
-        // `error` and `stopped`. `change` and `synchronized` were never emitted
-        // by it, so "Keep remote directory up to date" ran and reported
-        // absolutely nothing back to the window that started it.
+        // Forward the watcher's complete plain-data event vocabulary. The
+        // renderer consumes `changes` and `tick` to explain what was queued;
+        // dropping those events would make a live watcher look idle even while
+        // transfers were being scheduled.
         for (const ev of ['started', 'changes', 'tick', 'error', 'stopped']) {
           watcher.on(ev, (payload) => this.emit('event:sync', { type: ev, id, payload: syncPayload(ev, payload, this) }));
         }

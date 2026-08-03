@@ -722,10 +722,9 @@ export function openKeepUpToDateDialog(props = {}) {
     }
   });
 
-  // design/main/sync.js's Watcher emits 'changes'/'tick' while design/main/ipc.js
-  // forwards 'change'/'synchronized', so a change event does not currently reach
-  // the renderer. The queue does, so the log reports what was actually enqueued
-  // rather than staying blank while files fly past.
+  // The main watcher emits 'changes'/'tick', and the IPC bridge republishes
+  // those names unchanged. The queue does too, so the log reports what was
+  // actually enqueued rather than staying blank while files fly past.
   const known = new Set(queueModel.snapshot.items.map((i) => i.id));
   const offQueue = queueModel.subscribe((snap) => {
     if (!watcherId) { for (const i of snap.items) known.add(i.id); return; }

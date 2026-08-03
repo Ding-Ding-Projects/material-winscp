@@ -52,6 +52,7 @@ trusted endpoint, preferably over HTTPS.
 | Paths containing `+`, `#`, `%` or non-ASCII | Servers disagree about encoding. `webDavLiberalEscaping` widens the escaping set. | Usually |
 | `MOVE`/`COPY` across a quota boundary | The server's `507` is surfaced verbatim, including its message. | Depends on the server |
 | Recursive `MKCOL` meets an existing file | The adapter checks the `405` response with `stat` and reports that the intermediate resource is not a directory; it never silently treats a file as a folder. | Yes, choose a different path |
+| Upload receives a negative, non-finite or unsafe offset | The adapter rejects the request before creating a PUT stream; WebDAV PUT always starts at byte zero. | Yes, restart from the beginning |
 | Locking (`LOCK`/`UNLOCK`) | Not implemented. Concurrent edits are last-write-wins, and the editor warns when a file's ETag changed under it. | Partially |
 | No resume support | `caps.resume` is false; interrupted uploads restart. Range `GET` is not used for resumed downloads because servers report support inconsistently. | n/a |
 | Certificate untrusted | The same blocking trust dialog as FTPS, with the same fingerprint pinning. | Yes |
@@ -97,6 +98,8 @@ trusted endpoint, preferably over HTTPS.
   `Authorization` header.
 - Challenge-based authentication is tested to prove the first request carries
   no `Authorization` header and the retry carries the negotiated credentials.
+- Upload offset validation is tested for negative, non-finite and unsafe values
+  before a PUT stream is created.
 
 Manual check: connect over HTTPS, open the session log, and confirm the
 `PROPFIND` for the root directory returns `207 Multi-Status` with a `D:multistatus`

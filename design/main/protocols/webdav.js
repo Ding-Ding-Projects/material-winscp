@@ -1205,7 +1205,11 @@ class WebDavAdapter extends Adapter {
     // offset, and no server implements one portably. Quietly dropping the
     // offset would upload the tail of a file over the top of the whole one and
     // report success, so say what cannot be done instead.
-    if (Number(opts.start || 0) > 0 || opts.append) {
+    const start = opts.start === undefined ? 0 : Number(opts.start);
+    if (!Number.isSafeInteger(start) || start < 0) {
+      throw new Error('WebDAV upload start must be a non-negative integer');
+    }
+    if (start > 0 || opts.append) {
       throw new Error('WebDAV replaces a resource on every PUT and cannot write at an offset; '
         + 'this upload has to start from the beginning');
     }

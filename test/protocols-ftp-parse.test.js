@@ -9,7 +9,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const {
   parseListing, detectListingStyle, parseUnixLine, parseDosLine,
-  parseVmsRecord, parseMlsdLine, rightsToOctal, ftpTimestamp,
+  parseVmsRecord, parseMlsdLine, listingSize, rightsToOctal, ftpTimestamp,
 } = require('../design/main/protocols/ftp');
 
 // A fixed "now" so the year-less unix dates are deterministic.
@@ -272,4 +272,10 @@ test('listing sizes reject unsafe and overflowing remote values', () => {
   assert.strictEqual(unix.size, 0);
   assert.strictEqual(dos.size, 0);
   assert.strictEqual(mlsd.size, 0);
+});
+
+test('SIZE replies reject unsafe and overflowing remote values', () => {
+  assert.strictEqual(listingSize(Number.MAX_SAFE_INTEGER), Number.MAX_SAFE_INTEGER);
+  assert.strictEqual(listingSize(Number.MAX_SAFE_INTEGER + 1), 0);
+  assert.strictEqual(listingSize('9007199254740992'), 0);
 });

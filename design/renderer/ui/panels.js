@@ -165,6 +165,11 @@ export function entriesForDragPaths(entries, paths, pathOf, isLocal = false) {
   });
 }
 
+/** Only the most recently requested directory may update panel state. */
+export function isCurrentPanelLoad(requestId, currentRequestId) {
+  return requestId === currentRequestId;
+}
+
 /* ================================================================== */
 /* file masks — the panel-local fast path                              */
 /* ================================================================== */
@@ -417,6 +422,7 @@ export function createFilePanel(opts = {}) {
   let filteredCount = 0;
   const searchState = { active: false, text: '', matched: true, timer: 0 };
   const sizeCache = new Map();
+  let loadRequestId = 0;
 
   const columns = createColumnModel({ side, interfaceMode });
 
@@ -503,6 +509,7 @@ export function createFilePanel(opts = {}) {
   }
 
   async function load(target, { pushHistory = true, force = false } = {}) {
+    const requestId = ++loadRequestId;
     const want = target === undefined || target === null ? path : target;
     loading = true;
     loadError = null;
@@ -527,6 +534,7 @@ export function createFilePanel(opts = {}) {
           entries = [{ name: '..', type: 'dir', size: 0, mtime: 0, rights: '', owner: '', group: '', linkTarget: '', isSymlink: false, hidden: false }, ...entries];
         }
       }
+      if (!isCurrentPanelLoad(requestId, loadRequestId)) return;
       ({ entries: rawEntries, invalidCount } = normalizePanelEntries(entries));
       // A directory's calculated size survives a refresh of the same directory.
       // The cache key joins the path and the name with NUL, which is the one
@@ -555,6 +563,7 @@ export function createFilePanel(opts = {}) {
         path, `Changed the ${side} panel directory`,
       );
     } catch (err) {
+      if (!isCurrentPanelLoad(requestId, loadRequestId)) return;
       loadError = err.message || String(err);
       rawEntries = [];
       invalidCount = 0;
@@ -567,8 +576,10 @@ export function createFilePanel(opts = {}) {
       render();
       if (!err || !err.expected) notify.error(isLocal ? t('localPanel') : t('remotePanel'), loadError);
     } finally {
-      loading = false;
-      render();
+      if (isCurrentPanelLoad(requestId, loadRequestId)) {
+        loading = false;
+        render();
+      }
     }
   }
 

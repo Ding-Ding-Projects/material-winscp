@@ -201,6 +201,10 @@ async function compare(localAdapter, localPath, remoteAdapter, remotePath, optio
   const dir = o.direction;
 
   const mask = new FileMask(o.fileMask, { caseSensitive: o.caseSensitive, root: localPath });
+  // File-only masks must not prune directories before we can inspect their
+  // children. Directory-only rules (for example `node_modules/`) still apply
+  // here so an explicitly excluded subtree remains excluded.
+  const hasDirectoryRules = mask.parsed.dirInclude.length > 0 || mask.parsed.dirExclude.length > 0;
   const items = [];
 
   const key = (name) => (o.caseSensitive ? name : name.toLowerCase());
@@ -222,7 +226,10 @@ async function compare(localAdapter, localPath, remoteAdapter, remotePath, optio
       if (e.isSymlink && e.type === 'dir' && !o.followDirectorySymlinks) continue;
       const isDir = e.type === 'dir';
       const full = adapter.join(path, e.name);
-      if (!mask.matches(e.name, {
+      if (!isDir && !mask.matches(e.name, {
+        isDir, size: e.size, mtime: e.mtime, path: full, root: isRemote ? remotePath : localPath,
+      })) continue;
+      if (isDir && hasDirectoryRules && !mask.matches(e.name, {
         isDir, size: e.size, mtime: e.mtime, path: full, root: isRemote ? remotePath : localPath,
       })) continue;
       const mtime = isRemote

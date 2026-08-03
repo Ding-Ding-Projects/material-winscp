@@ -400,6 +400,16 @@ test('range reads reject invalid offsets before making a request', async () => {
   assert.equal(sent, false, 'invalid offsets never reach the server');
 });
 
+test('WebDAV uploads reject invalid offsets before creating a PUT stream', async () => {
+  const adapter = new WebDavAdapter({ hostName: 'dav.example.test', ftps: 'none' });
+  for (const start of [-1, Infinity, NaN]) {
+    await assert.rejects(
+      () => adapter.createWriteStream('/file.bin', { start }),
+      /upload start must be a non-negative integer/,
+    );
+  }
+});
+
 test('bounded range reads send the requested inclusive byte range', async () => {
   const adapter = new WebDavAdapter({ hostName: 'dav.example.test', ftps: 'none' });
   adapter.rangeReads = true;

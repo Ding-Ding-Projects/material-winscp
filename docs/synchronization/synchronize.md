@@ -82,7 +82,9 @@ all files appear newer, older, or unchanged.
   which applies to the run about to happen.
 - **A file mask restricts what is *transferred*, and also what is *considered*.**
   A mask that excludes a file also excludes it from deletion — a safety property
-  worth relying on deliberately.
+  worth relying on deliberately. During recursive comparison, ordinary file
+  masks do not prune directories before their children are checked; explicit
+  directory-only rules such as `node_modules/` still exclude that subtree.
 - **Timestamp-only mode writes metadata to both sides.** It is not read-only,
   despite feeling like it.
 - **Comparison reads names and metadata, never content**, unless a checksum

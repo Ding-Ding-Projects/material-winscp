@@ -32,6 +32,14 @@ test('panel listings reject malformed rows without turning them into a fake empt
   assert.deepEqual(normalizePanelEntries(undefined), { entries: [], invalidCount: 0 });
 });
 
+test('panel load generations reject stale path results', async () => {
+  const { isCurrentPanelLoad } = await loadPanels();
+  assert.equal(isCurrentPanelLoad(1, 2), false,
+    'an older directory response must not replace the newer path');
+  assert.equal(isCurrentPanelLoad(2, 2), true,
+    'the newest directory response must still update the panel');
+});
+
 /* ================================================================== */
 /* the match predicate                                                 */
 /* ================================================================== */

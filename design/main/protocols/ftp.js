@@ -1049,7 +1049,7 @@ class FtpAdapter extends Adapter {
       let size = null;
       try { size = await this.client.size(path); } catch { size = null; }
       if (size !== null) {
-        return entry({ name: this.basename(path), type: 'file', size, mtime });
+        return entry({ name: this.basename(path), type: 'file', size: listingSize(size), mtime });
       }
       // Last resort: find it in the parent listing (VMS and some mainframes
       // support neither SIZE nor MDTM).
@@ -1267,6 +1267,7 @@ class FtpAdapter extends Adapter {
 module.exports = { normalizeTimes,
   FtpAdapter,
   parseListing,
+  listingSize,
   detectListingStyle,
   parseUnixLine,
   parseDosLine,

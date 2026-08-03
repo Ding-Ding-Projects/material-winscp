@@ -716,6 +716,20 @@ test('the watcher uses a native adapter watch when one is offered', async () => 
   assert.strictEqual(closed, true, 'the native watcher is closed on stop');
 });
 
+test('a file mask does not prune directories before filtering their children', async () => {
+  const local = new MemoryAdapter('local');
+  const remote = new MemoryAdapter('remote');
+  local.putDir('/l'); remote.putDir('/r');
+  remote.putDir('/r/src');
+  local.put('/l/src/keep.txt', 'a', T);
+  local.put('/l/src/drop.log', 'a', T);
+
+  const c = await sync.compare(local, '/l', remote, '/r', {
+    direction: 'remote', criteria: 'time', recursive: true, fileMask: '*.txt',
+  });
+  assert.deepStrictEqual(summarize(c), [U('keep.txt')]);
+});
+
 test('an invalid native change source stops the watcher before reporting the error', async () => {
   const local = new MemoryAdapter('local');
   const remote = new MemoryAdapter('remote');
