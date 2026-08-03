@@ -187,6 +187,32 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "43eb4db", kind: 'commit', ref: "43eb4db", oid: "43eb4db6dba53da2e37aa50bf06966a53a4187b7", date: "2026-08-03",
+    title: "Fix CLI staging and transfer lifecycle edges",
+    changes: [
+      { category: "added", text: "Reject empty drag-stage paths, persist protection for legacy JSON secrets, keep paused queue work out of idle, retire stale WebDAV agents on reconnect, refuse blank queue targets, and reject Windows device basenames in shell payloads. Add focused documentation and regressions. The edge-case cupboard is less haunted, and the queue now knows that paused is not done." },
+      { category: "fixed", text: "拒絕空嘅 drag-stage path，舊 JSON secret 改完即刻保存保護，paused queue work 唔再扮 idle，WebDAV reconnect 會清走舊 agent，空 queue target 同 Windows device basename 一律拒絕。加埋文件同 regression；edge-case 雜物櫃少咗鬼，queue 終於明白 paused 唔係 done。" },
+    ],
+  },
+  {
+    id: "c02a2a9", kind: 'commit', ref: "c02a2a9", oid: "c02a2a94328ad5fdc71fbb3aab3ed060f87881bf", date: "2026-08-03",
+    title: "Update handoff with verified wave status",
+    changes: [
+      { category: "changed", text: "Refresh the handoff with the generated coverage, test, issue, and artifact facts while preserving the human notes. The dashboard now reports the weather instead of doing interpretive dance." },
+      { category: "changed", text: "更新 handoff 入面已驗證嘅 coverage、測試、issue 同 artifact 數字，同時保留手寫 notes。個 dashboard 而家報天氣，唔再跳解讀舞。" },
+    ],
+  },
+  {
+    id: "41e2d4c", kind: 'commit', ref: "41e2d4c", oid: "41e2d4c1e7813046ff5ce2c416dd2659331ab4b3", date: "2026-08-03",
+    title: "Refresh changelog for accessibility hardening",
+    changes: [
+      { category: "changed", text: "Record the latest verified implementation commit in the in-app history. The changelog now has receipts instead of vibes, and the protocol gremlins get a dated cameo." },
+    ],
+    changesYue: [
+      { category: "changed", text: "更新 app 入面嘅 changelog，記低最新已驗證嘅實作 commit。今次唔靠氣氛，靠收據；協議小妖怪都有日期出場。" },
+    ],
+  },
+  {
     id: "ad9936c", kind: 'commit', ref: "ad9936c", oid: "ad9936c45432426f3905d52ba298bcb2c12b9c47", date: "2026-08-03",
     title: "Harden FTP IPC accessibility and shortcut edges",
     changes: [
@@ -618,27 +644,6 @@ export const DEVELOPMENT = [
     title: "Refresh CLI boundary handoff metadata",
     changes: [
       { category: "fixed", text: "The handoff now records the 3,227-pass regression run, Docker smoke, the 1e1c543 and 2a2d946 milestones, and the honest 59.0% coverage with 114 units outstanding. The successor gets the real state, not a motivational poster.\\n\\nHandoff 而家記低 3,227 pass regression、Docker smoke、1e1c543 同 2a2d946 milestone，仲有老實嘅 59.0% coverage 同 114 個未完成 unit。交接畀 successor 嘅係真 state，唔係勵志海報。" },
-    ],
-  },
-  {
-    id: "2a2d946", kind: 'commit', ref: "2a2d946", oid: "2a2d946a3bca56fc46d931fa63eee5e42ba9d078", date: "2026-08-03",
-    title: "Refresh in-app changelog for CLI boundary work",
-    changes: [
-      { category: "changed", text: "The in-app history now includes the verified 1e1c543 headless CLI, console, SFTP cleanup, RemoteFiles, reconnect, and Preferences changes with full links and bilingual copy. The changelog now knows the command line has entered the room.\\n\\nApp 入面嘅歷史而家收錄已驗證嘅 1e1c543 headless CLI、console、SFTP cleanup、RemoteFiles、reconnect 同 Preferences 修正，連埋完整 link 同雙語 copy；changelog 終於知道 command line 入咗場。" },
-    ],
-  },
-  {
-    id: "1e1c543", kind: 'commit', ref: "1e1c543", oid: "1e1c54392fd27c023399c85434ddbc32f7edc7c2", date: "2026-08-03",
-    title: "Expand headless CLI and harden lifecycle boundaries",
-    changes: [
-      { category: "added", text: "The winscp-com wrapper now supports help and version without launching the console, ConsoleRunner turns invalid stream modes into exit code 1, reconnect cancellation wins over retries, failed SFTP handshakes clean up every socket, remote-file lists reject malformed duplicates, and Preferences gains keyboard tree navigation. Tests and docs follow each boundary, so the CLI can do its job without summoning a window-shaped ghost.\\n\\n而家 winscp-com 有 help 同 version，唔會偷開 console；ConsoleRunner 遇到壞 stream mode 會回 exit code 1，cancel 會贏過 reconnect，SFTP handshake 爆咗會清晒 socket，remote file list 唔收壞 duplicate，Preferences tree 又識用鍵盤行。測試文件一齊跟，CLI 做嘢唔使召喚視窗鬼魂。" },
-    ],
-  },
-  {
-    id: "6942a18", kind: 'commit', ref: "6942a18", oid: "6942a18028d57fe11b3537e93d77758005f7887c", date: "2026-08-03",
-    title: "Refresh interaction wave handoff metadata",
-    changes: [
-      { category: "fixed", text: "The handoff now records the 3,220-pass regression run, Docker evidence, the 9412e5b and d443d90 milestones, and the honest 59.0% coverage with 114 units outstanding. The paperwork is following the code at a brisk walk.\\n\\nHandoff 而家記低 3,220 pass regression、Docker evidence、9412e5b 同 d443d90 milestone，仲有老實嘅 59.0% coverage 同 114 個未完成 unit。文件用快步追住 code，冇再迷路。" },
     ],
   },
 ];
