@@ -187,6 +187,80 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "a281c72", kind: 'commit', ref: "a281c72", oid: "a281c72a0093def1bf5d55d5a77001aec9f20555", date: "2026-08-03",
+    title: "Expand headless CLI and harden transfer boundaries",
+    changes: [
+      { category: "removed", text: "English: The CLI now parses and generates redacted session URLs, while drag/drop, SFTP, sync, queue, configuration, editor, terminal, palette, S3, and SCP paths reject malformed or unsafe state. The code had been doing tiny numeric gymnastics; this gives it fewer chances to juggle knives." },
+    ],
+    changesYue: [
+      { category: "changed", text: "廣東話：CLI 而家識得安全解析同生成 session URL；拖放、傳輸、同步、設定、編輯器、終端機、指令面板同協定層都少啲歧路。啲細數字唔再玩雜技，免得 code 一邊搬檔案一邊踩香蕉皮。" },
+    ],
+  },
+  {
+    id: "2d7e22f", kind: 'commit', ref: "2d7e22f", oid: "2d7e22f52df4f8d39e29f7845f4175b5ef3d783a", date: "2026-08-03",
+    title: "Reset command palette selection on search",
+    changes: [
+      { category: "changed", text: "English: Keep the keyboard target at the first fresh match, because stale indexes made the palette pick a surprise command after filtering." },
+    ],
+    changesYue: [
+      { category: "changed", text: "廣東話: 搜尋一改就由第一個結果開始，唔好畀舊 index 帶個指令去食茶點。" },
+    ],
+  },
+  {
+    id: "22bc236", kind: 'commit', ref: "22bc236", oid: "22bc236a25f2313f91040c539cb57f3901d653bc", date: "2026-08-03",
+    title: "Validate SCP time record fields",
+    changes: [
+      { category: "changed", text: "Reject unsafe timestamp fields before the wire parser nods along. 呢次 SCP 時間記錄唔再畀超大數字扮正常，免得協議食壞肚。" },
+    ],
+  },
+  {
+    id: "85b7e96", kind: 'commit', ref: "85b7e96", oid: "85b7e968fa1533109b9b0a099f2ceda11760a0f8", date: "2026-08-03",
+    title: "Normalize S3 listing page sizes",
+    changes: [
+      { category: "changed", text: "English: Keep fractional max-keys values from bouncing off S3 like a confused dim sum order. The adapter now floors them and preserves a minimum page size before sending the request.\\n\\n廣東話: S3 唔食小數頁數，唔好叫個 API 食 2.9 份點心。依家落地取整，最少保留一份，等 listing 安全出街。" },
+    ],
+  },
+  {
+    id: "710f6b7", kind: 'commit', ref: "710f6b7", oid: "710f6b748e589bdea8263e52332832485d2739bd", date: "2026-08-03",
+    title: "Validate synchronization clock options",
+    changes: [
+      { category: "changed", text: "Reject non-finite and negative clock settings before comparison so malformed timing cannot make the checklist hallucinate. The clock gremlin now gets bounced at the door; 時鐘妖怪唔可以亂咁改同步結果。" },
+    ],
+  },
+  {
+    id: "d29d85d", kind: 'commit', ref: "d29d85d", oid: "d29d85d5687e6a3ab4797f2849c024e8b585a216", date: "2026-08-03",
+    title: "Record the pushed CLI handoff",
+    changes: [
+      { category: "changed", text: "Refresh the generated handoff after the push so it records origin/main at the same verified tip, the clean working tree, and the 3,424-test evidence." },
+      { category: "changed", text: "English humour: The handoff has finally caught the train it was documenting." },
+    ],
+    changesYue: [
+      { category: "changed", text: "廣東話玩笑：handoff 終於追到自己記緊嗰班車，唔使再喺月台揮手假裝同步。" },
+    ],
+  },
+  {
+    id: "61b8c11", kind: 'commit', ref: "61b8c11", oid: "61b8c11a37af74d459742a6c1f37797e5c273736", date: "2026-08-03",
+    title: "Record the latest CLI handoff",
+    changes: [
+      { category: "fixed", text: "Refresh the generated handoff with the 3,424-test evidence, clean-tree state, current 59.0% logic coverage, and the remaining 114-unit roadmap after the CLI and drag fixes." },
+      { category: "changed", text: "English humour: The handoff has counted the marching ants, checked the map, and still refuses to call 59 percent the finish line." },
+    ],
+    changesYue: [
+      { category: "changed", text: "廣東話玩笑：handoff 數清楚螞蟻、睇實張地圖，仲係唔肯將 59% 當終點，條路仲長過茶記餐牌。" },
+    ],
+  },
+  {
+    id: "2dae39b", kind: 'commit', ref: "2dae39b", oid: "2dae39b15735491090c7c076e203759be41e7dd8", date: "2026-08-03",
+    title: "Record the latest CLI changelog entry",
+    changes: [
+      { category: "changed", text: "Include the generated entry for the changelog refresh itself so the in-app history reaches the current implementation wave." },
+      { category: "changed", text: "English humour: The diary has now written down the fact that it wrote something down." },
+    ],
+    changesYue: [
+      { category: "changed", text: "廣東話玩笑：本簿仔終於記低自己啱啱寫過嘢，唔再扮失憶。" },
+    ],
+  },
+  {
     id: "e5ed31b", kind: 'commit', ref: "e5ed31b", oid: "e5ed31bcd49308ef28bfba45afe8a7dc61a9f101", date: "2026-08-03",
     title: "Refresh changelog for CLI hardening",
     changes: [
@@ -607,71 +681,6 @@ export const DEVELOPMENT = [
     title: "Cancel pending queue prompts on removal",
     changes: [
       { category: "fixed", text: "Resolve a queued item's credential prompt when its row is removed, so the transfer and idle lifecycle cannot remain blocked on a response from a vanished UI. Add a focused regression test and document the cancellation behavior. The queue no longer waits for a ghost password prompt, laah." },
-    ],
-  },
-  {
-    id: "ac29837", kind: 'commit', ref: "ac29837", oid: "ac2983762dde67e310b6148fb0f85e04bbeb742a", date: "2026-08-03",
-    title: "Assign IDs during configuration import",
-    changes: [
-      { category: "fixed", text: "Legacy JSON sites without identifiers now receive generated IDs during load and import, so they remain addressable by update, move, and delete operations. Add regression coverage and document the compatibility behavior." },
-      { category: "changed", text: "The importer used to show these sites with no name tag for the toolbox; now every one gets a proper label, 勁過冇牌茶餐廳。" },
-    ],
-  },
-  {
-    id: "2960899", kind: 'commit', ref: "2960899", oid: "296089966e9cb0f6031395d3f5ae64e221633b7b", date: "2026-08-03",
-    title: "Fix case-insensitive workspace reconnect links",
-    changes: [
-      { category: "fixed", text: "Keep workspace-link reconnect lookup consistent with case-insensitive stored-site names, and reject mixed-case cycles safely. Add focused regression coverage and document the persistence edge case." },
-    ],
-    changesYue: [
-      { category: "changed", text: "Workspace links 而家唔會因為大小楷玩失蹤；混合大小楷嘅循環都會安全收工，唔再喺重連迷宮入面兜圈。" },
-    ],
-  },
-  {
-    id: "bf98db8", kind: 'commit', ref: "bf98db8", oid: "bf98db81d3b7a508d6677d2a3b4758eb013ebe13", date: "2026-08-03",
-    title: "Refuse invalid Explorer drop effects",
-    changes: [
-      { category: "added", text: "Reject NONE, cancel, and unknown shell effects before transfer dispatch so a refused drag can never become an upload. Add focused coverage and document the direct-integration boundary. The drop handler now reads the sign instead of inventing a copy, 唔好亂咁將拒絕變成上載。" },
-    ],
-  },
-  {
-    id: "ceff51c", kind: 'commit', ref: "ceff51c", oid: "ceff51c1f58ad12998de05a6fec6c9a6b368c3b4", date: "2026-08-03",
-    title: "Refresh editor-wave handoff metadata",
-    changes: [
-      { category: "changed", text: "English: Record the verified 3,320/3,321 test result, unchanged 59.0% logic coverage, 114 remaining units, and the current editor/config checkpoint. The handoff keeps the breadcrumbs numbered." },
-      { category: "changed", text: "廣東話：記低已驗證嘅 3,320/3,321 測試、仍然 59.0% logic coverage、剩低 114 個 units 同今次 editor/config checkpoint。交更紙幫啲麵包屑編埋號。" },
-    ],
-  },
-  {
-    id: "9e8c679", kind: 'commit', ref: "9e8c679", oid: "9e8c67979b5abe25dd0351119997358915522934", date: "2026-08-03",
-    title: "Refresh in-app changelog for editor and lifecycle hardening",
-    changes: [
-      { category: "changed", text: "English: Record the editor, terminal, SCP, configuration, and transfer-settings lifecycle wave in the in-app history. The diary now includes the breadcrumbs used to escape the maze." },
-      { category: "changed", text: "廣東話：將 editor、terminal、SCP、configuration 同 transfer-settings lifecycle wave 寫入 app history，日記而家都有記低逃出迷宮嗰啲麵包屑。" },
-    ],
-  },
-  {
-    id: "abe24d9", kind: 'commit', ref: "abe24d9", oid: "abe24d943e60264d6c1983705b4b84efbe389c0f", date: "2026-08-03",
-    title: "Harden editor, terminal, SCP, and configuration lifecycles",
-    changes: [
-      { category: "added", text: "English: Add editor keyboard commands, propagate nested cancellation, keep WinConfiguration preset selections valid, add SCP checksum fallbacks, make CopyParams remembering one-shot, and support keyboard editor-list reordering. Add focused tests and documentation. The lifecycle machinery now exits the maze with its breadcrumbs intact." },
-      { category: "changed", text: "廣東話：補返 editor keyboard commands、nested cancellation、WinConfiguration preset selection、SCP checksum fallback、CopyParams one-shot remember，同 EditorPreferences 鍵盤排序。加 tests 同 docs，lifecycle machinery 終於帶住麵包屑行出迷宮。" },
-    ],
-  },
-  {
-    id: "2494d85", kind: 'commit', ref: "2494d85", oid: "2494d8531fe0c7ebea3c3ad40a59417adcb8dbfb", date: "2026-08-03",
-    title: "Refresh roadmap-slice handoff metadata",
-    changes: [
-      { category: "changed", text: "English: Record the verified 3,314/3,315 test result, unchanged 59.0% logic coverage, 114 remaining units, and the current high-weight checkpoint. The handoff is still a map, but the path has fewer potholes." },
-      { category: "changed", text: "廣東話：記低已驗證嘅 3,314/3,315 測試、仍然 59.0% logic coverage、剩低 114 個 units 同今次 high-weight checkpoint。交更紙仲係地圖，不過條路少咗幾個窿。" },
-    ],
-  },
-  {
-    id: "dfd9fe4", kind: 'commit', ref: "dfd9fe4", oid: "dfd9fe4e9f6c9ff88e7d07bb24e10c0183bbfc9a", date: "2026-08-03",
-    title: "Refresh in-app changelog for high-weight roadmap slices",
-    changes: [
-      { category: "security", text: "English: Record the Login, command, security, LocationProfiles, WebDAV, and S3 wave in the in-app history. The diary now contains fewer dragons hiding behind unchecked controls." },
-      { category: "security", text: "廣東話：將 Login、command、security、LocationProfiles、WebDAV 同 S3 呢輪寫入 app history，少啲火龍可以躲喺未驗證嘅掣後面。" },
     ],
   },
 ];
