@@ -79,3 +79,18 @@ test('palette filtering is active only when the search bar has a query', () => {
   assert.equal(P.filterPaletteEntries(entries, predicate, true).length, 1);
   assert.equal(P.filterPaletteEntries(entries, predicate, false).length, 2);
 });
+
+test('filtered result sets start keyboard selection at their first match', () => {
+  const entries = P.paletteEntries([
+    { id: 'alpha', label: 'Alpha command', run() {} },
+    { id: 'beta', label: 'Beta command', run() {} },
+    { id: 'gamma', label: 'Gamma command', run() {} },
+  ], []);
+  const predicate = { ok: true, test: (value) => String(value).toLowerCase().includes('a') };
+  const filtered = P.filterPaletteEntries(entries, predicate, true);
+  assert.deepEqual(filtered.map((entry) => entry.commandId), ['alpha', 'beta', 'gamma']);
+  // The renderer uses this reset before painting the new result set, making
+  // the first match the Enter target after typing.
+  assert.equal(P.firstPaletteIndex(filtered.length), 0);
+  assert.equal(P.firstPaletteIndex(0), -1);
+});

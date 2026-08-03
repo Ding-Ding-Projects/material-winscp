@@ -169,6 +169,11 @@ export function filterPaletteEntries(entries, predicate, active = true) {
   return entries.filter((entry) => entryMatches(entry, predicate, active));
 }
 
+/** The first result is the only stable keyboard target after a new query. */
+export function firstPaletteIndex(resultCount) {
+  return resultCount > 0 ? 0 : -1;
+}
+
 function entryIcon(entry) {
   if (entry.type === 'setting') return entry.pending ? 'lock' : 'settings';
   if (entry.type === 'destination') return 'folder_open';
@@ -212,7 +217,9 @@ export function openCommandPalette() {
     id: 'command-palette', labelKey: 'cpSearch', placeholderKey: 'cpSearchPh',
     appearanceKey: 'command-palette-search', appearanceLabel: 'Command palette search',
     sampleProvider: () => entries.flatMap((e) => e.fields).join('\n'),
-    onChange: () => render(),
+    // A query creates a new result set; keeping the old numeric index can
+    // silently select a different command (or clamp to the last match).
+    onChange: () => { activeIndex = firstPaletteIndex(results.length); render(); },
     onSubmit: () => selectActive(),
   });
   search.input.setAttribute('aria-controls', listId);
