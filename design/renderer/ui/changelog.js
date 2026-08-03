@@ -187,6 +187,18 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "640d1f4", kind: 'commit', ref: "640d1f4", oid: "640d1f4f795d987b98fb1dadf610ca93b0ddf50c", date: "2026-08-02",
+    title: "Align queued local symlink planning with foreground transfers",
+    changes: [
+      { category: "fixed", text: "Queued local uploads now descend into local directory symlinks under excludeEmptyDirectories just as the foreground engine does. Remote-source plans still require followDirectorySymlinks, so a remote link is not followed by accident." },
+      { category: "fixed", text: "Added a regression test that proves the symlink's file arrives and that the queued directory plan contains the expected directories rather than pruning the tree." },
+    ],
+    changesYue: [
+      { category: "fixed", text: "佇列上載本機資料夾而家同前景引擎一樣，開住 excludeEmptyDirectories 都會落入本機 directory symlink；remote source 就繼續要明確開 followDirectorySymlinks，唔會自己走捷徑。" },
+      { category: "fixed", text: "加咗回歸測試，證明 symlink 入面嘅檔案真係到，同埋個 queue plan 冇再將成棵樹當空目錄斬走。" },
+    ],
+  },
+  {
     id: "c6cbbc5", kind: 'commit', ref: "c6cbbc5", oid: "c6cbbc520d8983b18a83bc8ebef9c1c6cced7f65", date: "2026-08-02",
     title: "Stop one test permanently forbidding the only fix for another",
     changes: [
