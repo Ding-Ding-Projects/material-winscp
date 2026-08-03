@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `2facf09`** — Close SFTP size preference and checklist gaps
+**At commit `4d78e05`** — Fix CLI edges and protocol transfer races
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **60.5%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 71.5% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3507 run, **3506 pass, 0 fail**, 1 skipped |
-| Hand-written code | 222,243 lines across 442 files |
-| Commits | 227 on `main` |
+| Tests | 3516 run, **3515 pass, 0 fail**, 1 skipped |
+| Hand-written code | 222,696 lines across 443 files |
+| Commits | 229 on `main` |
 | Working tree | clean |
-| Remote | `origin/main` at `2facf09` — in sync |
+| Remote | `origin/main` at `4d78e05` — in sync |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `4d78e05` | 2026-08-03 | Fix CLI edges and protocol transfer races |
+| `c0209f5` | 2026-08-03 | Refresh handoff after SFTP checkpoint |
 | `2facf09` | 2026-08-03 | Close SFTP size preference and checklist gaps |
 | `7fa152f` | 2026-08-03 | Refresh handoff after roadmap checkpoint |
 | `a95dc72` | 2026-08-03 | Harden reconnect queue WebDAV and menu parity |
 | `e840449` | 2026-08-03 | Wire editor refresh, preference shortcut, and S3 listing guards |
 | `5d0b038` | 2026-08-03 | Wire protocol edges and roadmap controls |
 | `abe0622` | 2026-08-03 | Refresh handoff after freshness fix |
-| `fbb9bae` | 2026-08-03 | Ignore expected handoff test artefact |
-| `68f8952` | 2026-08-03 | Make handoff freshness self-checking |
 
 ## Notes from whoever worked on this last
 
