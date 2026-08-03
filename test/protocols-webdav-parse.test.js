@@ -619,6 +619,45 @@ test('rebuilding a WebDAV connection destroys the previous agent pool', () => {
   assert.notEqual(adapter._agent.destroy, undefined);
 });
 
+test('connect withdraws server-side operation capabilities when OPTIONS omits Allow', async () => {
+  let allow = null;
+  const adapter = new WebDavAdapter({ hostName: 'dav.example.test', ftps: 'none' });
+  adapter._propfind = async () => [];
+  adapter.request = async (method) => {
+    if (method === 'OPTIONS') {
+      const headers = { dav: '1' };
+      if (allow !== null) headers.allow = allow;
+      return { status: 200, headers, text: '' };
+    }
+    if (method === 'HEAD') return { status: 200, headers: {}, text: '' };
+    throw new Error(`unexpected ${method}`);
+  };
+
+  try {
+    await adapter.connect();
+    assert.deepEqual(
+      [adapter.caps.copyRemote, adapter.caps.nativeMove, adapter.caps.rename, adapter.caps.move],
+      [false, false, false, false],
+    );
+
+    allow = 'OPTIONS, GET, HEAD, COPY, MOVE';
+    await adapter.connect();
+    assert.deepEqual(
+      [adapter.caps.copyRemote, adapter.caps.nativeMove, adapter.caps.rename, adapter.caps.move],
+      [true, true, true, true],
+    );
+
+    allow = null;
+    await adapter.connect();
+    assert.deepEqual(
+      [adapter.caps.copyRemote, adapter.caps.nativeMove, adapter.caps.rename, adapter.caps.move],
+      [false, false, false, false],
+    );
+  } finally {
+    await adapter.disconnect();
+  }
+});
+
 test('invalid WebDAV timeouts fall back to the safe default', () => {
   for (const timeout of [undefined, '', 'not-a-number', 0, -1, Infinity, NaN]) {
     const adapter = new WebDavAdapter({ hostName: 'dav.example.test', timeout });

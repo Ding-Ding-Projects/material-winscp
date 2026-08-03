@@ -1663,6 +1663,8 @@ class TransferQueue extends EventEmitter {
     if (!p.sourceAdapter || !p.targetAdapter) {
       throw new Error('A transfer plan needs a source adapter and a target adapter.');
     }
+    const copyParam = { ...COPY_PARAM_DEFAULTS, ...(p.copyParam || {}) };
+    copyParam.cpsLimit = normalizeCpsLimit(copyParam.cpsLimit);
     // A plan may arrive from a session transfer that has no queue item behind
     // it. Everything the streaming loop reads off an item is supplied here, so
     // one implementation serves both callers rather than two that agree today.
@@ -1676,17 +1678,17 @@ class TransferQueue extends EventEmitter {
       startedAt: Date.now(),
       finishedAt: 0,
       skipped: [],
-      cpsLimit: 0,
+      cpsLimit: copyParam.cpsLimit,
       error: null,
       sourceAdapter: p.sourceAdapter,
       targetAdapter: p.targetAdapter,
-      copyParam: p.copyParam || { ...COPY_PARAM_DEFAULTS },
+      copyParam,
       session: p.session || null,
       progress: { bytes: 0, total: Number(p.size) || 0, filesDone: 0, files: 1, cps: 0, eta: null, currentFile: p.sourcePath },
       _bytesDone: 0,
       _cancelled: false,
       _gate: new Gate(true),
-      _throttle: new Throttle(0),
+      _throttle: new Throttle(copyParam.cpsLimit),
       _cpsWindow: [],
       _lastProgressAt: 0,
     };

@@ -171,6 +171,12 @@ test.describe('SCP adapter contract', () => {
     assert.equal(row.size, 0);
   });
 
+  test('preserves special POSIX mode bits in SCP transfer headers', () => {
+    assert.equal(modeString(0o4755), '4755', 'setuid must remain in the four-digit mode field');
+    assert.equal(modeString(0o2644), '2644', 'setgid must remain in the four-digit mode field');
+    assert.equal(modeString(0o1777), '1777', 'sticky bit must remain in the four-digit mode field');
+  });
+
   test('never sends more bytes than the SCP header declares and reports progress', async () => {
     const channel = new PassThrough();
     const progress = [];

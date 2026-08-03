@@ -364,7 +364,7 @@ function parseControl(line) {
 
 function modeString(mode) {
   const n = checkedMode(mode);
-  return '0' + n.toString(8).padStart(3, '0').slice(-3);
+  return n.toString(8).padStart(4, '0');
 }
 
 /**

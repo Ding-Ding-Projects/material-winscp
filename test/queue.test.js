@@ -721,6 +721,31 @@ test('the speed limit really throttles', async () => {
   assert.ok(throttled > unthrottled * 2, `${throttled}ms vs ${unthrottled}ms`);
 });
 
+test('the shared byte mover honors copyParam speed limits without a queue item', async () => {
+  const { local, remote } = makePair({ chunkSize: 1024 });
+  const payload = bigBuffer(8192);
+  local.put('/l/foreground.bin', payload);
+
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  const started = Date.now();
+  const copied = await q.moveBytes({
+    sourceAdapter: local,
+    targetAdapter: remote,
+    sourcePath: '/l/foreground.bin',
+    targetPath: '/r/foreground.bin',
+    size: payload.length,
+    // Session transfers arrive through the shared mover as a plan, not a
+    // queue item; keep the string here because IPC callers can still be
+    // form-shaped at this boundary.
+    copyParam: { cpsLimit: String(payload.length) },
+  });
+
+  const elapsed = Date.now() - started;
+  assert.strictEqual(copied, payload.length);
+  assert.ok(elapsed >= 700, `foreground transfer ignored its limit: ${elapsed}ms`);
+  assert.ok(remote.read('/r/foreground.bin').equals(payload));
+});
+
 test('setSpeedLimit changes the limit of an item already queued', async () => {
   const { local, remote } = makePair();
   local.put('/l/a.bin', bigBuffer(4096));

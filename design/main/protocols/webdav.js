@@ -611,8 +611,8 @@ class WebDavAdapter extends Adapter {
       resume: false,
       timestamp: false,     // getlastmodified is a live property, not settable
       checksum: false,
-      copyRemote: true,     // COPY
-      nativeMove: true,     // MOVE
+      copyRemote: true,     // COPY; reconciled from Allow during connect
+      nativeMove: true,     // MOVE; reconciled from Allow during connect
       rename: true,
       move: true,
       hiddenFiles: true,
@@ -971,6 +971,16 @@ class WebDavAdapter extends Adapter {
     await this._verifyCertificate();
     this._makeAgent();
 
+    // A reconnect can observe a different endpoint or a different set of
+    // methods. Clear the previous server's operation capabilities before the
+    // new OPTIONS probe so a missing/failed Allow header cannot leave stale
+    // commands enabled.
+    this.allowed = [];
+    this.caps.copyRemote = false;
+    this.caps.nativeMove = false;
+    this.caps.rename = false;
+    this.caps.move = false;
+
     const root = this.session.remoteDirectory && this.session.remoteDirectory !== ''
       ? this.normalize(this.session.remoteDirectory)
       : '/';
@@ -985,12 +995,10 @@ class WebDavAdapter extends Adapter {
       this.serverInfo.dav = this.davClasses;
       this.serverInfo.allow = this.allowed;
       this.serverInfo.server = res.headers.server || '';
-      if (this.allowed.length) {
-        this.caps.copyRemote = this.allowed.includes('COPY');
-        this.caps.nativeMove = this.allowed.includes('MOVE');
-        this.caps.rename = this.caps.nativeMove;
-        this.caps.move = this.caps.nativeMove;
-      }
+      this.caps.copyRemote = this.allowed.includes('COPY');
+      this.caps.nativeMove = this.allowed.includes('MOVE');
+      this.caps.rename = this.caps.nativeMove;
+      this.caps.move = this.caps.nativeMove;
       if (!this.davClasses.length) {
         this._log('warning', 'Server did not advertise a DAV compliance class; it may not be a WebDAV server');
       }
