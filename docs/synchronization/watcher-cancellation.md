@@ -17,3 +17,8 @@ so callbacks already queued by the operating system cannot start a new
 comparison after the monitor has failed. This mirrors WinSCP's
 `SynchronizeInvalid` path and is covered by the invalid native change-source
 test in `test/sync.test.js`.
+
+The keep-up-to-date window also keeps its close action disabled while start or
+stop IPC is pending. Escape follows the same rule. This prevents the renderer
+from detaching before a late start reply can be paired with its watcher, which
+would otherwise leave a running watcher with no visible stop control.

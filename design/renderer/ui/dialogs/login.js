@@ -80,6 +80,20 @@ export function loginErrorMessage(resultOrError, fallback = 'The session could n
   return fallback;
 }
 
+/** Prevent duplicate activation while a single-session submit is pending. */
+export function createLoginSubmitGuard() {
+  let pending = false;
+  return {
+    tryStart() {
+      if (pending) return false;
+      pending = true;
+      return true;
+    },
+    finish() { pending = false; },
+    get pending() { return pending; },
+  };
+}
+
 /** Return every site below a folder, including sites in nested folders. */
 export function folderSites(node) {
   const sites = [];
@@ -678,6 +692,7 @@ export function createLoginPanel(opts = {}) {
   /* ---------------- buttons ---------------- */
 
   let loginBtn = null;
+  const loginSubmitGuard = createLoginSubmitGuard();
 
   function renderButtons() {
     clear(buttonsEl);
@@ -718,7 +733,7 @@ export function createLoginPanel(opts = {}) {
     const node = tree.selected;
     const container = node && (node.kind === 'folder' || node.kind === 'workspace');
     const ready = container ? true : !validateLoginSite(state.site);
-    loginBtn.disabled = !ready;
+    loginBtn.disabled = !ready || loginSubmitGuard.pending;
     loginBtn.title = ready ? '' : t('hostRequired');
   }
 
@@ -727,16 +742,23 @@ export function createLoginPanel(opts = {}) {
   /* ================================================================ */
 
   async function doLogin() {
+    if (!loginSubmitGuard.tryStart()) return null;
     const node = tree.selected;
-    if (node && node.kind === 'folder') return openFolder(node);
-    if (node && node.kind === 'workspace') return openWorkspace(node);
+    syncButtons();
+    try {
+      if (node && node.kind === 'folder') return openFolder(node);
+      if (node && node.kind === 'workspace') return openWorkspace(node);
 
-    const validation = validateLoginSite(state.site);
-    if (validation) {
-      notify.warning(t('loginBtn'), validation.message);
-      return null;
+      const validation = validateLoginSite(state.site);
+      if (validation) {
+        notify.warning(t('loginBtn'), validation.message);
+        return null;
+      }
+      return openSession(buildRequest(), siteLabel(state.site));
+    } finally {
+      loginSubmitGuard.finish();
+      syncButtons();
     }
-    return openSession(buildRequest(), siteLabel(state.site));
   }
 
   /**

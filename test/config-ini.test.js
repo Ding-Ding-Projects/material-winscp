@@ -164,6 +164,27 @@ test('failed JSON import rolls back the live configuration before reporting the 
   assert.deepEqual(config.exportState(), before);
 }));
 
+test('host-key writes remain intact when their atomic rename fails', () => withRoot(() => {
+  const config = new Config();
+  config.data.hostKeys = { 'old.example.com:22': { fingerprint: 'old', algorithm: 'ssh-ed25519' } };
+  config.flush();
+  const hostkeys = P.hostkeys();
+  const before = fs.readFileSync(hostkeys, 'utf8');
+  const rename = fs.renameSync;
+  fs.renameSync = (source, target) => {
+    if (String(source).includes('hostkeys.json.tmp-')) throw new Error('simulated host-key rename failure');
+    return rename(source, target);
+  };
+  try {
+    config.data.hostKeys = { 'new.example.com:22': { fingerprint: 'new', algorithm: 'ssh-ed25519' } };
+    assert.throws(() => config.flush(), /simulated host-key rename failure/);
+  } finally {
+    fs.renameSync = rename;
+  }
+  assert.equal(fs.readFileSync(hostkeys, 'utf8'), before);
+  assert.equal(fs.readdirSync(path.dirname(hostkeys)).some((name) => name.startsWith('hostkeys.json.tmp-')), false);
+}));
+
 test('malformed JSON import reports a configuration error without mutating sites', () => withRoot((root) => {
   const source = path.join(root, 'broken.json');
   fs.writeFileSync(source, '{"sites": [', 'utf8');

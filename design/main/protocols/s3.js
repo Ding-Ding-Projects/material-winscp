@@ -231,7 +231,12 @@ function decodeXmlText(s) {
     if (body[0] === '#') {
       const code = body[1] === 'x' || body[1] === 'X'
         ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10);
-      return Number.isFinite(code) ? String.fromCodePoint(code) : whole;
+      // Keep malformed XML entities as text. String.fromCodePoint throws for
+      // values outside Unicode's scalar range, which would hide the actual
+      // S3 response error behind an unexpected parser exception.
+      const validCodePoint = Number.isInteger(code) && code >= 0 && code <= 0x10FFFF
+        && !(code >= 0xD800 && code <= 0xDFFF);
+      return validCodePoint ? String.fromCodePoint(code) : whole;
     }
     return XML_ENTITIES[body] === undefined ? whole : XML_ENTITIES[body];
   });

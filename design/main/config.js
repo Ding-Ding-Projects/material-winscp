@@ -181,7 +181,7 @@ class Config extends EventEmitter {
     const tmp = file + '.tmp';
     fs.writeFileSync(tmp, payload, 'utf8');
     fs.renameSync(tmp, file);
-    fs.writeFileSync(P.hostkeys(), JSON.stringify(this.data.hostKeys, null, 2), 'utf8');
+    writeAtomic(P.hostkeys(), JSON.stringify(this.data.hostKeys, null, 2));
     this.emit('saved');
   }
 

@@ -174,6 +174,9 @@ export function firstPaletteIndex(resultCount) {
   return resultCount > 0 ? 0 : -1;
 }
 
+/** The deferred initial focus must not run after the palette has closed. */
+export function shouldFocusPalette(isClosed) { return !isClosed; }
+
 function entryIcon(entry) {
   if (entry.type === 'setting') return entry.pending ? 'lock' : 'settings';
   if (entry.type === 'destination') return 'folder_open';
@@ -194,6 +197,8 @@ export function openCommandPalette() {
 
   const restore = focusMemory();
   let size = store.get('commandPalette.size') === 'full' ? 'full' : 'card';
+  let closed = false;
+  let focusFrame = null;
   let activeIndex = 0;
   let entries = paletteEntries();
   let results = entries;
@@ -250,6 +255,11 @@ export function openCommandPalette() {
 
   function close() {
     if (!openHandle) return;
+    closed = true;
+    if (focusFrame !== null && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(focusFrame);
+      focusFrame = null;
+    }
     document.removeEventListener('keydown', onKey, true);
     offI18n?.();
     offCommands?.();
@@ -356,7 +366,10 @@ export function openCommandPalette() {
   setSize(size);
   document.addEventListener('keydown', onKey, true);
   render();
-  requestAnimationFrame(() => search.focus());
+  focusFrame = requestAnimationFrame(() => {
+    focusFrame = null;
+    if (shouldFocusPalette(closed)) search.focus();
+  });
 
   openHandle = {
     element: root,

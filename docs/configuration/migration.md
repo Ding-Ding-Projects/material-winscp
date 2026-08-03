@@ -2,7 +2,9 @@
 
 The main-process store keeps the current configuration in
 `winscp-material.json`. A portable `WinSCP.ini` beside the app data is imported
-once when the JSON store does not exist. Both paths write atomically.
+once when the JSON store does not exist. Both paths write atomically. The
+known-host-key file is also written through a temporary sibling and rename, so
+a failed write cannot truncate the previous file.
 
 ## What it does
 

@@ -24,6 +24,12 @@ test('S3 max-keys is normalized to an integer accepted by the service', () => {
   assert.equal(adapter._maxKeys(), 1);
 });
 
+test('S3 XML reader preserves numeric entities outside Unicode instead of throwing', () => {
+  assert.doesNotThrow(() => parseXml('<Error><Message>&#x110000;</Message></Error>'));
+  const doc = parseXml('<Error><Message>&#x110000; &#xD800; &#x41;</Message></Error>');
+  assert.equal(doc.children[0].children[0].text, '&#x110000; &#xD800; A');
+});
+
 // ---------------------------------------------------------------------------
 // The signing key derivation vector from the AWS "Signature Version 4 signing
 // process" documentation (secret wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY,

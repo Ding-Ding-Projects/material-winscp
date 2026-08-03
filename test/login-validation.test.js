@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { folderSites, validateLoginSite, loginErrorMessage } from '../design/renderer/ui/dialogs/login.js';
+import { folderSites, validateLoginSite, loginErrorMessage, createLoginSubmitGuard } from '../design/renderer/ui/dialogs/login.js';
 
 test('folder opening includes sites nested in child folders', () => {
   const first = { kind: 'site', id: 'one' };
@@ -39,4 +39,14 @@ test('Login preserves both IPC error envelope and thrown error messages', () => 
   assert.equal(loginErrorMessage({ ok: false, error: 'Authentication failed.' }), 'Authentication failed.');
   assert.equal(loginErrorMessage(new Error('Timed out.')), 'Timed out.');
   assert.equal(loginErrorMessage({ ok: false, error: {} }), 'The session could not be opened.');
+});
+
+test('Login submit guard rejects a second activation until the first finishes', () => {
+  const guard = createLoginSubmitGuard();
+  assert.equal(guard.tryStart(), true);
+  assert.equal(guard.pending, true);
+  assert.equal(guard.tryStart(), false);
+  guard.finish();
+  assert.equal(guard.pending, false);
+  assert.equal(guard.tryStart(), true);
 });

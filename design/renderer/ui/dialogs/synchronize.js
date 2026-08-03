@@ -551,11 +551,15 @@ let kutdWindow = null;
 
 /** Pure presentation state for the asynchronous start/stop seam. */
 export function watcherUiState(watcherId, pendingAction = null) {
-  if (pendingAction === 'start') return { action: 'start', busy: true, labelKey: 'txKutdStarting' };
-  if (pendingAction === 'stop') return { action: 'stop', busy: true, labelKey: 'txKutdStopping' };
+  if (pendingAction === 'start') return {
+    action: 'start', busy: true, closeDisabled: true, labelKey: 'txKutdStarting',
+  };
+  if (pendingAction === 'stop') return {
+    action: 'stop', busy: true, closeDisabled: true, labelKey: 'txKutdStopping',
+  };
   return watcherId
-    ? { action: 'stop', busy: false, labelKey: 'txKutdStop' }
-    : { action: 'start', busy: false, labelKey: 'txKutdStart' };
+    ? { action: 'stop', busy: false, closeDisabled: false, labelKey: 'txKutdStop' }
+    : { action: 'start', busy: false, closeDisabled: false, labelKey: 'txKutdStart' };
 }
 
 /**
@@ -639,6 +643,8 @@ export function openKeepUpToDateDialog(props = {}) {
     startBtn.append(icon(state.action === 'stop' ? 'close' : 'sync_alt', 16), h('span', {}, t(state.labelKey)));
     startBtn.disabled = state.busy;
     startBtn.setAttribute('aria-busy', state.busy ? 'true' : 'false');
+    closeBtn.disabled = state.closeDisabled;
+    closeBtn.setAttribute('aria-disabled', state.closeDisabled ? 'true' : 'false');
     statusEl.textContent = state.busy
       ? t(state.labelKey)
       : watcherId ? t('txKutdRunning', context.localPath) : t('txKutdExplain');
@@ -731,6 +737,10 @@ export function openKeepUpToDateDialog(props = {}) {
   });
 
   function close() {
+    // Do not detach the window while start/stop IPC is unresolved. A late
+    // start reply would otherwise leave a watcher running with no UI to stop
+    // it (and a late stop reply would repaint a removed surface).
+    if (pendingAction) return;
     offSync();
     offQueue();
     root.remove();

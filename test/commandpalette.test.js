@@ -94,3 +94,8 @@ test('filtered result sets start keyboard selection at their first match', () =>
   assert.equal(P.firstPaletteIndex(filtered.length), 0);
   assert.equal(P.firstPaletteIndex(0), -1);
 });
+
+test('deferred initial focus is skipped after palette teardown', () => {
+  assert.equal(P.shouldFocusPalette(false), true);
+  assert.equal(P.shouldFocusPalette(true), false);
+});
