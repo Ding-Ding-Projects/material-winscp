@@ -309,8 +309,8 @@ export const SITE_ADVANCED_PAGES = [
         controls: [
           number('SFTPMinPacketSizeEdit', 'sftpMinPacketSize', 'Minimum SFTP packet size:', { max: 1048576, unit: 'bytes' }),
           number('SFTPMaxPacketSizeEdit', 'sftpMaxPacketSize', 'Maximum SFTP packet size:', { max: 1048576, unit: 'bytes', hint: '0 uses the engine’s own read size. This value maps onto the stream high-water mark, which genuinely is the SFTP read packet size here.' }),
-          number('SFTPDownloadQueueEdit', 'sftpDownloadQueue', 'Download pipelining depth:', { max: 256, gap: 'sftpDownloadQueue' }),
-          number('SFTPUploadQueueEdit', 'sftpUploadQueue', 'Upload pipelining depth:', { max: 256, gap: 'sftpUploadQueue' }),
+          number('SFTPDownloadQueueEdit', 'sftpDownloadQueue', 'Download pipelining depth:', { max: 256 }),
+          number('SFTPUploadQueueEdit', 'sftpUploadQueue', 'Upload pipelining depth:', { max: 256 }),
           number('SFTPListingQueueEdit', 'sftpListingQueue', 'Listing pipelining depth:', { max: 256 }),
         ],
       },

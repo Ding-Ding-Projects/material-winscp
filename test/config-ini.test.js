@@ -309,3 +309,14 @@ test('site and workspace mutation inputs reject invalid shapes before changing s
   assert.throws(() => config.saveWorkspace('broken', null), /Configuration workspace sessions must be an array/);
   assert.deepEqual(config.exportState(), before);
 }));
+
+test('site identity remains unique and cannot be changed by an update patch', () => withRoot(() => {
+  const config = new Config();
+  config.save = () => {};
+  config.data.sites = [{ id: 'existing', name: 'Existing' }];
+
+  const added = config.addSite({ id: 'existing', name: 'Added', hostName: 'added.example.com' });
+  assert.notEqual(added.id, 'existing');
+  assert.equal(config.updateSite(added.id, { id: 'reassigned', name: 'Renamed' }).id, added.id);
+  assert.equal(config.siteById('reassigned'), null);
+}));

@@ -19,6 +19,9 @@ transactionally so the live configuration remains unchanged. Workspace session
 lists are normalized to records, and invalid direct mutation inputs are refused
 before they can poison the store.
 
+Site IDs are durable identities: malformed or colliding IDs receive a fresh ID
+when a site is loaded or added, and an update cannot reassign an existing ID.
+
 Focused verification:
 
 ```powershell

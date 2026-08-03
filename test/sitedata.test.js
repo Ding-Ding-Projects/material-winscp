@@ -1137,6 +1137,41 @@ test('advancedContext derives the protocol family flags', async () => {
   assert.strictEqual(adv.advancedContext(await siteOf({ protocol: 'ftp', ftps: 'none' })).tls, false);
 });
 
+test('SiteAdvanced clones nested settings before editing', async () => {
+  const { adv, tree } = await modules;
+  const original = await siteOf({
+    sshBugs: { ...tree.SESSION_DEFAULTS.sshBugs, rekey2: 'auto' },
+    sftpBugs: { ...tree.SESSION_DEFAULTS.sftpBugs, symlink: 'auto' },
+  });
+  const working = adv.cloneAdvancedSite(original);
+  working.sshBugs.rekey2 = 'on';
+  working.sftpBugs.symlink = 'off';
+  assert.equal(original.sshBugs.rekey2, 'auto');
+  assert.equal(original.sftpBugs.symlink, 'auto');
+});
+
+test('SiteAdvanced only enables capabilities that the selected adapter consumes', async () => {
+  const { adv } = await modules;
+  const control = (id) => adv.allAdvancedControls().find(({ control: c }) => c.id === id).control;
+  const ftp = adv.advancedContext(await siteOf({ protocol: 'ftp', ftps: 'explicitTls' }));
+  const sftp = adv.advancedContext(await siteOf({ protocol: 'sftp' }));
+  const s3 = adv.advancedContext(await siteOf({ protocol: 's3', ftps: 'implicit' }));
+  const proxyPage = adv.SITE_ADVANCED_PAGES.find((page) => page.id === 'proxy');
+  const tlsPage = adv.SITE_ADVANCED_PAGES.find((page) => page.id === 'tls');
+
+  assert.equal(control('FtpTransferActiveImmediatelyCombo').gap, undefined, 'implemented FTP ordering is not a gap');
+  assert.equal(control('SFTPDownloadQueueEdit').gap, undefined, 'implemented SFTP download pipelining is not a gap');
+  assert.equal(control('SFTPUploadQueueEdit').gap, undefined, 'implemented SFTP upload pipelining is not a gap');
+  assert.equal(control('BufferSizeCheck').enabled(ftp), false);
+  assert.equal(control('CodePageCombo').enabled(sftp), false);
+  assert.equal(control('SourceAddressEdit').enabled(s3), false);
+  assert.equal(proxyPage.enabled(ftp), false);
+  assert.equal(proxyPage.enabled(sftp), true);
+  assert.equal(tlsPage.enabled(s3), false);
+  assert.match(adv.PROTOCOL_GAP_NOTES.webDavCrossDomainRedirects, /remain refused/i);
+  assert.match(adv.PROTOCOL_GAP_NOTES.protocolFeatures, /not consumed/i);
+});
+
 test('advanced order-list options provide an active-descendant target', async () => {
   const { adv } = await modules;
   assert.equal(adv.orderListOptionId('KexOrderList', 0), 'KexOrderList-option-0');

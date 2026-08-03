@@ -6,9 +6,11 @@ on blur/change, so an out-of-range or non-numeric entry cannot remain displayed
 after a different value has been persisted.
 
 This is renderer-side validation only: it does not change defaults or rewrite
-imported configuration. Invalid numeric input falls back to the control's
-minimum (or its declared default when conversion requires it), then follows the
-normal `config:setPref` persistence path.
+imported configuration. A malformed imported number is shown as the declared
+default with an invalid-value note until the user replaces it. Newly typed
+invalid numeric input falls back to the control's minimum (or its declared
+default when conversion requires it), then follows the normal
+`config:setPref` persistence path.
 
 Verification:
 

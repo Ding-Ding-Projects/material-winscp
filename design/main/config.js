@@ -123,7 +123,8 @@ function normalizeSite(site) {
   const normalized = deepMerge(clone(SESSION_DEFAULTS), isRecord(site) ? site : {});
   // Older/manual JSON backups may omit IDs. Without one the site is visible
   // but cannot be addressed by update/remove/move operations.
-  normalized.id = normalized.id || newId('site');
+  normalized.id = typeof normalized.id === 'string' && normalized.id !== ''
+    ? normalized.id : newId('site');
   for (const field of SECRET_FIELDS) {
     const value = normalized[field];
     if (!value) { normalized[field] = ''; continue; }
@@ -443,7 +444,7 @@ class Config extends EventEmitter {
   addSite(site) {
     if (!isRecord(site)) invalidCollection('site', 'an object');
     const s = deepMerge(clone(SESSION_DEFAULTS), site);
-    s.id = s.id || newId('site');
+    if (typeof s.id !== 'string' || s.id === '' || this.siteById(s.id)) s.id = newId('site');
     for (const f of SECRET_FIELDS) {
       if (typeof s[f] !== 'string') s[f] = '';
       if (s[f] && !s[f].startsWith('mp:') && !s[f].startsWith('os:')) s[f] = s.savePassword || f !== 'password' ? crypt.protect(s[f]) : '';
@@ -459,6 +460,7 @@ class Config extends EventEmitter {
     if (i < 0) return null;
     if (!isRecord(patch)) invalidCollection('site patch', 'an object');
     const merged = deepMerge(this.data.sites[i], patch);
+    merged.id = this.data.sites[i].id;
     for (const f of SECRET_FIELDS) {
       const v = patch[f];
       if (v !== undefined) {
