@@ -203,6 +203,16 @@ test('findFile searches PATH only for a bare name', () => {
     { found: false, path: 'sub\\t.exe' });
 });
 
+test('findFile ignores empty PATH components instead of probing the root', () => {
+  const checked = [];
+  const r = G.findFile('tool.exe', {
+    env: { PATH: ';C:\\bin;;' },
+    exists: (p) => { checked.push(p); return false; },
+  });
+  assert.deepStrictEqual(r, { found: false, path: 'tool.exe' });
+  assert.deepStrictEqual(checked, ['tool.exe', 'C:\\bin\\tool.exe']);
+});
+
 test('findFile reports not-found without throwing', () => {
   assert.deepStrictEqual(
     G.findFile('nowhere.exe', { env: {}, exists: () => false }),

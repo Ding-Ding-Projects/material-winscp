@@ -156,6 +156,18 @@ function pickRuntimeField(runtime, adapter, key, fallback = '') {
   return fallback;
 }
 
+function certificateField(runtime, adapter, key, fallback = '') {
+  const direct = pickRuntimeField(runtime, adapter, key, undefined);
+  if (direct !== undefined && direct !== '') return direct;
+  const certificate = (runtime && runtime.certificate) ||
+    (adapter && adapter.certificate) ||
+    (runtime && runtime.serverInfo && runtime.serverInfo.certificate) ||
+    (adapter && adapter.serverInfo && adapter.serverInfo.certificate);
+  if (!certificate || typeof certificate !== 'object') return fallback;
+  if (key === 'certificate') return certificate;
+  return certificate[key] === undefined ? fallback : certificate[key];
+}
+
 function capabilitySnapshot(value) {
   if (!value || typeof value !== 'object') return {};
   const out = {};
@@ -222,10 +234,13 @@ class SessionInfo {
     this.sshImplementation = asString(pickRuntimeField(runtime, adapter, 'sshImplementation'));
     this.hostKeyFingerprintSHA256 = asString(pickRuntimeField(runtime, adapter, 'hostKeyFingerprintSHA256'));
     this.hostKeyFingerprintMD5 = asString(pickRuntimeField(runtime, adapter, 'hostKeyFingerprintMD5'));
-    this.certificateFingerprintSHA1 = asString(pickRuntimeField(runtime, adapter, 'certificateFingerprintSHA1'));
-    this.certificateFingerprintSHA256 = asString(pickRuntimeField(runtime, adapter, 'certificateFingerprintSHA256'));
-    this.certificate = sanitize(pickRuntimeField(runtime, adapter, 'certificate', null));
-    this.certificateVerifiedManually = !!pickRuntimeField(runtime, adapter, 'certificateVerifiedManually', false);
+    this.certificateFingerprintSHA1 = asString(certificateField(runtime, adapter, 'certificateFingerprintSHA1',
+      certificateField(runtime, adapter, 'fingerprint')));
+    this.certificateFingerprintSHA256 = asString(certificateField(runtime, adapter, 'certificateFingerprintSHA256',
+      certificateField(runtime, adapter, 'fingerprint256')));
+    this.certificate = sanitize(certificateField(runtime, adapter, 'certificate', null));
+    this.certificateVerifiedManually = !!certificateField(runtime, adapter,
+      'certificateVerifiedManually', false);
   }
 
   static fromSessionData(data, runtime = {}) { return new SessionInfo({ session: data, runtime }); }

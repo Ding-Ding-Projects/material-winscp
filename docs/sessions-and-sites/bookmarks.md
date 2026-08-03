@@ -24,7 +24,9 @@ never become bookmark identity or bookmark data.
 
 `BookmarkList` is an ordered collection. `add`, `insert`, `move`, `moveTo`,
 `update`, `rename` and `remove` are the mutation operations; `findByName` and
-`findByShortcut` are the lookup operations. Folder/name identity is
+`findByShortcut` are the lookup operations. `shortcuts()` returns the occupied
+non-zero shortcuts in the current bookmark order, matching WinSCP's
+`TBookmarkList::ShortCuts` behavior. Folder/name identity is
 case-insensitive, matching WinSCP. A folder name uses `/` between segments;
 bookmark names cannot contain either path separator, a control character or a
 numeric-only name.

@@ -80,6 +80,12 @@ and still attaches a photograph, labelled as a photo rather than a code name.
 - The landing page's release section.
 - The app's About surface.
 
+The About dialog also exposes **Copy these details** directly in its action bar.
+It copies the version, code name, runtime, platform, theme, language mode and
+launch identifier as plain text for bug reports; a clipboard refusal is reported
+as a failure rather than claimed as success. The same action remains available
+from the dialog context menu.
+
 Always with the catalog's own bundled photo — never a food photo fetched from a
 CDN, never an invented dish. The dish's name stays factual at every
 [funny level](../accessibility-and-languages/funny-levels.md) and in every

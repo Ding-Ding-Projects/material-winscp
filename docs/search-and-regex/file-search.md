@@ -36,6 +36,9 @@ back to the mask field so the next search uses exactly what was shown.
   invalidates those late callbacks.
 - **The search is cancellable at any point**, and cancelling keeps the results
   found so far.
+- **Results can be exported without the pointer.** Focus the results list and press
+  `Ctrl+C` (or `Cmd+C` on macOS) to copy the currently filtered result paths;
+  the same operation is also available from the context menu.
 - **It uses the ordinary adapter listing path**, so it obeys the protocol's
   capabilities, the site's timeouts and any active session limits.
 - **It searches names, not contents.** Content search would mean downloading

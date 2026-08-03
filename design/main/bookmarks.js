@@ -238,6 +238,13 @@ class BookmarkList {
     return value === 0 ? null : this._items.find((item) => item.shortcut === value) || null;
   }
 
+  /** WinSCP's TBookmarkList::ShortCuts: occupied shortcuts, in bookmark order. */
+  shortcuts() {
+    return this._items
+      .filter((item) => item.shortcut !== 0)
+      .map((item) => item.shortcut);
+  }
+
   _indexOf(ref) {
     if (ref instanceof Bookmark) return this._items.findIndex((item) => item.key === ref.key);
     if (Number.isInteger(ref)) return ref >= 0 && ref < this.count ? ref : -1;

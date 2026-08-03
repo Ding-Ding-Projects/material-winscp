@@ -444,6 +444,9 @@ function panelArrangement(mode, state) {
       swapped: false,
       // fcRemoteTree — the one tree Explorer has, on the left of the file list.
       treePlacement: 'left',
+      // A hidden tree is still a valid Explorer panel; do not infer panel
+      // absence from component visibility.
+      treeVisible: s.treeVisible !== false,
       menuCaptions: { local: null, remote: '&Remote' },
     };
   }
@@ -465,6 +468,12 @@ function panelArrangement(mode, state) {
     rightPanel,
     swapped,
     treePlacement: s.treeOnLeft ? 'left' : 'top',
+    // Preserve each panel's explicit tree visibility in the public layout
+    // contract. Both trees start visible in the Commander form.
+    treeVisible: {
+      local: s.localTreeVisible !== false,
+      remote: s.remoteTreeVisible !== false,
+    },
     // UpdateControls (ScpCommander.cpp:1139): with a session the menus are
     // named Local/Remote; with none they are named by position, because both
     // panels are local and "Remote" would be a lie.

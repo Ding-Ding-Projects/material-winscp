@@ -231,9 +231,15 @@ test('Explorer has no local panel and Commander always has two', () => {
   const e = I.panelArrangement(EXPLORER, {});
   assert.equal(e.hasLocalPanel, false);
   assert.deepEqual(e.panels, [REMOTE]);
+  assert.equal(e.treeVisible, true);
+  assert.equal(I.panelArrangement(EXPLORER, { treeVisible: false }).treeVisible, false);
   const c = I.panelArrangement(COMMANDER, { hasSession: true });
   assert.equal(c.hasLocalPanel, true);
   assert.deepEqual(c.panels, [LOCAL, REMOTE]);
+  assert.deepEqual(c.treeVisible, { local: true, remote: true });
+  assert.deepEqual(I.panelArrangement(COMMANDER, {
+    hasSession: true, localTreeVisible: false, remoteTreeVisible: true,
+  }).treeVisible, { local: false, remote: true });
 });
 
 test('right-to-left layout inverts the swapped-panels preference', () => {

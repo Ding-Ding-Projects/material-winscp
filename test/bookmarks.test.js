@@ -88,6 +88,18 @@ test('shortcuts are unique within a list and can be found or cleared', () => {
   assert.equal(list.count, 0);
 });
 
+test('shortcuts returns occupied shortcuts in bookmark order and omits zero', () => {
+  const list = new BookmarkList([
+    mark('first', { shortcut: 12 }),
+    mark('plain'),
+    mark('second', { shortcut: 4 }),
+  ]);
+  assert.deepEqual(list.shortcuts(), [12, 4]);
+  list.move(list.findByName('first'), 2);
+  assert.deepEqual(list.shortcuts(), [4, 12]);
+  assert.deepEqual(list.shortcuts(), [4, 12]);
+});
+
 test('updates are immutable and a failed rename leaves the old record intact', () => {
   const list = new BookmarkList([mark('one'), mark('two')]);
   const old = list.findByName('one');

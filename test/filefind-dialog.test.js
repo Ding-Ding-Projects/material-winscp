@@ -20,3 +20,9 @@ test('FileFind rejects late hits and verification callbacks', () => {
   assert.match(source, /if \(generationAtStart !== searchGeneration\) return;/);
   assert.match(source, /searchGeneration \+= 1;\s*state = 'aborted';/);
 });
+
+test('FileFind makes result export keyboard reachable', () => {
+  assert.match(source, /resultList\.addEventListener\('keydown', \(e\) => \{/);
+  assert.match(source, /\(e\.ctrlKey \|\| e\.metaKey\) && e\.key\.toLowerCase\(\) === 'c'/);
+  assert.match(source, /e\.preventDefault\(\);\s*copyResults\(\);/);
+});

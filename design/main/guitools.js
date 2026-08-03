@@ -567,6 +567,10 @@ function findFile(path, options) {
       for (const part of String(paths).split(';')) {
         // Not normalizing: PATH is not under our control and an invalid entry
         // must not throw, it must just fail to match.
+        // An empty Windows PATH component means the current directory. The
+        // desktop app must not turn that implicit location into a root probe
+        // when resolving an external tool, so empty components fail closed.
+        if (part === '') continue;
         const candidate = includeTrailingBackslash(part) + p;
         if (exists(candidate)) return { found: true, path: candidate };
       }

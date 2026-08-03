@@ -324,6 +324,11 @@ export function openFileFind(props = {}) {
   resultList.addEventListener('keydown', (e) => {
     const items = visibleResults();
     if (!items.length) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+      e.preventDefault();
+      copyResults();
+      return;
+    }
     const moveTo = (index) => {
       focusedIndex = Math.max(0, Math.min(items.length - 1, index));
       // Ctrl+arrow moves without disturbing a multi-file selection.

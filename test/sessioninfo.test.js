@@ -101,6 +101,27 @@ test('fromSession accepts the repository Session class without a bridge or adapt
   assert.equal(info.hostPort, 'example.com:22');
 });
 
+test('live certificate facts under adapter serverInfo reach the secret-free snapshot', () => {
+  const live = new Session(site({ id: 'site-cert', protocol: 'ftp', ftps: 'explicitTls' }), { id: 'runtime-cert' });
+  live.adapter = {
+    connected: true,
+    serverInfo: {
+      certificate: {
+        subject: 'CN=files.example.com',
+        fingerprint: 'AA:BB',
+        fingerprint256: '11:22',
+        privateKey: 'must-not-escape',
+      },
+    },
+  };
+  const info = live.info();
+  assert.equal(info.certificateFingerprintSHA1, 'AA:BB');
+  assert.equal(info.certificateFingerprintSHA256, '11:22');
+  assert.equal(info.certificate.subject, 'CN=files.example.com');
+  assert.equal(info.certificate.privateKey, undefined);
+  assert.doesNotMatch(JSON.stringify(info), /must-not-escape|privateKey/i);
+});
+
 test('live Session.info publishes the canonical identity while retaining renderer aliases', () => {
   const live = new Session(site({ id: 'site-3', password: 'secret', protocol: 'sftp' }), { id: 'runtime-3' });
   const info = live.info();

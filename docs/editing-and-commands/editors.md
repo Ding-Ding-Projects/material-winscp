@@ -68,6 +68,7 @@ actual selection, so it never unexpectedly copies an entire file.
 | Situation | What the user sees | Recoverable |
 | --- | --- | --- |
 | External editor not found at its configured path | Named error, and the association is not silently reassigned. | Yes |
+| External editor name cannot be resolved from `PATH` | Empty `PATH` entries are ignored; resolution fails closed rather than probing the filesystem root. | Yes |
 | File changed on the server while being edited | A modal conflict prompt: upload anyway, download theirs, or save locally. This is a decision, so it is modal. | Yes |
 | Editor exits before saving | Nothing is uploaded. The temporary is kept briefly so an accidental close is recoverable. | Yes |
 | Encoding cannot represent an edited character | With `warnOnEncodingFallback`, a warning naming the character and offering UTF-8. Without it, the substitution is still recorded in the session log. | Yes |

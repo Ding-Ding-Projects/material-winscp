@@ -378,6 +378,7 @@ export function registerAboutDialog() {
       content: body.element,
       onClose: () => body.destroy(),
       actions: [
+        { label: s('abCopyDetails'), kind: 'text', onSelect: () => { body.copyDetails(); return true; } },
         { label: s('abChangelog'), kind: 'text', onSelect: () => { openChangelog(); return true; } },
         { label: s('abHistory'), kind: 'text', onSelect: () => { openHistoryPanel(); return true; } },
         { label: s('abLicenseBtn'), kind: 'text', onSelect: () => { openLicense(); return true; } },

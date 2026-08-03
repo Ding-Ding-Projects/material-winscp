@@ -17,7 +17,7 @@ Stored under `PREF_DEFAULTS.window`, plus the workspace records themselves.
 | `autoWorkspace` | `''` | Which workspace the automatic save writes to. |
 
 A workspace records, per session: the site it came from, the local and remote
-directories, panel widths, sort order, the active filter, and the session's
+directories, panel widths, tree visibility, sort order, the active filter, and the session's
 place in the [tab structure](../tabs-and-navigation/) — order, pinned state,
 group membership and whether that group was collapsed.
 

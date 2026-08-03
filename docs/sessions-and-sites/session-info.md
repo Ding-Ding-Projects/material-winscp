@@ -27,6 +27,12 @@ for a `Config`-shaped store, or `SessionInfo.fromSession(liveSession)` for the
 existing `Session` object. The last form reads the existing `state` and
 adapter; it does not add an IPC channel or change the renderer bridge.
 
+When a live adapter reports a peer certificate in `serverInfo.certificate`, the
+snapshot copies only its public certificate identity (fingerprints and sanitized
+metadata). This keeps the negotiated certificate visible to diagnostics through
+the existing `Session.info()` path without exposing client credentials or key
+material.
+
 `FileSystemInfo` accepts the existing `Session.fileSystemInfo()` result and
 keeps protocol, server and capability fields in the same snapshot family.
 
