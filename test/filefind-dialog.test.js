@@ -26,3 +26,7 @@ test('FileFind makes result export keyboard reachable', () => {
   assert.match(source, /\(e\.ctrlKey \|\| e\.metaKey\) && e\.key\.toLowerCase\(\) === 'c'/);
   assert.match(source, /e\.preventDefault\(\);\s*copyResults\(\);/);
 });
+
+test('FileFind disables the regex builder while a search is running', () => {
+  assert.match(source, /limitInput, editMaskButton, regexMaskButton,/);
+});

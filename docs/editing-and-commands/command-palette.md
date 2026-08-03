@@ -25,6 +25,10 @@ validation, persistence, unavailable-state handling and version-history labels.
 - Master-password and other secret values are not rendered or indexed.
 - Arrow keys move the visible option, `Home`/`End` jump to its boundaries,
   `Enter` runs it, and `Escape` closes the surface and restores focus.
+- Shortcut metadata is normalized at the command boundary, so stored spellings
+  such as `Ctrl + F3` and `Cmd+Shift+L` resolve the same way as live keyboard
+  events. This keeps native-menu and palette actions from becoming inert when
+  their display formatting includes spaces or uses `Cmd`.
 
 ## Size and accessibility
 

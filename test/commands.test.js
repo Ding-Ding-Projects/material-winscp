@@ -214,6 +214,14 @@ test('a shortcut resolves to one action, preferring the focused side', () => {
   assert.equal(C.resolveShortcut('Nope+Q'), null);
 });
 
+test('shortcut resolution accepts human-formatted metadata spellings', () => {
+  // Native menus and the command palette pass stored shortcut metadata, not
+  // necessarily the canonical event spelling. The action must remain reachable
+  // when case and separator whitespace differ.
+  assert.equal(C.resolveShortcut('ctrl + f3'), 'RemoteSortByNameAction2');
+  assert.equal(C.resolveShortcut('CMD+SHIFT+L'), C.resolveShortcut('Meta+Shift+L'));
+});
+
 test('focused variants are never reachable from the keyboard', () => {
   // A *Focused* action belongs to the right-click menu; letting it win a
   // shortcut would silently act on one row instead of the whole selection.

@@ -1403,6 +1403,16 @@ test('resizing respects a work area that starts left of or above zero', () => {
   assert.ok(r.top >= workarea.top, 'never off the top edge');
 });
 
+test('an impossible minimum is capped so the form remains reachable', () => {
+  const workarea = { left: 0, top: 0, right: 1000, bottom: 800 };
+  const r = U.resizeForm({ left: 100, top: 100, width: 200, height: 200 },
+    300, 300, workarea, { minWidth: 1600, minHeight: 1200 });
+  assert.equal(r.width, 1000);
+  assert.equal(r.height, 800);
+  assert.ok(r.left >= workarea.left && r.left + r.width <= workarea.right);
+  assert.ok(r.top >= workarea.top && r.top + r.height <= workarea.bottom);
+});
+
 test('an oversized form is re-centred by the difference the layout forced', () => {
   const workarea = { left: 0, top: 0, right: 1000, bottom: 800 };
   const r = U.resizeForm({ left: 400, top: 400, width: 200, height: 200 },

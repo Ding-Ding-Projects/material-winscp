@@ -3,7 +3,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { passiveClientOptions } = require('../design/main/protocols/ftp');
+const { passiveClientOptions, assertSafeFtpArgument } = require('../design/main/protocols/ftp');
 
 test('passive host policy forces the control host only when explicitly on', () => {
   assert.deepEqual(passiveClientOptions('on'), { allowSeparateTransferHost: false });
@@ -15,4 +15,11 @@ test('passive host policy forces the control host only when explicitly on', () =
   assert.deepEqual(passiveClientOptions(0), { allowSeparateTransferHost: false });
   assert.deepEqual(passiveClientOptions(1), { allowSeparateTransferHost: true });
   assert.deepEqual(passiveClientOptions(2), { allowSeparateTransferHost: true });
+});
+
+test('FTP authentication arguments reject command record separators', () => {
+  assert.doesNotThrow(() => assertSafeFtpArgument('normal-user', 'username'));
+  assert.throws(() => assertSafeFtpArgument('user\r\nNOOP', 'username'), /username contains a line break/);
+  assert.throws(() => assertSafeFtpArgument('secret\nPASS injected', 'password'), /password contains a line break/);
+  assert.throws(() => assertSafeFtpArgument('acct\rvalue', 'account'), /account contains a line break/);
 });

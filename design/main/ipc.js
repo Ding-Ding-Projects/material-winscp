@@ -504,7 +504,21 @@ class Ipc {
     this._askSeq += 1;
     const promptId = `ask-${Date.now().toString(36)}-${this._askSeq.toString(36)}`;
     return new Promise((resolve) => {
-      this._asks.set(promptId, resolve);
+      let settled = false;
+      const settle = (answer) => {
+        if (settled) return false;
+        settled = true;
+        if (typeof w.removeListener === 'function') w.removeListener('closed', onClosed);
+        this._asks.delete(promptId);
+        resolve(answer);
+        return true;
+      };
+      const onClosed = () => settle('cancel');
+      // BrowserWindow destruction is the renderer's last reliable lifecycle
+      // signal. Without this listener a prompt can keep a queue/terminal
+      // operation awaiting a response after its only renderer has gone away.
+      if (typeof w.once === 'function') w.once('closed', onClosed);
+      this._asks.set(promptId, settle);
       this.emit('event:prompt', {
         promptId,
         kind: 'question',
@@ -515,11 +529,8 @@ class Ipc {
 
   /** Settle a pending `ask`. Returns false when the question is already gone. */
   answerAsk(promptId, answer) {
-    const resolve = this._asks.get(promptId);
-    if (!resolve) return false;
-    this._asks.delete(promptId);
-    resolve(answer);
-    return true;
+    const settle = this._asks.get(promptId);
+    return settle ? settle(answer) : false;
   }
 
   /** The one ExplorerShell, built over the live session manager and queue. */

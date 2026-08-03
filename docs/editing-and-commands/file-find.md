@@ -7,6 +7,11 @@ search returns immediately without normalizing the root, listing a directory,
 or opening a file stream. Positive limits stop the stream as soon as that many
 matching entries have been yielded.
 
+While a search is running, the mask field and both mask editors—including the
+regular-expression builder—are disabled together. This keeps keyboard users
+from opening the builder and applying a new mask to a field that the active
+search can no longer read, and makes the Stop/Start state unambiguous.
+
 This matters for remote adapters: an empty result request must not start a
 network listing, and cancellation must not turn into a late match after the
 caller has stopped consuming the stream. A permitted `test/filefind.test.js`

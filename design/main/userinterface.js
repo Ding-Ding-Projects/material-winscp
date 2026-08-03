@@ -2321,6 +2321,10 @@ function resizeForm(bounds, width, height, workarea, constraints) {
   let h = Math.min(height, waHeight);
   if (c.minHeight !== undefined && h < c.minHeight) h = c.minHeight;
   if (c.minWidth !== undefined && w < c.minWidth) w = c.minWidth;
+  // A pathological minimum must not defeat the desktop boundary. The outer
+  // form still has to remain reachable when a layout asks for more space.
+  w = Math.min(w, waWidth);
+  h = Math.min(h, waHeight);
 
   let top = bounds.top + Math.trunc((bounds.height - h) / 2);
   let left = bounds.left + Math.trunc((bounds.width - w) / 2);

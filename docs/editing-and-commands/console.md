@@ -43,6 +43,7 @@ publishes events for both sessions.
 | A command waits for input the user did not expect | It is interactive — that is what this surface is for. Interrupt is always available. | Yes |
 | Console startup fails while creating its communication session | Startup reports the global initialization error and closes the session-owned channel, so a retry cannot reuse a half-open console. | Yes — retry after correcting the startup failure |
 | Cleanup encounters a late session or XML-log error | The command keeps its established exit result, attempts both cleanup paths, and releases the runner state instead of rejecting after completion. | Yes — rerun after correcting the underlying resource error |
+| The renderer window closes while a confirmation is pending | IPC resolves the pending question as `cancel` and removes its window listener, so the console or queued operation cannot wait forever for a destroyed renderer. | Yes — reopen the surface and retry |
 
 ## Security considerations
 
@@ -79,6 +80,8 @@ publishes events for both sessions.
   session-owned communication channel is closed before the global error returns.
 - Runner cleanup is tested with failing session and XML-log close operations to
   ensure both are attempted without leaking the completed run's script state.
+- Pending IPC questions are tested to resolve as `cancel` on window close and to
+  remove their lifecycle listener after a normal answer.
 
 ## Suggested articles
 

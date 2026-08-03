@@ -3360,7 +3360,11 @@ function reportShortcutConflicts() {
 
 /** Pick the action a shortcut should run, given the focused panel. */
 export function resolveShortcut(key, over = {}) {
-  const names = SHORTCUTS.get(key);
+  // Callers include the command palette, native-menu bridge and tests; some
+  // provide the human spelling (for example `ctrl + f3`) rather than the
+  // event spelling. Normalize at this boundary so shortcut metadata does not
+  // silently become unreachable outside the DOM keydown handler.
+  const names = SHORTCUTS.get(normalizeShortcut(key));
   if (!names || !names.length) return null;
   const ws = services.workspace;
   const activeSide = over.side || (ws && ws.activeSide ? ws.activeSide() : 'remote');

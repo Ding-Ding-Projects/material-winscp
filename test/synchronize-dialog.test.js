@@ -20,6 +20,17 @@ test('keep-up-to-date controls expose stable start/stop state while awaiting IPC
   });
 });
 
+test('watcher errors are assertive alerts while activity stays polite', async () => {
+  const { watcherLogState } = await import('../design/renderer/ui/dialogs/synchronize.js');
+
+  assert.deepStrictEqual(watcherLogState(), {
+    role: 'status', 'aria-live': 'polite',
+  });
+  assert.deepStrictEqual(watcherLogState('error'), {
+    role: 'alert', 'aria-live': 'assertive',
+  });
+});
+
 test('keep-up-to-date tolerates queue errors without an item', async () => {
   const { Watcher } = require('../design/main/sync');
   const { EventEmitter } = require('node:events');

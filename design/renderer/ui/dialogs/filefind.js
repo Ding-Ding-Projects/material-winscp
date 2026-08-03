@@ -646,7 +646,7 @@ export function openFileFind(props = {}) {
     const finding = state === 'finding' || state === 'aborting';
     startStop.textContent = finding ? tx('ffStop') : tx('ffStart');
     startStop.disabled = !finding && !rootInput.value.trim();
-    for (const el of [rootInput, maskInput, textInput, limitInput, editMaskButton,
+    for (const el of [rootInput, maskInput, textInput, limitInput, editMaskButton, regexMaskButton,
       caseCheck.input, regexCheck.input, recursiveCheck.input]) {
       el.disabled = finding || (el === textInput && !hasSession);
     }

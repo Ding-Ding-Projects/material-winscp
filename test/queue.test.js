@@ -1750,6 +1750,37 @@ test('transfersLimit bounds how many items run at once', async () => {
   for (let i = 0; i < 5; i++) assert.ok(remote.read(`/r/f${i}.bin`), `f${i} missing`);
 });
 
+test('IPC questions fail closed when their renderer window closes', async () => {
+  const { EventEmitter } = require('events');
+  const { ipc } = ipcWithQueue();
+  const window = new EventEmitter();
+  window.isDestroyed = () => false;
+  window.webContents = { isDestroyed: () => false, send() {} };
+  ipc.getWindow = () => window;
+
+  const pending = ipc.ask({ message: 'Confirm the operation.' });
+  assert.equal(ipc._asks.size, 1);
+  window.emit('closed');
+  assert.equal(await pending, 'cancel');
+  assert.equal(ipc._asks.size, 0);
+});
+
+test('answering an IPC question removes its window lifecycle listener', async () => {
+  const { EventEmitter } = require('events');
+  const { ipc } = ipcWithQueue();
+  const window = new EventEmitter();
+  window.isDestroyed = () => false;
+  window.webContents = { isDestroyed: () => false, send() {} };
+  ipc.getWindow = () => window;
+
+  const pending = ipc.ask({ message: 'Confirm the operation.' });
+  const promptId = [...ipc._asks.keys()][0];
+  assert.equal(ipc.answerAsk(promptId, 'yes'), true);
+  assert.equal(await pending, 'yes');
+  window.emit('closed');
+  assert.equal(ipc._asks.size, 0);
+});
+
 test('parallel chunk failure aborts and settles sibling streams', async () => {
   const { local, remote } = makePair({ chunkSize: 1024, readDelayMs: 2 });
   const payload = bigBuffer(65536);

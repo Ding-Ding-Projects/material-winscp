@@ -558,6 +558,17 @@ export function watcherUiState(watcherId, pendingAction = null) {
     : { action: 'start', busy: false, labelKey: 'txKutdStart' };
 }
 
+/**
+ * Errors must interrupt the watcher's otherwise polite activity stream. A
+ * transport failure is actionable even when the window is not focused, so its
+ * log row is an assertive alert rather than another low-priority log entry.
+ */
+export function watcherLogState(kind = 'activity') {
+  return kind === 'error'
+    ? { role: 'alert', 'aria-live': 'assertive' }
+    : { role: 'status', 'aria-live': 'polite' };
+}
+
 export function openKeepUpToDateDialog(props = {}) {
   injectTransferStyles();
   injectSyncStyles();
@@ -610,10 +621,13 @@ export function openKeepUpToDateDialog(props = {}) {
   layer('popover').appendChild(root);
   root.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
 
-  function log(text) {
+  function log(text, kind = 'activity') {
+    const live = watcherLogState(kind);
     const line = h('div', { class: 'tx-sy-log-line' },
       h('span', { class: 'tx-sy-log-time' }, new Date().toLocaleTimeString()),
       h('span', { class: 'ellipsis', title: text }, text));
+    line.setAttribute('role', live.role);
+    line.setAttribute('aria-live', live['aria-live']);
     logEl.appendChild(line);
     logEl.scrollTop = logEl.scrollHeight;
     if (logEl.childElementCount > 500) logEl.removeChild(logEl.firstChild);
@@ -682,7 +696,7 @@ export function openKeepUpToDateDialog(props = {}) {
 
   const offSync = bus.on('sync:event', (payload) => {
     if (!watcherId || payload?.id !== watcherId) return;
-    if (payload.type === 'error') { log(t('txKutdError', payload.payload?.message || payload.payload || '')); return; }
+    if (payload.type === 'error') { log(t('txKutdError', payload.payload?.message || payload.payload || ''), 'error'); return; }
     if (payload.type === 'change' || payload.type === 'changes') {
       const items = payload.payload?.items?.length || 0;
       const deletions = payload.payload?.deletions?.length || 0;

@@ -46,6 +46,7 @@ Under **Site → Advanced → FTP** and **→ TLS/SSL**.
 | Non-UTF-8 filenames without `UTF8` in `FEAT` | Names decoded through the site's `codePage`. Mis-set, they appear as mojibake but remain openable. | Yes |
 | Resume on a server without `REST` | `caps.resume` stays false; the queue restarts the file rather than offering a broken resume. | n/a |
 | Idle disconnect | Detected on the next command; auto-reconnect follows `security.sessionReopen*`. | Yes |
+| Username, password or ACCT contains a line break | Login is rejected before any credential command is sent. FTP has no escaping for command record separators, so accepting one could send an unintended command. | Yes — correct the saved site value |
 
 The passive-host choice is applied when the FTP client is constructed, before
 the first `PASV`/`EPSV` negotiation. In particular, `on` is not merely a UI

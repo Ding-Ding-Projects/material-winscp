@@ -410,6 +410,14 @@ function passiveClientOptions(forcePasvIp) {
   return { allowSeparateTransferHost: !force };
 }
 
+/** FTP command arguments must never contain record separators. */
+function assertSafeFtpArgument(value, label) {
+  if (/[\r\n]/.test(String(value ?? ''))) {
+    throw new Error(`FTP ${label} contains a line break`);
+  }
+  return value;
+}
+
 /** `rwxr-xr-x` or `755` → the octal number SITE CHMOD wants. */
 function rightsToOctal(rights) {
   if (/^[0-7]{3,4}$/.test(String(rights))) return String(rights);
@@ -720,6 +728,9 @@ class FtpAdapter extends Adapter {
       ? (this.options.password || 'anonymous@')
       : (this.options.password !== undefined ? this.options.password : s.password);
     const account = s.ftpAccount || '';
+    assertSafeFtpArgument(user, 'username');
+    assertSafeFtpArgument(password || '', 'password');
+    assertSafeFtpArgument(account, 'account');
     const ftp = this.client.ftp;
 
     return ftp.handle(`USER ${user}`, (res, task) => {
@@ -1243,5 +1254,6 @@ module.exports = { normalizeTimes,
   parseHashReply,
   normalizeChecksumAlg,
   passiveClientOptions,
+  assertSafeFtpArgument,
   CHECKSUM_ALGS,
 };
