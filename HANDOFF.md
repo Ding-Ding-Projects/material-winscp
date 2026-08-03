@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `128d764`** — Refresh changelog for CLI parity hardening
+**At commit `a3d6bc5`** — Record Windows CI newline fix
 
 ## Where the work stands
 
@@ -15,9 +15,9 @@
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
 | Tests | 3337 run, **3336 pass, 0 fail**, 1 skipped |
 | Hand-written code | 217,103 lines across 399 files |
-| Commits | 138 on `main` |
+| Commits | 141 on `main` |
 | Working tree | **1 uncommitted change(s)** |
-| Remote | `origin/main` at `4355fa1` — **differs from HEAD** |
+| Remote | `origin/main` at `2fabb27` — **differs from HEAD** |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `a3d6bc5` | 2026-08-03 | Record Windows CI newline fix |
+| `0e0969b` | 2026-08-03 | Fix Windows line-ending test extraction |
+| `2fabb27` | 2026-08-03 | Refresh handoff for CLI parity wave |
 | `128d764` | 2026-08-03 | Refresh changelog for CLI parity hardening |
 | `7e93933` | 2026-08-03 | Complete CLI parity and harden platform edges |
 | `4355fa1` | 2026-08-03 | Refresh handoff for transfer and security wave |
 | `e1df1cc` | 2026-08-03 | Refresh changelog for transfer and security hardening |
 | `3ba2f1c` | 2026-08-03 | Harden transfer console security and sync edges |
-| `33184f0` | 2026-08-03 | Refresh handoff for CLI and lifecycle wave |
-| `14afd31` | 2026-08-03 | Refresh changelog for CLI and accessibility fixes |
-| `a74836c` | 2026-08-03 | Harden CLI drop classification and progress accessibility |
 
 ## Notes from whoever worked on this last
 
