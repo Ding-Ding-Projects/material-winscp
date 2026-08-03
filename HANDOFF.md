@@ -5,7 +5,7 @@
 > this file cannot flatter the state of the work. Re-run it at the end of any
 > task that changes the repository.
 
-**At commit `9148a21`** — Update the in-app changelog for security and lifecycle fixes
+**At commit `e0fa83f`** — Update the in-app changelog for the parity wave
 
 ## Where the work stands
 
@@ -13,11 +13,11 @@
 |---|---|
 | **Port coverage (logic)** | **59.0%** of 209,889 lines that are actually code |
 | Port coverage (raw) | 70.4% — includes embedded hex resources, **do not quote this one** |
-| Tests | 3388 run, **3387 pass, 0 fail**, 1 skipped |
-| Hand-written code | 218,761 lines across 412 files |
-| Commits | 166 on `main` |
+| Tests | 3394 run, **3393 pass, 0 fail**, 1 skipped |
+| Hand-written code | 218,980 lines across 419 files |
+| Commits | 169 on `main` |
 | Working tree | **1 uncommitted change(s)** |
-| Remote | `origin/main` at `9148a21` — in sync |
+| Remote | `origin/main` at `e0fa83f` — in sync |
 
 ### Coverage by area
 
@@ -127,14 +127,14 @@ bite a successor who assumes otherwise:
 
 | Commit | Date | Subject |
 |---|---|---|
+| `e0fa83f` | 2026-08-03 | Update the in-app changelog for the parity wave |
+| `0dcc3f4` | 2026-08-03 | Harden preferences, actions, sync, dialogs, and packaging |
+| `e7ae918` | 2026-08-03 | Record the current security and lifecycle wave in handoff |
 | `9148a21` | 2026-08-03 | Update the in-app changelog for security and lifecycle fixes |
 | `e81083b` | 2026-08-03 | Harden security, config, S3, queue, and session edges |
 | `e40a62b` | 2026-08-03 | Record the current pushed roadmap wave in handoff |
 | `ae34762` | 2026-08-03 | Update the in-app changelog for the roadmap wave |
 | `e91bd48` | 2026-08-03 | Fix CLI, drag-drop, menu, overlay, and history edges |
-| `7c9fe53` | 2026-08-03 | Record the verified pushed head in handoff |
-| `d85484b` | 2026-08-03 | Refresh handoff for the second verified wave |
-| `88d55a8` | 2026-08-03 | Update the in-app changelog |
 
 ## Notes from whoever worked on this last
 
