@@ -8,7 +8,7 @@ const path = require('node:path');
 const dialog = (name) => fs.readFileSync(
   path.join(__dirname, '..', 'design', 'renderer', 'ui', 'dialogs', `${name}.js`),
   'utf8',
-);
+).replace(/\r\n/g, '\n');
 
 test('Rights keeps its modal open until the bridge confirms the write', () => {
   const source = dialog('rights');
