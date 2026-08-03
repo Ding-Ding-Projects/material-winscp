@@ -33,7 +33,10 @@ test('Commander Insert selects the focused last row, not its predecessor', async
     const encodedPath = JSON.stringify(dir);
     await app.evaluate(`(() => { const input = document.querySelector('input[aria-label="Local"], input[aria-label="Local panel"]');
       input.value = ${encodedPath}; input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); })()`);
-    await waitFor(() => app.evaluate(`document.querySelectorAll('.fp-local .fp-row').length >= 3`));
+    // A Windows runner may start in a populated checkout directory. Waiting
+    // only for a row count can therefore observe the old listing before the
+    // requested temp directory has arrived; wait for the exact fixture row.
+    await waitFor(() => app.evaluate(`!!document.querySelector('.fp-local .fp-row[data-name="last.txt"]')`));
 
     await app.evaluate(keydown('End'));
     // The real panel may still be completing the directory render when the

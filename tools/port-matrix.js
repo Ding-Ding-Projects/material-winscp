@@ -268,7 +268,12 @@ function main() {
   const report = lines.join('\n');
   if (check) {
     let current = '';
-    try { current = fs.readFileSync(OUT, 'utf8'); } catch { current = ''; }
+    try {
+      // Git may check tracked Markdown out with CRLF on Windows while the
+      // generator deliberately emits LF. Compare the report's content, not
+      // the workstation's line-ending preference.
+      current = fs.readFileSync(OUT, 'utf8').replace(/\r\n/g, '\n');
+    } catch { current = ''; }
     if (current !== report) problems.push('docs/port-coverage.md is stale; run node tools/port-matrix.js');
   } else {
     fs.mkdirSync(path.dirname(OUT), { recursive: true });
