@@ -187,6 +187,13 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "aca79a7", kind: 'commit', ref: "aca79a7", oid: "aca79a794e5ad9fb091151086ed2f17e4db0428c", date: "2026-08-03",
+    title: "Harden dialogs panels editors and secrets",
+    changes: [
+      { category: "fixed", text: "English: Keep asynchronous dialog actions open until persistence or queue commits succeed, clamp and persist panel splitters, validate external editor commands, redact registered secrets unconditionally, and normalize host-key trust records. Add regression tests and categorized documentation.\\n\\n粵語：dialog 未 commit 完唔好閂門，panel splitter 唔好飛出邊界，editor command 唔好食爛 quote，secret 永遠要遮面；host key 亦整理到唔會攞住一堆古怪資料扮可信。" },
+    ],
+  },
+  {
     id: "0a1939a", kind: 'commit', ref: "0a1939a", oid: "0a1939a3f75a0b0da966e39b8e8b8b11131ca6c4", date: "2026-08-03",
     title: "Extend headless config and settings surfaces",
     changes: [
@@ -663,13 +670,6 @@ export const DEVELOPMENT = [
     title: "Fix Windows line-ending test extraction",
     changes: [
       { category: "fixed", text: "Make the location-profile source-extraction regression accept LF and CRLF endings so the Windows CI checkout tests the same behavior as the local checkout. The regex now reads the file instead of arguing with the newline fashion police.\\n\\n廣東話：location profile 個 regex 而家識睇 LF 同 CRLF，唔會再同換行符號鬥氣，Windows CI 可以正常開工。" },
-    ],
-  },
-  {
-    id: "7e93933", kind: 'commit', ref: "7e93933", oid: "7e9393357f94f5f34c7dd288a194c9b6cb219345", date: "2026-08-03",
-    title: "Complete CLI parity and harden platform edges",
-    changes: [
-      { category: "added", text: "Preserve tab-containing command arguments, release runner state through optional log cleanup failures, make PATH lookup host-correct, restore companion preference keys, require explicit remote-copy capability, and make SFTP recursive removal lstat entries without attributes. Add focused tests and documentation. The CLI now keeps its tabs, the runner keeps its marbles, and SFTP stops wandering into symlinked gardens.\\n\\n廣東話：CLI 保住 tab、runner 收好自己啲 marble、SFTP 用 lstat 睇清楚條路，唔會再行入 symlink 花園打卡。" },
     ],
   },
 ];
