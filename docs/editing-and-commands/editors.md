@@ -133,6 +133,10 @@ available through the visible Up and Down buttons for pointer users.
   command line before it is saved.
 - **Filenames are quoted when passed to an external editor**, so a remote file
   named with shell metacharacters cannot become a command.
+- **The external command is validated before launch.** An empty command or an
+  unterminated quote is rejected as an invalid association. If **Pass the file
+  name to the program** is off, the process receives no arguments at all; it is
+  not silently given the temporary path.
 - **Conflict detection is best-effort** — it relies on the metadata the protocol
   provides. Where none is available the prompt says the check could not be made,
   rather than implying it passed.

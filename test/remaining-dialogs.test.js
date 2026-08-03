@@ -68,3 +68,20 @@ test('Location-profile writes restore stored data and keep name validation open'
   assert.match(source, /if \(!await save\([^\n]+\)\) return false;/);
   assert.match(source, /Promise\.resolve\(props\.onOk\(name, folderInput\.value\.trim\(\)\)\)/);
 });
+
+test('async remaining-dialog actions keep the modal open until commit finishes', () => {
+  const remote = dialog('remotetransfer');
+  assert.match(remote, /onSelect: \(closeDialog\) => \{/);
+  assert.match(remote, /void queue\(\)\.then\(\(queued\) => \{[\s\S]*closeDialog\('action'\);/);
+  assert.match(remote, /return true;/);
+
+  const mask = dialog('selectmask');
+  assert.match(mask, /if \(applying\) return true;/);
+  assert.match(mask, /void apply\(\)\.then\(\(\) => close\('action'\)\)\.catch/);
+  assert.match(mask, /return true;/);
+
+  const copy = dialog('copyparams');
+  assert.match(copy, /if \(confirming\) return true;/);
+  assert.match(copy, /void confirm\(\)\.then\(\(\) => close\('action'\)\)\.catch/);
+  assert.match(copy, /async function confirm\(\)/);
+});

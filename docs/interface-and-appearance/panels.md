@@ -85,6 +85,14 @@ ends are usable. In particular, the local action is disabled while the remote
 session is disconnected; it must not navigate one side and imply that the
 other side followed it. The action maps separators only after that state check.
 
+The Commander splitters are keyboard controls as well as pointer controls.
+Focus the panel separator and use Left/Right to resize; the result is clamped
+so neither panel falls below 160 CSS pixels and the fraction is persisted in
+`scpCommander.localPanelWidth`. The drive-tree separator uses the same rule
+with 120–520 pixel bounds and persists each keyboard adjustment. This keeps
+keyboard operation, pointer dragging, restart behavior, and headless panel math
+aligned.
+
 The local **Root** action preserves UNC semantics: `\\server\\share\\folder`
 goes to `\\server\\share`, while a drive path goes to its drive root. It never
 falls back to the process root `\\` for a UNC path.

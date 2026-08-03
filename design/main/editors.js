@@ -881,9 +881,21 @@ function isNotFoundError(error) {
  * convention). Anything without a placeholder gets the file appended.
  */
 function splitProgram(program, file, withParams) {
-  const parts = tokenizeCommandLine(String(program));
+  const source = String(program || '');
+  if (!source.trim()) {
+    const e = new Error('The external editor command is empty.');
+    e.code = 'INVALID_EXTERNAL_EDITOR';
+    throw e;
+  }
+  const parts = tokenizeCommandLine(source);
   const command = parts.shift() || '';
-  let args = withParams === false ? [] : parts;
+  if (!command || command.includes('\0')) {
+    const e = new Error('The external editor command is invalid.');
+    e.code = 'INVALID_EXTERNAL_EDITOR';
+    throw e;
+  }
+  if (withParams === false) return { command, args: [] };
+  let args = parts;
   const PLACEHOLDER = /!\.!|"%1"|%1/;
   if (args.some((a) => PLACEHOLDER.test(a))) {
     args = args.map((a) => a.replace(/!\.!|"%1"|%1/g, file));
@@ -903,6 +915,11 @@ function tokenizeCommandLine(line) {
     if (c === '"') { quoted = !quoted; continue; }
     if (!quoted && /\s/.test(c)) { if (cur) { out.push(cur); cur = ''; } continue; }
     cur += c;
+  }
+  if (quoted) {
+    const e = new Error('The external editor command has an unterminated quote.');
+    e.code = 'INVALID_EXTERNAL_EDITOR';
+    throw e;
   }
   if (cur) out.push(cur);
   return out;

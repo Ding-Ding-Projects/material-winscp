@@ -27,4 +27,7 @@ order.
 
 Verification: `node --test test/remotetransfer.test.js` covers empty selection,
 blank target, missing session, unsupported capability, multi-file literal target,
-and a valid masked target.
+and a valid masked target. The affirmative action returns the modal primitive's
+explicit keep-open sentinel while `queue:add` is pending; it closes only after
+success and remains available for retry after failure. The primitive does not
+await an `async` action callback.

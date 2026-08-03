@@ -66,3 +66,15 @@ test('Commander panel headers are hidden in Explorer and enabled in Commander', 
     C.services.workspace = previous;
   }
 });
+
+test('panel splitter keyboard math is clamped and persistable', async () => {
+  const { clampPanelWidth, adjustPanelWidth, panelWidthFraction, adjustTreeWidth } =
+    await import('../design/renderer/ui/panels.js');
+  assert.equal(clampPanelWidth(-50, 1000), 160);
+  assert.equal(clampPanelWidth(950, 1000), 840);
+  assert.equal(adjustPanelWidth(500, -400, 1000), 160);
+  assert.equal(adjustPanelWidth(500, 400, 1000), 840);
+  assert.equal(panelWidthFraction(500, 1000), 0.5);
+  assert.equal(adjustTreeWidth(120, -16), 120);
+  assert.equal(adjustTreeWidth(520, 16), 520);
+});

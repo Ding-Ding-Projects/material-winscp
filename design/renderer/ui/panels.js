@@ -460,6 +460,27 @@ function colorFor(entry, fullPath, dark) {
 
 const VIEW_STYLES = ['icon', 'smallIcon', 'list', 'report', 'thumbnail'];
 
+/** Keep keyboard and pointer panel resizing on the same bounded path. */
+export function clampPanelWidth(width, total, minimum = 160) {
+  const available = Math.max(minimum * 2, Number(total) || minimum * 2);
+  const value = Number(width);
+  return Math.max(minimum, Math.min(available - minimum, Number.isFinite(value) ? value : minimum));
+}
+
+export function adjustPanelWidth(width, delta, total, minimum = 160) {
+  return clampPanelWidth((Number(width) || minimum) + (Number(delta) || 0), total, minimum);
+}
+
+export function panelWidthFraction(width, total) {
+  const available = Math.max(1, Number(total) || 1);
+  return Math.max(0, Math.min(1, Number(width) / available));
+}
+
+export function adjustTreeWidth(width, delta, minimum = 120, maximum = 520) {
+  const value = Number(width);
+  return Math.max(minimum, Math.min(maximum, (Number.isFinite(value) ? value : minimum) + (Number(delta) || 0)));
+}
+
 function metricsFor(style, den, thumbSize) {
   switch (style) {
     case 'icon': return { grid: true, tileW: 108 * den, tileH: 92 * den, iconPx: 34 };
@@ -1319,21 +1340,22 @@ export function createFilePanel(opts = {}) {
   });
   splitter.addEventListener('pointermove', (e) => {
     if (!splitDrag) return;
-    const next = Math.max(120, Math.min(520, splitDrag.w + (e.clientX - splitDrag.x)));
+    const next = adjustTreeWidth(splitDrag.w, e.clientX - splitDrag.x);
     treeHost.style.width = `${next}px`;
   });
+  const persistTreeWidth = () => writePref(
+    isLocal ? 'scpCommander.localPanel.driveViewWidth' : 'scpCommander.remotePanel.driveViewWidth',
+    Math.round(treeHost.getBoundingClientRect().width), 'Changed the tree width',
+  );
   splitter.addEventListener('pointerup', () => {
     if (!splitDrag) return;
     splitDrag = null;
-    writePref(
-      isLocal ? 'scpCommander.localPanel.driveViewWidth' : 'scpCommander.remotePanel.driveViewWidth',
-      Math.round(treeHost.getBoundingClientRect().width), 'Changed the tree width',
-    );
+    persistTreeWidth();
   });
   splitter.addEventListener('keydown', (e) => {
     const w = treeHost.getBoundingClientRect().width;
-    if (e.key === 'ArrowLeft') { e.preventDefault(); treeHost.style.width = `${Math.max(120, w - 16)}px`; }
-    else if (e.key === 'ArrowRight') { e.preventDefault(); treeHost.style.width = `${Math.min(520, w + 16)}px`; }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); treeHost.style.width = `${adjustTreeWidth(w, -16)}px`; persistTreeWidth(); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); treeHost.style.width = `${adjustTreeWidth(w, 16)}px`; persistTreeWidth(); }
   });
 
   /* ---- helpers used by the handle ---- */
@@ -1888,7 +1910,7 @@ export function createWorkspace(opts = {}) {
         split.addEventListener('pointermove', (e) => {
           if (!splitDrag) return;
           const total = panelsHost.getBoundingClientRect().width || 1;
-          const next = Math.max(160, Math.min(total - 160, splitDrag.w + (e.clientX - splitDrag.x)));
+          const next = adjustPanelWidth(splitDrag.w, e.clientX - splitDrag.x, total);
           panels.local.element.style.flex = `0 0 ${next}px`;
           panels.remote.element.style.flex = '1 1 0';
         });
@@ -1897,12 +1919,18 @@ export function createWorkspace(opts = {}) {
           splitDrag = null;
           const total = panelsHost.getBoundingClientRect().width || 1;
           writePref('scpCommander.localPanelWidth',
-            panels.local.element.getBoundingClientRect().width / total, 'Changed the panel split');
+            panelWidthFraction(clampPanelWidth(panels.local.element.getBoundingClientRect().width, total), total),
+            'Changed the panel split');
         });
         split.addEventListener('keydown', (e) => {
+          if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+          e.preventDefault();
+          const total = panelsHost.getBoundingClientRect().width || 1;
           const cur = panels.local.element.getBoundingClientRect().width;
-          if (e.key === 'ArrowLeft') { e.preventDefault(); panels.local.element.style.flex = `0 0 ${cur - 20}px`; }
-          else if (e.key === 'ArrowRight') { e.preventDefault(); panels.local.element.style.flex = `0 0 ${cur + 20}px`; }
+          const next = adjustPanelWidth(cur, e.key === 'ArrowLeft' ? -20 : 20, total);
+          panels.local.element.style.flex = `0 0 ${next}px`;
+          panels.remote.element.style.flex = '1 1 0';
+          writePref('scpCommander.localPanelWidth', panelWidthFraction(next, total), 'Changed the panel split');
         });
         panelsHost.appendChild(split);
       }

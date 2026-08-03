@@ -320,9 +320,13 @@ registerDialog('remotetransfer', ({ props, close }) => {
       {
         label: t('ok'), kind: 'filled', autofocus: true,
         ref: (btn) => { okButton = btn; update(); },
-        onSelect: async (closeDialog) => {
-          const queued = await queue();
-          if (queued) closeDialog();
+        onSelect: (closeDialog) => {
+          // openModal closes an action unless the handler returns true. An
+          // async handler returns a Promise, so it would close before queue:add
+          // reports success or failure.
+          void queue().then((queued) => {
+            if (queued) closeDialog('action');
+          });
           return true;
         },
       },

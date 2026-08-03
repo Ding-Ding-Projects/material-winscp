@@ -67,6 +67,9 @@ something was removed rather than wondering whether it was ever sent.
   it on, the log can contain passwords, key passphrases, session tokens and
   authentication exchanges. Such a log is exactly as sensitive as the credentials
   in it and should be treated as a secret, not as a diagnostic.
+- **Registered live secrets remain redacted even when `logSensitive` is on.**
+  Adapters register credentials they hold so an exact value cannot leak through
+  a verbose protocol line; the setting only relaxes heuristic redaction.
 - **Redaction is applied at the point of writing**, not by post-processing, so a
   crash mid-write cannot leave an unredacted fragment.
 - **Even redacted logs contain hostnames, usernames, paths and filenames.** For

@@ -413,6 +413,21 @@ test('a failed local external launch never deletes the source file', async () =>
   }
 });
 
+test('external editor validation honours no-argument mode and rejects malformed commands', () => {
+  const { splitProgram } = require('../design/main/editors');
+  assert.deepEqual(splitProgram('editor.exe --reuse', 'C:/notes.txt', false), {
+    command: 'editor.exe', args: [],
+  });
+  assert.throws(
+    () => splitProgram('"C:/Program Files/Editor/editor.exe', 'C:/notes.txt', true),
+    (error) => error.code === 'INVALID_EXTERNAL_EDITOR' && /unterminated quote/.test(error.message),
+  );
+  assert.throws(
+    () => splitProgram('   ', 'C:/notes.txt', true),
+    (error) => error.code === 'INVALID_EXTERNAL_EDITOR' && /empty/.test(error.message),
+  );
+});
+
 test('discarding an unsaved remote edit records an audit revision before close', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-history-'));
   P.setRoot(root);

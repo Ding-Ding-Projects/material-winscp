@@ -172,14 +172,18 @@ class SessionLog extends EventEmitter {
     s = s.replace(KEY_BODY_RE, '-----BEGIN PRIVATE KEY----- ' + REDACTED + ' -----END PRIVATE KEY-----');
     s = s.replace(PUTTY_KEY_RE, (m, head) => head + REDACTED + '\n');
 
-    const p = prefs || this.prefs();
-    if (p.logSensitive) return s;
-
-    for (const [re, rep] of SENSITIVE_LINE_RES) s = s.replace(re, rep);
+    // A caller-registered literal is known to be a live credential. It must
+    // never be exposed merely because a user enabled protocol verbosity.
+    // The sensitive-log switch only controls heuristic protocol redaction;
+    // it cannot override an exact secret registration.
     for (const secret of this._secrets) {
       if (!secret) continue;
       s = s.split(secret).join(REDACTED);
     }
+    const p = prefs || this.prefs();
+    if (p.logSensitive) return s;
+
+    for (const [re, rep] of SENSITIVE_LINE_RES) s = s.replace(re, rep);
     return s;
   }
 

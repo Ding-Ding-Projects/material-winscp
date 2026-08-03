@@ -123,8 +123,18 @@ function hasPlainWorkspaceSecrets(value) {
 function normalizeHostKeys(value) {
   if (!isRecord(value)) return {};
   return Object.fromEntries(Object.entries(value)
-    .filter(([hostPort, record]) => hostPort !== '' && isRecord(record))
-    .map(([hostPort, record]) => [hostPort, clone(record)]));
+    .filter(([hostPort, record]) => hostPort !== '' && isRecord(record) &&
+      typeof record.fingerprint === 'string' && record.fingerprint.trim() !== '')
+    .map(([hostPort, record]) => {
+      const normalized = { fingerprint: record.fingerprint.trim() };
+      if (typeof record.algorithm === 'string' && record.algorithm.trim()) {
+        normalized.algorithm = record.algorithm.trim();
+      }
+      if (Number.isSafeInteger(record.addedAt) && record.addedAt > 0) {
+        normalized.addedAt = record.addedAt;
+      }
+      return [hostPort, normalized];
+    }));
 }
 
 function isValidWorkspace(workspace) {
@@ -656,11 +666,17 @@ class Config extends EventEmitter {
   }
 
   // ------------------------------------------------------------ host keys
-  knownHostKey(hostPort) { return this.data.hostKeys[hostPort] || null; }
+  knownHostKey(hostPort) {
+    const record = this.data.hostKeys[hostPort];
+    return record ? clone(record) : null;
+  }
 
   rememberHostKey(hostPort, fingerprint, algorithm) {
-    if (!String(hostPort || '').trim() || !String(fingerprint || '').trim()) return false;
-    this.data.hostKeys[hostPort] = { fingerprint, algorithm, addedAt: Date.now() };
+    if (typeof hostPort !== 'string' || !hostPort.trim() ||
+        typeof fingerprint !== 'string' || !fingerprint.trim()) return false;
+    const record = { fingerprint: fingerprint.trim(), addedAt: Date.now() };
+    if (typeof algorithm === 'string' && algorithm.trim()) record.algorithm = algorithm.trim();
+    this.data.hostKeys[hostPort] = record;
     this.save(`Accepted the host key for ${hostPort}`);
     return true;
   }

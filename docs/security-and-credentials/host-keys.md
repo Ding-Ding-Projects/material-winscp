@@ -100,6 +100,9 @@ implicit acceptance and no secret or fingerprint is logged while retrying.
 - **`hostkeys.json` is integrity-relevant, not secret.** It contains no
   credentials; what matters is that it is not silently modified. It lives in the
   app's own data directory with the user's permissions.
+- **Malformed trust records are discarded, not trusted.** A remembered record
+  must carry a non-empty string fingerprint; accepted values are trimmed and
+  callers receive a copy, so an in-memory mutation cannot bypass the save path.
 
 ## Verification
 

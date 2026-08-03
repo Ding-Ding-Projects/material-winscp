@@ -49,6 +49,7 @@ const STRINGS = {
   smFiltered: ['Filter set to "{0}".', '篩選設做「{0}」。'],
   smFilterCleared: ['Filter cleared.', '篩選清咗。'],
   smColorSet: ['Files matching "{0}" are now coloured.', '符合「{0}」嘅檔案而家有色。'],
+  smApplyFailed: ['The mask was not applied: {0}', '套用唔到遮罩：{0}'],
   smUnavailable: [
     'Matching is evaluated by the application’s mask engine, which this window cannot reach right now.',
     '配對係由程式嘅遮罩引擎計，而家呢個視窗接觸唔到佢。'],
@@ -235,6 +236,7 @@ registerDialog('selectmask', ({ props, close }) => {
   }, 220);
 
   let okButton = null;
+  let applying = false;
 
   function update() {
     const mask = maskInput.value.trim();
@@ -323,7 +325,19 @@ registerDialog('selectmask', ({ props, close }) => {
       {
         label: t('ok'), kind: 'filled', autofocus: true,
         ref: (btn) => { okButton = btn; update(); },
-        onSelect: () => { apply(); close(); },
+        onSelect: () => {
+          if (applying) return true;
+          applying = true;
+          if (okButton) okButton.disabled = true;
+          // Persistence is part of applying the mask, so do not close before
+          // history/preferences have either completed or reported an error.
+          void apply().then(() => close('action')).catch((err) => {
+            applying = false;
+            update();
+            notify.error(tx(MODE_TITLE[mode]), tx('smApplyFailed', err?.message || 'The setting could not be saved.'));
+          });
+          return true;
+        },
       },
     ],
   };

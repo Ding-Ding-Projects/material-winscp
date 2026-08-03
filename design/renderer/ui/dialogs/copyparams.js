@@ -678,6 +678,8 @@ export function openCopyDialog(props = {}) {
     : !!props.queue;
 
   const neverAgain = h('input', { type: 'checkbox', class: 'pref-check-input', id: uid('copy-never') });
+  let confirming = false;
+  let confirmButton = null;
 
   const caption = direction === 'download'
     ? (tx(`Copy ${files.length} ${files.length === 1 ? 'item' : 'items'} to the local directory`, `下載 ${files.length} 個項目去本機目錄`))
@@ -705,7 +707,29 @@ export function openCopyDialog(props = {}) {
       { label: t('cancel'), kind: 'text' },
       {
         label: t('ok'), kind: 'filled', autofocus: true,
-        onSelect: async () => {
+        ref: (btn) => { confirmButton = btn; btn.disabled = confirming; },
+        onSelect: () => {
+          if (confirming) return true;
+          confirming = true;
+          if (confirmButton) {
+            confirmButton.disabled = true;
+            confirmButton.setAttribute('aria-busy', 'true');
+          }
+          void confirm().then(() => close('action')).catch((err) => {
+            confirming = false;
+            if (confirmButton) {
+              confirmButton.disabled = false;
+              confirmButton.removeAttribute('aria-busy');
+            }
+            notify.error(t('transferSettingsShort'), err?.message || tx('Unable to save transfer confirmation settings.', '儲存傳輸確認設定失敗。'));
+          });
+          return true;
+        },
+      },
+    ],
+  });
+
+  async function confirm() {
           const target = targetInput.value.trim();
           if (target) { try { await api.raw?.config?.pushHistory?.(historyKey, target); } catch { /* history is a convenience */ } }
           if (neverAgain.checked) {
@@ -715,10 +739,7 @@ export function openCopyDialog(props = {}) {
             await writePref('copyParam', rememberedCopyParam(copyParam), 'Remembered the transfer options from the copy dialog');
           }
           props.onConfirm?.({ target, copyParam, queue: queueCheck.checked, direction, files });
-        },
-      },
-    ],
-  });
+  }
 }
 
 /* ================================================================== */

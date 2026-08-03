@@ -18,6 +18,7 @@ const S = require('../design/main/security');
 const FB = require('../design/main/filebuffer');
 const C = require('../design/main/crypto');
 const { Config } = require('../design/main/config');
+const { SessionLog } = require('../design/main/logging');
 
 const zeroRng = () => 0;
 
@@ -200,6 +201,35 @@ test('malformed master-password verifiers fail closed without throwing', () => {
   assert.strictEqual(C.unlockMaster('anything', { salt: 'not-base64', probe: 'x' }), false);
   assert.strictEqual(C.unlockMaster('anything', { salt: 'AAAAAAAAAAAAAAAAAAAAAA==', probe: 'x' }), false);
   assert.strictEqual(C.hasMaster(), false);
+});
+
+test('registered log secrets stay redacted even when sensitive logging is enabled', () => {
+  const log = new SessionLog({
+    getPrefs: () => ({ enabled: true, level: 2, logSensitive: true }),
+  });
+  log.registerSecret('fixture-session-secret');
+  const line = log.redact('Authorization: Bearer fixture-session-secret', {
+    logSensitive: true,
+  });
+  assert.equal(line.includes('fixture-session-secret'), false);
+  assert.equal(line.includes('***'), true);
+});
+
+test('host-key trust records are trimmed, validated, and returned by value', () => {
+  const config = new Config();
+  config.save = () => {};
+  config.data.hostKeys = {
+    'invalid.example:22': { fingerprint: '   ' },
+    'valid.example:22': { fingerprint: ' SHA256:fixture ', algorithm: ' ssh-ed25519 ' },
+  };
+  // The public mutator is the only supported path for new trust decisions.
+  assert.equal(config.rememberHostKey('new.example:22', ' SHA256:new ', ' ssh-ed25519 '), true);
+  assert.deepEqual(config.knownHostKey('new.example:22'), {
+    fingerprint: 'SHA256:new', algorithm: 'ssh-ed25519', addedAt: config.data.hostKeys['new.example:22'].addedAt,
+  });
+  const copy = config.knownHostKey('new.example:22');
+  copy.fingerprint = 'tampered';
+  assert.equal(config.knownHostKey('new.example:22').fingerprint, 'SHA256:new');
 });
 
 test('a failed unlock cannot replace an already-unlocked session key', () => {
