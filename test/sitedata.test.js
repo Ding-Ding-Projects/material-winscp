@@ -1071,6 +1071,16 @@ test('advancedContext derives the protocol family flags', async () => {
   assert.strictEqual(adv.advancedContext(await siteOf({ protocol: 'ftp', ftps: 'none' })).tls, false);
 });
 
+test('advanced order-list options provide an active-descendant target', async () => {
+  const { adv } = await modules;
+  assert.equal(adv.orderListOptionId('KexOrderList', 0), 'KexOrderList-option-0');
+  assert.match(
+    await require('node:fs').promises.readFile(
+      path.join(__dirname, '..', 'design', 'renderer', 'ui', 'dialogs', 'siteadvanced.js'), 'utf8'),
+    /id:\s*orderListOptionId\(id, index\)/,
+  );
+});
+
 test('siteAdvancedPatch preserves ordinary edits and only sends touched secrets', async () => {
   const { adv, tree } = await modules;
   const site = await siteOf({ remoteDirectory: '/incoming', password: tree.SECRET_SENTINEL });

@@ -476,7 +476,11 @@ function aes256CreateVerifier(input) {
 /** AES256Verify. */
 function aes256Verify(input, verifier) {
   const buf = Buffer.isBuffer(verifier) ? verifier : Buffer.from(verifier, 'binary');
-  if (buf.length < AES256_SALT_LENGTH * 2 + AES256_MAC_LENGTH) return false;
+  // The verifier has one unambiguous serialized shape. Reject trailing bytes
+  // as well as truncation; accepting an edited suffix would make malformed
+  // stored security state look valid to callers that do not canonicalize it.
+  const verifierLength = AES256_SALT_LENGTH * 2 + AES256_MAC_LENGTH;
+  if (buf.length !== verifierLength) return false;
   const salt = buf.subarray(0, AES256_SALT_LENGTH);
   const dummy = buf.subarray(AES256_SALT_LENGTH, AES256_SALT_LENGTH * 2);
   const mac = buf.subarray(AES256_SALT_LENGTH * 2, AES256_SALT_LENGTH * 2 + AES256_MAC_LENGTH);

@@ -833,6 +833,38 @@ test('a symlink loop is detected and marks the whole chain', () => {
   assert.equal(resolverCalls, 1, 'a cycle must not call the server again');
 });
 
+test('symlink cycles are detected across relative and absolute target spellings', () => {
+  const terminal = { userName: 'martin', resolvingSymlinks: true };
+  const directory = { fullDirectory: '/home/links/' };
+  const first = new R.TRemoteFile();
+  first.terminal = terminal;
+  first.directory = directory;
+  first.type = 'l';
+  first.fileName = 'a';
+  first.linkTo = '../shared';
+
+  let resolverCalls = 0;
+  first.complete(() => {
+    resolverCalls++;
+    const next = new R.TRemoteFile(first);
+    next.terminal = terminal;
+    next.directory = directory;
+    next.type = 'l';
+    next.fileName = 'b';
+    next.linkTo = '/home/shared';
+    return next;
+  });
+
+  const second = first.linkedFile;
+  second.findLinkedFile(() => {
+    resolverCalls++;
+    return new R.TRemoteFile(second);
+  });
+  assert.equal(resolverCalls, 1, 'equivalent targets must not be resolved again');
+  assert.equal(second.cyclicLink, true);
+  assert.equal(first.brokenLink, true);
+});
+
 test('resolve() terminates even on a self-referential chain', () => {
   const a = new R.TRemoteFile();
   a.fileName = 'a';

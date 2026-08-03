@@ -17,6 +17,13 @@ that cannot encrypt files.
 
 Verification is in `test/sitedata.test.js` (encryption-key validation).
 
+Advanced algorithm preference lists are accessible listboxes. Their selected
+entry is exposed through `aria-activedescendant`, and every rendered option has
+the stable DOM id required by that relationship, so keyboard and screen-reader
+users do not lose the active item when the list is repainted after a move.
+
+Verification is in `test/sitedata.test.js` (order-list active-descendant target).
+
 Verification is in `test/session-dialog.test.js` (four focused tests). The
 module does not log, serialize, or otherwise expose secret values.
 

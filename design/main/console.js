@@ -1555,10 +1555,15 @@ async function runConsoleHost(options = {}) {
     }
 
     if (typeof options.finalize === 'function') options.finalize();
-    if (channel) channel.close();
   } catch (e) {
     host.printException(e);
     result = RESULT.GLOBAL_ERROR;
+  } finally {
+    // Initialization can fail before the inner run reaches its normal
+    // teardown. The channel is still a session-owned resource in that path;
+    // leave no apparently-live communication endpoint behind for callers
+    // that retry the same session.
+    if (channel) channel.close();
   }
 
   return result;

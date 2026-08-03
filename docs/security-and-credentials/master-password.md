@@ -87,7 +87,8 @@ Under **Preferences → Security**:
 - Derivation is tested for determinism given the same password and salt, and for
   producing a different key per installation salt.
 - Session lock/re-unlock, failed unlock preservation, malformed verifier
-  rejection, and truncated AES-GCM envelope rejection are tested directly.
+  rejection (including truncated and trailing bytes), and truncated AES-GCM
+  envelope rejection are tested directly.
 - The verifier is tested to reject wrong passwords and to leak nothing usable.
 - Re-wrapping is tested across a full configuration, asserting every secret
   decrypts afterwards and none is left under the old key.

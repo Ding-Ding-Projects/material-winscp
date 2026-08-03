@@ -87,6 +87,7 @@ defineStrings({
   txClNoDeleteTimestamp: ['Timestamp mode never deletes anything.', '時間戳模式永遠唔會刪嘢。'],
   txClNoTypeMismatch: ['A directory on one side and a file on the other is never resolved automatically. Fix it by hand.', '一邊目錄一邊檔案，永遠唔會自動處理，要自己手動搞掂。'],
   txClNoReverse: ['This row cannot be reversed: {0}', '呢一行調轉唔到：{0}'],
+  txClNoReverseNothing: ['A row set to Do nothing has no direction to reverse.', '設定咗唔做嘢嘅一行冇方向可以調轉。'],
   txClConfirmTitle: ['Confirm the synchronization', '確認同步'],
   txClApplied: ['{0} transfer(s) queued, {1} deletion(s) performed.', '排咗 {0} 單傳輸，刪咗 {1} 個項目。'],
   txClApplyFailed: ['{0} item(s) could not be applied.', '{0} 個項目做唔到。'],
@@ -226,7 +227,10 @@ export function reverseAction(item) {
     upload: 'download', download: 'upload',
     deleteLocal: 'deleteRemote', deleteRemote: 'deleteLocal',
   }[item?.action];
-  if (!mirror) return { ok: false, reasonKey: 'txClNoTypeMismatch', item };
+  if (!mirror) {
+    const reasonKey = item?.action === 'nothing' ? 'txClNoReverseNothing' : 'txClNoTypeMismatch';
+    return { ok: false, reasonKey, item };
+  }
   return overrideAction(item, mirror);
 }
 

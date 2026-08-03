@@ -45,7 +45,7 @@ as an explicit opt-in, with the builder anchored beside the field.
 | --- | --- | --- |
 | Very large checklist (100,000+ rows) | The list virtualizes; group counts are computed up front so the destructive total is never hidden behind lazy loading. | n/a |
 | A file changes on disk between comparison and execution | Detected at transfer time; the item fails with "changed since comparison" rather than acting on stale information. | Yes, re-compare |
-| A row is overridden into an impossible action | Actions the protocol cannot perform are not offered for that row — the same `caps` rule as everywhere else. | n/a |
+| A row is overridden into an impossible action | Actions the protocol cannot perform are not offered for that row — the same `caps` rule as everywhere else. A `Do nothing` row has no direction, so Reverse is gated with a direction-specific explanation rather than a misleading type-mismatch warning. | n/a |
 | Delete files is enabled | Remote-only/local-only target rows appear in the checklist with the engine's deletion policy, and the destructive confirmation repeats the count. | Yes, untick or cancel |
 | Everything is skipped | The confirmation says "nothing to do" instead of running an empty transfer. | n/a |
 | Comparison ran with a mask, then the mask is changed | The checklist does not silently update. It states the mask it was computed under, and offers Re-compare. | Yes |
@@ -75,6 +75,8 @@ as an explicit opt-in, with the builder anchored beside the field.
   resulting deletion and new-file rows.
 - Per-row override is tested for not disturbing other rows and for respecting
   protocol capabilities.
+- Reverse on a `Do nothing` row is tested to remain gated with the correct
+  no-direction reason.
 - Directory-scoped check and uncheck is tested for changing only the displayed
   directory subtree, preserving each row's action, excluding similarly named
   siblings, and never ticking `Do nothing`.

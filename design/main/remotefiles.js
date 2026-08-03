@@ -275,6 +275,19 @@ function absolutePath(base, path) {
   return unixExcludeTrailingBackslash(result);
 }
 
+/**
+ * Canonical target used only for symlink-cycle detection.  Servers may report
+ * the same target as a relative link (`../shared`) or an absolute link
+ * (`/home/shared`); comparing the raw listing text lets that loop escape the
+ * ancestor check.
+ */
+function symlinkTargetPath(file) {
+  const target = String(file.linkTo || '');
+  if (target === '' || unixIsAbsolutePath(target)) return target;
+  const directory = file.directory && file.directory.fullDirectory;
+  return directory ? absolutePath(directory, target) : target;
+}
+
 function fromUnixPath(path) { return C.fromUnixPath(path); }
 function toUnixPath(path) { return C.toUnixPath(path); }
 
@@ -1647,10 +1660,11 @@ class TRemoteFile {
     this.cyclicLink = false;
 
     if (this.linkTo !== '') {
+      const targetPath = symlinkTargetPath(this);
       // A cycle is any ancestor link pointing at the same target.
       let linkedBy = this.linkedByFile;
       while (linkedBy) {
-        if (linkedBy.linkTo === this.linkTo) {
+        if (symlinkTargetPath(linkedBy) === targetPath) {
           this.cyclicLink = true;
           break;
         }

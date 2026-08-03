@@ -374,6 +374,11 @@ test('aes256Verify refuses a short verifier instead of reading past its end', ()
   assert.strictEqual(S.aes256Verify('p', Buffer.alloc(4)), false);
 });
 
+test('aes256Verify refuses a verifier with trailing bytes', () => {
+  const verifier = S.aes256CreateVerifier('p');
+  assert.strictEqual(S.aes256Verify('p', Buffer.concat([verifier, Buffer.from([0])])), false);
+});
+
 test('isValidPassword is tri-state exactly as IsValidPassword is', () => {
   assert.strictEqual(S.isValidPassword(''), -1, 'empty is unusable');
   assert.strictEqual(S.isValidPassword('x'.repeat(129)), -1, 'over the maximum');

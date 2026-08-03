@@ -96,6 +96,7 @@ Presets are ordinary user-managed records, so they are covered by
 | `fileNameCase` collides two names | The second transfer hits the overwrite rule. The confirmation names the case change as the cause. | Yes |
 | Symlink loop with `followDirectorySymlinks` on | Depth-bounded; the transfer stops and names the loop. | Yes |
 | `onceDoneOperation: shutdown` and the transfer fails | The action does not run. | n/a |
+| Cancellation arrives after overwrite planning but before the byte mover starts | The transfer exits as cancelled without opening a write or creating a target. | Yes, start it again |
 
 ## Security considerations
 

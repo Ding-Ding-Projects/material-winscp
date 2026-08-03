@@ -45,8 +45,10 @@ When symlink resolution is enabled, a resolver must return a `TRemoteFile`.
 Refusals, exceptions, malformed results and cycles leave the link unresolved
 and mark it broken; they do not turn an invalid object into a navigable file.
 Resolution is disabled by the session when the protocol cannot safely follow a
-link. A link to a directory is a directory only after a real target row has
-been resolved.
+link. Cycle detection compares canonical targets: relative targets are resolved
+against the link's containing directory, so alternate spellings such as
+`../shared` and `/home/shared` cannot evade the loop guard. A link to a
+directory is a directory only after a real target row has been resolved.
 
 Refreshing a directory detaches every old row and forgets its cached parent
 entry. This prevents a removed row from continuing to manufacture a full path
@@ -78,8 +80,9 @@ returns the original entry for the caller to focus before it opens the item.
 
 `test/remotefiles.test.js` covers Unix and drive-qualified path forms, common
 paths from local and cloned remote selections, Unix listing dialects,
-permissions and owner/group metadata, VMS revision names, symlink refusal and
-cycle handling, recursive-size sentinels, empty-directory parent semantics,
+permissions and owner/group metadata, VMS revision names, symlink refusal,
+canonical relative/absolute cycle handling, recursive-size sentinels,
+empty-directory parent semantics,
 and refresh detachment. Run:
 
 ```text

@@ -2804,6 +2804,15 @@ class TransferEngine {
 class AdapterFileSystem {
   constructor(engine) { this.engine = engine; }
 
+  /**
+   * A cancel can arrive after overwrite/resume decisions but before the byte
+   * mover is entered. Honour that boundary here so a late click cannot start
+   * another write after the operation has already been cancelled.
+   */
+  _throwIfCancelled(progress) {
+    if (progress && progress.cancel !== CANCEL.continue) throw new AbortError();
+  }
+
   _copyBytes(plan) {
     const fn = this.engine.copyBytes;
     if (typeof fn !== 'function') {
@@ -2980,6 +2989,7 @@ class AdapterFileSystem {
       }
     }
 
+    this._throwIfCancelled(progress);
     await this._copyBytes({
       side: SIDES.local,
       sourceAdapter: src,
@@ -3145,6 +3155,7 @@ class AdapterFileSystem {
     const partSize = copyParam.partSize === undefined ? -1 : copyParam.partSize;
     const readTo = partSize >= 0 ? readFrom + partSize - 1 : undefined;
 
+    this._throwIfCancelled(progress);
     await this._copyBytes({
       side: SIDES.remote,
       sourceAdapter: src,

@@ -2520,3 +2520,23 @@ test('transferEngineFor keeps one engine per terminal and accepts late dependenc
   assert.strictEqual(third, first);
   assert.strictEqual(first.copyBytes, mover, 'a later dependency updates the engine in place');
 });
+
+test('a cancellation arriving after planning does not start the byte mover', async () => {
+  const { engine, local, remote, terminal, moved } = makeEngine();
+  local.put('/l/a.txt', 'A');
+  remote.putDir('/r');
+
+  // Simulate the user cancelling while the transfer is entering its operation
+  // (after planning/statting, but before AdapterFileSystem.source writes).
+  const operationStart = terminal.operationStart.bind(terminal);
+  terminal.operationStart = (progress, ...args) => {
+    operationStart(progress, ...args);
+    progress.setCancel(CANCEL.cancel);
+  };
+
+  const result = await engine.copyToRemote(['/l/a.txt'], '/r/',
+    cp({ preserveTime: false, resumeSupport: 'off' }), COPY_FLAGS.noConfirmation, null);
+  assert.strictEqual(result, false);
+  assert.deepStrictEqual(moved, [], 'a cancelled operation must not invoke copyBytes');
+  assert.strictEqual(remote.has('/r/a.txt'), false);
+});

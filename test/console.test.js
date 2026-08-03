@@ -1053,6 +1053,19 @@ test('a failure before the console objects exist is a global error', async () =>
   assert.strictEqual(code, RESULT.GLOBAL_ERROR);
 });
 
+test('initialization failure still closes the session-owned channel', async () => {
+  const { host, channel } = makePair();
+  const code = await runConsoleHost({
+    host,
+    channel,
+    initialize: () => { throw new ConsoleError('no objects', RESULT.GLOBAL_ERROR); },
+    child: async () => 0,
+  });
+  assert.strictEqual(code, RESULT.GLOBAL_ERROR);
+  assert.strictEqual(channel.closed, true,
+    'a failed startup must not leave a retry-visible communication channel open');
+});
+
 test('the held progress line is committed before the front-end exits', async () => {
   const { stdout, host, channel, client } = makePair({ outputType: FILE_TYPE.DISK });
   const code = await runConsoleHost({

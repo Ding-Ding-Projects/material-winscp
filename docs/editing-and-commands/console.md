@@ -41,6 +41,7 @@ publishes events for both sessions.
 | Non-POSIX login shell | The console opens and everything behaves oddly. The `shell` option is the fix, and the error names the shell the server reported. | Yes |
 | Session drops with the console open | The console shows the disconnection and offers reconnect. Scrollback is preserved. | Yes |
 | A command waits for input the user did not expect | It is interactive — that is what this surface is for. Interrupt is always available. | Yes |
+| Console startup fails while creating its communication session | Startup reports the global initialization error and closes the session-owned channel, so a retry cannot reuse a half-open console. | Yes — retry after correcting the startup failure |
 
 ## Security considerations
 
@@ -73,6 +74,8 @@ publishes events for both sessions.
   configuration file.
 - Environment normalization (`clearAliases`, `unsetNationalVars`) is tested by
   inspecting the commands issued at shell open.
+- Startup cleanup is tested by forcing initialization to fail and asserting the
+  session-owned communication channel is closed before the global error returns.
 
 ## Suggested articles
 

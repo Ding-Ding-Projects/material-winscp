@@ -1575,6 +1575,7 @@ export function createSiteAdvancedPanel(site, opts = {}) {
         const below = warnAt >= 0 && index > warnAt;
         const unsupported = (control.unsupported || []).includes(algorithm);
         const item = h('div', {
+          id: orderListOptionId(id, index),
           class: `sa-orderitem${isWarn ? ' is-warn' : ''}${below ? ' is-below' : ''}${unsupported ? ' is-gap' : ''}`,
           role: 'option', 'aria-selected': String(index === selected),
           'data-index': String(index),
@@ -1716,3 +1717,8 @@ if (typeof document !== 'undefined') {
 
 export { GAPS as PROTOCOL_GAP_NOTES, getKey as getSiteKey, setKey as setSiteKey };
 export { bindText };
+
+/** Stable DOM id used by the order-list listbox's active-descendant link. */
+export function orderListOptionId(listId, index) {
+  return `${listId}-option-${index}`;
+}

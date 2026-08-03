@@ -77,6 +77,9 @@ believe something false.
   non-text ciphertext is rejected before AES-GCM authentication; the caller
   receives an empty secret and prompts again rather than accepting a decoder's
   permissive normalization.
+- **Verifier records have an exact shape.** A master-password verifier with
+  missing or trailing bytes is rejected before password verification; malformed
+  security state never gets treated as a valid credential store.
 - **AAD is bound to a stable identifier**, not to a row id or array index. A
   record that is deleted and restored from history keeps its identifier, so its
   secret still decrypts. Binding to an autoincrement id produces data that
