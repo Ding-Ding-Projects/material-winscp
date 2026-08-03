@@ -32,19 +32,44 @@ Usage:
 Use winscp --help for the headless drag/drop simulation and convenience commands.
 `;
 
-const first = process.argv[2];
-if (first === '--help' || first === '-h' || first === 'help') {
+// The console runner treats these as ordinary switches. The executable owns
+// them instead, including when they appear after a variadic /command or
+// /parameter group. Skip the value belonging to a value-taking switch so a
+// command whose literal text happens to be "--help" is not stolen by the
+// wrapper.
+const VALUE_SWITCHES = new Set([
+  'script', 'command', 'parameter', 'log', 'loglevel', 'xmllog', 'ini',
+  'rawsettings', 'stdout', 'stdin', 'consolechild', 'consoleinstance',
+]);
+
+function hasMetaFlag(args, names) {
+  const wanted = new Set(names);
+  for (let i = 0; i < args.length; i++) {
+    const token = String(args[i]);
+    if (token === '--') return false;
+    if (wanted.has(token.toLowerCase())) return true;
+    if (!/^[-/]/.test(token)) continue;
+    const body = token.slice(1);
+    const equals = body.indexOf('=');
+    const key = (equals < 0 ? body : body.slice(0, equals)).toLowerCase();
+    if (equals < 0 && VALUE_SWITCHES.has(key) && i + 1 < args.length) i++;
+  }
+  return false;
+}
+
+const args = process.argv.slice(2);
+if (hasMetaFlag(args, ['--help', '-h']) || args[0] === 'help') {
   process.stdout.write(HELP);
   process.exitCode = 0;
   return;
 }
-if (first === '--version' || first === '-v' || first === 'version') {
+if (hasMetaFlag(args, ['--version', '-v']) || args[0] === 'version') {
   process.stdout.write(`${packageInfo.version}\n`);
   process.exitCode = 0;
   return;
 }
 
-runConsoleFrontEnd(process.argv.slice(2)).then(
+runConsoleFrontEnd(args).then(
   (code) => { finish(code); },
   (error) => {
     // runConsoleFrontEnd turns every failure it knows about into an exit code,

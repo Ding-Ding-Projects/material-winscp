@@ -81,6 +81,9 @@ reference with exit code `0`, without starting the console runner or a GUI.
 The same is true for the console forms: `winscp run --help`,
 `winscp script --help`, and `winscp command --help`. `--version` is likewise
 handled by `run`, `script`, and `command` before the scripting engine starts.
+The standalone `winscp-com` wrapper also owns help/version flags after a
+variadic `/command` or `/parameter` group, so discovery cannot accidentally
+enter an interactive prompt.
 Help may follow a nested simulation option, for example
 `winscp url parse sftp://host/ --help`.
 

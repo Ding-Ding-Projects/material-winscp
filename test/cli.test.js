@@ -134,6 +134,16 @@ test('winscp-com prints help and version without starting the console runner', (
   assert.equal(version.status, 0);
   assert.equal(version.stdout, `${require('../package.json').version}\n`);
   assert.equal(version.stderr, '');
+
+  const nestedHelp = spawnSync(process.execPath, [entry, '/command', 'echo okay', '--help'], { encoding: 'utf8' });
+  assert.equal(nestedHelp.status, 0);
+  assert.match(nestedHelp.stdout, /console-compatible WinSCP command line/);
+  assert.equal(nestedHelp.stderr, '');
+
+  const nestedVersion = spawnSync(process.execPath, [entry, '/command', 'echo okay', '--version'], { encoding: 'utf8' });
+  assert.equal(nestedVersion.status, 0);
+  assert.equal(nestedVersion.stdout, `${require('../package.json').version}\n`);
+  assert.equal(nestedVersion.stderr, '');
 });
 
 test('console convenience forms own their help and version flags', async () => {
@@ -174,6 +184,13 @@ test('the executable run help flag does not enter the console prompt', () => {
   assert.equal(run.status, 0, run.stderr);
   assert.match(run.stdout, /winscp drag plan/);
   assert.equal(run.stderr, '');
+
+  const nested = spawnSync(process.execPath, [entry, 'run', '/command', 'echo okay', '--help'], {
+    encoding: 'utf8', timeout: 120000,
+  });
+  assert.equal(nested.status, 0, nested.stderr);
+  assert.match(nested.stdout, /winscp drag plan/);
+  assert.equal(nested.stderr, '');
 });
 
 test('convenience commands translate to the existing console runner switches', () => {

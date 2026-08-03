@@ -701,11 +701,11 @@ async function runCli(argv = process.argv.slice(2), io = {}) {
       // `run` is the compatibility escape hatch, but its standard meta flags
       // still belong to this executable. Forwarding `--help` to the script
       // parser starts an interactive prompt instead of answering the caller.
-      if (runArgs[0] === '--help' || runArgs[0] === '-h') {
+      if (hasHelpFlag(runArgs)) {
         streams.stdout.write(HELP);
         return 0;
       }
-      if (runArgs[0] === '--version' || runArgs[0] === '-v') {
+      if (hasVersionFlag(runArgs)) {
         streams.stdout.write(`${packageInfo.version}\n`);
         return 0;
       }
