@@ -922,6 +922,20 @@ test('show inaccessible directories is now consumed by the runtime file lists', 
   ], 'the live consumers should all read the correctly spelled key');
 });
 
+test('opened tabs shortcut preference controls the real command binding', async () => {
+  const { schema } = await load();
+  const corpus = scan.readCorpus(repoRoot);
+  assert.ok(!schema.PENDING_KEYS.has('window.openedTabsShortcut'));
+  assert.deepEqual(scan.consumersOf('window.openedTabsShortcut', corpus), [
+    'design/renderer/ui/commands.js',
+  ]);
+  const commands = require('node:fs').readFileSync(
+    require('node:path').join(repoRoot, 'design', 'renderer', 'ui', 'commands.js'), 'utf8');
+  assert.match(commands, /def\('OpenedTabsAction',[\s\S]*?shortcut: 'Ctrl\+Shift\+Tab'/);
+  assert.match(commands, /def\('OpenedTabsAction',[\s\S]*?readPrefs\(\)\['window\.openedTabsShortcut'\] !== false/);
+  assert.match(commands, /if \(!state\.visible \|\| !state\.enabled\) return;/);
+});
+
 test('a comment that names an option is not a consumer of it either', async () => {
   const { schema } = await load();
   const corpus = scan.readCorpus(repoRoot);

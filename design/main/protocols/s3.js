@@ -966,11 +966,17 @@ class S3Adapter extends Adapter {
     const prefix = key ? `${key.replace(/\/+$/, '')}/` : '';
     const { contents, prefixes } = await this._listObjects(bucket, prefix);
 
-    const out = prefixes.map((p) => entry({
-      name: p.slice(prefix.length).replace(/\/$/, ''),
-      type: 'dir',
-      raw: { prefix: p },
-    }));
+    // A few S3-compatible gateways have returned the same CommonPrefixes
+    // entry on two adjacent pages. Keep the panel filesystem-shaped even when
+    // pagination overlaps: one remote folder must produce one row.
+    const seenDirectories = new Set();
+    const out = [];
+    for (const p of prefixes) {
+      const name = p.slice(prefix.length).replace(/\/$/, '');
+      if (!name || seenDirectories.has(name)) continue;
+      seenDirectories.add(name);
+      out.push(entry({ name, type: 'dir', raw: { prefix: p } }));
+    }
 
     for (const c of contents) {
       // The zero-byte key that *is* this folder is the folder marker; showing

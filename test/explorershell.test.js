@@ -12,6 +12,10 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const repoRoot = path.join(__dirname, '..');
 
 const E = require('../design/main/explorershell');
 const { CopyParamList } = require('../design/main/winconfig');
@@ -121,6 +125,42 @@ test('SetProperties dispatches local-local workspaces to the focused local panel
   assert.equal(calls.length, 1);
   assert.equal(calls[0][0], 'local');
   assert.equal(calls[0][2].local, true);
+});
+
+test('completed remote editor saves refresh only the matching remote panel', async () => {
+  const refreshes = [];
+  const shell = makeShell({
+    ops: { refreshPanel: (...args) => { refreshes.push(args); return true; } },
+  });
+
+  const saved = await shell.handleEditorEvent({
+    type: 'uploaded', sessionId: 's1', remotePath: '/home/joe/note.txt',
+  });
+  assert.deepStrictEqual(saved, {
+    refreshed: true, side: 'remote', path: '/home/joe/note.txt',
+  });
+  assert.deepStrictEqual(refreshes, [[
+    'remote', { path: '/home/joe/note.txt', reason: 'editor-save' },
+  ]]);
+
+  const local = await shell.handleEditorEvent({
+    type: 'saved', sessionId: 's1', local: true, remotePath: '',
+  });
+  assert.equal(local.refreshed, false);
+  assert.equal(refreshes.length, 1);
+
+  const other = await shell.handleEditorEvent({
+    type: 'uploaded', sessionId: 'other', remotePath: '/other.txt',
+  });
+  assert.equal(other.refreshed, false);
+  assert.equal(refreshes.length, 1);
+});
+
+test('the IPC editor event bridge forwards completed uploads to the explorer shell', () => {
+  const ipcSource = require('node:fs').readFileSync(
+    require('node:path').join(repoRoot, 'design', 'main', 'ipc.js'), 'utf8');
+  assert.match(ipcSource, /this\.editors\.on\('uploaded',[\s\S]*?handleEditorEvent/);
+  assert.match(ipcSource, /type: 'uploaded',[\s\S]*?sessionId: record && record\.sessionId/);
 });
 
 test('SetProperties builds capability context and selected tokens beyond the first 100 entries', () => {

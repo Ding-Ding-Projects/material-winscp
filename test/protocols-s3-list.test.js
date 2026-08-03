@@ -27,3 +27,16 @@ test('stops when a truncated listing repeats its continuation token', async () =
   assert.equal(warnings.length, 1);
   assert.match(warnings[0].message, /repeated a continuation token/);
 });
+
+test('deduplicates repeated common prefixes from overlapping pages', async () => {
+  const adapter = new S3Adapter({ hostName: 's3.example.test', portNumber: 443, ftps: 'tls' });
+  adapter._listObjects = async () => ({
+    contents: [],
+    prefixes: ['folder/', 'folder/', 'other/'],
+  });
+
+  const rows = await adapter.list('/bucket');
+
+  assert.deepEqual(rows.map((row) => row.name), ['folder', 'other']);
+  assert.ok(rows.every((row) => row.type === 'dir'));
+});

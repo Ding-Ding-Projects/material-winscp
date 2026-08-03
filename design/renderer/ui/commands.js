@@ -2532,6 +2532,8 @@ def('RenameTabAction', {
   },
 });
 def('OpenedTabsAction', {
+  shortcut: 'Ctrl+Shift+Tab',
+  enabled: () => readPrefs()['window.openedTabsShortcut'] !== false,
   submenu: (c) => {
     const s = strip(c);
     if (!s) return [{ label: t('noTabsMatched'), disabled: true }];
@@ -3413,7 +3415,7 @@ function installShortcutHandler() {
     const name = resolveShortcut(key);
     if (!name) return;
     const state = commandState(name);
-    if (!state.visible) return;
+    if (!state.visible || !state.enabled) return;
     e.preventDefault();
     e.stopPropagation();
     runAction(name);

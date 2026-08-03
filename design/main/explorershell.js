@@ -2617,6 +2617,30 @@ class ExplorerShell {
   }
 
   /**
+   * Reconcile a remote panel after the editor manager finishes an upload.
+   *
+   * The editor owns the guarded write; the explorer owns the visible listing.
+   * Keeping this hook here prevents a successful remote save from leaving the
+   * panel's stale size/time columns on screen.  Local-editor events are
+   * intentionally ignored, as they cannot change a remote listing.
+   */
+  async handleEditorEvent(event) {
+    const e = event || {};
+    if (!['saved', 'uploaded'].includes(String(e.type || ''))) {
+      return { refreshed: false, reason: 'not-a-completed-save' };
+    }
+    const session = this.session();
+    if (!e.remotePath || !session || (e.sessionId && e.sessionId !== session.id)) {
+      return { refreshed: false, reason: 'not-this-remote-session' };
+    }
+    if (typeof this.ops.refreshPanel === 'function') {
+      await this.ops.refreshPanel(SIDES.remote, { path: e.remotePath, reason: 'editor-save' });
+      return { refreshed: true, side: SIDES.remote, path: e.remotePath };
+    }
+    return { refreshed: false, reason: 'refresh-not-wired' };
+  }
+
+  /**
    * ExecuteFile's guard (CustomScpExplorer.cpp:3722). Opening a file that is
    * already open elsewhere is REFUSED, not silently duplicated — two editors
    * over one temporary copy means whichever saves last wins and the other

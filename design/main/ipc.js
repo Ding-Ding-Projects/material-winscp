@@ -243,6 +243,23 @@ class Ipc {
         ? this.config.exportState() : {},
       emit: this.emit,
     });
+    // A remote editor upload changes the directory listing outside the panel
+    // command path. Forward the completed write to the live ExplorerShell so
+    // its remote view cannot keep stale size/time columns. No shell exists in
+    // headless startup until a panel asks for one, so that path remains a
+    // harmless no-op when the app has no visible panel.
+    this.editors.on('uploaded', (record) => {
+      const explorer = this._explorer;
+      if (!explorer || typeof explorer.handleEditorEvent !== 'function') return;
+      Promise.resolve(explorer.handleEditorEvent({
+        type: 'uploaded',
+        sessionId: record && record.sessionId,
+        remotePath: record && record.remotePath,
+      })).catch((error) => this.emit('event:log', {
+        source: 'explorer', kind: 'error',
+        text: `The remote panel could not be refreshed after an editor upload: ${error.message}`,
+      }));
+    });
     this.updates = new Updates({ config: this.config, currentVersion: this.version, emit: this.emit });
     // Silent background updating, Chrome-style: it downloads and stages on its
     // own and never asks. `updates` above stays for the explicit "Check for

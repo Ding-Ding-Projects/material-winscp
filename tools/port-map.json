@@ -115,7 +115,7 @@
       "targets": [
         "design/main/protocols/s3.js"
       ],
-      "note": "Hand-written SigV4 verified against published AWS vectors; multipart, paging, AssumeRole. No live endpoint tested yet."
+      "note": "Hand-written SigV4 verified against published AWS vectors; multipart, paging, AssumeRole, and overlapping CommonPrefixes deduplication. No live endpoint tested yet."
     },
     "core/NeonIntf": {
       "status": "replaced",
@@ -422,7 +422,7 @@
         "design/main/explorershell.js",
         "design/main/ipc.js"
       ],
-      "note": "The orchestration half (side resolution, file-operation entry points, the delete decision with both confirmations, transfer-preset auto-selection, drag-and-drop decisions, queue predicates, synchronized browsing) is ported and reachable over explorer:*. Not ported: the file-editing round trip (ExecutedFileChanged/EditedFileUploaded), ExecuteFile/EditNew, SetProperties' body, the synchronization engine and the whole workspace lifecycle."
+      "note": "The orchestration half (side resolution, file-operation entry points, the delete decision with both confirmations, transfer-preset auto-selection, drag-and-drop decisions, queue predicates, synchronized browsing) is ported and reachable over explorer:*. Remote editor uploads now refresh the matching remote panel through the ExplorerShell event bridge. Not ported: the broader file-editing round trip (ExecutedFileChanged/EditedFileUploaded), ExecuteFile/EditNew, SetProperties' body, the synchronization engine and the whole workspace lifecycle."
     },
     "forms/EditMask": {
       "status": "partial",
@@ -538,7 +538,7 @@
         "design/renderer/ui/dialogs/preferences.js",
         "design/renderer/ui/dialogs/prefpages.js"
       ],
-      "note": "28 pages, 207 controls over 207 real keys, live writes through config:setPref one key at a time. 45 of those options are stored and not yet honoured - each says so on its own row, and test/preferences.test.js holds the list to the real consumer scan."
+      "note": "28 pages, 207 controls over 207 real keys, live writes through config:setPref one key at a time. 27 of those options are stored and not yet honoured - each says so on its own row, and test/preferences.test.js holds the list to the real consumer scan."
     },
     "forms/Progress": {
       "status": "partial",

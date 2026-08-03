@@ -53,6 +53,7 @@ pending list; a control without one must appear there.
 | `queue.keepDoneItemsFor` | `design/main/queue.js` → `pruneDoneItems()` | Completed rows are swept according to `0`, positive seconds, or `-1`. |
 | `tabs.truncateTitles` | `design/renderer/ui/tabs.js` → tab strip class and `components.css` | Tab labels use ellipsis by default and retain their full text when truncation is disabled; changes apply live. |
 | `showInaccessibleDirectories` | `design/main/dirview.js`, `design/main/guitools.js`, `design/main/ipc.js` | The file lists and traversal code now read the correctly spelled key, so inaccessible directories obey the toggle. |
+| `window.openedTabsShortcut` | `design/renderer/ui/commands.js` → `OpenedTabsAction` | `Ctrl+Shift+Tab` opens the all-tabs search when enabled; disabling the preference removes the command from shortcut execution while leaving the tabs action available through menus. |
 
 The real-Electron regression changes another live queue preference through the
 Preferences surface: `queue.noConfirmations` is persisted by `config:setPref`

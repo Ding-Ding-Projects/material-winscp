@@ -1343,9 +1343,8 @@ export function pageById(id, pages = PAGES) { return pages.find((p) => p.id === 
  * READS the key — see test/helpers/consumer-scan.js. It is deliberately not
  * "the key is mentioned somewhere": the scan used to walk test/ as well, where
  * test/preferences.test.js names every key it asserts, and it used to match
- * inside comments. Eleven options were stored, rendered and read by nothing
- * while this list stayed green, eight of them because their own test named
- * them and three because one doc comment did.
+ * inside comments. Options are kept here only while they are stored, rendered
+ * and read by nothing; a real runtime read must remove the key from this set.
  */
 export const PENDING_KEYS = new Set([
   'dDAllowMoveInit',
@@ -1392,7 +1391,6 @@ export const PENDING_KEYS = new Set([
   'window.largeToolbarIcons',
   // There is no tray icon to minimise to yet.
   'window.minimizeToTray',
-  'window.openedTabsShortcut',
   'window.sessionTabCaptionTruncation',
 ]);
 
