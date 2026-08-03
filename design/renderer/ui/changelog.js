@@ -187,6 +187,32 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "e81083b", kind: 'commit', ref: "e81083b", oid: "e81083b8a200ada03fa467229bb7f2848f5c85b6", date: "2026-08-03",
+    title: "Harden security, config, S3, queue, and session edges",
+    changes: [
+      { category: "changed", text: "The next roadmap wave fails closed on missing host fingerprints, preserves config on malformed JSON, explains unsupported S3 checksums, resets active throttle debt, shares concurrent disconnect teardown, and gives the calendar a real accessible name." },
+      { category: "changed", text: "今輪修正 host fingerprint、JSON config、S3 checksum、queue throttle、session disconnect 同 calendar accessibility；啲 edge case 而家有真 contract，唔再靠估。" },
+    ],
+  },
+  {
+    id: "e40a62b", kind: 'commit', ref: "e40a62b", oid: "e40a62b123455a600d9cb6ef58e5ee1f73065da3", date: "2026-08-03",
+    title: "Record the current pushed roadmap wave in handoff",
+    changes: [
+      { category: "changed", text: "HANDOFF.md now reflects the 3,382-test baseline and the synchronized ae34762 origin/main tip." },
+    ],
+    changesYue: [
+      { category: "changed", text: "HANDOFF.md 而家記低 3382 個測試，同埋已經同步嘅 ae34762 origin/main；唔再俾舊資料扮新鮮。" },
+    ],
+  },
+  {
+    id: "ae34762", kind: 'commit', ref: "ae34762", oid: "ae3476233d72a7c21862fb59266533fc26f025ae", date: "2026-08-03",
+    title: "Update the in-app changelog for the roadmap wave",
+    changes: [
+      { category: "fixed", text: "The history now records the verified CLI, drag/drop, menu, overlay, palette, and discard fixes with validated commit links." },
+      { category: "removed", text: "App 入面嘅 changelog 而家記低已驗證嘅 CLI、drag/drop、menu、overlay、palette 同 discard 修正，commit link 逐條驗過，唔畀死 link 偷雞。" },
+    ],
+  },
+  {
     id: "e91bd48", kind: 'commit', ref: "e91bd48", oid: "e91bd48fa962d535b43b6e5706ab890ffaf007db", date: "2026-08-03",
     title: "Fix CLI, drag-drop, menu, overlay, and history edges",
     changes: [
@@ -634,32 +660,6 @@ export const DEVELOPMENT = [
     changes: [
       { category: "added", text: "English: Make batch remote copies transactional, expose RemoteFiles aliases, preserve S3 deletion errors except concurrent 404s, add WebDAV legacy-auth warnings, invert checklist selections accessibly, and provide injected clipboard text handling. Add focused regressions and documentation. The edge cases now wear tiny safety helmets instead of sprinting into traffic." },
       { category: "fixed", text: "廣東話：令批次 remote copy 有 transaction、補返 RemoteFiles aliases、S3 只吞 concurrent 404、WebDAV legacy auth 顯示保安警告、checklist 有 accessibility 反選，同 WinApi 有 injected clipboard text。加埋 regression tests 同文件，啲 edge cases 終於戴返迷你安全帽，唔再衝出馬路。" },
-    ],
-  },
-  {
-    id: "c46bd62", kind: 'commit', ref: "c46bd62", oid: "c46bd621848ca83a381cc9e0a72300877ffcbce3", date: "2026-08-03",
-    title: "Refresh unit-porting handoff metadata",
-    changes: [
-      { category: "changed", text: "English: Record the verified 3,271/3,272 test result, 59.0% logic coverage, 114 remaining units, and the current porting checkpoint. The handoff now tells the truth before the next code archaeology expedition." },
-      { category: "changed", text: "廣東話：記低已驗證嘅 3,271/3,272 測試、59.0% logic coverage、剩低 114 個 units 同今次 porting checkpoint，交更紙講真話，下一輪考古少啲撞牆。" },
-    ],
-  },
-  {
-    id: "6e6f5e3", kind: 'commit', ref: "6e6f5e3", oid: "6e6f5e38610a1ce31ba5a2e5bf2ecbd1c227c9fb", date: "2026-08-03",
-    title: "Refresh in-app changelog for unit-porting wave",
-    changes: [
-      { category: "changed", text: "English: Record the Explorer, editor, preferences, queue, SFTP, and WinConfiguration slice in the in-app release history. The changelog keeps the code's diary so future archaeology needs fewer tiny shovels." },
-      { category: "changed", text: "廣東話：將 Explorer、editor、preferences、queue、SFTP 同 WinConfiguration 呢輪改動寫入 app 內置 changelog，等將來考古唔使拎住迷你鏟周圍掘。" },
-    ],
-  },
-  {
-    id: "3e1d057", kind: 'commit', ref: "3e1d057", oid: "3e1d057e89a65af7802474eb3ad072dca92f1704", date: "2026-08-03",
-    title: "Port Explorer, editor, preferences, queue, SFTP, and WinConfiguration slices",
-    changes: [
-      { category: "fixed", text: "English: Port local/remote property dispatch, editor clipboard actions, live tab preferences, retry-attempt state, safe SFTP STAT fallback, and portable configuration roots. Add focused regression coverage and documentation. The code now knows which side of the pane it is on, so it can stop playing hide-and-seek with its own settings." },
-    ],
-    changesYue: [
-      { category: "changed", text: "廣東話：補返本地／遠端屬性分流、編輯器剪貼簿操作、即時 tab 偏好、retry attempt 狀態、安全 SFTP STAT 後備，同 portable 設定根目錄，連埋測試同文件一齊上。啲 code 終於分得清左右邊，唔使再同自己啲設定玩捉迷藏。" },
     ],
   },
 ];
