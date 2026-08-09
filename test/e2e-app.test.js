@@ -217,7 +217,7 @@ test.describe('the application boots and stays usable', () => {
 
   test.it('opens the command palette, searches with its own builder, persists size, and teleports to a setting', async () => {
     const opened = await app.evaluate(`(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, shiftKey: true, bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, shiftKey: true, bubbles: true }));
       return true;
     })()`);
     assert.equal(opened, true);
@@ -290,7 +290,7 @@ test.describe('the application boots and stays usable', () => {
       'the inline value flushed during palette close');
 
     await app.resize(420, 260);
-    await app.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, shiftKey: true, bubbles: true }))`);
+    await app.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, shiftKey: true, bubbles: true }))`);
     await waitFor(() => app.evaluate('!!document.querySelector(".cmdp-surface")'), 8000,
       'the palette to reopen in a narrow viewport');
     const narrow = await app.evaluate(`(() => {
@@ -304,7 +304,7 @@ test.describe('the application boots and stays usable', () => {
     await app.evaluate('document.querySelector(".cmdp-close")?.click()');
     await app.resize(1200, 800);
 
-    await app.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, shiftKey: true, bubbles: true }))`);
+    await app.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, shiftKey: true, bubbles: true }))`);
     await waitFor(() => app.evaluate('!!document.querySelector(".cmdp-surface")'), 8000,
       'the palette to reopen after the narrow-layout check');
     assert.equal(await app.evaluate('document.querySelector("[data-search-id=\\"command-palette\\"] input")?.value'),
@@ -330,13 +330,13 @@ test.describe('the application boots and stays usable', () => {
     // not depend on an eval-created KeyboardEvent carrying the active focus.
     await app.evaluate('Array.from(document.querySelectorAll(".modal .modal-actions > .btn-filled")).at(-1)?.click()');
     await waitFor(() => app.evaluate('!document.querySelector(".prefs")'), 8000, 'Preferences to close');
-    await app.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, shiftKey: true, bubbles: true }))`);
+    await app.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, shiftKey: true, bubbles: true }))`);
     await waitFor(() => app.evaluate('!!document.querySelector(".cmdp-surface")'), 8000, 'the palette to reopen');
     await app.evaluate('document.querySelector(".cmdp-size")?.click()');
     assert.equal(await app.evaluate('document.querySelector(".cmdp-surface")?.classList.contains("is-full")'), true);
     await app.evaluate('document.querySelector(".cmdp-close")?.click()');
     await waitFor(() => app.evaluate('!document.querySelector(".cmdp-surface")'), 8000, 'the palette to close');
-    await app.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, shiftKey: true, bubbles: true }))`);
+    await app.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, shiftKey: true, bubbles: true }))`);
     await waitFor(() => app.evaluate('!!document.querySelector(".cmdp-surface")'), 8000, 'the persisted full-window palette');
     assert.equal(await app.evaluate('document.querySelector(".cmdp-surface")?.classList.contains("is-full")'), true);
     await app.evaluate('document.querySelector(".cmdp-close")?.click()');

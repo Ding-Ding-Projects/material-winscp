@@ -1047,7 +1047,22 @@ export function createEditorWindow(record, initial, opts = {}) {
         content: h('p', { class: 'prose' }, s('edEncodingWarn')),
         actions: [
           { label: t('cancel'), kind: 'text' },
-          { label: t('save'), kind: 'filled', onSelect: async () => { if (await save(false)) applyEncoding(next); } },
+          {
+            label: t('save'),
+            kind: 'filled',
+            onSelect: (close) => {
+              // openModal closes immediately unless the handler returns true.
+              // Keep this decision surface open while the upload settles so a
+              // failure leaves the Save action available for another attempt.
+              void (async () => {
+                if (await save(false)) {
+                  close('save');
+                  applyEncoding(next);
+                }
+              })();
+              return true;
+            },
+          },
           { label: t('discard'), kind: 'danger', onSelect: () => applyEncoding(next) },
         ],
       });

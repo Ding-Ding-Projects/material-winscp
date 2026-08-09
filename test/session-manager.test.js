@@ -166,6 +166,25 @@ test('an adapter close retires the dead adapter before reconnect is scheduled', 
   session._reconnect.timer = null;
 });
 
+test('an adapter close cancels pending prompts and blocks reconnect approval', async () => {
+  const session = new Session(
+    { protocol: 'sftp', hostName: 'prompt-close.example' },
+    { config: configFor({ sessionReopenAuto: 10 }), emit() {} },
+  );
+  const adapter = new EventEmitter();
+  adapter.connected = true;
+  session.adapter = adapter;
+  session._wireAdapter(adapter);
+
+  const pending = session.ask('certificate', { fingerprintSHA256: 'SHA256:new' });
+  adapter.emit('close', 'network dropped');
+
+  assert.equal(await pending, null);
+  assert.equal(session._pending.size, 0);
+  assert.equal(session._promptCancelled, true);
+  assert.equal(session._reconnect.timer, null);
+});
+
 test('reconnect uses bounded backoff and refuses to cross the total budget', () => {
   let now = 100;
   const session = new Session(
@@ -261,6 +280,32 @@ test('a refused security prompt does not schedule an automatic reconnect', async
   assert.equal(accepted, false);
   session._scheduleReconnect(new Error('TLS certificate rejected'));
   assert.equal(session._reconnect.timer, null);
+});
+
+test('a remembered certificate mismatch still requires explicit re-approval when system-trusted', async () => {
+  let prompted = 0;
+  const session = new Session(
+    { protocol: 'webdav', hostName: 'remembered-cert.example' },
+    {
+      config: {
+        prefs: { logging: {}, security: {} },
+        knownHostKey() { return { fingerprint: 'SHA256:old' }; },
+      },
+      emit() {},
+    },
+  );
+  session.ask = async (kind, payload) => {
+    prompted++;
+    assert.equal(kind, 'certificate');
+    assert.match(payload.errors[0], /does not match the remembered fingerprint/);
+    return { accept: true, remember: false };
+  };
+
+  assert.equal(await session.verifyCertificate({
+    host: 'remembered-cert.example', port: 443,
+    fingerprintSHA256: 'SHA256:new', trusted: true, errors: [],
+  }), true);
+  assert.equal(prompted, 1);
 });
 
 test('successful connection resets the reconnect budget window', async () => {

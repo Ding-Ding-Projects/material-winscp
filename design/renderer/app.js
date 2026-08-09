@@ -124,8 +124,28 @@ export function registerTitlebarAction(spec) {
 let panelRenderer = null;
 export function setTabPanelRenderer(fn) {
   panelRenderer = fn;
-  const strip = getStrip('main');
-  if (strip) for (const tab of strip.tabs) { if (tab.panel) { clear(tab.panel); fn(tab, tab.panel); } }
+  const rebuild = () => {
+    const strip = getStrip('main');
+    // A tab can be painted by the shell fallback during the one macrotask
+    // between boot and the feature module's registration. The panel reference
+    // is not sufficient to find every stale fallback when a render was queued
+    // at the same time, so sweep the tab host before rebuilding real panels.
+    strip?.panelHost?.querySelectorAll('[data-shell-panel-fallback], .placeholder')
+      .forEach((node) => node.remove());
+    if (!strip) return;
+    for (const tab of strip.tabs) {
+      if (!tab.panel) continue;
+      clear(tab.panel);
+      fn(tab, tab.panel);
+      // Remove any fallback that was queued after the first sweep. Only one
+      // panel surface should remain visible for a tab.
+      tab.panel.querySelectorAll('[data-shell-panel-fallback], .placeholder')
+        .forEach((node) => node.remove());
+    }
+  };
+  rebuild();
+  // Cover the rAF that may already be queued by the first tab render.
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(rebuild);
 }
 
 /* ================================================================== */
@@ -518,7 +538,7 @@ function renderPlaceholderPanel(tab, panel) {
     appearanceKey: `search-panel-${tab.key || tab.id}`,
     appearanceLabel: 'Panel filter',
   });
-  const card = h('div', { class: 'placeholder' },
+  const card = h('div', { class: 'placeholder', 'data-shell-panel-fallback': 'true' },
     h('div', { class: 'placeholder-head' },
       icon(tab.icon || 'dns', 22),
       h('div', {},

@@ -20,6 +20,7 @@
 const http = require('http');
 const https = require('https');
 const tls = require('tls');
+const net = require('net');
 const fs = require('fs');
 const crypto = require('crypto');
 const { PassThrough, Writable } = require('stream');
@@ -678,11 +679,15 @@ class WebDavAdapter extends Adapter {
 
   _tlsBase() {
     const s = this.session;
+    const tlsHost = String(this.host).replace(/^\[|\]$/g, '');
     const opts = {
       minVersion: TLS_VERSIONS[s.minTlsVersion] || 'TLSv1',
       maxVersion: TLS_VERSIONS[s.maxTlsVersion] || 'TLSv1.3',
-      servername: this.host,
     };
+    // Node rejects an IP literal in TLS ServerName. Certificate validation
+    // still uses the peer identity and the adapter's pinning path; only the
+    // optional SNI extension is omitted for literal IPv4/IPv6 hosts.
+    if (!net.isIP(tlsHost)) opts.servername = tlsHost;
     if (s.tlsCertificateFile) {
       // One PEM holding the client certificate, its key, and often the CA that
       // issued the server certificate — the same file WinSCP asks for.

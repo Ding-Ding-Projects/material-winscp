@@ -7,6 +7,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
+const { EventEmitter } = require('node:events');
 const fs = require('fs');
 const path = require('path');
 
@@ -136,6 +137,68 @@ test('the update feed points at a public repository', () => {
   // private, silent updates stop working and the failure is invisible.
   assert.match(REPO, /^[\w.-]+\/[\w.-]+$/);
   assert.strictEqual(FEED_HOST, 'https://update.electronjs.org');
+});
+
+test('feed setup wires lifecycle events before setup and stop detaches them', () => {
+  const updater = new EventEmitter();
+  updater.setFeedURL = ({ url }) => {
+    assert.match(url, /update\.electronjs\.org/);
+    updater.emit('checking-for-update');
+  };
+  updater.checkForUpdates = () => {};
+  updater.quitAndInstall = () => {};
+  const u = new AutoUpdater({ isPackaged: true, platform: 'win32', updater });
+  u.start();
+  assert.equal(u.state, 'checking', 'a synchronous feed event must not be missed');
+  u.stop();
+  updater.emit('update-downloaded', null, '', '0.1.9');
+  assert.equal(u.state, 'checking', 'stopped updaters must ignore later events');
+});
+
+test('stopping during the startup delay prevents the first check and interval', () => {
+  const updater = new EventEmitter();
+  let checks = 0;
+  updater.setFeedURL = () => {};
+  updater.checkForUpdates = () => { checks += 1; };
+  updater.quitAndInstall = () => {};
+  const u = new AutoUpdater({ isPackaged: true, platform: 'win32', updater });
+  u.start();
+  u.stop();
+  return new Promise((resolve) => setTimeout(() => {
+    assert.equal(checks, 0);
+    resolve();
+  }, 0));
+});
+
+test('update failures return to idle and emit a passive state update', () => {
+  const updater = new EventEmitter();
+  updater.setFeedURL = () => {};
+  updater.checkForUpdates = () => {};
+  updater.quitAndInstall = () => {};
+  const u = new AutoUpdater({ isPackaged: true, platform: 'win32', updater });
+  const states = [];
+  u.on('state', (state) => states.push(state.state));
+  u.start();
+  updater.emit('error', new Error('offline'));
+  assert.equal(u.state, 'idle');
+  assert.equal(u.lastError.message, 'offline');
+  assert.deepEqual(states, ['idle']);
+  u.stop();
+});
+
+test('a synchronous check failure records the error and emits idle state', () => {
+  const updater = new EventEmitter();
+  updater.setFeedURL = () => {};
+  updater.checkForUpdates = () => { throw new Error('offline'); };
+  updater.quitAndInstall = () => {};
+  const u = new AutoUpdater({ isPackaged: true, platform: 'win32', updater });
+  const states = [];
+  u.on('state', (state) => states.push(state.state));
+  u.start();
+  assert.equal(u.checkNow(), false);
+  assert.equal(u.lastError.message, 'offline');
+  assert.deepEqual(states, ['idle']);
+  u.stop();
 });
 
 test('a release is updateable only when the complete Squirrel set is present', () => {

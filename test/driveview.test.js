@@ -31,3 +31,10 @@ test('drive roots keep their virtual-root boundary', () => {
   assert.equal(driveview.driveParentOf('local', 'C:\\'), null);
   assert.equal(driveview.driveJoinPath('local', 'C:\\', 'Users'), 'C:\\Users');
 });
+
+test('remote drive trees stay hidden until a session can populate them', () => {
+  assert.equal(driveview.driveTreeVisible({ side: 'remote', enabled: true, sessionId: null }), false);
+  assert.equal(driveview.driveTreeVisible({ side: 'remote', enabled: true, sessionId: 's-1' }), true);
+  assert.equal(driveview.driveTreeVisible({ side: 'local', enabled: true, sessionId: null }), true);
+  assert.equal(driveview.driveTreeVisible({ side: 'remote', enabled: false, sessionId: 's-1' }), false);
+});

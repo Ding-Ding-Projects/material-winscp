@@ -143,6 +143,10 @@ function nodeText(node) {
   return node.textContent || (node.children || []).map((child) => nodeText(child)).join('');
 }
 
+function menuRows(menu) {
+  return menu.children.filter((child) => child.getAttribute('role')?.startsWith('menuitem'));
+}
+
 test('action descriptors resolve through the shared registry and use platform notation', () => {
   assert.equal(C.shortcutForAction({ action: 'LocalBackAction' }), 'Alt+Left');
   assert.equal(C.shortcutForMenu({ action: 'LocalBackAction' }, { platform: 'win32' }), 'Alt+←');
@@ -329,7 +333,7 @@ test('nested shortcut rows expose normalized visual and accessible key text', ()
       }],
       x: 10, y: 10,
     });
-    const parentRow = parent.element.children[0];
+    const parentRow = menuRows(parent.element)[0];
     const parentShortcut = parentRow.children[2];
     assert.equal(parentRow.getAttribute('aria-keyshortcuts'), 'Ctrl+Shift+F7');
     assert.equal(parentRow.getAttribute('aria-describedby'), parentShortcut.getAttribute('id'));
@@ -340,7 +344,7 @@ test('nested shortcut rows expose normalized visual and accessible key text', ()
     parent.element.dispatchEvent(keyEvent('ArrowRight'));
     const menuLayer = document.getElementById('layer-menu');
     const childMenu = menuLayer.children.find((menu) => menu !== parent.element);
-    const childRow = childMenu.children[0];
+    const childRow = menuRows(childMenu)[0];
     const childShortcut = childRow.children[2];
     assert.equal(childRow.getAttribute('aria-keyshortcuts'), 'Alt+ArrowLeft');
     assert.equal(childRow.getAttribute('aria-describedby'), childShortcut.getAttribute('id'));
@@ -358,7 +362,7 @@ test('submenu dismissal returns focus and clears the parent expanded state', () 
       items: [{ id: 'more', label: 'More', submenu: [{ id: 'child', label: 'Child' }] }],
       x: 10, y: 10,
     });
-    const parentRow = parent.element.children[0];
+    const parentRow = menuRows(parent.element)[0];
     parent.focusFirst();
     parent.element.dispatchEvent(keyEvent('ArrowRight'));
 
@@ -396,12 +400,42 @@ test('selecting a dropdown item clears the opener state so keyboard can reopen i
     assert.equal(button.getAttribute('aria-expanded'), 'true');
     const menu = document.getElementById('layer-menu');
     assert.equal(menu.children.length, 1);
-    menu.children[0].children[0].dispatchEvent({ type: 'click', target: menu.children[0].children[0] });
+    const item = menuRows(menu.children[0])[0];
+    item.dispatchEvent({ type: 'click', target: item });
 
     assert.equal(menu.children.length, 0, 'selection closes the menu');
     assert.equal(button.getAttribute('aria-expanded'), 'false', 'selection resets the opener state');
     button.dispatchEvent({ type: 'click', target: button });
     assert.equal(menu.children.length, 1, 'the same button can reopen the menu');
+  } finally {
+    restore();
+  }
+});
+
+test('each menu exposes a keyboard-reachable local search without changing activation semantics', () => {
+  const restore = installMenuDom();
+  try {
+    let selected = 0;
+    const menu = C.openMenu({
+      items: [
+        { id: 'copy', label: 'Copy', shortcut: 'Ctrl+C', onSelect: () => { selected += 1; } },
+        { id: 'rename', label: 'Rename', onSelect: () => { selected += 10; } },
+      ],
+      x: 10, y: 10,
+    });
+    const search = menu.element.children[0];
+    assert.equal(search.getAttribute('type'), 'search');
+    assert.equal(search.getAttribute('aria-label'), search.getAttribute('placeholder'));
+    search.focus();
+    search.value = 'rename';
+    search.dispatchEvent({ type: 'input', target: search });
+
+    const rows = menuRows(menu.element);
+    assert.equal(rows[0].style.display, 'none');
+    assert.equal(rows[1].style.display, '');
+    rows[1].dispatchEvent({ type: 'click', target: rows[1] });
+    assert.equal(selected, 10, 'filtered row still uses its original action');
+    assert.equal(menu.element.parentNode, null, 'normal selection still closes the menu');
   } finally {
     restore();
   }

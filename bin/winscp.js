@@ -296,7 +296,11 @@ function generateSessionUrl(argv) {
   const protocolName = String(optionValue(options, 'protocol', 'sftp')).toLowerCase();
   const protocol = URL_PROTOCOLS[protocolName];
   if (!protocol) throw new Error(`--protocol must be one of ${Object.keys(URL_PROTOCOLS).join(', ')}`);
-  const hostName = String(optionValue(options, 'host', '')).trim();
+  // Keep session summaries canonical: URL authority brackets belong to the
+  // generated URL, not to the stored host field (parseUrl already does this).
+  const hostName = sessionData.stripIP6LiteralBrackets(
+    String(optionValue(options, 'host', '')).trim(),
+  );
   if (!hostName) throw new Error('url generate needs --host HOST');
 
   const data = sessionData.defaultSessionData();

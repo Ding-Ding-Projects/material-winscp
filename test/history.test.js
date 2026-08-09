@@ -152,6 +152,28 @@ test('actionOf derives the action from the label', () => {
   assert.equal(actionOf('Discarded unsaved document "notes.txt"'), 'discarded');
 });
 
+test('discard recovery bytes survive an append-only history restore byte-for-byte', async () => {
+  const h = newHistory('discard-bytes');
+  const bytes = Buffer.from('line 1\r\n工作\u0000', 'utf8');
+  const discarded = await h.snapshot('Discarded unsaved document "notes.txt"', {
+    ...stateWith([]),
+    editorDiscard: {
+      fileName: 'notes.txt', encoding: 'utf8',
+      bytesBase64: bytes.toString('base64'),
+    },
+  });
+  await h.snapshot('Changed setting language', stateWith([], { language: 'yue' }));
+
+  const restored = await h.restore(discarded.value.oid, 'Restored discarded document "notes.txt"');
+  assert.equal(restored.ok, true);
+  const recovered = Buffer.from(restored.value.state.editorDiscard.bytesBase64, 'base64');
+  assert.deepEqual(recovered, bytes);
+  const revisions = await h.list({});
+  assert.equal(revisions.value[0].label, 'Restored discarded document "notes.txt"');
+  assert.equal(revisions.value[0].action, 'restored');
+  assert.equal(revisions.value.length, 3, 'restore appends instead of rewriting the discard audit');
+});
+
 test('read APIs wait for queued writes before showing history', async () => {
   const h = newHistory('settled-read');
   await h.init();

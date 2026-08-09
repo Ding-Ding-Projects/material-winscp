@@ -1412,8 +1412,11 @@ export function flattenControls(pages = PAGES) {
         out.push({
           pageId: page.id,
           pageTitle: page.title,
+          pageDescription: page.description,
           sectionId: section.id,
           sectionTitle: section.title,
+          sectionDescription: section.description,
+          sectionActions: section.actions || [],
           control,
         });
       }
@@ -1595,10 +1598,16 @@ export function searchFieldsFor(entry, stored) {
     ...bothOf(c.label),
     ...bothOf(c.hint),
     ...bothOf(entry.pageTitle),
+    ...bothOf(entry.pageDescription),
     ...bothOf(entry.sectionTitle),
+    ...bothOf(entry.sectionDescription),
     c.key || '',
   ];
   for (const o of c.options || []) fields.push(...bothOf(o.label));
+  if (c.buttonLabel) fields.push(...bothOf(c.buttonLabel));
+  for (const a of entry.sectionActions || []) {
+    fields.push(...bothOf(a.label), ...bothOf(a.hint), ...bothOf(a.buttonLabel));
+  }
   fields.push(describeValue(c, stored, 'en'));
   fields.push(describeValue(c, stored, 'yue'));
   return fields.filter(Boolean);

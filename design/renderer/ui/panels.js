@@ -34,7 +34,7 @@ import {
   makeMeasurer, naturalCompare,
 } from './panelcolumns.js';
 import {
-  createDriveView, createBrowsingSync, driveJoinPath, driveParentOf, normalizeLocal, uncRootOf,
+  createDriveView, createBrowsingSync, driveJoinPath, driveParentOf, normalizeLocal, uncRootOf, driveTreeVisible,
 } from './driveview.js';
 import { createToolbars } from './toolbars.js';
 import { createMenuBar, fileContextItems, panelContextItems, installMenuMnemonics } from './menus.js';
@@ -635,11 +635,19 @@ export function createFilePanel(opts = {}) {
     return workspace && typeof workspace.sessionInfo === 'function' ? workspace.sessionInfo() : null;
   }
   function sessionId() { const i = sessionInfo(); return i ? i.id : null; }
+  function treeCanShow() {
+    return driveTreeVisible({ side, enabled: treeShown, sessionId: sessionId() });
+  }
+  function syncTreeVisibility() {
+    const hidden = !treeCanShow();
+    treeHost.hidden = hidden;
+    splitter.hidden = hidden;
+  }
 
   /* ---- the tree ---- */
   let tree = null;
   function ensureTree() {
-    if (tree || !treeShown) return;
+    if (tree || !treeCanShow()) return;
     tree = createDriveView({
       side,
       sessionId,
@@ -650,6 +658,7 @@ export function createFilePanel(opts = {}) {
     treeHost.appendChild(tree.element);
     treeHost.style.width = `${readPref(isLocal ? 'scpCommander.localPanel.driveViewWidth' : 'scpCommander.remotePanel.driveViewWidth', 180)}px`;
   }
+  syncTreeVisibility();
 
   /* ---- loading ---- */
 
@@ -718,9 +727,12 @@ export function createFilePanel(opts = {}) {
       loadError = err.message || String(err);
       rawEntries = [];
       invalidCount = 0;
-      // The header must never go blank: a panel with no title looks broken,
-      // where "Not connected" is a state the user can act on.
-      titlePath.textContent = path || loadError;
+      // A disconnected remote panel already renders the actionable state in
+      // its empty note. Repeating the same sentence in the path header makes
+      // the pane look like it has two empty states; keep that header clear
+      // until a real remote path exists, while retaining concrete errors.
+      const quietDisconnected = !isLocal && err && err.expected && !sessionId();
+      titlePath.textContent = path || (quietDisconnected ? '' : loadError);
       titlePath.title = titlePath.textContent;
       addrInput.disabled = !path;
       applyView();
@@ -1592,15 +1604,18 @@ export function createFilePanel(opts = {}) {
     treeVisible: () => treeShown,
     setTreeVisible(on) {
       treeShown = !!on;
-      treeHost.hidden = !treeShown;
-      splitter.hidden = !treeShown;
-      if (treeShown) { ensureTree(); tree?.setPath(path); }
+      syncTreeVisibility();
+      if (treeCanShow()) { ensureTree(); tree?.setPath(path); }
       writePref(
         isLocal ? 'scpCommander.localPanel.driveView' : 'scpCommander.remotePanel.driveView',
         treeShown, `Changed the ${side} tree`,
       );
     },
-    focusTree() { ensureTree(); tree?.focus(); },
+    focusTree() { syncTreeVisibility(); ensureTree(); tree?.focus(); },
+    syncSession() {
+      syncTreeVisibility();
+      if (treeCanShow()) { ensureTree(); tree?.refresh(); }
+    },
     repaint() { applyView(); render(); },
 
     /* operations the commands need */
@@ -1759,6 +1774,7 @@ export function createWorkspace(opts = {}) {
     sessionInfo: () => sessionInfoValue,
     attachSession(info) {
       sessionInfoValue = info;
+      panels.remote?.syncSession?.();
       if (tab) {
         tab.data = { ...(tab.data || {}), sessionInfo: info, siteId: info.siteId };
         const strip = appSession.get('strip');

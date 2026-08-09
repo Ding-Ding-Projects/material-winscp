@@ -949,7 +949,12 @@ test('SFTP extended requests against a real server', async (t) => {
     try {
       const { adapter } = await connectAdapter(srv);
       assert.equal(adapter.caps.hardlink, false);
-      await assert.rejects(() => adapter.hardlink('/a', '/b'), /does not offer hard links/);
+      await assert.rejects(() => adapter.hardlink('/a', '/b'), (error) => {
+        assert.equal(error.code, 'ERR_SFTP_HARDLINK_UNSUPPORTED');
+        assert.match(error.message, /does not offer hard links/);
+        assert.equal(srv.received.some((request) => request.name === 'hardlink@openssh.com'), false);
+        return true;
+      });
       await adapter.disconnect();
     } finally { await srv.close(); }
   });

@@ -99,6 +99,19 @@ test('URL generation supports protocol, user, IPv6 and WinSCP-specific schemes',
   assert.equal(JSON.parse(result.text()).url, 'ftps://backup@files.example.com/');
 });
 
+test('URL generation canonicalizes bracketed IPv6 in the JSON session summary', () => {
+  const bracketed = cli.generateSessionUrl([
+    '--protocol', 'sftp', '--host', '[2001:db8::1]', '--port', '2222', '--username', 'alice',
+  ]);
+  const unbracketed = cli.generateSessionUrl([
+    '--protocol', 'sftp', '--host', '2001:db8::1', '--port', '2222', '--username', 'alice',
+  ]);
+
+  assert.equal(bracketed.url, 'sftp://alice@[2001:db8::1]:2222/');
+  assert.deepEqual(bracketed.session, unbracketed.session);
+  assert.equal(bracketed.session.hostName, '2001:db8::1');
+});
+
 test('URL utilities reject malformed input before any session starts', async () => {
   assert.throws(() => cli.parseSessionUrl(['not-a-session']), /supported session URL/);
   assert.throws(() => cli.generateSessionUrl(['--host', 'example.com', '--port', '0']), /1 through 65535/);

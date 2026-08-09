@@ -357,6 +357,27 @@ test('the checklist carries both sides and the reason', async () => {
   });
 });
 
+test('timestamp plus either still syncs changed times when sizes differ', async () => {
+  const { local, remote } = fixture();
+
+  local.files.get('/l/sizediff.txt').mtime = T + MIN;
+  const upload = await sync.compare(local, '/l', remote, '/r', {
+    direction: 'remote', mode: 'timestamp', criteria: 'either',
+  });
+  const uploadItem = upload.items.find((i) => i.local.name === 'sizediff.txt');
+  assert.strictEqual(uploadItem.action, 'upload');
+  assert.strictEqual(uploadItem.reason, 'local-newer');
+
+  local.files.get('/l/sizediff.txt').mtime = T;
+  remote.files.get('/r/sizediff.txt').mtime = T + MIN;
+  const download = await sync.compare(local, '/l', remote, '/r', {
+    direction: 'local', mode: 'timestamp', criteria: 'either',
+  });
+  const downloadItem = download.items.find((i) => i.remote.name === 'sizediff.txt');
+  assert.strictEqual(downloadItem.action, 'download');
+  assert.strictEqual(downloadItem.reason, 'remote-newer');
+});
+
 test('case-insensitive name collisions fail instead of dropping a checklist item', async () => {
   const local = new MemoryAdapter('local');
   const remote = new MemoryAdapter('remote');

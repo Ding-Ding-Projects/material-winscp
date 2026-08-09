@@ -29,6 +29,7 @@
 'use strict';
 
 const http = require('http');
+const https = require('https');
 const crypto = require('crypto');
 const fs = require('fs');
 const fsp = fs.promises;
@@ -88,6 +89,7 @@ function parseDigestAuthorization(header) {
  * @param options.namespace   'prefix' | 'default' — how DAV: is declared
  * @param options.quota       { available, used } to answer RFC 4331 properties
  * @param options.acceptRanges  advertise byte ranges (default true)
+ * @param options.tls           `{ key, cert, ca }` passed to `https.createServer`
  * @returns { port, origin, root, requests, close() }
  */
 async function startWebDavServer(options = {}) {
@@ -280,7 +282,9 @@ async function startWebDavServer(options = {}) {
     res.end(buf);
   };
 
-  const server = http.createServer(async (req, res) => {
+  const serverOptions = options.tls || null;
+  const createServer = serverOptions ? https.createServer : http.createServer;
+  const server = createServer(serverOptions || {}, async (req, res) => {
     const urlPath = cleanUrlPath(req.url.split('?')[0]);
     requests.push({ method: req.method, url: req.url, path: urlPath, headers: { ...req.headers } });
 
@@ -505,7 +509,7 @@ async function startWebDavServer(options = {}) {
 
   return {
     port,
-    origin: `http://127.0.0.1:${port}`,
+    origin: `${serverOptions ? 'https' : 'http'}://127.0.0.1:${port}`,
     root,
     requests,
     state,

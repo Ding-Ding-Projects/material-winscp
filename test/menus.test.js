@@ -10,11 +10,13 @@ const R = (rel) => pathToFileURL(path.join(ROOT, 'design', 'renderer', rel)).hre
 
 let M;
 let C;
+let COMMANDS;
 let ACTIONS;
 
 test.before(async () => {
   M = await import(R('ui/menus.js'));
   C = await import(R('ui/contextmenu.js'));
+  COMMANDS = await import(R('ui/commands.js'));
   ({ ACTIONS } = await import(R('actions.js')));
 });
 
@@ -49,8 +51,27 @@ test('every menu action with registered shortcut exposes it to the menu renderer
     const action = known.get(node.action);
     if (!action?.shortcut) continue;
     const [item] = M.buildMenuItems([{ action: node.action }]);
+    if (!item) continue; // explicitly unavailable actions remain ledgered, not executable
     assert.equal(item.shortcut, C.shortcutForAction({ action: node.action }), node.action);
     assert.ok(item.shortcut, `${node.action} lost its shortcut`);
+  }
+});
+
+test('explicitly unavailable actions stay ledgered but are omitted from menus', () => {
+  const unavailable = new Set(['LockAction', 'UnlockAction', 'RemoteExploreDirectoryAction']);
+  const renderedMenus = [
+    ...M.COMMANDER_MENUS,
+    ...M.EXPLORER_MENUS,
+  ].flatMap((menu) => M.buildMenuItems(menu.items));
+  const renderedActions = new Set(renderedItems(renderedMenus).map((item) => item.action));
+
+  for (const name of unavailable) assert.equal(renderedActions.has(name), false, name);
+
+  const coverage = COMMANDS.commandCoverage();
+  const declared = new Map(coverage.declared.map((entry) => [entry.name, entry.reason]));
+  for (const name of unavailable) {
+    assert.ok(declared.has(name), `${name} remains in the coverage ledger`);
+    assert.ok(declared.get(name), `${name} retains its unavailable reason`);
   }
 });
 
@@ -95,7 +116,7 @@ test('descriptor shortcuts survive the menu tree and nested submenu renderer', (
   // are keyboard-only or exposed by a different surface, so this test does
   // not pretend that the issue is fully closed.
   assert.ok(menuActions.size >= 60, `only ${menuActions.size} action-backed menu entries were audited`);
-  assert.equal(shortcutMenuActions.size, 66, 'the current menu-bearing slice must stay explicit');
+  assert.equal(shortcutMenuActions.size, 65, 'the current menu-bearing slice must stay explicit');
 });
 
 function renderedItems(items, out = []) {

@@ -761,6 +761,23 @@ test('the shared byte mover honors copyParam speed limits without a queue item',
   assert.ok(remote.read('/r/foreground.bin').equals(payload));
 });
 
+test('moveBytes normalizes malformed read and write offsets before adapters see them', async () => {
+  const { local, remote } = makePair();
+  const payload = Buffer.from('queue offsets stay boring');
+  local.put('/l/offsets.bin', payload);
+  const q = new TransferQueue({ prefs: prefs(), progressMs: 0 });
+  for (const [index, value] of [-1, Infinity, NaN, 'not-an-offset'].entries()) {
+    await q.moveBytes({
+      sourceAdapter: local, targetAdapter: remote,
+      sourcePath: '/l/offsets.bin', targetPath: `/r/offset-${index}.bin`,
+      size: payload.length, readFrom: value, writeAt: value,
+    });
+  }
+  assert.deepStrictEqual(local.reads.slice(-4).map((read) => read.start), [0, 0, 0, 0]);
+  assert.deepStrictEqual(remote.writes.slice(-4).map((write) => write.start), [0, 0, 0, 0]);
+  assert.ok(remote.read('/r/offset-0.bin').equals(payload));
+});
+
 test('setSpeedLimit changes the limit of an item already queued', async () => {
   const { local, remote } = makePair();
   local.put('/l/a.bin', bigBuffer(4096));

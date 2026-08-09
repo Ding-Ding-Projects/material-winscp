@@ -225,7 +225,7 @@ export function openMenu(opts = {}) {
 
   const root = h('div', {
     class: 'menu surface-2', role: 'menu', tabindex: '-1',
-    'aria-label': opts.label || t('menuSearchPh'),
+    'aria-label': opts.label || t('contextMenuLabel'),
   });
   // A long bilingual label plus a shortcut must remain usable on a narrow
   // window. The component stylesheet supplies the normal 220–420px range;
@@ -240,6 +240,19 @@ export function openMenu(opts = {}) {
   let subHandle = null;
   let typeahead = '';
   let typeaheadTimer = 0;
+
+  // Every menu owns its own search state.  Keeping the field in the menu
+  // rather than in a shared overlay means nested menus cannot filter their
+  // parent, and selecting a result still follows the normal row path.
+  const search = h('input', {
+    class: 'menu-search field-input',
+    type: 'search',
+    placeholder: t('searchPlainHint'),
+    'aria-label': t('searchPlainHint'),
+    autocomplete: 'off',
+    spellcheck: 'false',
+  });
+  root.appendChild(search);
 
   const rows = [];
   for (const it of items) {
@@ -286,6 +299,21 @@ export function openMenu(opts = {}) {
     rows.push({ it, row });
     root.appendChild(row);
   }
+
+  function filterRows() {
+    const query = String(search.value || '').trim().toLocaleLowerCase();
+    rows.forEach(({ it, row }) => {
+      const visible = !query || it.label.toLocaleLowerCase().includes(query);
+      row.style.display = visible ? '' : 'none';
+    });
+  }
+  search.addEventListener('input', filterRows);
+  search.addEventListener('keydown', (e) => {
+    // Printable keys belong to the field, not the menu's legacy typeahead.
+    // Navigation keys continue to bubble to the menu so keyboard users can
+    // leave the field and activate the filtered action without a pointer.
+    if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) e.stopPropagation();
+  });
 
   layer('menu').appendChild(root);
 

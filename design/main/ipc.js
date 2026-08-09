@@ -136,6 +136,20 @@ function localPath(session, p, label) {
   return abs;
 }
 
+/** Resolve a renderer editor path only within application-owned roots. */
+function ownedEditorPath(p, roots, label) {
+  const raw = str(p, label || 'localPath', LIMITS.path);
+  const abs = path.resolve(raw);
+  let real;
+  try { real = fs.realpathSync.native(abs); } catch { need(false, 'The editor path does not exist.'); }
+  const allowed = (roots || []).map((root) => {
+    try { return fs.realpathSync.native(path.resolve(root)); } catch { return null; }
+  }).filter(Boolean);
+  need(allowed.some((root) => real === root || real.startsWith(root + path.sep)),
+    'The editor path is outside the application-owned editor roots.');
+  return real;
+}
+
 // -------------------------------------------------- lazily owned modules
 
 /**
@@ -1051,7 +1065,7 @@ class Ipc {
       str(name, 'name', LIMITS.name),
       sessions === undefined ? this.sessions.snapshotWorkspace() : arr(sessions, 'sessions', 200)));
     this.handle('config:workspaceRemove', (name) => cfg().removeWorkspace(str(name, 'name', LIMITS.name)));
-    this.handle('config:workspaces', () => cfg().data.workspaces);
+    this.handle('config:workspaces', () => publicWorkspaces(cfg().data.workspaces));
 
     this.handle('config:bookmarks', (key) => cfg().bookmarksFor(str(key, 'key', LIMITS.name)));
     this.handle('config:bookmarkAdd', (key, side, value, name) => {
@@ -1700,7 +1714,7 @@ class Ipc {
       const r = obj(req, 'request');
       if (r.localPath && !r.remotePath) {
         return this.editors.openLocal({
-          localPath: path.resolve(str(r.localPath, 'localPath', LIMITS.path)),
+          localPath: ownedEditorPath(r.localPath, [P.root(), P.temp()]),
           mode: optStr(r.mode, 'mode', 16) || 'auto',
           external: optStr(r.external, 'external', LIMITS.path),
           encoding: optStr(r.encoding, 'encoding', 16) || undefined,
@@ -2505,24 +2519,39 @@ function syncPayload(type, payload, ipc) {
   };
 }
 
-/** A site as the renderer may see it: no secret ever leaves the main process. */
-function publicSite(s) {
-  const out = { ...s };
-  for (const f of ['password', 'passphrase', 'proxyPassword', 'tunnelPassword', 'tunnelPassphrase', 'encryptKey', 's3SessionToken']) {
-    // Report only WHETHER something is stored, never its value, its length, or
-    // its ciphertext.
-    out[f] = out[f] ? '__stored__' : '';
+const PUBLIC_SECRET_FIELDS = new Set(['password', 'passphrase', 'proxyPassword',
+  'tunnelPassword', 'tunnelPassphrase', 'encryptKey', 's3SessionToken']);
+const PRIVATE_KEY = /(?:password|passphrase|secret|token|credential|ciphertext|privatekey|apikey|authorization|cookie)/i;
+
+/**
+ * Copy data crossing into the renderer without allowing a newly-added secret
+ * field to become public by accident. Known session fields retain the old
+ * presence marker; other credential-shaped fields are omitted entirely.
+ */
+function publicValue(value, key) {
+  if (key && PUBLIC_SECRET_FIELDS.has(key)) return value ? '__stored__' : '';
+  if (Array.isArray(value)) return value.map((item) => publicValue(item));
+  if (!value || typeof value !== 'object') return value;
+  const out = {};
+  for (const [childKey, childValue] of Object.entries(value)) {
+    if (PRIVATE_KEY.test(childKey) && !PUBLIC_SECRET_FIELDS.has(childKey)) continue;
+    out[childKey] = publicValue(childValue, childKey);
   }
   return out;
 }
 
+/** A site as the renderer may see it: no secret ever leaves the main process. */
+function publicSite(s) { return publicValue(s); }
+
+function publicWorkspaces(workspaces) { return publicValue(Array.isArray(workspaces) ? workspaces : []); }
+
 /** The complete configuration document safe to clone into the renderer. */
 function publicConfig(config) {
   return {
-    prefs: config.prefs,
+    prefs: publicValue(config.prefs),
     sites: config.sites.map(publicSite),
     folders: config.data.folders,
-    workspaces: config.data.workspaces,
+    workspaces: publicWorkspaces(config.data.workspaces),
     needsUnlock: config.needsUnlock(),
   };
 }
@@ -2592,4 +2621,7 @@ function hasRemoteCopyCapability(caps = {}) {
   return !!caps.copyRemote;
 }
 
-module.exports = { Ipc, ok, err, publicSite, validateSite, ValidationError, LIMITS, hasRemoteCopyCapability };
+module.exports = {
+  Ipc, ok, err, publicSite, publicConfig, publicWorkspaces, validateSite,
+  ValidationError, LIMITS, hasRemoteCopyCapability, ownedEditorPath,
+};

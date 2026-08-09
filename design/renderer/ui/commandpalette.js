@@ -283,6 +283,11 @@ export function firstPaletteIndex(resultCount) {
 /** The deferred initial focus must not run after the palette has closed. */
 export function shouldFocusPalette(isClosed) { return !isClosed; }
 
+/** The command palette has one deliberate global shortcut; keep P free for other commands. */
+export function isCommandPaletteShortcut({ key, ctrlKey = false, metaKey = false, shiftKey = false } = {}) {
+  return (ctrlKey || metaKey) && shiftKey && String(key).toLowerCase() === 'f';
+}
+
 function entryIcon(entry) {
   if (entry.type === 'setting') return entry.pending ? 'lock' : 'settings';
   if (entry.type === 'destination') return 'folder_open';
@@ -549,14 +554,14 @@ export function openCommandPalette() {
 }
 
 registerCommand({
-  id: 'app.commandPalette', labelKey: 'cpOpen', icon: 'manage_search', shortcut: 'Ctrl+Shift+P',
+  id: 'app.commandPalette', labelKey: 'cpOpen', icon: 'manage_search', shortcut: 'Ctrl+Shift+F',
   run: () => openCommandPalette(),
 });
 registerTitlebarAction({ id: 'command-palette', labelKey: 'cpOpen', icon: 'manage_search', order: 15, onSelect: openCommandPalette });
 
 if (typeof window !== 'undefined') {
   window.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'p') {
+    if (isCommandPaletteShortcut(e)) {
       e.preventDefault();
       openCommandPalette();
     }

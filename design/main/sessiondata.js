@@ -690,12 +690,16 @@ const OPTIONS = [
   { k: 'FtpHost', f: 'ftpHost', t: T.ENUM, e: 'autoSwitch', putty: 'no' },
   { k: 'FtpWorkFromCwd', f: 'ftpWorkFromCwd', t: T.ENUM, e: 'autoSwitch', alias: ['FtpDeleteFromCwd'], putty: 'no' },
   { k: 'FtpAnyCodeForPwd', f: 'ftpAnyCodeForPwd', t: T.BOOL, putty: 'no' },
+  { k: 'FtpDupFF', f: 'ftpDupFF', t: T.BOOL, putty: 'no' },
+  { k: 'FtpUndupFF', f: 'ftpUndupFF', t: T.BOOL, putty: 'no' },
   { k: 'SslSessionReuse', f: 'sslSessionReuse', t: T.BOOL, putty: 'no' },
   { k: 'TlsCertificateFile', f: 'tlsCertificateFile', t: T.STR, putty: 'no' },
   { k: 'FtpProxyLogonType', f: 'ftpProxyLogonType', t: T.INT, putty: 'no' },
   { k: 'MinTlsVersion', f: 'minTlsVersion', t: T.ENUM, e: 'tlsVersion', putty: 'no' },
   { k: 'MaxTlsVersion', f: 'maxTlsVersion', t: T.ENUM, e: 'tlsVersion', putty: 'no' },
   { k: 'CompleteTlsShutdown', f: 'completeTlsShutdown', t: T.ENUM, e: 'autoSwitch', putty: 'no' },
+
+  { k: 'S3StorageClass', f: 's3StorageClass', t: T.STR, putty: 'no' },
 
   { k: 'WebDavLiberalEscaping', f: 'webDavLiberalEscaping', t: T.BOOL, putty: 'no' },
   { k: 'WebDavAuthLegacy', f: 'webDavAuthLegacy', t: T.BOOL, putty: 'no' },

@@ -56,6 +56,19 @@ test('reload and encoding changes refresh the detected-encoding state', async ()
     /state\.encodingDetected = res\.encodingDetected;/);
 });
 
+test('encoding confirmation keeps its blocking decision open until Save succeeds', async () => {
+  const source = await fs.readFile(sourcePath, 'utf8');
+  const changeStart = source.indexOf('async function changeEncoding(next)');
+  const applyStart = source.indexOf('async function applyEncoding(next)', changeStart);
+  assert.ok(changeStart >= 0 && applyStart > changeStart);
+  const change = source.slice(changeStart, applyStart);
+  assert.match(change, /onSelect: \(close\) => \{/);
+  assert.match(change, /void \(async \(\) => \{/);
+  assert.match(change, /if \(await save\(false\)\) \{\s*close\('save'\);\s*applyEncoding\(next\);/);
+  assert.match(change, /return true;/);
+  assert.doesNotMatch(change, /onSelect: async \(\) => \{ if \(await save\(false\)\)/);
+});
+
 test('modeless close serializes an async unsaved-changes decision', async () => {
   const source = await fs.readFile(sourcePath, 'utf8');
   const closeStart = source.indexOf('async function close(reason)');

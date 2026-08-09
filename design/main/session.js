@@ -356,13 +356,17 @@ class Session extends EventEmitter {
       this.log.add('debug', `Certificate for ${hostPort} is already trusted.`);
       return true;
     }
-    if (cert.trusted && (!cert.errors || !cert.errors.length)) {
+    const rememberedMismatch = !!(known && known.fingerprint && known.fingerprint !== shown);
+    if (cert.trusted && (!cert.errors || !cert.errors.length) && !rememberedMismatch) {
       // Verified by the system trust store with no errors: nothing to ask.
       this.log.add('debug', `Certificate for ${hostPort} verified against the system trust store.`);
       return true;
     }
 
-    this.log.add('error', `Certificate for ${hostPort} could not be verified: ${(cert.errors || ['unknown reason']).join('; ')}`);
+    const reasons = rememberedMismatch
+      ? [`the presented fingerprint does not match the remembered fingerprint${known.fingerprint ? ` (${known.fingerprint})` : ''}`, ...(cert.errors || [])]
+      : (cert.errors || ['unknown reason']);
+    this.log.add('error', `Certificate for ${hostPort} could not be verified: ${reasons.join('; ')}`);
     const answer = await this.ask('certificate', {
       hostPort,
       subject: cert.subject || '',
@@ -371,7 +375,7 @@ class Session extends EventEmitter {
       fingerprintSHA1: cert.fingerprintSHA1 || '',
       validFrom: cert.validFrom || '',
       validTo: cert.validTo || '',
-      errors: cert.errors || [],
+      errors: reasons,
       pem: cert.pem || '',
     });
     if (!answer || !answer.accept) {
@@ -648,6 +652,12 @@ class Session extends EventEmitter {
   _onAdapterClosed(adapter, reason) {
     if (adapter !== this.adapter) return;
     if (this.adapter) this.adapter.connected = false;
+    // A dead adapter cannot answer a security question. Cancel before
+    // removing listeners so the awaiting protocol operation fails closed and
+    // reconnect cannot inherit a prompt from the retired connection.
+    const hadPendingPrompt = this._pending.size > 0;
+    if (hadPendingPrompt) this._promptCancelled = true;
+    this._cancelPrompts('adapter-closed');
     // Retire the closed adapter before scheduling a retry. Keeping it attached
     // lets late protocol events from the dead connection leak into the new
     // session, and makes reconnect replace a live listener graph without

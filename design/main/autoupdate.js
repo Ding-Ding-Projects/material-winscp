@@ -46,7 +46,7 @@ const DEFAULT_INTERVAL_MS = 5 * 60 * 60 * 1000;
 const STARTUP_DELAY_MS = 45 * 1000;
 
 class AutoUpdater extends EventEmitter {
-  constructor({ config, logger, isPackaged } = {}) {
+  constructor({ config, logger, isPackaged, updater, platform } = {}) {
     super();
     this.config = config || null;
     this.log = logger || (() => {});
@@ -56,6 +56,9 @@ class AutoUpdater extends EventEmitter {
     this.lastError = null;      // recorded, never shown
     this._timer = null;
     this._started = false;
+    this._updater = updater || (electron && electron.autoUpdater) || null;
+    this._platform = platform || process.platform;
+    this._handlers = null;
 
     const app = electron && electron.app;
     this.isPackaged = isPackaged !== undefined ? isPackaged : !!(app && app.isPackaged);
@@ -70,8 +73,8 @@ class AutoUpdater extends EventEmitter {
    * that is exactly the bug nobody finds until a release goes out.
    */
   get supported() {
-    if (!electron || !electron.autoUpdater) return false;
-    if (process.platform !== 'win32') return false;
+    if (!this._updater) return false;
+    if (this._platform !== 'win32') return false;
     return this.isPackaged;
   }
 
@@ -94,7 +97,43 @@ class AutoUpdater extends EventEmitter {
       return this;
     }
 
-    const { autoUpdater } = electron;
+    const autoUpdater = this._updater;
+
+    this._handlers = {
+      checking: () => {
+        this.state = 'checking';
+        this.emit('state', this.snapshot());
+      },
+      unavailable: () => {
+        this.state = this.stagedVersion ? 'staged' : 'idle';
+        this.lastCheck = Date.now();
+        this.emit('state', this.snapshot());
+      },
+      available: () => {
+        this.state = 'downloading';
+        this.log({ level: 'info', message: 'A newer version is downloading in the background.' });
+        this.emit('state', this.snapshot());
+      },
+      downloaded: (_e, _notes, releaseName) => {
+        this.state = 'staged';
+        this.stagedVersion = releaseName || '';
+        this.lastCheck = Date.now();
+        this.log({ level: 'info', message: `Update ${this.stagedVersion} is staged and applies on next start.` });
+        this.emit('staged', this.snapshot());
+        this.emit('state', this.snapshot());
+      },
+      error: (err) => {
+        this.lastError = err;
+        this.state = this.stagedVersion ? 'staged' : 'idle';
+        this.log({ level: 'debug', message: 'Update check failed: ' + (err && err.message) });
+        this.emit('state', this.snapshot());
+      },
+    };
+    autoUpdater.on('checking-for-update', this._handlers.checking);
+    autoUpdater.on('update-not-available', this._handlers.unavailable);
+    autoUpdater.on('update-available', this._handlers.available);
+    autoUpdater.on('update-downloaded', this._handlers.downloaded);
+    autoUpdater.on('error', this._handlers.error);
 
     try {
       autoUpdater.setFeedURL({ url: this.feedUrl() });
@@ -103,50 +142,15 @@ class AutoUpdater extends EventEmitter {
       this.state = 'unsupported';
       this.lastError = err;
       this.log({ level: 'warn', message: 'Update feed could not be set: ' + err.message });
+      this.stop();
+      this.state = 'unsupported';
       return this;
     }
 
-    autoUpdater.on('checking-for-update', () => {
-      this.state = 'checking';
-      this.emit('state', this.snapshot());
-    });
-
-    autoUpdater.on('update-not-available', () => {
-      this.state = this.stagedVersion ? 'staged' : 'idle';
-      this.lastCheck = Date.now();
-      this.emit('state', this.snapshot());
-    });
-
-    autoUpdater.on('update-available', () => {
-      // Downloading starts on its own and runs in the background. Deliberately
-      // silent: the user did not ask, so the user is not told.
-      this.state = 'downloading';
-      this.log({ level: 'info', message: 'A newer version is downloading in the background.' });
-      this.emit('state', this.snapshot());
-    });
-
-    autoUpdater.on('update-downloaded', (_e, _notes, releaseName) => {
-      this.state = 'staged';
-      this.stagedVersion = releaseName || '';
-      this.lastCheck = Date.now();
-      this.log({ level: 'info', message: `Update ${this.stagedVersion} is staged and applies on next start.` });
-      // Passive only. Anything listening may show a quiet indicator; nothing
-      // may raise a dialog, a toast or a restart prompt.
-      this.emit('staged', this.snapshot());
-      this.emit('state', this.snapshot());
-    });
-
-    autoUpdater.on('error', (err) => {
-      // A failed update is the updater's problem. Log it, keep the previous
-      // state, and let the next interval try again.
-      this.lastError = err;
-      this.state = this.stagedVersion ? 'staged' : 'idle';
-      this.log({ level: 'debug', message: 'Update check failed: ' + (err && err.message) });
-      this.emit('state', this.snapshot());
-    });
-
     this._timer = setTimeout(() => {
+      if (!this._started) return;
       this.checkNow();
+      if (!this._started) return;
       this._timer = setInterval(() => this.checkNow(), this.intervalMs());
       // An interval must never hold the process open at quit.
       if (this._timer.unref) this._timer.unref();
@@ -170,10 +174,12 @@ class AutoUpdater extends EventEmitter {
     // Once something is staged there is nothing further to fetch until restart.
     if (this.state === 'downloading' || this.state === 'staged') return false;
     try {
-      electron.autoUpdater.checkForUpdates();
+      this._updater.checkForUpdates();
       return true;
     } catch (err) {
       this.lastError = err;
+      this.state = this.stagedVersion ? 'staged' : 'idle';
+      this.emit('state', this.snapshot());
       return false;
     }
   }
@@ -186,7 +192,7 @@ class AutoUpdater extends EventEmitter {
   applyAndRestart() {
     if (this.state !== 'staged') return false;
     try {
-      electron.autoUpdater.quitAndInstall();
+      this._updater.quitAndInstall();
       return true;
     } catch (err) {
       this.lastError = err;
@@ -212,6 +218,14 @@ class AutoUpdater extends EventEmitter {
 
   stop() {
     if (this._timer) { clearTimeout(this._timer); clearInterval(this._timer); this._timer = null; }
+    if (this._handlers && this._updater && this._updater.removeListener) {
+      this._updater.removeListener('checking-for-update', this._handlers.checking);
+      this._updater.removeListener('update-not-available', this._handlers.unavailable);
+      this._updater.removeListener('update-available', this._handlers.available);
+      this._updater.removeListener('update-downloaded', this._handlers.downloaded);
+      this._updater.removeListener('error', this._handlers.error);
+      this._handlers = null;
+    }
     this._started = false;
   }
 }

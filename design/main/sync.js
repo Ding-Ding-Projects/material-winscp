@@ -393,9 +393,10 @@ function decide(local, remote, ctx) {
   const { timestamp, mirror, notByTime, bySize, direction, tolerance } = ctx;
 
   let timeCompare = 0;
-  // In timestamp+size mode the sizes must agree before the times are even
-  // looked at, otherwise a half-written file would get its clock "fixed".
-  if (!notByTime && (!timestamp || !bySize || local.size === remote.size)) {
+  // Timestamp mode only changes metadata, so criteria "either" must still
+  // compare clocks when sizes differ.  Size differences affect byte-copying
+  // modes, but cannot be resolved by a timestamp-only operation.
+  if (!notByTime && (timestamp || !bySize || local.size === remote.size)) {
     timeCompare = compareTime(local.mtime, remote.mtime, tolerance);
   }
 

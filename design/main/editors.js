@@ -690,7 +690,7 @@ class EditorManager extends EventEmitter {
     // The renderer owns the unsaved textarea buffer. A deliberate discard must
     // therefore cross the bridge explicitly: without this marker the main
     // record still looks clean and would delete the only recovery copy.
-    const discardRequested = o.discard === true && rec.remotePath && !rec.localOnly;
+    const discardRequested = o.discard === true;
     let discardTextError = null;
     if (discardRequested && typeof o.text === 'string') {
       try {
@@ -701,7 +701,17 @@ class EditorManager extends EventEmitter {
         discardTextError = e;
       }
     }
-    const orphan = (rec.dirty || discardRequested) && !rec.localOnly;
+    const orphan = rec.dirty || discardRequested;
+
+    // The temporary path is useful for the live orphan surface, but it is not
+    // a recovery record: cleanup, disk repair, or a later user action can make
+    // that path disappear. Capture the exact bytes in the append-only history
+    // state as well. A missing temp file is reported honestly and never turns
+    // into invented recovery content.
+    let recoveryBytes = null;
+    if (orphan && !discardTextError) {
+      try { recoveryBytes = (await fsp.readFile(rec.localPath)).toString('base64'); } catch { /* reported below */ }
+    }
 
     // A discard is itself an auditable user action. Write it before the close
     // notification and before deleting the record. History is best effort by
@@ -718,6 +728,8 @@ class EditorManager extends EventEmitter {
             sessionId: rec.sessionId,
             remotePath: rec.remotePath,
             localPath: rec.localPath,
+            encoding: rec.encoding,
+            bytesBase64: recoveryBytes,
           },
         });
         discardAudit = result && result.ok === false
@@ -735,7 +747,9 @@ class EditorManager extends EventEmitter {
         type: 'orphan', id: rec.id, localPath: rec.localPath, remotePath: rec.remotePath,
         discardAudit,
         recoveryAvailable,
-        message: 'The edit was not uploaded; the temporary file has been kept.',
+        message: rec.localOnly
+          ? 'The local edit was discarded; its recovery copy has been kept.'
+          : 'The edit was not uploaded; the temporary file has been kept.',
       });
     } else if (!keep && !rec.localOnly) {
       await this._removeTemp(rec);

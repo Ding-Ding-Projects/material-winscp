@@ -27,6 +27,7 @@ const fsp = fs.promises;
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const childProcess = require('node:child_process');
 
 const { WebDavAdapter } = require('../design/main/protocols/webdav');
 const { LocalAdapter } = require('../design/main/protocols/local');
@@ -42,6 +43,24 @@ const SECRET = 'correct horse battery staple';
 
 let tmpRoot;
 const servers = [];
+
+async function makeTlsFixture() {
+  const dir = await fsp.mkdtemp(path.join(tmpRoot, 'tls-'));
+  const pfx = path.join(dir, 'server.pfx');
+  const script = [
+    `$pfx = '${pfx.replace(/'/g, "''")}'`,
+    '$rsa = [System.Security.Cryptography.RSA]::Create(2048)',
+    '$dn = [System.Security.Cryptography.X509Certificates.X500DistinguishedName]::new("CN=127.0.0.1")',
+    '$req = [System.Security.Cryptography.X509Certificates.CertificateRequest]::new($dn,$rsa,[System.Security.Cryptography.HashAlgorithmName]::SHA256,[System.Security.Cryptography.RSASignaturePadding]::Pkcs1)',
+    '$san = [System.Security.Cryptography.X509Certificates.SubjectAlternativeNameBuilder]::new()',
+    '$san.AddIpAddress([System.Net.IPAddress]::Parse("127.0.0.1"))',
+    '$req.CertificateExtensions.Add($san.Build())',
+    '$crt = $req.CreateSelfSigned([DateTimeOffset]::Now.AddMinutes(-1),[DateTimeOffset]::Now.AddDays(1))',
+    '[IO.File]::WriteAllBytes($pfx,$crt.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx, ""))',
+  ].join(';');
+  childProcess.execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { stdio: 'ignore' });
+  return { pfx: await fsp.readFile(pfx) };
+}
 
 /** Start a server plus a connected adapter pointed at it. */
 async function stand(options = {}) {
@@ -120,6 +139,44 @@ test('connect talks OPTIONS, HEAD and PROPFIND to a real server', async () => {
 
   const propfind = server.requests.find((r) => r.method === 'PROPFIND');
   assert.equal(propfind.headers.depth, '0', 'the connect probe is Depth 0');
+  await adapter.disconnect();
+});
+
+test('HTTPS WebDAV uses the live TLS helper and accepts only an explicit certificate decision', async () => {
+  const tlsFixture = await makeTlsFixture();
+  const root = await fsp.mkdtemp(path.join(tmpRoot, 'dav-https-'));
+  await fsp.writeFile(path.join(root, 'secure.bin'), Buffer.from('TLS lives here'));
+  const server = await startWebDavServer({ root, tls: tlsFixture });
+  servers.push(server);
+  const seen = [];
+  const adapter = makeAdapter(server, {}, { ftps: 'implicit' });
+  adapter.options.certVerifier = async (host, certificate, problem) => {
+    seen.push({ host, certificate, problem });
+    return true;
+  };
+
+  await adapter.connect();
+  assert.equal(server.origin.startsWith('https://'), true);
+  assert.equal(adapter.protocolName, 'WebDAVS');
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].certificate.authorized, false, 'the fixture is intentionally untrusted');
+  assert.match(seen[0].certificate.fingerprint256, /^[0-9A-F:]+$/);
+  assert.ok(seen[0].problem, 'the untrusted certificate problem is surfaced');
+  assert.deepEqual((await adapter.list('/')).map((item) => item.name), ['secure.bin']);
+  assert.equal((await adapter.readFile('/secure.bin')).toString(), 'TLS lives here');
+  await adapter.disconnect();
+});
+
+test('HTTPS WebDAV fails closed when certificate verification is not accepted', async () => {
+  const tlsFixture = await makeTlsFixture();
+  const root = await fsp.mkdtemp(path.join(tmpRoot, 'dav-https-reject-'));
+  const server = await startWebDavServer({ root, tls: tlsFixture });
+  servers.push(server);
+  const adapter = makeAdapter(server, {}, { ftps: 'implicit' });
+  adapter.options.certVerifier = () => false;
+
+  await assert.rejects(() => adapter.connect(), /TLS certificate rejected/);
+  assert.equal(server.requests.length, 0, 'no WebDAV request is sent before certificate acceptance');
   await adapter.disconnect();
 });
 

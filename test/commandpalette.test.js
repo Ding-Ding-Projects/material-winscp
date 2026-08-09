@@ -147,3 +147,15 @@ test('deferred initial focus is skipped after palette teardown', () => {
   assert.equal(P.shouldFocusPalette(false), true);
   assert.equal(P.shouldFocusPalette(true), false);
 });
+
+test('command palette opens only on Ctrl+Shift+F, never the competing Ctrl+Shift+P shortcut', async () => {
+  assert.equal(P.isCommandPaletteShortcut({ key: 'f', ctrlKey: true, shiftKey: true }), true);
+  assert.equal(P.isCommandPaletteShortcut({ key: 'F', ctrlKey: true, shiftKey: true }), true);
+  assert.equal(P.isCommandPaletteShortcut({ key: 'f', metaKey: true, shiftKey: true }), true);
+  assert.equal(P.isCommandPaletteShortcut({ key: 'p', ctrlKey: true, shiftKey: true }), false);
+  assert.equal(P.isCommandPaletteShortcut({ key: 'f', ctrlKey: true, shiftKey: false }), false);
+
+  const app = await import(R('app.js'));
+  const palette = app.listCommands().find((command) => command.id === 'app.commandPalette');
+  assert.equal(palette?.shortcut, 'Ctrl+Shift+F');
+});

@@ -317,6 +317,9 @@ export function buildMenuItems(nodes, over = {}) {
       if (!cmd) continue;
       const state = commandState(node.action, over);
       if (!state.visible) continue;
+      // Explicitly unavailable commands stay in the command registry and its
+      // coverage ledger, but must not masquerade as executable menu entries.
+      if (cmd.unavailableReason) continue;
       const item = {
         action: node.action,
         label: actionLabel(node.action),

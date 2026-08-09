@@ -395,6 +395,23 @@ test('a plain password is read and flagged for rewriting into the protected form
   assert.strictEqual(S.loadSession({ PasswordPlain: 'x' }, { loadPasswords: false }).data.password, '');
 });
 
+test('advanced FTP and S3 settings survive the real INI save/load path', () => {
+  const d = S.defaultSessionData('advanced');
+  d.ftpDupFF = true;
+  d.ftpUndupFF = true;
+  d.s3StorageClass = 'STANDARD_IA';
+
+  const ini = S.saveSession(d);
+  assert.strictEqual(ini.FtpDupFF, '1');
+  assert.strictEqual(ini.FtpUndupFF, '1');
+  assert.strictEqual(ini.S3StorageClass, 'STANDARD_IA');
+
+  const restored = S.loadSession(ini).data;
+  assert.strictEqual(restored.ftpDupFF, true);
+  assert.strictEqual(restored.ftpUndupFF, true);
+  assert.strictEqual(restored.s3StorageClass, 'STANDARD_IA');
+});
+
 test('raw string options stay strings when an importer supplies typed values', () => {
   const d = S.loadSession({ ProxyTelnetCommand: 123 }).data;
   assert.strictEqual(d.proxyTelnetCommand, '123');

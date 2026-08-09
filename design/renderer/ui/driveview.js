@@ -92,6 +92,11 @@ export function driveEmptyState({ side = 'remote', hasSession = true, itemCount 
   return itemCount ? null : 'emptyDir';
 }
 
+/** A remote tree has no useful navigation surface until its session exists. */
+export function driveTreeVisible({ side = 'remote', enabled = false, sessionId = null } = {}) {
+  return enabled === true && (side === 'local' || !!sessionId);
+}
+
 /* ------------------------------------------------------------------ */
 /* the tree                                                            */
 /* ------------------------------------------------------------------ */

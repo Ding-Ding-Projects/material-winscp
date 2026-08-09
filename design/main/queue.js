@@ -1729,6 +1729,13 @@ class TransferQueue extends EventEmitter {
       throw new Error('A transfer plan needs a source adapter and a target adapter.');
     }
     const copyParam = normalizeCopyParam(p.copyParam);
+    // IPC/session plans can carry form-shaped offset values. Number() alone
+    // lets Infinity through and `|| 0` leaves negative numbers untouched.
+    // Keep malformed positions away from adapters while preserving valid ones.
+    const safeOffset = (value) => {
+      const offset = Number(value);
+      return Number.isFinite(offset) && offset >= 0 ? Math.floor(offset) : 0;
+    };
     // A plan may arrive from a session transfer that has no queue item behind
     // it. Everything the streaming loop reads off an item is supplied here, so
     // one implementation serves both callers rather than two that agree today.
@@ -1761,7 +1768,7 @@ class TransferQueue extends EventEmitter {
     const before = item.progress.bytes;
     const written = await this._copyStream(
       item, entry, p.targetPath,
-      Number(p.writeAt) || 0, Number(p.readFrom) || 0, !!p.text, p.readTo,
+      safeOffset(p.writeAt), safeOffset(p.readFrom), !!p.text, p.readTo,
       { append: !!p.append, onBytes: typeof p.onBytes === 'function' ? p.onBytes : null });
     // The engine's own progress object is fed through onBytes as the bytes
     // land; this is the return value it accounts the pass with.

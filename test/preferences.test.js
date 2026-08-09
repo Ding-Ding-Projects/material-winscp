@@ -472,6 +472,27 @@ test('searchFieldsFor indexes both languages and the key itself', async () => {
   assert.ok(fields.some((f) => f === '熄'));
 });
 
+test('preference search indexes visible descriptions and action labels', async () => {
+  const { schema } = await load();
+  const entries = schema.flattenControls();
+  const described = entries.find((e) => e.sectionDescription);
+  assert.ok(described);
+  const describedFields = schema.searchFieldsFor(described, false);
+  assert.ok(describedFields.includes(described.sectionDescription.en));
+  assert.ok(describedFields.includes(described.sectionDescription.yue));
+
+  const actionEntry = entries.find((e) => e.control.actionId === 'checkUpdates');
+  assert.ok(actionEntry);
+  const actionFields = schema.searchFieldsFor(actionEntry, 0);
+  assert.ok(actionFields.includes('Check now'));
+  assert.ok(actionFields.includes('而家檢查'));
+
+  const sectionActionEntry = entries.find((e) => e.sectionActions.some((a) => a.label));
+  assert.ok(sectionActionEntry);
+  const sectionActionFields = schema.searchFieldsFor(sectionActionEntry, undefined);
+  assert.ok(sectionActionFields.includes(sectionActionEntry.sectionActions[0].label.en));
+});
+
 // ------------------------------------------------ transfer settings (copy)
 
 test('the transfer-settings defaults match COPY_PARAM_DEFAULTS exactly', async () => {

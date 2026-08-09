@@ -15,6 +15,30 @@ const cp = require('node:child_process');
 
 const P = require('../design/main/paths');
 const { EditorManager } = require('../design/main/editors');
+const { ownedEditorPath } = require('../design/main/ipc');
+
+test('renderer editor paths stay inside app-owned roots, including symlink escapes', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-ipc-'));
+  const owned = path.join(root, 'temp');
+  const outside = path.join(root, 'outside.txt');
+  await fs.mkdir(owned);
+  await fs.writeFile(path.join(owned, 'draft.txt'), 'draft');
+  await fs.writeFile(outside, 'private');
+  try {
+    assert.equal(ownedEditorPath(path.join(owned, 'draft.txt'), [root]),
+      path.join(owned, 'draft.txt'));
+    assert.throws(() => ownedEditorPath(outside, [owned]), /outside the application-owned/);
+    const link = path.join(owned, 'escape.txt');
+    try {
+      await fs.symlink(outside, link);
+      assert.throws(() => ownedEditorPath(link, [owned]), /outside the application-owned/);
+    } catch (e) {
+      if (e.code !== 'EPERM' && e.code !== 'EACCES') throw e;
+    }
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
 
 function fixture(initial = 'before') {
   const files = new Map([['/notes.txt', { data: Buffer.from(initial), mtime: 1000 }]]);
@@ -444,6 +468,7 @@ test('discarding an unsaved remote edit records an audit revision before close',
     assert.deepEqual(revisions[0].state.editorDiscard, {
       id: opened.id, fileName: 'notes.txt', sessionId: f.session.id,
       remotePath: '/notes.txt', localPath: opened.localPath,
+      encoding: 'utf8', bytesBase64: Buffer.from('before').toString('base64'),
     });
     assert.ok(f.emitted.some((e) => e.type === 'orphan' && e.id === opened.id));
     assert.equal(f.emitted.find((e) => e.type === 'orphan').discardAudit.status, 'recorded');
@@ -491,10 +516,38 @@ test('renderer discard sends its latest buffer before close and keeps recovery b
     assert.deepEqual(order, ['history', 'close-returned']);
     assert.equal(revisions.length, 1);
     assert.match(revisions[0].label, /^Discarded unsaved document/);
+    assert.equal(revisions[0].state.editorDiscard.bytesBase64,
+      Buffer.from('typed in renderer').toString('base64'));
     const orphan = f.emitted.find((e) => e.type === 'orphan' && e.id === opened.id);
     assert.equal(orphan.discardAudit.status, 'recorded');
     assert.equal(orphan.recoveryAvailable, true);
     assert.equal(await fs.readFile(opened.localPath, 'utf8'), 'typed in renderer');
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a dirty local-only editor close is audited without deleting the user file', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'material-editor-local-discard-'));
+  P.setRoot(root);
+  const localPath = path.join(root, 'notes.txt');
+  await fs.writeFile(localPath, 'local draft', 'utf8');
+  const f = fixture();
+  const revisions = [];
+  f.manager.history = { snapshot: async (label, state) => {
+    revisions.push({ label, state });
+    return { ok: true, value: { oid: 'local-discard-revision' } };
+  } };
+  try {
+    const opened = await f.manager.openLocal({ localPath, mode: 'internal' });
+    f.manager.open.get(opened.id).dirty = true;
+    await f.manager.close(opened.id, {});
+    assert.equal(revisions.length, 1);
+    assert.match(revisions[0].label, /Discarded unsaved document/);
+    assert.equal(revisions[0].state.editorDiscard.bytesBase64,
+      Buffer.from('local draft').toString('base64'));
+    assert.equal(await fs.readFile(localPath, 'utf8'), 'local draft');
+    assert.equal(f.emitted.find((e) => e.type === 'orphan').discardAudit.status, 'recorded');
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

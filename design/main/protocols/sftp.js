@@ -1986,7 +1986,11 @@ class SftpAdapter extends Adapter {
    */
   async hardlink(existing, linkPath) {
     if (!this.ext) throw new Error('Not connected');
-    if (!this.caps.hardlink) throw new Error('The server does not offer hard links');
+    if (!this.caps.hardlink) {
+      const error = new Error('The server does not offer hard links');
+      error.code = 'ERR_SFTP_HARDLINK_UNSUPPORTED';
+      throw error;
+    }
     await this.ext.hardlink(this.normalize(existing), this.normalize(linkPath), {
       force: this.implementation === 'bitvise',
     });
