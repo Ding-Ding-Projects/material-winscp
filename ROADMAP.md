@@ -12,6 +12,8 @@ not a reason to narrow scope.
 
 ## Done
 
+- Plain-clone coverage verification preserves the checked-in port ledger when
+  the optional upstream source submodule is not initialized
 - Electron application with a Material Design 3 interface, booting and usable
 - Squirrel installer: built, installed and launched from the installed location
 - Silent background updates, Chrome-style, with no prompt at any point

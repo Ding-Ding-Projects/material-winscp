@@ -31,6 +31,10 @@ like a configuration mistake and is not one. See
 `vendor/winscp` is a git submodule holding the upstream WinSCP source. It is the
 porting reference and is **read-only to this project** — never edit it and never
 commit into it. You do not need it checked out to build or test.
+`node tools/port-matrix.js --check` keeps the checked-in coverage ledger
+read-only in that plain-clone state and reports that source comparison was
+skipped. Check the submodule out only when regenerating the ledger or auditing
+it against the upstream source.
 
 ## What "done" means
 

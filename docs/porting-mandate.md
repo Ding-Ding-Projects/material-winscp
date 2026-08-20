@@ -99,8 +99,13 @@ to optimistic reporting:
 - Coverage is weighted by source lines, so a large subsystem cannot be made to
   look finished by porting a handful of small files around it.
 
-Run it after any significant change. `--check` exits non-zero when a mapping is
-broken, so CI can hold the line.
+Run it after any significant change. With `vendor/winscp` checked out,
+`--check` exits non-zero when a mapping is broken or the generated ledger is
+stale. In a documented plain clone it instead verifies that the checked-in
+ledger is present and leaves it byte-for-byte unchanged; source comparison is
+reported as skipped. Regeneration still fails closed until the optional source
+reference is checked out, so a missing submodule can never replace the ledger
+with an empty report.
 
 ## Rules for anyone continuing this work
 

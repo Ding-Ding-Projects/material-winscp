@@ -128,6 +128,25 @@ function fileExists(rel) {
 function main() {
   const check = process.argv.includes('--check');
   const map = loadMap();
+
+  if (!fs.existsSync(WINSCP)) {
+    if (!check) {
+      console.error('WinSCP source not found at ' + WINSCP +
+        '\nRun: git submodule update --init --depth 1 vendor/winscp');
+      process.exit(2);
+    }
+
+    let current = '';
+    try { current = fs.readFileSync(OUT, 'utf8'); } catch { current = ''; }
+    if (!current.startsWith('# Port coverage\n') && !current.startsWith('# Port coverage\r\n')) {
+      console.error('docs/port-coverage.md is missing or is not a generated coverage ledger');
+      process.exit(1);
+    }
+    console.log(`Checked ${path.relative(ROOT, OUT)} without the optional WinSCP source reference`);
+    console.log('  source comparison: skipped (vendor/winscp is not checked out)');
+    return;
+  }
+
   const units = collectUnits();
   const vendored = collectVendored();
 
