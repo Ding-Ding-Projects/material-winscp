@@ -187,6 +187,16 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "c5e4aeb", kind: 'commit', ref: "c5e4aeb", oid: "c5e4aeb9aa1975d23f9f7a079dbef2e761551e05", date: "2026-10-12",
+    title: "Preserve Windows native evidence; Discard repair pending [skip ci]",
+    changes: [
+      { category: "fixed", text: "Preserve the executed harness source and a sanitized result summary. The Discard callback still trips over its own second invitation: native verification passed eight scenarios and retained one re-entry failure. No callback repair or new regression test was implemented before work stopped. Raw captures, profiles and machine-specific outputs remain local." },
+    ],
+    changesYue: [
+      { category: "changed", text: "保留已執行嘅驗證程式同經整理嘅結果。Discard 回呼收到第二張請帖就自己絆倒自己：八個原生情境通過，一個重入情境仍然失敗。停止工作前未實作修正或新增回歸測試；原始截圖、設定檔同機器資料全部留喺本機。" },
+    ],
+  },
+  {
     id: "f323183", kind: 'commit', ref: "f323183", oid: "f32318331e4ac806ad6b08a97f4d8add447b0c59", date: "2026-10-12",
     title: "Fix CRLF changelog freshness false alarms [skip ci]",
     changes: [
@@ -692,17 +702,6 @@ export const DEVELOPMENT = [
     title: "Validate synchronization clock options",
     changes: [
       { category: "changed", text: "Reject non-finite and negative clock settings before comparison so malformed timing cannot make the checklist hallucinate. The clock gremlin now gets bounced at the door; 時鐘妖怪唔可以亂咁改同步結果。" },
-    ],
-  },
-  {
-    id: "afbe57d", kind: 'commit', ref: "afbe57d", oid: "afbe57d891913aa7d1c1c9d7bcf929541213be4c", date: "2026-08-03",
-    title: "Fix repeated CLI batches and drag-name collisions",
-    changes: [
-      { category: "changed", text: "Group repeated /command and /parameter values before the console parser so every batch command is consumed without an implicit session or prompt. Reject remote names that collide after Windows filename conversion instead of allowing a staged file to overwrite another." },
-      { category: "changed", text: "English humour: The parser stops leaving later commands loitering in a fake prompt, and the drag folder stops playing filename musical chairs." },
-    ],
-    changesYue: [
-      { category: "changed", text: "廣東話玩笑：命令唔再喺假 prompt 入面留低等人餵，拖放檔名撞車就即刻煞停，唔畀檔案玩消失魔術。" },
     ],
   },
 ];
