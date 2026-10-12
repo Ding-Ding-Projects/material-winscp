@@ -1,0 +1,6 @@
+# Generated native evidence may contain machine paths. Keep it local.
+*.png
+*.log
+*-report.json
+*-results.json
+*-data/
