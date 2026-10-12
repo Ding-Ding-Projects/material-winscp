@@ -187,6 +187,38 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "f0d906f", kind: 'commit', ref: "f0d906f", oid: "f0d906f1eb02d1fcfd5a18e3558ef5967f3d2a9e", date: "2026-10-12",
+    title: "Document combined local repair evidence and acceptance gaps [skip ci]",
+    changes: [
+      { category: "added", text: "Record provenance and recovery repairs, 170 focused checks and 13 negative checks. The raw suite keeps its 30 failures, 36 cancellations and 3 skips; the 26 added tests pass. Historical green reports no longer impersonate current acceptance." },
+    ],
+    changesYue: [
+      { category: "changed", text: "記錄來源驗證同文件復原修復，170 項重點測試同 13 項反例通過。完整測試仍有 30 項失敗、36 項取消同 3 項略過；新增 26 項通過。舊綠燈唔再扮今日驗收合格。" },
+    ],
+  },
+  {
+    id: "f94fcc6", kind: 'commit', ref: "f94fcc6", oid: "f94fcc6a4daf5289eaddc8e48e862ff5a698e055", date: "2026-10-12",
+    title: "Merge reviewed document recovery and changelog repairs [skip ci]",
+    changes: [
+      { category: "changed", text: "Preserve both source histories without rewriting either repair. Git history now keeps its receipts; document recovery keeps its own copy." },
+    ],
+    changesYue: [
+      { category: "changed", text: "保留兩條修復歷史，唔改寫原有提交。Git 查清收據先出帳，文件復原自己開副本，唔再霸住原檔。" },
+    ],
+  },
+  {
+    id: "962ac35", kind: 'commit', ref: "962ac35", oid: "962ac353c404a16938f34083dbad1f432daa5764", date: "2026-10-12",
+    title: "Recover discarded documents without eating originals [skip ci]",
+    refs: ["#23"],
+    changes: [
+      { category: "added", text: "Local discard now preserves the original file and writes an exclusive owned recovery copy. History restore validates and materializes exact bytes into a new detached local copy, preserving current settings and protected credentials. Append-only audit failures are reported honestly without deleting recovery. Bound generated restore labels and distinguish recovery copies from settings undo. Add registered IPC and production callback coverage and correct the categorized recovery/privacy documentation." },
+    ],
+    changesYue: [
+      { category: "changed", text: "還原捨棄文件，唔好順手吞埋原檔。 本機捨棄改用獨立復原副本，原檔保持不變；歷史還原驗證完整 bytes， 新增獨立本機副本，保留目前設定同受保護憑證。新增歷史記錄失敗會 如實提示，唔會刪走復原內容。限制還原標籤長度，分清文件副本同設定 撤銷，加入實際 IPC／介面 callback 測試，修正文檔同私隱說明。" },
+      { category: "changed", text: "Verification: 81 focused tests passed. Raw full suite: 3651 passed, 30 failed, 36 cancelled, 3 skipped; failure names match the pristine baseline exactly. Windows GUI, screenshots and installer acceptance remain unverified. Refs #23" },
+    ],
+  },
+  {
     id: "724862e", kind: 'commit', ref: "724862e", oid: "724862e9c87125e06283d7bd6460c62659a53f89", date: "2026-10-12",
     title: "[skip ci] Fail closed when changelog history cannot verify its identity",
     changes: [
@@ -663,32 +695,6 @@ export const DEVELOPMENT = [
     changes: [
       { category: "changed", text: "The remaining slice now validates numeric preferences, removes an inert SiteAdvanced toggle, validates directory names, gates hidden-file state, reports case collisions, and rejects incomplete Squirrel artifacts in CI." },
       { category: "changed", text: "今輪補實 Preferences range、SiteAdvanced、Create Directory、hidden files、sync collision 同 Squirrel artifact gate；啲設定唔再有假掣，啲 package 唔再靠運氣出街。" },
-    ],
-  },
-  {
-    id: "e81083b", kind: 'commit', ref: "e81083b", oid: "e81083b8a200ada03fa467229bb7f2848f5c85b6", date: "2026-08-03",
-    title: "Harden security, config, S3, queue, and session edges",
-    changes: [
-      { category: "changed", text: "The next roadmap wave fails closed on missing host fingerprints, preserves config on malformed JSON, explains unsupported S3 checksums, resets active throttle debt, shares concurrent disconnect teardown, and gives the calendar a real accessible name." },
-      { category: "changed", text: "今輪修正 host fingerprint、JSON config、S3 checksum、queue throttle、session disconnect 同 calendar accessibility；啲 edge case 而家有真 contract，唔再靠估。" },
-    ],
-  },
-  {
-    id: "e91bd48", kind: 'commit', ref: "e91bd48", oid: "e91bd48fa962d535b43b6e5706ab890ffaf007db", date: "2026-08-03",
-    title: "Fix CLI, drag-drop, menu, overlay, and history edges",
-    changes: [
-      { category: "changed", text: "The command line now forwards INI and raw settings, Explorer drops fail closed, menus show platform shortcuts and scroll safely, palette jumps focus their controls, and discard events report whether history recorded them." },
-      { category: "removed", text: "CLI 而家識傳 INI 同 raw settings，Explorer drop 唔再亂跌落 current directory，menu 會顯示平台快捷鍵兼識捲，palette 直達真正 control，discard 就老實講有冇寫入 history；啲 edge case 終於唔使再扮魔術。" },
-    ],
-  },
-  {
-    id: "bcc1fd8", kind: 'commit', ref: "bcc1fd8", oid: "bcc1fd8a50bd2db15aad23b5601cab4cd31bc19a", date: "2026-08-03",
-    title: "Fix workspace, search, session, and SFTP edge cases",
-    changes: [
-      { category: "changed", text: "The edge cases now follow the real capability and protocol contracts; the code can stop pretending every workspace member is a tab." },
-    ],
-    changesYue: [
-      { category: "changed", text: "修正工作區、搜尋、工作階段同 SFTP 嘅邊角位；啲 bug 而家唔使再扮成主角搶戲。" },
     ],
   },
 ];
