@@ -49,7 +49,22 @@ article. `site/build.js` obtains entries through `tools/changelog.js`, preservin
 the full object name, author date, title and issue references. Each short SHA is
 an accessible link whose target is the exact full SHA on the repository's own
 forge. A source archive without a Git object database shows an honest empty
-ledger; it never guesses a neighbouring ref.
+ledger; it never guesses a neighbouring ref. This fallback applies only when
+there is no `.git` marker at the source root, including isolated site fixtures.
+A checkout's `.git` directory or linked-worktree file instead requires successful
+generation: a missing generator, unreadable history, missing object, or object
+that is not a commit fails the site build. Broken checkout metadata is not
+classified as an archive. Git commands explicitly bind to this checkout's
+`.git` marker and worktree. Repository-local environment overrides such as
+`GIT_DIR`, `GIT_WORK_TREE` and `GIT_OBJECT_DIRECTORY` are removed only from the
+child command environment, so another repository cannot supply the ledger.
+Normal linked-worktree gitfiles remain supported; global settings are unchanged.
+
+The generator also fails before rewriting the in-app development block if any
+object from the Git log cannot be verified as a commit. Both regeneration and
+`--check` exit non-zero; neither silently drops that entry. Restore the checkout's
+object database or fetch the required history before retrying. There is no
+switch to bypass validation in a checkout.
 
 Release notes carry the same date, full SHA and commit URL for the generated
 entries they present. This keeps the in-app viewer, copied Markdown, site and
@@ -97,6 +112,16 @@ other entry untrustworthy.
   information.
 
 ## Verification
+
+- `node --test test/changelog-validation.test.js test/site-build.test.js` checks
+  missing and non-commit objects against real temporary Git databases, target
+  preservation on failure, site error propagation, exact commit URLs, corrupt
+  history, and the archive/fixture fallback. All mutations stay in disposable
+  test repositories.
+- `node tools/changelog.js --check` checks freshness against the full checkout;
+  `node site/build.js --verify` validates the generated site. Run `npm test` for
+  the repository-wide gate. These checks do not replace native Windows release
+  or installer verification.
 
 - The date picker is tested for month/year jump, range selection, every preset,
   locale-format and ISO typed input, and for preserving partial input while

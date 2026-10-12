@@ -615,3 +615,63 @@ test('a release with no installer asset still records the release, without a but
   assert.strictEqual(rel.installer, null);
   assert.strictEqual(rel.assets.length, 1);
 });
+
+/* ------------------------- changelog failure boundaries ------------------ */
+
+test('a source archive with the generator emits an explicitly empty ledger', () => {
+  const repo = tempRepo();
+  put(repo, 'tools/changelog.js', fs.readFileSync(path.join(ROOT, 'tools/changelog.js')));
+  const result = runCli(repo);
+  assert.equal(result.status, 0, result.text);
+  const content = fs.readFileSync(path.join(repo, 'site/_site/content.js'), 'utf8');
+  assert.match(content, /"development":\[\]/);
+});
+
+for (const marker of ['directory', 'worktree-file']) {
+  test(`a checkout with a ${marker} fails when changelog validation fails`, () => {
+    const repo = tempRepo();
+    if (marker === 'directory') fs.mkdirSync(path.join(repo, '.git'));
+    else put(repo, '.git', 'gitdir: missing-worktree-metadata\n');
+    put(repo, 'tools/changelog.js', 'exports.collect = () => { throw new Error("Changelog verification failed: fixture object"); };');
+    const result = runCli(repo);
+    assert.notEqual(result.status, 0, result.text);
+    assert.match(result.text, /Changelog verification failed: fixture object/);
+    assert.ok(!fs.existsSync(path.join(repo, 'site/_site/content.js')));
+  });
+}
+
+test('a checkout cannot hide a missing or broken generator as a fixture', () => {
+  const repo = tempRepo();
+  fs.mkdirSync(path.join(repo, '.git'));
+  let result = runCli(repo);
+  assert.notEqual(result.status, 0, result.text);
+  assert.match(result.text, /Cannot find module/);
+  put(repo, 'tools/changelog.js', 'throw new Error("Broken generator dependency");');
+  result = runCli(repo);
+  assert.notEqual(result.status, 0, result.text);
+  assert.match(result.text, /Broken generator dependency/);
+});
+
+test('real Git history ships exact commit links and a missing object fails the next build', () => {
+  const repo = tempRepo();
+  put(repo, 'tools/changelog.js', fs.readFileSync(path.join(ROOT, 'tools/changelog.js')));
+  function git(...args) {
+    const result = spawnSync('git', args, { cwd: repo, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  }
+  git('init', '-q');
+  git('add', '.');
+  git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'Add site fixture');
+  const oid = git('rev-parse', 'HEAD');
+  let result = runCli(repo);
+  assert.equal(result.status, 0, result.text);
+  const content = fs.readFileSync(path.join(repo, 'site/_site/content.js'), 'utf8');
+  assert.ok(content.includes(`"oid":"${oid}"`));
+  assert.ok(content.includes(`/commit/${oid}`));
+  // Corrupt only this disposable repository, never the project's object store.
+  fs.unlinkSync(path.join(repo, '.git/objects', oid.slice(0, 2), oid.slice(2)));
+  result = runCli(repo);
+  assert.notEqual(result.status, 0, result.text);
+  assert.match(result.text, /bad object HEAD/);
+});

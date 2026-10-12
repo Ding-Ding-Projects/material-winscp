@@ -49,8 +49,23 @@ const LIMIT = 60;
 const RECORD = '\x1e';
 const FIELD = '\x1f';
 
+// Repository-local overrides (git rev-parse --local-env-vars) must not redirect
+// this ledger to another checkout or object database. Keep ordinary process
+// settings intact and sanitize only each child Git command's environment.
+const LOCAL_GIT_ENV = [
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_CONFIG', 'GIT_CONFIG_PARAMETERS',
+  'GIT_CONFIG_COUNT', 'GIT_OBJECT_DIRECTORY', 'GIT_DIR', 'GIT_WORK_TREE',
+  'GIT_IMPLICIT_WORK_TREE', 'GIT_GRAFT_FILE', 'GIT_INDEX_FILE',
+  'GIT_NO_REPLACE_OBJECTS', 'GIT_REPLACE_REF_BASE', 'GIT_PREFIX',
+  'GIT_SHALLOW_FILE', 'GIT_COMMON_DIR', 'GIT_NAMESPACE',
+];
+
 function git(args) {
-  return cp.execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const env = { ...process.env };
+  for (const name of LOCAL_GIT_ENV) delete env[name];
+  return cp.execFileSync('git', [`--git-dir=${path.join(ROOT, '.git')}`, `--work-tree=${ROOT}`, ...args], {
+    cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env,
+  });
 }
 
 /** True when the object really is a commit in this repository. */
@@ -145,8 +160,7 @@ function collect() {
     if (!r.trim()) continue;
     const [oid, ref, iso, subject, body = ''] = r.split(FIELD);
     if (!oid || !commitExists(oid)) {
-      console.error(`  ! skipping an entry whose object could not be verified: ${oid || '(none)'}`);
-      continue;
+      throw new Error(`Changelog verification failed: object ${oid || '(none)'} is not a verified commit.`);
     }
     if (isGeneratedOnlyCommit(oid)) continue;
     const { en, yue } = splitBilingual(body);
