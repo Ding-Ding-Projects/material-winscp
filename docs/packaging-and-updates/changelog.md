@@ -113,6 +113,11 @@ other entry untrustworthy.
 
 ## Verification
 
+Freshness checks treat Git checkout CRLF and LF newlines as equivalent. A current
+ledger remains byte-for-byte unchanged in either mode; changed content and missing
+Git metadata still fail closed. Regression tests use a real `core.autocrlf=true`
+checkout and verify its CRLF bytes before checking freshness.
+
 - `node --test test/changelog-validation.test.js test/site-build.test.js` checks
   missing and non-commit objects against real temporary Git databases, target
   preservation on failure, site error propagation, exact commit URLs, corrupt

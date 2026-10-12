@@ -84,3 +84,58 @@ for (const variable of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_OBJEC
     assert.equal(JSON.parse(result.stdout)[0].oid, own.git('rev-parse', 'HEAD'));
   });
 }
+
+function generatedCheckout(t, autocrlf) {
+  const item = fixture(t);
+  const script = path.join(item.repo, 'tools/changelog.js');
+  const generated = cp.spawnSync(process.execPath, [script], { encoding: 'utf8' });
+  assert.equal(generated.status, 0, generated.stderr);
+  item.git('add', 'design/renderer/ui/changelog.js');
+  item.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'Refresh ledger');
+  item.git('config', 'core.autocrlf', String(autocrlf));
+  // Make Git perform a real checkout conversion instead of mocking file reads.
+  fs.unlinkSync(item.target);
+  item.git('checkout-index', '--force', '--', 'design/renderer/ui/changelog.js');
+  const bytes = fs.readFileSync(item.target, 'utf8');
+  if (autocrlf) {
+    assert.ok(bytes.includes('\r\n'), 'the checkout must actually contain CRLF');
+    assert.equal(/(?<!\r)\n/.test(bytes), false, 'every checkout newline must be CRLF');
+  } else {
+    assert.equal(bytes.includes('\r'), false);
+  }
+  return { ...item, script, bytes };
+}
+
+for (const autocrlf of [false, true]) {
+  test(`fresh ${autocrlf ? 'CRLF' : 'LF'} checkout passes without rewriting the ledger`, (t) => {
+    const { target, script, bytes } = generatedCheckout(t, autocrlf);
+    for (const args of [['--check'], []]) {
+      const result = cp.spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /Changelog is current/);
+      assert.equal(fs.readFileSync(target, 'utf8'), bytes);
+    }
+  });
+}
+
+test('CRLF checkout still rejects changed ledger content without rewriting it', (t) => {
+  const { target, script, bytes } = generatedCheckout(t, true);
+  const changed = bytes.replace('Add fixture', 'Changed fixture');
+  assert.notEqual(changed, bytes);
+  fs.writeFileSync(target, changed);
+  const result = cp.spawnSync(process.execPath, [script, '--check'], { encoding: 'utf8' });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Changelog is STALE/);
+  assert.equal(fs.readFileSync(target, 'utf8'), changed);
+});
+
+test('CRLF checkout still fails closed when Git metadata is missing', (t) => {
+  const { repo, target, script, bytes } = generatedCheckout(t, true);
+  fs.renameSync(path.join(repo, '.git'), path.join(repo, 'saved-git'));
+  for (const args of [['--check'], []]) {
+    const result = cp.spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /not a git repository/);
+    assert.equal(fs.readFileSync(target, 'utf8'), bytes);
+  }
+});

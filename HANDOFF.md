@@ -1,5 +1,18 @@
 # Handoff
 
+## CRLF freshness follow-on (2026-10-12; source-only acceptance)
+
+Freshness comparison now normalizes CRLF checkout newlines without changing
+ledger content or weakening Git object validation. Real Git checkout regression
+tests reproduce the false stale result before the fix (11 pass, 1 fail) and
+verify unchanged LF/CRLF bytes, changed-content rejection, and missing-history
+rejection afterward. Focused changelog and site suites pass **93/93**; site
+verification passes. The full Node 22 suite reports **3741 tests: 3672 pass,
+28 fail, 36 cancelled, 5 skipped**. Failure and cancellation names exactly match
+the preceding plain-checkout candidate; the four new tests pass. This remains a
+non-green aggregate result. Native Windows GUI, installer and release acceptance remain
+pending. See [changelog verification](docs/packaging-and-updates/changelog.md).
+
 ## Coverage-fixture follow-on (2026-10-12; source-only acceptance)
 
 The absent-source coverage checks now use isolated fixtures in both plain and

@@ -1,5 +1,11 @@
 # Roadmap
 
+## CRLF freshness follow-on (2026-10-12; not released)
+
+Changelog freshness comparison now accepts Git checkout CRLF newlines while
+retaining changed-content and missing-history rejection. Native Windows GUI and
+release acceptance remain separate pending gates.
+
 ## Local repair candidate (2026-10-12; not released)
 
 Two reviewed source repairs are integrated locally above main

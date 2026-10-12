@@ -227,7 +227,8 @@ function main() {
   const entries = collect();
   const block = render(entries);
 
-  if (existing.trim() === block.trim()) {
+  // Git may check text out as CRLF on Windows; only newline spelling differs.
+  if (existing.replace(/\r\n/g, '\n').trim() === block.trim()) {
     console.log(`Changelog is current: ${entries.length} commits, newest ${entries[0].ref} (${entries[0].date}).`);
     return;
   }

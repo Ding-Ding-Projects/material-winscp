@@ -61,6 +61,8 @@ node tools/changelog.js --check  # exit non-zero if it is stale
 Generates the in-app changelog from `git log`. A hand-maintained one had already
 drifted seven commits behind within a day.
 
+- Freshness comparison accepts LF and CRLF checkouts without rewriting the file.
+  Content changes still fail `--check`; Git verification remains mandatory.
 - Every entry carries the **full** object name, verified with `git cat-file`
   before it is written. A wrong SHA is worse than none: it sends a reader
   somewhere confidently irrelevant.

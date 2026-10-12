@@ -33,6 +33,7 @@ sliders, and a one-in-ten chance of dim sum at startup.
 ## Local source repair status
 
 The unreleased candidate repairs changelog Git provenance and document recovery.
+Changelog freshness also accepts Windows CRLF checkouts without rewriting them.
 See [current evidence and pending acceptance](HANDOFF.md) and
 [document recovery privacy and retention](docs/version-history/document-discard.md).
 Native Windows, installer and release acceptance remain pending; existing release
