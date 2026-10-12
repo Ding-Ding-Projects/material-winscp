@@ -73,8 +73,10 @@ const STR = {
   hpRestore: ['Restore…', '還原…'],
   hpRestoreTitle: ['Restore revision {0}', '還原版本 {0}'],
   hpRestoreBody: [
-    'This brings back the state recorded in revision {0} from {1}.\n\nNothing is rewound: the state you have right now is kept as its own revision, and restoring writes a NEW revision on top. You can undo this restore, and undo that undo, from this same panel.',
-    '呢個會拎返版本 {0}（{1}）入面記低嘅狀態返嚟。\n\n冇任何嘢會被倒帶：你而家嘅狀態會照樣留低做一個版本，還原只係喺上面再寫一個新版本。你之後可以喺呢度撤銷呢次還原，仲可以撤銷嗰次撤銷。'],
+    'This brings back the state recorded in revision {0} from {1}.\n\nDocument discard revisions open a separate local recovery copy without changing current settings or uploading. Other revisions restore application settings.\n\nExisting history stays available. Document recovery adds a copy; another restore does not remove earlier copies. Application-settings restores add new revisions, so settings changes can be undone from this panel.',
+    '呢個會拎返版本 {0}（{1}）入面記低嘅狀態返嚟。\n\n捨棄文件嘅版本會開啟獨立本機復原副本，唔會改目前設定或上傳；其他版本會還原應用程式設定。\n\n現有歷史會保留。文件復原會新增副本；再次還原唔會刪除之前嘅副本。應用程式設定還原會新增版本，所以可以喺呢度撤銷設定變更。'],
+  hpDocumentRestored: ['Document recovered to {0}. A new history revision was recorded; the original file and current settings are unchanged.', '文件已還原到 {0}，亦記錄咗新歷史版本；原檔同目前設定保持不變。'],
+  hpDocumentAuditFailed: ['Document recovered to {0}, but the new history revision could not be recorded. Keep this recovery copy.', '文件已還原到 {0}，但記錄唔到新歷史版本。請保留呢份復原副本。'],
   hpRestoreBtn: ['Restore', '還原'],
   hpRestored: ['Restored revision {0}. It was written as a new revision, so it can be undone.', '還原咗版本 {0}。佢係以新版本寫入，所以可以撤銷。'],
   hpRestoreFailed: ['The restore did not happen: {0}', '還原冇做到：{0}'],
@@ -619,7 +621,9 @@ export function createHistoryPanel(opts = {}) {
 
   /* ---------------- operations ---------------- */
 
+  let restorePending = false;
   function confirmRestore(row) {
+    if (restorePending) return;
     openModal({
       title: s('hpRestoreTitle', row.short),
       width: 560,
@@ -633,14 +637,25 @@ export function createHistoryPanel(opts = {}) {
           kind: 'filled',
           autofocus: true,
           onSelect: async () => {
+            if (restorePending) return;
+            restorePending = true;
             try {
-              await callMain('history.restore', row.oid, `Restored revision ${row.short} — ${row.label}`);
-              notify.success(s('hpTitle'), s('hpRestored', row.short));
-              announce(s('hpRestored', row.short));
+              // Revision identity stays first; long filenames and repeated restore
+              // labels must not exceed the bridge's 256-character label limit.
+              const label = `Restored revision ${row.short} — ${row.label}`.slice(0, 256);
+              const result = await callMain('history.restore', row.oid, label);
+              const document = result.recoveredDocument;
+              if (document) bus.emit('editor:opened', document);
+              const message = document
+                ? s(result.auditRecorded ? 'hpDocumentRestored' : 'hpDocumentAuditFailed', document.localPath)
+                : s('hpRestored', row.short);
+              if (document && !result.auditRecorded) notify.error(s('hpTitle'), message);
+              else notify.success(s('hpTitle'), message);
+              announce(message);
               await refresh();
             } catch (err) {
               notify.error(s('hpTitle'), s('hpRestoreFailed', err.message));
-            }
+            } finally { restorePending = false; }
           },
         },
       ],

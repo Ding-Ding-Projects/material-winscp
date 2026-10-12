@@ -343,6 +343,50 @@ class EditorManager extends EventEmitter {
     return this.describe(rec);
   }
 
+  /** Write bytes to an exclusive, app-owned recovery copy. Historical paths
+   * are descriptive only: never reopen them, overwrite them or upload to them. */
+  async recoveryCopy(fileName, bytes) {
+    const dir = await fsp.mkdtemp(path.join(P.temp(), 'recovered-'));
+    const name = 'recovered-' + safeName(path.win32.basename(String(fileName || 'document')))
+      .replace(/[\x00-\x1f\x7f]/g, '_').slice(0, 120).replace(/[. ]+$/, '');
+    const localPath = path.join(dir, name);
+    try {
+      await fsp.writeFile(localPath, bytes, { flag: 'wx', mode: 0o600 });
+      return localPath;
+    } catch (error) {
+      await fsp.rm(dir, { recursive: true, force: true }).catch(() => {});
+      throw error;
+    }
+  }
+
+  async restoreDiscard(discard, maxBytes) {
+    // Buffer.from(base64) accepts malformed input silently. Reject it before
+    // creating any files or recording a successful restore, including legacy
+    // metadata-only records for which no recovery bytes were captured.
+    if (!discard || typeof discard !== 'object' || Array.isArray(discard) ||
+        typeof discard.bytesBase64 !== 'string' ||
+        discard.bytesBase64.length % 4 !== 0 ||
+        /[^A-Za-z0-9+/=]/.test(discard.bytesBase64)) {
+      throw Object.assign(new Error('This revision has no valid document recovery bytes.'), { code: 'NO_RECOVERY_BYTES' });
+    }
+    if (Number.isFinite(maxBytes) && discard.bytesBase64.length > Math.ceil(maxBytes / 3) * 4) {
+      throw Object.assign(new Error('This document exceeds the editor recovery size limit; its history bytes are unchanged.'), { code: 'RECOVERY_TOO_LARGE' });
+    }
+    const bytes = Buffer.from(discard.bytesBase64, 'base64');
+    if (bytes.toString('base64') !== discard.bytesBase64) {
+      throw Object.assign(new Error('This revision has invalid document recovery bytes.'), { code: 'NO_RECOVERY_BYTES' });
+    }
+    const localPath = await this.recoveryCopy(discard.fileName, bytes);
+    try {
+      return await this.openLocal({ localPath, mode: 'internal',
+        encoding: ['utf8', 'utf8bom', 'utf16le', 'utf16be', 'ansi'].includes(discard.encoding)
+          ? discard.encoding : 'auto' });
+    } catch (error) {
+      await fsp.rm(path.dirname(localPath), { recursive: true, force: true }).catch(() => {});
+      throw error;
+    }
+  }
+
   // ----------------------------------------------------- internal editor
   /** The text the internal editor should show, decoded with the chosen encoding. */
   async read(id) {
@@ -691,10 +735,13 @@ class EditorManager extends EventEmitter {
     // therefore cross the bridge explicitly: without this marker the main
     // record still looks clean and would delete the only recovery copy.
     const discardRequested = o.discard === true;
+    const sourceLocalPath = rec.localOnly ? rec.localPath : null;
     let discardTextError = null;
     if (discardRequested && typeof o.text === 'string') {
       try {
-        await fsp.writeFile(rec.localPath, encode(o.text, rec.encoding));
+        const bytes = encode(o.text, rec.encoding);
+        if (rec.localOnly) rec.localPath = await this.recoveryCopy(rec.fileName, bytes);
+        else await fsp.writeFile(rec.localPath, bytes);
       } catch (e) {
         // The history action remains best effort and close must still finish;
         // the orphan event below tells the caller that recovery may be absent.
@@ -728,6 +775,7 @@ class EditorManager extends EventEmitter {
             sessionId: rec.sessionId,
             remotePath: rec.remotePath,
             localPath: rec.localPath,
+            ...(sourceLocalPath ? { sourceLocalPath } : {}),
             encoding: rec.encoding,
             bytesBase64: recoveryBytes,
           },
