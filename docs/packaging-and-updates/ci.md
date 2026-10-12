@@ -121,3 +121,20 @@ No claim is made here that CI is green. See [`HANDOFF.md`](../../HANDOFF.md).
 - [Building](building.md) — the same build, locally.
 - [The installer](installer.md) — the artefact CI ships.
 - [The dim sum surprise](../accessibility-and-languages/dim-sum.md) — the catalog CI reads.
+
+## Coverage fixtures with optional upstream source
+
+CI initializes the read-only WinSCP reference submodule. Coverage tests that
+exercise absent-source behavior therefore use disposable checkout fixtures,
+not the surrounding checkout's submodule state. The fixture copies the real
+generator, mapping and ledger, deliberately omitting upstream source.
+
+`node --test test/port-matrix.test.js` checks LF and CRLF ledgers, rejects missing
+or invalid ledgers without writes, and verifies that regeneration without source
+cannot replace or create a report. Each invocation compares all fixture file
+bytes and file/directory modification times. Seven checks pass with the actual
+checkout's reference either initialized or absent; production behavior and
+workflow definitions are unchanged. Run `npm test` separately for the aggregate.
+
+Linux verification retains baseline platform, Electron display and proxy-warning
+failures. These fixtures do not establish Windows installer or release acceptance.

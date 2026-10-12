@@ -53,6 +53,10 @@ not a reason to narrow scope.
 
 ## In progress
 
+- Coverage-fixture follow-on: isolated absent-source tests pass with the actual
+  checkout reference initialized or absent. Production and workflows unchanged;
+  baseline aggregate failures and native/release acceptance remain unresolved.
+
 - `forms/CustomScpExplorer` — 7,023 weighted lines remaining
 - `core/Terminal` — 4,180 weighted lines remaining
 - `forms/Preferences` — 3,677 weighted lines remaining

@@ -36,10 +36,9 @@ The unreleased candidate repairs changelog Git provenance and document recovery.
 See [current evidence and pending acceptance](HANDOFF.md) and
 [document recovery privacy and retention](docs/version-history/document-discard.md).
 Native Windows, installer and release acceptance remain pending; existing release
-links below describe earlier published builds. Standard test acceptance uses a
-plain clone with the optional upstream submodule uninitialized; the initialized
-reference is retained separately for source comparison. Both candidate and
-pristine Linux runs retain the same 28 failures and 36 cancellations, as detailed
+links below describe earlier published builds. Coverage absence checks use isolated fixtures, so
+the optional upstream submodule may be initialized or absent in the real checkout.
+Both Linux setups retain the same 28 failures and 36 cancellations, as detailed
 in the handoff.
 
 ## Install

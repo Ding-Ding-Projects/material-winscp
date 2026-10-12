@@ -1,5 +1,19 @@
 # Handoff
 
+## Coverage-fixture follow-on (2026-10-12; source-only acceptance)
+
+The absent-source coverage checks now use isolated fixtures in both plain and
+initialized checkouts, matching CI's initialized-submodule setup without changing
+production code or workflows. Seven focused tests pass in each setup. See
+[CI coverage fixtures](docs/packaging-and-updates/ci.md).
+
+Committed follow-on verification: plain clone **3737 tests, 3668 pass, 28 fail,
+36 cancelled, 5 skipped**; initialized reference **3737 tests, 3670 pass, 28 fail,
+36 cancelled, 3 skipped**. Failure/cancellation names match the preceding
+plain-clone candidate exactly. These remain non-green aggregate results;
+native Windows, installer and release acceptance remain pending. The earlier
+setup-specific diagnostics below are retained as historical evidence.
+
 ## Local repair candidate (2026-10-12; not released)
 
 Two reviewed source repairs are integrated locally above main
