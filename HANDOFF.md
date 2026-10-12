@@ -24,9 +24,9 @@ Two reviewed source repairs are integrated locally above main
   installer through CI; main can also deploy Pages. No push, PR, tag, workflow
   dispatch, release, wiki update or issue closure was made for this candidate.
 
-### Combined local verification
+### Combined local verification (initialized-reference diagnostic setup)
 
-Official Node 22.22.2, pinned read-only upstream reference
+Official Node 22.22.2, initialized read-only upstream reference
 `648b6c0a97a9b3b8c89680127ea3567972bd96ef`, unchanged process environment:
 
 - Combined focused checks: **170/170 pass**; fail-closed negatives: **13/13 pass**.
@@ -36,9 +36,28 @@ Official Node 22.22.2, pinned read-only upstream reference
   26 added tests pass. This is not an all-green aggregate result.
 - Existing failures include Linux/Windows assumptions, unavailable Electron
   display/system bus, injected Node proxy warnings in exact-output assertions,
-  and two upstream-absence tests contradicting the initialized reference.
+  and two documented plain-clone checks that require the optional reference to
+  remain uninitialized. Initializing that reference changes their intended test
+  setup; these two failures are not defects in the tests. Standard plain-clone
+  acceptance is recorded separately below.
 - Original repair commits are preserved by a non-fast-forward merge. Workflow
   files are unchanged. Source-only checks cannot establish installer acceptance.
+
+### Standard plain-clone acceptance
+
+Separate full-history candidate and pristine-main clones leave the optional
+`vendor/winscp` submodule uninitialized, matching the documented test setup.
+Neither source checkout nor the initialized porting reference was removed.
+
+- Candidate: **3733 tests, 3664 pass, 28 fail, 36 cancelled, 5 skipped**.
+- Pristine main: **3707 tests, 3638 pass, 28 fail, 36 cancelled, 5 skipped**.
+- Exact failure/cancellation entry names match; all 26 added tests pass.
+- Both plain-clone port-matrix checks pass; source-dependent checks skip as
+  designed. No tests were edited, suppressed or manually skipped for this run.
+- Serial combined focused replay passes **170/170**. An earlier overlapping
+  full/focused replay shared site output and produced extra output-file race
+  failures; those diagnostic logs are retained but are not acceptance evidence.
+- Actual Windows GUI, installer, remote CI and release acceptance remain pending.
 
 ## Historical generated report (not current acceptance evidence)
 
