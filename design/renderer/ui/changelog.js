@@ -187,6 +187,16 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "437e271", kind: 'commit', ref: "437e271", oid: "437e271aa7bf061c910f0cdd7a709eedee2df1f4", date: "2026-10-12",
+    title: "Correct plain-clone verification setup and evidence [skip ci]",
+    changes: [
+      { category: "added", text: "Record separate full-history plain-clone candidate and pristine runs: identical 28 failures, 36 cancellations and 5 skips, with 26 added tests passing. Keep initialized-reference diagnostics separate. Tests asked for an empty reference chair; filling it was a setup choice, not their fault." },
+    ],
+    changesYue: [
+      { category: "changed", text: "記錄獨立完整歷史嘅普通複製測試：兩邊同樣有 28 項失敗、36 項取消同 5 項略過，新增 26 項通過。已初始化參考源碼嘅診斷另列。測試叫留張空櫈，擺咗參考源碼上去係設定選擇，唔係測試失職。" },
+    ],
+  },
+  {
     id: "f0d906f", kind: 'commit', ref: "f0d906f", oid: "f0d906f1eb02d1fcfd5a18e3558ef5967f3d2a9e", date: "2026-10-12",
     title: "Document combined local repair evidence and acceptance gaps [skip ci]",
     changes: [
@@ -687,14 +697,6 @@ export const DEVELOPMENT = [
     ],
     changesYue: [
       { category: "changed", text: "粵語：WebDAV、FTP、SFTP 同幾個對話框終於唔再喺邊界位跳舞；Docker 卡住時有時限，唔使等個 daemon 寫完自傳先收工。" },
-    ],
-  },
-  {
-    id: "0dcc3f4", kind: 'commit', ref: "0dcc3f4", oid: "0dcc3f41b1328058596dad3bc6c23099f1317ae1", date: "2026-08-03",
-    title: "Harden preferences, actions, sync, dialogs, and packaging",
-    changes: [
-      { category: "changed", text: "The remaining slice now validates numeric preferences, removes an inert SiteAdvanced toggle, validates directory names, gates hidden-file state, reports case collisions, and rejects incomplete Squirrel artifacts in CI." },
-      { category: "changed", text: "今輪補實 Preferences range、SiteAdvanced、Create Directory、hidden files、sync collision 同 Squirrel artifact gate；啲設定唔再有假掣，啲 package 唔再靠運氣出街。" },
     ],
   },
 ];
