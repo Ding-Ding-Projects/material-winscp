@@ -187,6 +187,65 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "724862e", kind: 'commit', ref: "724862e", oid: "724862e9c87125e06283d7bd6460c62659a53f89", date: "2026-10-12",
+    title: "[skip ci] Fail closed when changelog history cannot verify its identity",
+    changes: [
+      { category: "changed", text: "Stop generation before rewriting the app ledger when an object is missing or is not a commit. Site checkouts propagate generator and Git errors; archives without a root .git marker retain their explicit empty ledger." },
+      { category: "fixed", text: "Bind Git to this checkout and sanitize repository-local overrides for each child command. A broken checkout can no longer borrow a neighbour's history and put on a convincing fake moustache. Real temporary Git regressions cover missing objects, non-commits, corrupt metadata, foreign environment overrides, and healthy linked worktrees. Categorized documentation explains the boundary." },
+    ],
+    changesYue: [
+      { category: "changed", text: "更新日誌而家要驗明正身先可以出街：物件唔見咗或者唔係 commit，就停止生成， 唔會靜靜刪走條記錄。真正 checkout 出錯會令網站 build 失敗；冇 Git 嘅原碼 壓縮包仍然顯示空記錄。Git 指令綁定本身個 checkout，同時隔開外來環境設定， 爛資料庫唔可以偷隔籬本族譜再黐假鬚扮自己。測試包括壞物件同正常 worktree。" },
+    ],
+  },
+  {
+    id: "05d9782", kind: 'commit', ref: "05d9782", oid: "05d97820461d1ef9d9fde82931ce7612c48e0101", date: "2026-09-10",
+    title: "State the agent conversation-vocabulary rule in AGENTS.md",
+    changes: [
+      { category: "changed", text: "Every agent that opens this project now reads the rule before it writes its first reply instead of after it has already published something: use the shared private conversation vocabulary in chat, and keep every last word of it out of commit messages, code, docs, issues, releases and this file. The wording is copied verbatim from the canonical instructions and names no term, because the obvious way to explain the rule is to give an example and the example is the leak." },
+      { category: "changed", text: "Verified with the canonical leak scanner: clean on all 155 needles." },
+    ],
+    changesYue: [
+      { category: "changed", text: "以後開呢個專案嘅代理，未打第一句就已經睇到規矩，唔係漏完先知：傾嘢用內部 講法，但係 commit、程式碼、文件、issue、發佈同呢個檔案，一個字都唔准出現。 條文係逐字照抄，一個詞都唔舉例，因為舉例本身就係漏底。" },
+      { category: "changed", text: "已經用洩漏掃描器驗過，155 個字全部乾淨。" },
+    ],
+  },
+  {
+    id: "09950bd", kind: 'commit', ref: "09950bd", oid: "09950bd851224219e852fa6ebef1b67dafe6d99f", date: "2026-08-20",
+    title: "Keep plain-clone coverage verification honest",
+    changes: [
+      { category: "changed", text: "The coverage ledger used to demand a read-only upstream submodule even though the documented build and test path explicitly leaves it absent. That made a fresh clone trip over its own shoelaces before checking any product code." },
+      { category: "changed", text: "`--check` now preserves and validates the checked-in ledger when the source reference is unavailable, while regeneration still fails closed instead of writing a majestic zero-unit report. Focused regressions cover both paths, and the contributor, roadmap, handoff, and porting records describe the boundary." },
+      { category: "changed", text: "普通 clone 唔使搬埋成座 WinSCP 原碼山先可以測試；coverage check 而家會守住現有 ledger，仲會老實講 source comparison 跳過咗。想 regenerate 就照舊要 submodule，唔會因為少咗材料就煮出一碟空氣蒸餃。" },
+    ],
+  },
+  {
+    id: "148217c", kind: 'commit', ref: "148217c", oid: "148217cdda1a3f2af760ea9543754864f9dd028c", date: "2026-08-09",
+    title: "Auto commit 2026-08-09 19:41:55.722Z",
+    changes: [
+      { category: "changed", text: "48 files changed" },
+      { category: "changed", text: "bin/winscp.js" },
+      { category: "changed", text: "design/main/autoupdate.js" },
+      { category: "changed", text: "design/main/editors.js" },
+      { category: "changed", text: "design/main/ipc.js" },
+      { category: "changed", text: "design/main/protocols/sftp.js" },
+      { category: "changed", text: "design/main/protocols/webdav.js" },
+      { category: "changed", text: "design/main/queue.js" },
+      { category: "changed", text: "design/main/session.js" },
+      { category: "changed", text: "design/main/sessiondata.js" },
+      { category: "changed", text: "design/main/sync.js" },
+      { category: "changed", text: "…and 38 more" },
+    ],
+  },
+  {
+    id: "f19adca", kind: 'commit', ref: "f19adca", oid: "f19adca6ca155d88e4723025d8405128535039e6", date: "2026-08-03",
+    title: "Harden site contention and interaction parity",
+    changes: [
+      { category: "removed", text: "The site lock no longer treats a busy Windows checkout like a haunted house: it waits for legitimate serialized builds, while the test now gives six real builders enough runway to finish. Drag/drop, overlays, menus, changelog links, and the handoff all keep their facts visible instead of sending the code on a slapstick detour." },
+      { category: "removed", text: "廣東話：個 site lock 而家識等真正排隊嘅 build，唔會兩分鐘就扮鬼叫；六個 builder 有足夠時間跑完，drag/drop、overlay、menu 同 changelog 都唔再玩失蹤，code 終於唔使再食住蕉跑障礙賽。" },
+      { category: "fixed", text: "Verified: npm test — 3718 passed, 0 failed, 1 skipped out of 3719; focused site/UI regression — 218 passed, 0 failed; headless Lowlevel Electron smoke — rendered_ok=true, terminal_window=false, focus_stealing=false." },
+    ],
+  },
+  {
     id: "7d4d84a", kind: 'commit', ref: "7d4d84a", oid: "7d4d84a25152fa5f6c810291c5ec9bae67124d66", date: "2026-08-03",
     title: "Verify releases and complete headless parity",
     changes: [
@@ -630,46 +689,6 @@ export const DEVELOPMENT = [
     ],
     changesYue: [
       { category: "changed", text: "修正工作區、搜尋、工作階段同 SFTP 嘅邊角位；啲 bug 而家唔使再扮成主角搶戲。" },
-    ],
-  },
-  {
-    id: "69004b4", kind: 'commit', ref: "69004b4", oid: "69004b45a056a36bb9262415a72b7b9e3f75831a", date: "2026-08-03",
-    title: "Expand headless CLI and close transfer edge cases",
-    changes: [
-      { category: "fixed", text: "The headless CLI now covers the practical console switches and deterministic drag/drop target simulation, while the application closes editor, checklist, DirView, FTP, SFTP, and existing-only synchronization gaps. Real protocol regressions, Docker policy probes, focused tests, and feature documentation accompany the fixes. The code previously treated a checklist policy like a suggestion box; now it reads the checkbox." },
-      { category: "fixed", text: "CLI 而家支援實用 console switches，同埋 deterministic drag/drop target simulation；app 亦補返 editor、checklist、DirView、FTP、SFTP 同 existing-only synchronization 個窿。真 protocol regression、Docker policy probes、focused tests 同 feature docs 一齊落地。之前啲 code 當 checklist policy 係意見箱，而家終於識睇個 checkbox。" },
-    ],
-  },
-  {
-    id: "43eb4db", kind: 'commit', ref: "43eb4db", oid: "43eb4db6dba53da2e37aa50bf06966a53a4187b7", date: "2026-08-03",
-    title: "Fix CLI staging and transfer lifecycle edges",
-    changes: [
-      { category: "added", text: "Reject empty drag-stage paths, persist protection for legacy JSON secrets, keep paused queue work out of idle, retire stale WebDAV agents on reconnect, refuse blank queue targets, and reject Windows device basenames in shell payloads. Add focused documentation and regressions. The edge-case cupboard is less haunted, and the queue now knows that paused is not done." },
-      { category: "fixed", text: "拒絕空嘅 drag-stage path，舊 JSON secret 改完即刻保存保護，paused queue work 唔再扮 idle，WebDAV reconnect 會清走舊 agent，空 queue target 同 Windows device basename 一律拒絕。加埋文件同 regression；edge-case 雜物櫃少咗鬼，queue 終於明白 paused 唔係 done。" },
-    ],
-  },
-  {
-    id: "ad9936c", kind: 'commit', ref: "ad9936c", oid: "ad9936c45432426f3905d52ba298bcb2c12b9c47", date: "2026-08-03",
-    title: "Harden FTP IPC accessibility and shortcut edges",
-    changes: [
-      { category: "added", text: "Reject CR/LF in FTP credentials, cancel IPC prompts when the renderer closes, normalize human shortcuts, cap impossible dialog minima, announce synchronize errors assertively, and lock the file-find regex builder during active searches. Add focused tests and docs. The protocol doors now check the luggage, and the UI stops asking a closed window for directions." },
-    ],
-    changesYue: [
-      { category: "changed", text: "拒絕 FTP 認證資料入面嘅 CR/LF，renderer 關門就取消 IPC 問題，整靚人手 shortcut，限制唔可能嘅 dialog 最小尺寸，俾 synchronize 錯誤大聲通知，搜尋中就鎖住 regex builder。加埋測試同文件；協議門口終於識睇行李，個 UI 亦唔再問一扇已閂嘅門路向。" },
-    ],
-  },
-  {
-    id: "ae54b2a", kind: 'commit', ref: "ae54b2a", oid: "ae54b2a10ef9b397ef88f602fb968f2bcfa40d9b", date: "2026-08-03",
-    title: "Harden drag shell terminal and protocol security",
-    changes: [
-      { category: "added", text: "Expose disabled preference state, capture drag-start panel paths, refuse unsafe staged names, release pending terminal prompts on cancel, reject invalid AssumeRole expiry, and require WebDAV challenges unless legacy auth is explicit. Add focused tests and documentation. The drag payload now knows where it started, and the protocols have stopped handing credentials to surprise guests.\\n\\n廣東話：drag payload 記住自己由邊度出發，WebDAV 唔再見人就派 credentials；Terminal、S3、panel 同 Preferences 都收好尾。" },
-    ],
-  },
-  {
-    id: "aa5ee78", kind: 'commit', ref: "aa5ee78", oid: "aa5ee78c22119ff7a0ba3ae75db9f3a1bb7ba010", date: "2026-08-03",
-    title: "Harden queue sessions search panels and setup",
-    changes: [
-      { category: "added", text: "Include queue prompt state in once-done requests, fail closed on stale exec capabilities, tolerate watcher errors without items, short-circuit empty find limits, normalize Windows directory caches case-insensitively, and keep shortcut cleanup Windows-only. Add focused tests and indexed documentation. The queue now carries its paperwork, the search knows when zero means zero, and setup stops visiting the wrong operating system.\\n\\n廣東話：queue 帶齊文件、find 明白零就係零、setup 唔再去錯 OS 探親；panel 同 session 都有新路牌。" },
     ],
   },
 ];
