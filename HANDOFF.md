@@ -1,5 +1,51 @@
 # Handoff
 
+## Local repair candidate (2026-10-12; not released)
+
+Two reviewed source repairs are integrated locally above main
+`05d97820461d1ef9d9fde82931ce7612c48e0101`. Neither issue is closed.
+
+- **Changelog provenance, issue #21:** Git objects must be verified commits
+  before ledger writes. Site generation fails closed on broken checkout metadata;
+  marker-free archives retain an empty ledger. Repository-local Git environment
+  overrides cannot substitute another checkout's history. See
+  [changelog generation](docs/packaging-and-updates/changelog.md).
+- **Document recovery, issue #23:** discarding local edits preserves the original
+  file; restoring a document creates a separate exact-byte owned recovery copy,
+  leaves current settings intact and appends an audit. Audit failures report
+  partial success honestly. Recovery never reconnects or uploads. Binary or
+  larger-than-8-MiB copies remain on disk if the text renderer cannot open them.
+  Base64 history contains actual document contents and is not encryption. See
+  [document recovery and retention](docs/version-history/document-discard.md).
+- **Acceptance pending:** native Windows GUI, issue-specific real screenshots,
+  installer, remote CI, release and deployed-site evidence. Headless IPC and
+  production callback tests do not establish native GUI acceptance.
+- **Publication withheld:** every branch push can build and publish a latest
+  installer through CI; main can also deploy Pages. No push, PR, tag, workflow
+  dispatch, release, wiki update or issue closure was made for this candidate.
+
+### Combined local verification
+
+Official Node 22.22.2, pinned read-only upstream reference
+`648b6c0a97a9b3b8c89680127ea3567972bd96ef`, unchanged process environment:
+
+- Combined focused checks: **170/170 pass**; fail-closed negatives: **13/13 pass**.
+- Actual `npm test`: **3733 tests, 3664 pass, 30 fail, 36 cancelled, 3 skipped**.
+- Pristine exact-main comparison: **3707 tests, 3638 pass, 30 fail,
+  36 cancelled, 3 skipped**. All failure/cancellation entry names match;
+  26 added tests pass. This is not an all-green aggregate result.
+- Existing failures include Linux/Windows assumptions, unavailable Electron
+  display/system bus, injected Node proxy warnings in exact-output assertions,
+  and two upstream-absence tests contradicting the initialized reference.
+- Original repair commits are preserved by a non-fast-forward merge. Workflow
+  files are unchanged. Source-only checks cannot establish installer acceptance.
+
+## Historical generated report (not current acceptance evidence)
+
+The report below predates these repairs. Its green test, installer and remote
+claims are historical and do not describe this local candidate.
+
+
 > [!NOTE]
 > Plain clones intentionally leave `vendor/winscp` uninitialized. The focused
 > coverage check now validates the checked-in ledger without rewriting it and

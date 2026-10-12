@@ -30,6 +30,14 @@ four discovery searches, an **appearance editor on every rendered element**, a
 for everything you own, three **language modes** with independent funny-level
 sliders, and a one-in-ten chance of dim sum at startup.
 
+## Local source repair status
+
+The unreleased candidate repairs changelog Git provenance and document recovery.
+See [current evidence and pending acceptance](HANDOFF.md) and
+[document recovery privacy and retention](docs/version-history/document-discard.md).
+Native Windows, installer and release acceptance remain pending; existing release
+links below describe earlier published builds.
+
 ## Install
 
 > [!NOTE]
