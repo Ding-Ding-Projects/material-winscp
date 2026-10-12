@@ -187,6 +187,26 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "00615ac", kind: 'commit', ref: "00615ac", oid: "00615ac170000932eb1fc61788fcde33b744f699", date: "2026-10-12",
+    title: "Document isolated coverage fixtures and remaining acceptance gaps [skip ci]",
+    changes: [
+      { category: "changed", text: "Record seven fixture checks and unchanged baseline failure names in plain and initialized checkouts. The fixtures carry their own setup instead of asking CI to hide its reference; native and release acceptance remain pending." },
+    ],
+    changesYue: [
+      { category: "changed", text: "記錄七項獨立樣本檢查，普通同已初始化複製嘅既有失敗名稱不變。樣本自備設定，唔使 CI 收埋參考源碼；原生介面同發佈驗收仍待完成。" },
+    ],
+  },
+  {
+    id: "3febdac", kind: 'commit', ref: "3febdac", oid: "3febdac037d947211e5cef20c747cdc56c1cc2d9", date: "2026-10-12",
+    title: "test: isolate coverage fixtures from submodule weather [skip ci]",
+    changes: [
+      { category: "changed", text: "Run absent-source coverage checks in disposable checkout fixtures rather than treating CI's initialized reference as an unexpected houseguest. Check LF and CRLF ledgers, reject missing or invalid ledgers without writes, and prove regeneration cannot replace or create a report without source. No production behavior or upstream source changes." },
+    ],
+    changesYue: [
+      { category: "changed", text: "測試：覆蓋率測試搬入獨立樣本，唔再睇子模組天氣做人。 CI 有上游參考都唔使扮冇；缺少來源時，報告唔會被亂寫。" },
+    ],
+  },
+  {
     id: "437e271", kind: 'commit', ref: "437e271", oid: "437e271aa7bf061c910f0cdd7a709eedee2df1f4", date: "2026-10-12",
     title: "Correct plain-clone verification setup and evidence [skip ci]",
     changes: [
@@ -679,24 +699,6 @@ export const DEVELOPMENT = [
     changes: [
       { category: "security", text: "English: Missing INI files now explain themselves, portable imports find the file WinSCP actually writes, secrets refuse unsafe rewraps, FTP and WebDAV stop guessing, and numeric settings show what they really saved; the boundary guards have formed a small but determined queue." },
       { category: "security", text: "粵語：INI 唔見咗會自己講清楚、portable import 搵返 WinSCP 真係寫嗰份、secret rewrap fail closed、FTP/WebDAV 唔再靠估、numeric setting 顯示返真正存咗乜；啲邊界守衛排隊排得幾有紀律。" },
-    ],
-  },
-  {
-    id: "c68948c", kind: 'commit', ref: "c68948c", oid: "c68948c970400321de07c140af91d7249455c7aa", date: "2026-08-03",
-    title: "Harden CLI, editor, queue, and protocol edges",
-    changes: [
-      { category: "changed", text: "English: Nested CLI help, BOM-less decoding, filtered editor ordering, CustomCommand prompts, queue event containment, S3 abort idempotence, and IPC capability gates now behave like grown-up boundary code; the sharp edges have been given tiny helmets." },
-      { category: "changed", text: "粵語：CLI help、editor 編碼、filtered 排序、CustomCommand、queue、S3 cleanup 同 IPC capability gate 而家識得好好守邊界；啲尖角終於戴咗細細個安全帽。" },
-    ],
-  },
-  {
-    id: "c38476f", kind: 'commit', ref: "c38476f", oid: "c38476f35d1ea101a5a7137cbeeebb146aac1914", date: "2026-08-03",
-    title: "Harden protocol edge cases and Docker smoke cleanup",
-    changes: [
-      { category: "changed", text: "English: WebDAV redirects, FTP commands, canonical paths, URLs, and dialogs now stop doing interpretive dance at their sharpest edges; the Docker smoke runner gives a stuck daemon a bounded timeout instead of waiting for it to write a memoir." },
-    ],
-    changesYue: [
-      { category: "changed", text: "粵語：WebDAV、FTP、SFTP 同幾個對話框終於唔再喺邊界位跳舞；Docker 卡住時有時限，唔使等個 daemon 寫完自傳先收工。" },
     ],
   },
 ];
