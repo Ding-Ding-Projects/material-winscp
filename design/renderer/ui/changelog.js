@@ -187,6 +187,18 @@ export const CURRENT_BUILD = {
  */
 export const DEVELOPMENT = [
   {
+    id: "f323183", kind: 'commit', ref: "f323183", oid: "f32318331e4ac806ad6b08a97f4d8add447b0c59", date: "2026-10-12",
+    title: "Fix CRLF changelog freshness false alarms [skip ci]",
+    changes: [
+      { category: "removed", text: "Normalize checkout CRLF newlines during comparison; the ledger no longer mistakes Windows line endings for missing history. Current files keep their exact bytes, while changed content and missing Git metadata still fail closed. Four real-checkout regressions cover both newline modes and negative cases." },
+      { category: "changed", text: "Focused changelog and site suites pass 93 tests. The full suite retains the preceding candidate's 28 failures and 36 cancellations, with four additional passing tests; native Windows GUI and release acceptance remain pending." },
+    ],
+    changesYue: [
+      { category: "changed", text: "修正 CRLF 更新日誌新鮮度誤報；換行符終於唔使扮失蹤提交。比較時統一換行，現有檔案位元組保持不變；內容有改或 Git 資料失蹤仍然拒絕。四個真實 checkout 測試涵蓋兩種換行同失敗情況。" },
+      { category: "changed", text: "相關日誌及網站測試 93 項通過。完整測試保留上一候選版本嘅 28 項失敗同 36 項取消，新增四項通過；Windows 原生介面同發佈驗收仍然待辦。" },
+    ],
+  },
+  {
     id: "00615ac", kind: 'commit', ref: "00615ac", oid: "00615ac170000932eb1fc61788fcde33b744f699", date: "2026-10-12",
     title: "Document isolated coverage fixtures and remaining acceptance gaps [skip ci]",
     changes: [
@@ -691,14 +703,6 @@ export const DEVELOPMENT = [
     ],
     changesYue: [
       { category: "changed", text: "廣東話玩笑：命令唔再喺假 prompt 入面留低等人餵，拖放檔名撞車就即刻煞停，唔畀檔案玩消失魔術。" },
-    ],
-  },
-  {
-    id: "d008db8", kind: 'commit', ref: "d008db8", oid: "d008db882c5475cadc8d3ae7ac95eb052efb72fe", date: "2026-08-03",
-    title: "Harden startup, security, protocol, and preference edges",
-    changes: [
-      { category: "security", text: "English: Missing INI files now explain themselves, portable imports find the file WinSCP actually writes, secrets refuse unsafe rewraps, FTP and WebDAV stop guessing, and numeric settings show what they really saved; the boundary guards have formed a small but determined queue." },
-      { category: "security", text: "粵語：INI 唔見咗會自己講清楚、portable import 搵返 WinSCP 真係寫嗰份、secret rewrap fail closed、FTP/WebDAV 唔再靠估、numeric setting 顯示返真正存咗乜；啲邊界守衛排隊排得幾有紀律。" },
     ],
   },
 ];
