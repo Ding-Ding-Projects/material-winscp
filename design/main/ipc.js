@@ -2442,10 +2442,30 @@ class Ipc {
       const revision = str(rev, 'revision', 64);
       const read = await this.history.read(revision);
       if (!read.ok) throw Object.assign(new Error(read.error.message), { code: read.error.code });
+      const restoreLabel = optStr(label, 'label', 256) || `Restored revision ${revision.slice(0, 8)}`;
+      if (Object.prototype.hasOwnProperty.call(read.value, 'editorDiscard')) {
+        const recoveredDocument = await this.editors.restoreDiscard(read.value.editorDiscard, LIMITS.text * 4 + 3);
+        // A document restore is a new local copy, never a settings rollback.
+        // Export the CURRENT protected config, not historical credentials.
+        let audit;
+        try {
+          audit = await this.history.snapshot(restoreLabel, {
+            ...this.config.exportState(),
+            editorDiscard: {
+              fileName: recoveredDocument.fileName, encoding: recoveredDocument.encoding,
+              bytesBase64: read.value.editorDiscard.bytesBase64,
+            },
+            documentRestore: { from: revision, id: recoveredDocument.id },
+          });
+        } catch { audit = { ok: false }; }
+        return { restored: revision, recoveredDocument,
+          newRevision: audit.ok ? audit.value.oid : null,
+          auditRecorded: audit.ok === true };
+      }
       // importState() flushes and then records a NEW revision through
       // config.attachHistory, which is what keeps the history append-only:
       // the revision that was current a moment ago is still there to go back to.
-      this.config.importState(read.value, optStr(label, 'label', 256) || `Restored revision ${revision.slice(0, 8)}`);
+      this.config.importState(read.value, restoreLabel);
       // Wait for that new revision to land before replying, so the panel that
       // refreshes on this reply sees the restore in the log.
       await settled();
